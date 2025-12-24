@@ -8,3 +8,4 @@ examples/.DS_Store
 /lib/build
 /lib/llama_cpp/patches
 /lib/models
+/docs
