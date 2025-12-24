@@ -8,11 +8,21 @@ bool llama_mobile_context::loadModel(common_params &params_)
 {
     params = params_;
     llama_init = common_init_from_params(params);
+    if (llama_init == nullptr)
+    {
+        LOG_ERROR("unable to initialize model context: %s", params.model.path.c_str());
+        return false;
+    }
     model = llama_init->model();
     ctx = llama_init->context();
     if (model == nullptr)
     {
         LOG_ERROR("unable to load model: %s", params.model.path.c_str());
+        return false;
+    }
+    if (ctx == nullptr)
+    {
+        LOG_ERROR("unable to create context: %s", params.model.path.c_str());
         return false;
     }
     templates = common_chat_templates_init(model, params.chat_template);

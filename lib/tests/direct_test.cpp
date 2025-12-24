@@ -6,7 +6,7 @@ int main(int argc, char** argv) {
         std::cout << "Starting direct test...\n";
         
         common_params params;
-        params.model.path = "/Users/shileipeng/Documents/llama_mobile_sdk/lib/models/SmolLM-360M-Instruct.Q6_K.gguf"; // Use available smaller model
+    params.model.path = "../../lib/models/SmolLM-360M-Instruct.Q6_K.gguf"; // Relative path from build/output to lib/models
         params.n_ctx = 2048;
         params.n_batch = 512;
         params.n_gpu_layers = 20; // Enable GPU with Metal

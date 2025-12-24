@@ -13,7 +13,7 @@
 #include "../../lib/llama_mobile.h"
 
 // Include nlohmann json for proper JSON handling
-#include "../../lib/llama_cpp/json.hpp"
+#include "../../lib/llama_cpp/nlohmann/json.hpp"
 using json = nlohmann::ordered_json;
 
 struct GenerationResult {
@@ -195,7 +195,7 @@ void demonstrateSamplingVariations(llama_mobile::llama_mobile_context& context) 
 
 int main(int argc, char **argv) {
     // Use local Qwen3 model by default
-    std::string model_path = "../../../lib/models/Qwen3-0.6B-Q5_K_M.gguf";
+    std::string model_path = "../../lib/models/Qwen3-0.6B-Q5_K_M.gguf";
     std::string demo_mode = "";
     
     std::cout << "\n=== Cactus LLM Example ===" << std::endl;

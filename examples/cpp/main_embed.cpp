@@ -59,7 +59,7 @@ std::vector<float> getSentenceEmbedding(llama_mobile::llama_mobile_context& cont
 
 int main(int argc, char **argv) {
     // Use local embedding model by default
-    std::string model_path = "../../../lib/models/embedding/bge-m3-Q5_K_M.gguf";
+    std::string model_path = "../../lib/models/embedding/bge-m3-Q5_K_M.gguf";
     
     // Allow user to specify a different model path
     if (argc > 1) {

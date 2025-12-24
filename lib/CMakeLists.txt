@@ -400,10 +400,8 @@ file(MAKE_DIRECTORY ${INCLUDE_OUTPUT_PATH}/llama_cpp/ggml-cpu)
 file(MAKE_DIRECTORY ${INCLUDE_OUTPUT_PATH}/llama_cpp/minja)
 file(MAKE_DIRECTORY ${INCLUDE_OUTPUT_PATH}/llama_cpp/tools/mtmd)
 
-# Copy main headers
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_mobile.h DESTINATION ${INCLUDE_OUTPUT_PATH})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_mobile_ffi.h DESTINATION ${INCLUDE_OUTPUT_PATH})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_mobile_api.h DESTINATION ${INCLUDE_OUTPUT_PATH})
+# Copy main header (unified only)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_mobile_unified.h DESTINATION ${INCLUDE_OUTPUT_PATH})
 
 # Copy llama_cpp headers
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/llama.h DESTINATION ${INCLUDE_OUTPUT_PATH}/llama_cpp)

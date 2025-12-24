@@ -82,8 +82,8 @@ bool prompt_and_respond_ffi(llama_mobile_context_handle_t handle, const std::str
 
 int main(int argc, char **argv) {
     // Local VLM models from lib/models
-    const std::string local_model_path = "../../../lib/models/SmolVLM-256M-Instruct-Q8_0.gguf";
-    const std::string local_mmproj_path = "../../../lib/models/mmproj-SmolVLM-256M-Instruct-Q8_0.gguf";
+    const std::string local_model_path = "../../lib/models/SmolVLM-256M-Instruct-Q8_0.gguf";
+    const std::string local_mmproj_path = "../../lib/models/mmproj-SmolVLM-256M-Instruct-Q8_0.gguf";
     const std::string image_path = "../files/image.jpg";
 
     // Fallback download URLs if local models are not available
