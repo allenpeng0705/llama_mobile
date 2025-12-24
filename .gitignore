@@ -9,3 +9,4 @@ examples/.DS_Store
 /lib/llama_cpp/patches
 /lib/models
 /docs
+/.vscode
