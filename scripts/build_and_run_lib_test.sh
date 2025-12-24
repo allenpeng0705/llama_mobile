@@ -13,8 +13,9 @@ echo -e "${BLUE}=== llama_mobile Build and Run Script ===${NC}"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LLAMA_MOBILE_DIR="$PROJECT_ROOT/lib"
 BUILD_DIR="$LLAMA_MOBILE_DIR/build"
+OUTPUT_DIR="$BUILD_DIR/output"
 MODELS_DIR="$LLAMA_MOBILE_DIR/models"
-TESTS_DIR="$BUILD_DIR/tests"
+TESTS_DIR="$OUTPUT_DIR"
 
 # Clean old build
 clean_build() {
@@ -119,11 +120,11 @@ run_program() {
     echo -e "${YELLOW}====================================${NC}"
     
     # Run the program with the selected model path
-    if [ "$PROGRAM" = "chat_example" ]; then
-        # Pass the model path directly to chat_example
+    if [ "$PROGRAM" = "chat_example" ] || [ "$PROGRAM" = "test_api" ]; then
+        # Pass the model path directly to both programs now
         ./$PROGRAM "$SELECTED_MODEL"
     else
-        # For test_api, it handles model selection internally
+        # For other programs that might be added later
         ./$PROGRAM
     fi
     

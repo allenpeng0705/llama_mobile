@@ -59,24 +59,32 @@ std::string get_executable_dir() {
 int main(int argc, char* argv[]) {
     std::vector<TestResult> test_results;
     
-    // Determine models directory relative to executable location
-    std::string executable_dir = get_executable_dir();
-    std::string models_dir = executable_dir + "/../../models";
-    std::cout << "Executable directory: " << executable_dir << std::endl;
-    std::cout << "Models directory: " << models_dir << std::endl;
-    std::cout << "Executable directory: " << executable_dir << std::endl;
-    std::cout << "Models directory: " << models_dir << std::endl;
+    std::string model_path;
     
-    // List available models
-    std::vector<std::string> models = list_models(models_dir);
-    if (models.empty()) {
-        std::cerr << "No models found in '" << models_dir << "' directory.\n";
-        std::cerr << "Please place model files (.gguf) in the 'models' directory.\n";
-        return 1;
+    // Check if model path is provided as command-line argument
+    if (argc > 1) {
+        model_path = argv[1];
+        std::cout << "Using model path from command line: " << model_path << "\n";
+    } else {
+        // Determine models directory relative to executable location
+        std::string executable_dir = get_executable_dir();
+        std::string models_dir = executable_dir + "/../../models";
+        std::cout << "Executable directory: " << executable_dir << std::endl;
+        std::cout << "Models directory: " << models_dir << std::endl;
+        std::cout << "Executable directory: " << executable_dir << std::endl;
+        std::cout << "Models directory: " << models_dir << std::endl;
+        
+        // List available models
+        std::vector<std::string> models = list_models(models_dir);
+        if (models.empty()) {
+            std::cerr << "No models found in '" << models_dir << "' directory.\n";
+            std::cerr << "Please place model files (.gguf) in the 'models' directory.\n";
+            return 1;
+        }
+        
+        // Let user select a model
+        model_path = select_model(models);
     }
-    
-    // Let user select a model
-    std::string model_path = select_model(models);
     std::cout << "Selected model: " << model_path << "\n";
     
     // Initialize model with embedding mode enabled (using full init API)

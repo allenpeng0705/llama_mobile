@@ -223,6 +223,39 @@ endif()
 
 add_library(llama_mobile_core_lib OBJECT ${LLAMA_MOBILE_CORE_SOURCES})
 
+# Create static library
+add_library(llama_mobile_core_static STATIC $<TARGET_OBJECTS:llama_mobile_core_lib>)
+set_target_properties(llama_mobile_core_static PROPERTIES OUTPUT_NAME "llama_mobile_core")
+
+# Create shared library
+add_library(llama_mobile_core_shared SHARED $<TARGET_OBJECTS:llama_mobile_core_lib>)
+set_target_properties(llama_mobile_core_shared PROPERTIES OUTPUT_NAME "llama_mobile_core")
+
+# Configure common output directory
+set(OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")
+set(LIBRARY_OUTPUT_PATH "${OUTPUT_DIR}/lib")
+set(INCLUDE_OUTPUT_PATH "${OUTPUT_DIR}/include")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${LIBRARY_OUTPUT_PATH})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${LIBRARY_OUTPUT_PATH})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${OUTPUT_DIR})
+
+# Apply the same include directories to both libraries
+target_include_directories(llama_mobile_core_static PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/ggml-cpu>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/minja>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/tools/mtmd>
+)
+
+target_include_directories(llama_mobile_core_shared PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/ggml-cpu>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/minja>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/tools/mtmd>
+)
+
 target_include_directories(llama_mobile_core_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp>
@@ -282,6 +315,20 @@ target_compile_definitions(llama_mobile_core_lib PUBLIC
     LM_GGML_COMMIT="${GGML_BUILD_COMMIT}"
 )
 
+target_compile_definitions(llama_mobile_core_static PUBLIC
+    LM_GGML_USE_CPU
+    LLAMA_MOBILE_VERBOSE=0
+    LM_GGML_VERSION="${GGML_VERSION}"
+    LM_GGML_COMMIT="${GGML_BUILD_COMMIT}"
+)
+
+target_compile_definitions(llama_mobile_core_shared PUBLIC
+    LM_GGML_USE_CPU
+    LLAMA_MOBILE_VERBOSE=0
+    LM_GGML_VERSION="${GGML_VERSION}"
+    LM_GGML_COMMIT="${GGML_BUILD_COMMIT}"
+)
+
 if(APPLE)
     find_library(FOUNDATION_LIBRARY Foundation)
     find_library(ACCELERATE_FRAMEWORK Accelerate)
@@ -293,7 +340,21 @@ if(APPLE)
             ${FOUNDATION_LIBRARY}
             ${ACCELERATE_FRAMEWORK}
         )
+        target_link_libraries(llama_mobile_core_static PUBLIC
+            ${FOUNDATION_LIBRARY}
+            ${ACCELERATE_FRAMEWORK}
+        )
+        target_link_libraries(llama_mobile_core_shared PUBLIC
+            ${FOUNDATION_LIBRARY}
+            ${ACCELERATE_FRAMEWORK}
+        )
         target_compile_definitions(llama_mobile_core_lib PUBLIC
+            LM_GGML_USE_ACCELERATE
+        )
+        target_compile_definitions(llama_mobile_core_static PUBLIC
+            LM_GGML_USE_ACCELERATE
+        )
+        target_compile_definitions(llama_mobile_core_shared PUBLIC
             LM_GGML_USE_ACCELERATE
         )
     endif()
@@ -304,17 +365,54 @@ if(APPLE)
             ${METAL_LIBRARY}
             ${METALKIT_LIBRARY}
         )
+        target_link_libraries(llama_mobile_core_static PUBLIC
+            ${METAL_LIBRARY}
+            ${METALKIT_LIBRARY}
+        )
+        target_link_libraries(llama_mobile_core_shared PUBLIC
+            ${METAL_LIBRARY}
+            ${METALKIT_LIBRARY}
+        )
         target_compile_definitions(llama_mobile_core_lib PUBLIC
             LM_GGML_USE_METAL
             LM_GGML_METAL_USE_BF16
         )
+        target_compile_definitions(llama_mobile_core_static PUBLIC
+            LM_GGML_USE_METAL
+            LM_GGML_METAL_USE_BF16
+        )
+        target_compile_definitions(llama_mobile_core_shared PUBLIC
+            LM_GGML_USE_METAL
+            LM_GGML_METAL_USE_BF16
+        )
         
-        # Copy Metal shader files to tests directory
-        configure_file(llama_cpp/ggml-metal.metal ${CMAKE_CURRENT_BINARY_DIR}/tests/ggml-metal.metal COPYONLY)
-        configure_file(llama_cpp/ggml-common.h ${CMAKE_CURRENT_BINARY_DIR}/tests/ggml-common.h COPYONLY)
-        configure_file(llama_cpp/ggml-metal-impl.h ${CMAKE_CURRENT_BINARY_DIR}/tests/ggml-metal-impl.h COPYONLY)
+        # Copy Metal shader files to output directory
+        configure_file(llama_cpp/ggml-metal.metal ${OUTPUT_DIR}/ggml-metal.metal COPYONLY)
+        configure_file(llama_cpp/ggml-common.h ${OUTPUT_DIR}/ggml-common.h COPYONLY)
+        configure_file(llama_cpp/ggml-metal-impl.h ${OUTPUT_DIR}/ggml-metal-impl.h COPYONLY)
     endif()
 endif()
+
+# Copy headers to include directory
+file(MAKE_DIRECTORY ${INCLUDE_OUTPUT_PATH})
+file(MAKE_DIRECTORY ${INCLUDE_OUTPUT_PATH}/llama_cpp)
+file(MAKE_DIRECTORY ${INCLUDE_OUTPUT_PATH}/llama_cpp/ggml-cpu)
+file(MAKE_DIRECTORY ${INCLUDE_OUTPUT_PATH}/llama_cpp/minja)
+file(MAKE_DIRECTORY ${INCLUDE_OUTPUT_PATH}/llama_cpp/tools/mtmd)
+
+# Copy main headers
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_mobile.h DESTINATION ${INCLUDE_OUTPUT_PATH})
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_mobile_ffi.h DESTINATION ${INCLUDE_OUTPUT_PATH})
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_mobile_api.h DESTINATION ${INCLUDE_OUTPUT_PATH})
+
+# Copy llama_cpp headers
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/llama.h DESTINATION ${INCLUDE_OUTPUT_PATH}/llama_cpp)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/llama-cpp.h DESTINATION ${INCLUDE_OUTPUT_PATH}/llama_cpp)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/ggml.h DESTINATION ${INCLUDE_OUTPUT_PATH}/llama_cpp)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/gguf.h DESTINATION ${INCLUDE_OUTPUT_PATH}/llama_cpp)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/common.h DESTINATION ${INCLUDE_OUTPUT_PATH}/llama_cpp)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/chat.h DESTINATION ${INCLUDE_OUTPUT_PATH}/llama_cpp)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/sampling.h DESTINATION ${INCLUDE_OUTPUT_PATH}/llama_cpp)
 
 # Add tests subdirectory
 add_subdirectory(tests)
