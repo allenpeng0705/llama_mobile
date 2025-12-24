@@ -1,0 +1,10 @@
+/cactus-flutter
+/cactus-react
+examples/.DS_Store
+.DS_Store
+/examples/cpp/build
+/examples/flutter
+/examples/react
+/lib/build
+/lib/llama_cpp/patches
+/lib/models
