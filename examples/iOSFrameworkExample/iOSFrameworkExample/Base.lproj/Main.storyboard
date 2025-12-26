@@ -16,14 +16,15 @@
                         <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
                         <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                         <subviews>
-                            <textField opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="left" contentVerticalAlignment="center" borderStyle="roundedRect" textAlignment="natural" minimumFontSize="17" translatesAutoresizingMaskIntoConstraints="NO" id="r9G-6c-5kF">
-                                <rect key="frame" x="16" y="352" width="382" height="34"/>
+                            <textView clipsSubviews="YES" contentMode="scaleToFill" editable="YES" textAlignment="natural" translatesAutoresizingMaskIntoConstraints="NO" id="r9G-6c-5kF">
+                                <rect key="frame" x="16" y="232" width="382" height="100"/>
                                 <constraints>
-                                    <constraint firstAttribute="height" constant="34" id="P6w-qd-sJv"/>
+                                    <constraint firstAttribute="height" constant="100" id="P6w-qd-sJv"/>
                                 </constraints>
+                                <color key="backgroundColor" systemColor="systemBackgroundColor"/>
                                 <fontDescription key="fontDescription" type="system" pointSize="14"/>
-                                <textInputTraits key="textInputTraits"/>
-                            </textField>
+                                <textInputTraits key="textInputTraits" autocapitalizationType="sentences"/>
+                            </textView>
                             <textView clipsSubviews="YES" contentMode="scaleToFill" editable="NO" textAlignment="natural" translatesAutoresizingMaskIntoConstraints="NO" id="lBc-5k-9xZ">
                                 <rect key="frame" x="16" y="16" width="382" height="200"/>
                                 <constraints>

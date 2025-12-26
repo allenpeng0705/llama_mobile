@@ -7,8 +7,11 @@
 
 #import "ViewController.h"
 #include <sys/stat.h>
+@import AVFoundation;
 
-@interface ViewController () <UIPickerViewDelegate, UIPickerViewDataSource>
+@interface ViewController ()
+
+@property (nonatomic, strong) UIStackView *mainStackView;
 
 @end
 
@@ -63,10 +66,6 @@ static bool token_callback(const char* token) {
     self.debugLogTextView.scrollEnabled = YES;
     self.debugLogTextView.layer.borderWidth = 1.0;
     self.debugLogTextView.layer.borderColor = [UIColor blackColor].CGColor;
-    [self.view addSubview:self.debugLogTextView];
-    
-    // Add model picker view at the top
-    [self setupModelPickerView];
     
     // Improve UI visibility with enhanced styling
     
@@ -77,13 +76,26 @@ static bool token_callback(const char* token) {
     [self.outputTextView setTextAlignment:NSTextAlignmentLeft];
     
     
-    // Prompt text field - improve visibility and appearance
+    // Prompt input - improve visibility and appearance
     [self.promptTextField setTextColor:[UIColor blackColor]];
     [self.promptTextField setBackgroundColor:[UIColor whiteColor]];
-    [self.promptTextField setBorderStyle:UITextBorderStyleNone]; // Remove system border to use custom layer border
     [self.promptTextField setFont:[UIFont systemFontOfSize:16]];
-    // Fix placeholder color
-    [self.promptTextField setAttributedPlaceholder:[[NSAttributedString alloc] initWithString:@"Enter your prompt here..." attributes:@{NSForegroundColorAttributeName: [UIColor lightGrayColor]}]];
+    [self.promptTextField setTextAlignment:NSTextAlignmentLeft];
+    [self.promptTextField setUserInteractionEnabled:YES];
+    [self.promptTextField setDelegate:self];
+    
+    // UITextView-specific properties
+    [self.promptTextField setEditable:YES];
+    [self.promptTextField setScrollEnabled:YES];
+    [self.promptTextField setTextContainerInset:UIEdgeInsetsMake(8.0, 8.0, 8.0, 8.0)];
+    // Set placeholder text for text view
+    [self.promptTextField setText:@"Enter your prompt here..."];
+    [self.promptTextField setTextColor:[UIColor lightGrayColor]];
+    
+    // Increase height of prompt input field
+    [self.promptTextField.heightAnchor constraintEqualToConstant:120.0].active = YES;
+    
+    // Set layer properties for better appearance
     [self.promptTextField.layer setCornerRadius:8.0];
     [self.promptTextField.layer setBorderWidth:1.0];
     [self.promptTextField.layer setBorderColor:[UIColor blackColor].CGColor];
@@ -107,14 +119,24 @@ static bool token_callback(const char* token) {
     [self.activityIndicator setColor:[UIColor blackColor]];
     
     self.modelContext = NULL;
+    self.vocoderContext = NULL;
     self.currentOutput = [NSMutableString string];
     self.isGenerating = NO;
+    self.isPlayingAudio = NO;
+    
+    // Initialize audio engine and player node for TTS playback
+    self.audioEngine = [[AVAudioEngine alloc] init];
+    self.audioPlayerNode = [[AVAudioPlayerNode alloc] init];
+    [self.audioEngine attachNode:self.audioPlayerNode];
     
     // Initialize model selection data structures
     self.modelPaths = [NSMutableDictionary dictionary];
     
-    // Scan app bundle for all GGUF model files
+    // Scan app bundle for all GGUF model files FIRST - this is critical for model picker
     [self scanForModelFiles];
+    
+    // Add model picker view after models are scanned
+    [self setupModelPickerView];
     
     // Disable buttons until model is initialized
     [self updateButtonStates];
@@ -122,6 +144,9 @@ static bool token_callback(const char* token) {
     // Add keyboard handling
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillShow:) name:UIKeyboardWillShowNotification object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(keyboardWillHide:) name:UIKeyboardWillHideNotification object:nil];
+    
+    // Add debug log view to main stack view in setupModelPickerView
+    // So we don't need to add it here
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -154,15 +179,49 @@ static bool token_callback(const char* token) {
 // MARK: - Keyboard Handling
 
 - (void)keyboardWillShow:(NSNotification *)notification {
-    // Adjust view when keyboard appears
+    // Adjust scroll view content inset when keyboard appears
     NSDictionary *info = [notification userInfo];
     CGRect keyboardFrame = [[info objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue];
-    self.outputTextView.contentInset = UIEdgeInsetsMake(0, 0, keyboardFrame.size.height, 0);
+    
+    // Get keyboard height
+    CGFloat keyboardHeight = [self.view convertRect:keyboardFrame fromView:nil].size.height;
+    
+    // Adjust scroll view content inset
+    UIEdgeInsets contentInset = self.scrollView.contentInset;
+    contentInset.bottom = keyboardHeight + 16.0;
+    self.scrollView.contentInset = contentInset;
+    
+    // Also adjust scroll indicator inset
+    UIEdgeInsets scrollIndicatorInset = self.scrollView.scrollIndicatorInsets;
+    scrollIndicatorInset.bottom = keyboardHeight + 16.0;
+    self.scrollView.scrollIndicatorInsets = scrollIndicatorInset;
+    
+    // Animate the change to match keyboard animation
+    double animationDuration = [[info objectForKey:UIKeyboardAnimationDurationUserInfoKey] doubleValue];
+    
+    [UIView animateWithDuration:animationDuration animations:^{ 
+        [self.view layoutIfNeeded];
+    }];
 }
 
 - (void)keyboardWillHide:(NSNotification *)notification {
-    // Reset view when keyboard disappears
-    self.outputTextView.contentInset = UIEdgeInsetsZero;
+    // Reset scroll view content inset when keyboard disappears
+    UIEdgeInsets contentInset = self.scrollView.contentInset;
+    contentInset.bottom = 16.0;
+    self.scrollView.contentInset = contentInset;
+    
+    // Also reset scroll indicator inset
+    UIEdgeInsets scrollIndicatorInset = self.scrollView.scrollIndicatorInsets;
+    scrollIndicatorInset.bottom = 16.0;
+    self.scrollView.scrollIndicatorInsets = scrollIndicatorInset;
+    
+    // Animate the change to match keyboard animation
+    NSDictionary *info = [notification userInfo];
+    double animationDuration = [[info objectForKey:UIKeyboardAnimationDurationUserInfoKey] doubleValue];
+    
+    [UIView animateWithDuration:animationDuration animations:^{ 
+        [self.view layoutIfNeeded];
+    }];
 }
 
 // MARK: - Model Selection
@@ -191,7 +250,7 @@ static bool token_callback(const char* token) {
         NSLog(@"DEBUG:   - %@: %@", modelName, [self.modelPaths objectForKey:modelName]);
     }
     
-    [self prependDebugText:[NSString stringWithFormat:@"Found %lu model files in bundle\n", (unsigned long)[self.availableModels count]]];
+
 }
 
 - (void)scanDirectory:(NSString *)directoryPath forFilesWithExtension:(NSString *)extension {
@@ -222,264 +281,277 @@ static bool token_callback(const char* token) {
 
 - (void)setupModelPickerView {
     // Create model label
-    self.modelLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    self.modelLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    self.modelLabel.text = @"Select Model:";
-    self.modelLabel.textColor = [UIColor blackColor];
-    self.modelLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
-    [self.view addSubview:self.modelLabel];
-    [self.view bringSubviewToFront:self.modelLabel];
+    if (!self.modelLabel) {
+        self.modelLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+        self.modelLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        self.modelLabel.text = @"Select Model:";
+        self.modelLabel.textColor = [UIColor blackColor];
+        self.modelLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
+        [self.view addSubview:self.modelLabel];
+    }
     
-    // Create model picker view
-    self.modelPickerView = [[UIPickerView alloc] initWithFrame:CGRectZero];
-    self.modelPickerView.translatesAutoresizingMaskIntoConstraints = NO;
-    self.modelPickerView.delegate = self;
-    self.modelPickerView.dataSource = self;
-    self.modelPickerView.backgroundColor = [UIColor whiteColor];
-    [self.modelPickerView.layer setBorderWidth:1.0];
-    [self.modelPickerView.layer setBorderColor:[UIColor blackColor].CGColor];
-    [self.view addSubview:self.modelPickerView];
-    [self.view bringSubviewToFront:self.modelPickerView];
-    
-    // Remove all existing constraints that involve outputTextView, promptTextField, or debugLogTextView positions
-    // This ensures we have a clean slate for our new layout
-    NSMutableArray *constraintsToRemove = [NSMutableArray array];
-    
-    // Check all constraints affecting the view and its subviews
-    // Get all constraints in the view hierarchy
-    NSArray *allConstraints = [self.view constraintsAffectingLayoutForAxis:UILayoutConstraintAxisVertical];
-    allConstraints = [allConstraints arrayByAddingObjectsFromArray:[self.view constraintsAffectingLayoutForAxis:UILayoutConstraintAxisHorizontal]];
-    
-    for (NSLayoutConstraint *constraint in allConstraints) {
-        // Check if constraint involves any of our key views
-        BOOL involvesOutputTextView = (constraint.firstItem == self.outputTextView || constraint.secondItem == self.outputTextView);
-        BOOL involvesPromptTextField = (constraint.firstItem == self.promptTextField || constraint.secondItem == self.promptTextField);
-        BOOL involvesDebugLogTextView = (constraint.firstItem == self.debugLogTextView || constraint.secondItem == self.debugLogTextView);
+    // Create model dropdown text field
+    if (!self.modelDropdownTextField) {
+        self.modelDropdownTextField = [[UITextField alloc] init];
+        self.modelDropdownTextField.translatesAutoresizingMaskIntoConstraints = NO;
+        self.modelDropdownTextField.backgroundColor = [UIColor whiteColor];
+        [self.modelDropdownTextField.layer setBorderWidth:1.0];
+        [self.modelDropdownTextField.layer setBorderColor:[UIColor blackColor].CGColor];
+        [self.modelDropdownTextField.layer setCornerRadius:8.0];
+        self.modelDropdownTextField.textColor = [UIColor blackColor];
+        self.modelDropdownTextField.font = [UIFont systemFontOfSize:16];
+        self.modelDropdownTextField.textAlignment = NSTextAlignmentCenter;
+        self.modelDropdownTextField.userInteractionEnabled = YES;
+        self.modelDropdownTextField.delegate = self;
         
-        // If constraint involves any of these views, we'll remove it to avoid conflicts
-        if (involvesOutputTextView || involvesPromptTextField || involvesDebugLogTextView) {
-            [constraintsToRemove addObject:constraint];
+        // Add a down arrow button to indicate dropdown
+        UIButton *dropdownButton = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 30, 30)];
+        [dropdownButton setImage:[UIImage systemImageNamed:@"chevron.down"] forState:UIControlStateNormal];
+        [dropdownButton setTintColor:[UIColor blackColor]];
+        self.modelDropdownTextField.rightView = dropdownButton;
+        self.modelDropdownTextField.rightViewMode = UITextFieldViewModeAlways;
+        
+        // Create picker view
+        self.modelPickerView = [[UIPickerView alloc] init];
+        self.modelPickerView.backgroundColor = [UIColor whiteColor];
+        self.modelPickerView.dataSource = self;
+        self.modelPickerView.delegate = self;
+        
+        // Set picker as input view
+        self.modelDropdownTextField.inputView = self.modelPickerView;
+        
+        // Create a toolbar with done button
+        UIToolbar *toolbar = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, 44)];
+        UIBarButtonItem *doneButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(doneButtonTapped)];
+        UIBarButtonItem *flexSpace = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
+        [toolbar setItems:@[flexSpace, doneButton] animated:NO];
+        
+        // Set toolbar as input accessory view
+        self.modelDropdownTextField.inputAccessoryView = toolbar;
+        
+        [self.view addSubview:self.modelDropdownTextField];
+    }
+    
+    // Reload picker data to ensure models are displayed
+    [self.modelPickerView reloadAllComponents];
+    
+    // If there's only one model, select it by default
+    if ([self.availableModels count] > 0) {
+        [self.modelPickerView selectRow:0 inComponent:0 animated:NO];
+        [self dropdownDidSelectModelAtIndex:0];
+    }
+    
+    // Remove all existing constraints for all key views to start fresh
+    NSArray *viewsToCleanup = @[
+        self.modelLabel, self.modelPickerView, self.outputTextView, 
+        self.debugLogTextView, self.promptTextField, self.generateButton, 
+        self.completeButton, self.conversationButton, self.embeddingButton,
+        self.initializeButton, self.multimodalButton, self.clearButton
+    ];
+    
+    for (UIView *view in viewsToCleanup) {
+        if (view) {
+            [view removeConstraints:view.constraints];
+            NSMutableArray *constraintsToRemove = [NSMutableArray array];
+            for (NSLayoutConstraint *constraint in view.superview.constraints) {
+                if (constraint.firstItem == view || constraint.secondItem == view) {
+                    [constraintsToRemove addObject:constraint];
+                }
+            }
+            [view.superview removeConstraints:constraintsToRemove];
         }
     }
     
-    // Deactivate all the constraints we want to remove
-    if ([constraintsToRemove count] > 0) {
-        [NSLayoutConstraint deactivateConstraints:constraintsToRemove];
-        NSLog(@"DEBUG: Deactivated %lu conflicting constraints", (unsigned long)[constraintsToRemove count]);
+    // Create or reuse main vertical stack view to hold all UI elements
+    if (!self.mainStackView) {
+        self.mainStackView = [[UIStackView alloc] init];
+        self.mainStackView.translatesAutoresizingMaskIntoConstraints = NO;
+        self.mainStackView.axis = UILayoutConstraintAxisVertical;
+        self.mainStackView.alignment = UIStackViewAlignmentFill;
+        self.mainStackView.distribution = UIStackViewDistributionFill;
+        self.mainStackView.spacing = 12.0;
+        [self.view addSubview:self.mainStackView];
+    } else {
+        // Clear any existing arranged subviews
+    for (UIView *subview in self.mainStackView.arrangedSubviews) {
+        [self.mainStackView removeArrangedSubview:subview];
+        [subview removeFromSuperview];
+    }
     }
     
-    // Set up constraints for the new layout order
-    // 1. Model label at the very top
-    NSLayoutConstraint *labelTopConstraint = [self.modelLabel.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:16.0];
-    NSLayoutConstraint *labelLeadingConstraint = [self.modelLabel.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16.0];
-    NSLayoutConstraint *labelTrailingConstraint = [self.modelLabel.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16.0];
+    // Add model selection section to the stack view
+    [self.mainStackView addArrangedSubview:self.modelLabel];
+    [self.mainStackView addArrangedSubview:self.modelDropdownTextField];
+    // Set a proper height for the dropdown text field
+    [self.modelDropdownTextField.heightAnchor constraintEqualToConstant:44.0].active = YES;
     
-    // 2. Model picker below the label
-    NSLayoutConstraint *pickerTopConstraint = [self.modelPickerView.topAnchor constraintEqualToAnchor:self.modelLabel.bottomAnchor constant:8.0];
-    NSLayoutConstraint *pickerLeadingConstraint = [self.modelPickerView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16.0];
-    NSLayoutConstraint *pickerTrailingConstraint = [self.modelPickerView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16.0];
-    NSLayoutConstraint *pickerHeightConstraint = [self.modelPickerView.heightAnchor constraintEqualToConstant:100.0]; // Reduced height for better space utilization
+    // Set output text view height
+    [self.outputTextView.heightAnchor constraintEqualToConstant:100.0].active = YES;
+    [self.mainStackView addArrangedSubview:self.outputTextView];
     
-    // 3. Output text view below the picker
-    NSLayoutConstraint *outputTopConstraint = [self.outputTextView.topAnchor constraintEqualToAnchor:self.modelPickerView.bottomAnchor constant:16.0];
-    NSLayoutConstraint *outputLeadingConstraint = [self.outputTextView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16.0];
-    NSLayoutConstraint *outputTrailingConstraint = [self.outputTextView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16.0];
-    NSLayoutConstraint *outputHeightConstraint = [self.outputTextView.heightAnchor constraintEqualToConstant:200.0]; // Explicit height constraint to prevent covering debug log
+    // Add prompt text field to the stack (on top of buttons)
+    [self.mainStackView addArrangedSubview:self.promptTextField];
+    // Set a proper height for the prompt text field (multiline)
+    [self.promptTextField.heightAnchor constraintEqualToConstant:120.0].active = YES;
     
-    // 4. Debug log below output text view
-    NSLayoutConstraint *debugTopConstraint = [self.debugLogTextView.topAnchor constraintEqualToAnchor:self.outputTextView.bottomAnchor constant:8.0];
-    NSLayoutConstraint *debugLeadingConstraint = [self.debugLogTextView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16.0];
-    NSLayoutConstraint *debugTrailingConstraint = [self.debugLogTextView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16.0];
-    NSLayoutConstraint *debugHeightConstraint = [self.debugLogTextView.heightAnchor constraintEqualToConstant:100.0];
+    // Create a button container stack view (3 rows of 2 buttons)
+    UIStackView *buttonRow1 = [[UIStackView alloc] init];
+    buttonRow1.axis = UILayoutConstraintAxisHorizontal;
+    buttonRow1.alignment = UIStackViewAlignmentFill;
+    buttonRow1.distribution = UIStackViewDistributionFillEqually;
+    buttonRow1.spacing = 8.0;
     
-    // 5. Prompt text field below debug log
-    NSLayoutConstraint *promptTopConstraint = [self.promptTextField.topAnchor constraintEqualToAnchor:self.debugLogTextView.bottomAnchor constant:16.0];
-    NSLayoutConstraint *promptLeadingConstraint = [self.promptTextField.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16.0];
-    NSLayoutConstraint *promptTrailingConstraint = [self.promptTextField.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16.0];
-    NSLayoutConstraint *promptBottomConstraint = [self.promptTextField.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-16.0];
+    UIStackView *buttonRow2 = [[UIStackView alloc] init];
+    buttonRow2.axis = UILayoutConstraintAxisHorizontal;
+    buttonRow2.alignment = UIStackViewAlignmentFill;
+    buttonRow2.distribution = UIStackViewDistributionFillEqually;
+    buttonRow2.spacing = 8.0;
     
-    // Create buttons container to manage the button grid layout
-    UIView *buttonsContainer = [[UIView alloc] initWithFrame:CGRectZero];
-    buttonsContainer.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:buttonsContainer];
-    [self.view bringSubviewToFront:buttonsContainer];
+    UIStackView *buttonRow3 = [[UIStackView alloc] init];
+    buttonRow3.axis = UILayoutConstraintAxisHorizontal;
+    buttonRow3.alignment = UIStackViewAlignmentFill;
+    buttonRow3.distribution = UIStackViewDistributionFillEqually;
+    buttonRow3.spacing = 8.0;
     
-    // Set up constraints for buttons container
-    NSLayoutConstraint *buttonsTopConstraint = [buttonsContainer.topAnchor constraintEqualToAnchor:self.outputTextView.bottomAnchor constant:8.0];
-    NSLayoutConstraint *buttonsLeadingConstraint = [buttonsContainer.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16.0];
-    NSLayoutConstraint *buttonsTrailingConstraint = [buttonsContainer.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16.0];
+    // Add buttons to rows
+    [buttonRow1 addArrangedSubview:self.initializeButton];
     
-    // Now reposition debug log to be below buttons container
-    debugTopConstraint = [self.debugLogTextView.topAnchor constraintEqualToAnchor:buttonsContainer.bottomAnchor constant:8.0];
+    [buttonRow2 addArrangedSubview:self.generateButton];
+    [buttonRow2 addArrangedSubview:self.completeButton];
     
-    // Position prompt text field below debug log
-    promptTopConstraint = [self.promptTextField.topAnchor constraintEqualToAnchor:self.debugLogTextView.bottomAnchor constant:16.0];
+    [buttonRow3 addArrangedSubview:self.conversationButton];
+    [buttonRow3 addArrangedSubview:self.embeddingButton];
     
-    // Create button constraints for a grid layout
-    NSLayoutConstraint *initializeTopConstraint = [self.initializeButton.topAnchor constraintEqualToAnchor:buttonsContainer.topAnchor constant:0.0];
-    NSLayoutConstraint *initializeLeadingConstraint = [self.initializeButton.leadingAnchor constraintEqualToAnchor:buttonsContainer.leadingAnchor constant:0.0];
-    NSLayoutConstraint *initializeTrailingConstraint = [self.initializeButton.trailingAnchor constraintEqualToAnchor:buttonsContainer.trailingAnchor constant:0.0];
-    NSLayoutConstraint *initializeHeightConstraint = [self.initializeButton.heightAnchor constraintEqualToConstant:44.0];
+    // Set button heights
+    CGFloat buttonHeight = 36.0;
+    NSArray *allButtons = @[
+        self.initializeButton, self.generateButton, self.completeButton, 
+        self.conversationButton, self.embeddingButton, self.multimodalButton, 
+        self.clearButton, self.ttsButton
+    ];
     
-    NSLayoutConstraint *generateTopConstraint = [self.generateButton.topAnchor constraintEqualToAnchor:self.initializeButton.bottomAnchor constant:8.0];
-    NSLayoutConstraint *generateLeadingConstraint = [self.generateButton.leadingAnchor constraintEqualToAnchor:buttonsContainer.leadingAnchor constant:0.0];
-    NSLayoutConstraint *generateTrailingConstraint = [self.generateButton.trailingAnchor constraintEqualToAnchor:buttonsContainer.centerXAnchor constant:-4.0];
-    NSLayoutConstraint *generateHeightConstraint = [self.generateButton.heightAnchor constraintEqualToConstant:44.0];
+    for (UIButton *button in allButtons) {
+        [button.heightAnchor constraintEqualToConstant:buttonHeight].active = YES;
+    }
     
-    NSLayoutConstraint *completeTopConstraint = [self.completeButton.topAnchor constraintEqualToAnchor:self.generateButton.topAnchor constant:0.0];
-    NSLayoutConstraint *completeLeadingConstraint = [self.completeButton.leadingAnchor constraintEqualToAnchor:buttonsContainer.centerXAnchor constant:4.0];
-    NSLayoutConstraint *completeTrailingConstraint = [self.completeButton.trailingAnchor constraintEqualToAnchor:buttonsContainer.trailingAnchor constant:0.0];
-    NSLayoutConstraint *completeHeightConstraint = [self.completeButton.heightAnchor constraintEqualToConstant:44.0];
+    // Add button rows to main stack
+    [self.mainStackView addArrangedSubview:buttonRow1];
+    [self.mainStackView addArrangedSubview:buttonRow2];
+    [self.mainStackView addArrangedSubview:buttonRow3];
     
-    NSLayoutConstraint *conversationTopConstraint = [self.conversationButton.topAnchor constraintEqualToAnchor:self.generateButton.bottomAnchor constant:8.0];
-    NSLayoutConstraint *conversationLeadingConstraint = [self.conversationButton.leadingAnchor constraintEqualToAnchor:buttonsContainer.leadingAnchor constant:0.0];
-    NSLayoutConstraint *conversationTrailingConstraint = [self.conversationButton.trailingAnchor constraintEqualToAnchor:buttonsContainer.centerXAnchor constant:-4.0];
-    NSLayoutConstraint *conversationHeightConstraint = [self.conversationButton.heightAnchor constraintEqualToConstant:44.0];
+    // Create a horizontal stack for the last two buttons
+    UIStackView *buttonRow4 = [[UIStackView alloc] init];
+    buttonRow4.axis = UILayoutConstraintAxisHorizontal;
+    buttonRow4.alignment = UIStackViewAlignmentFill;
+    buttonRow4.distribution = UIStackViewDistributionFillEqually;
+    buttonRow4.spacing = 8.0;
     
-    NSLayoutConstraint *embeddingTopConstraint = [self.embeddingButton.topAnchor constraintEqualToAnchor:self.conversationButton.topAnchor constant:0.0];
-    NSLayoutConstraint *embeddingLeadingConstraint = [self.embeddingButton.leadingAnchor constraintEqualToAnchor:buttonsContainer.centerXAnchor constant:4.0];
-    NSLayoutConstraint *embeddingTrailingConstraint = [self.embeddingButton.trailingAnchor constraintEqualToAnchor:buttonsContainer.trailingAnchor constant:0.0];
-    NSLayoutConstraint *embeddingHeightConstraint = [self.embeddingButton.heightAnchor constraintEqualToConstant:44.0];
+    [buttonRow4 addArrangedSubview:self.multimodalButton];
+    [buttonRow4 addArrangedSubview:self.ttsButton];
+    [self.mainStackView addArrangedSubview:buttonRow4];
     
-    NSLayoutConstraint *multimodalTopConstraint = [self.multimodalButton.topAnchor constraintEqualToAnchor:self.conversationButton.bottomAnchor constant:8.0];
-    NSLayoutConstraint *multimodalLeadingConstraint = [self.multimodalButton.leadingAnchor constraintEqualToAnchor:buttonsContainer.leadingAnchor constant:0.0];
-    NSLayoutConstraint *multimodalTrailingConstraint = [self.multimodalButton.trailingAnchor constraintEqualToAnchor:buttonsContainer.trailingAnchor constant:0.0];
-    NSLayoutConstraint *multimodalHeightConstraint = [self.multimodalButton.heightAnchor constraintEqualToConstant:44.0];
+    // Create a row for clear and audio playback buttons
+    UIStackView *buttonRow5 = [[UIStackView alloc] init];
+    buttonRow5.axis = UILayoutConstraintAxisHorizontal;
+    buttonRow5.alignment = UIStackViewAlignmentFill;
+    buttonRow5.distribution = UIStackViewDistributionFillEqually;
+    buttonRow5.spacing = 8.0;
     
-    NSLayoutConstraint *clearTopConstraint = [self.clearButton.topAnchor constraintEqualToAnchor:self.multimodalButton.bottomAnchor constant:8.0];
-    NSLayoutConstraint *clearLeadingConstraint = [self.clearButton.leadingAnchor constraintEqualToAnchor:buttonsContainer.leadingAnchor constant:0.0];
-    NSLayoutConstraint *clearTrailingConstraint = [self.clearButton.trailingAnchor constraintEqualToAnchor:buttonsContainer.trailingAnchor constant:0.0];
-    NSLayoutConstraint *clearHeightConstraint = [self.clearButton.heightAnchor constraintEqualToConstant:44.0];
+    [buttonRow5 addArrangedSubview:self.clearButton];
+    [buttonRow5 addArrangedSubview:self.playAudioButton];
+    [buttonRow5 addArrangedSubview:self.stopAudioButton];
+    [self.mainStackView addArrangedSubview:buttonRow5];
     
-    // Set the bottom constraint of the buttons container to match the bottom of the clear button
-    NSLayoutConstraint *buttonsBottomConstraint = [buttonsContainer.bottomAnchor constraintEqualToAnchor:self.clearButton.bottomAnchor constant:0.0];
+    // Hide audio controls initially
+    self.playAudioButton.hidden = YES;
+    self.stopAudioButton.hidden = YES;
     
-    // Activate all the new constraints
-    [NSLayoutConstraint activateConstraints:@[
-        // Model selection UI constraints
-        labelTopConstraint,
-        labelLeadingConstraint,
-        labelTrailingConstraint,
-        pickerTopConstraint,
-        pickerLeadingConstraint,
-        pickerTrailingConstraint,
-        pickerHeightConstraint,
+    // Set debug log height (increased to give more space for logging)
+    [self.debugLogTextView.heightAnchor constraintEqualToConstant:120.0].active = YES;
+    [self.mainStackView addArrangedSubview:self.debugLogTextView];
+    
+    // Create and configure scroll view
+    if (!self.scrollView) {
+        self.scrollView = [[UIScrollView alloc] init];
+        self.scrollView.translatesAutoresizingMaskIntoConstraints = NO;
+
+        [self.view addSubview:self.scrollView];
         
-        // Output text view constraints
-        outputTopConstraint,
-        outputLeadingConstraint,
-        outputTrailingConstraint,
-        outputHeightConstraint, // Add the explicit height constraint
-        
-        // Buttons container and buttons constraints
-        buttonsTopConstraint,
-        buttonsLeadingConstraint,
-        buttonsTrailingConstraint,
-        buttonsBottomConstraint,
-        
-        // Initialize button
-        initializeTopConstraint,
-        initializeLeadingConstraint,
-        initializeTrailingConstraint,
-        initializeHeightConstraint,
-        
-        // Generate button
-        generateTopConstraint,
-        generateLeadingConstraint,
-        generateTrailingConstraint,
-        generateHeightConstraint,
-        
-        // Complete button
-        completeTopConstraint,
-        completeLeadingConstraint,
-        completeTrailingConstraint,
-        completeHeightConstraint,
-        
-        // Conversation button
-        conversationTopConstraint,
-        conversationLeadingConstraint,
-        conversationTrailingConstraint,
-        conversationHeightConstraint,
-        
-        // Embedding button
-        embeddingTopConstraint,
-        embeddingLeadingConstraint,
-        embeddingTrailingConstraint,
-        embeddingHeightConstraint,
-        
-        // Multimodal button
-        multimodalTopConstraint,
-        multimodalLeadingConstraint,
-        multimodalTrailingConstraint,
-        multimodalHeightConstraint,
-        
-        // Clear button
-        clearTopConstraint,
-        clearLeadingConstraint,
-        clearTrailingConstraint,
-        clearHeightConstraint,
-        
-        // Debug log constraints
-        debugTopConstraint,
-        debugLeadingConstraint,
-        debugTrailingConstraint,
-        debugHeightConstraint,
-        
-        // Prompt text field constraints
-        promptTopConstraint,
-        promptLeadingConstraint,
-        promptTrailingConstraint,
-        promptBottomConstraint
-    ]];
+        // Add constraints for scrollView
+        [self.scrollView.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor constant:0.0].active = YES;
+        [self.scrollView.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:0.0].active = YES;
+        [self.scrollView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:0.0].active = YES;
+        [self.scrollView.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:0.0].active = YES;
+    }
     
-    // Bring all buttons to front to ensure visibility
-    [self.view bringSubviewToFront:self.generateButton];
-    [self.view bringSubviewToFront:self.completeButton];
-    [self.view bringSubviewToFront:self.conversationButton];
-    [self.view bringSubviewToFront:self.embeddingButton];
-    [self.view bringSubviewToFront:self.multimodalButton];
-    [self.view bringSubviewToFront:self.initializeButton];
-    [self.view bringSubviewToFront:self.clearButton];
+    // Always add mainStackView to scrollView and set constraints
+    [self.mainStackView removeFromSuperview];
+    [self.scrollView addSubview:self.mainStackView];
     
-    // Bring debug log view to front to ensure visibility
-    [self.view bringSubviewToFront:self.debugLogTextView];
+    // Add constraints for mainStackView inside scrollView
+    [self.mainStackView.leadingAnchor constraintEqualToAnchor:self.scrollView.leadingAnchor constant:16.0].active = YES;
+    [self.mainStackView.trailingAnchor constraintEqualToAnchor:self.scrollView.trailingAnchor constant:-16.0].active = YES;
+    [self.mainStackView.topAnchor constraintEqualToAnchor:self.scrollView.topAnchor constant:16.0].active = YES;
+    [self.mainStackView.bottomAnchor constraintEqualToAnchor:self.scrollView.bottomAnchor constant:-16.0].active = YES;
     
-    NSLog(@"DEBUG: Model picker view setup completed");
+    // Ensure mainStackView width matches scrollView width
+    [self.mainStackView.widthAnchor constraintEqualToAnchor:self.scrollView.widthAnchor constant:-32.0].active = YES;
+    
+    NSLog(@"DEBUG: Model picker view setup completed with stack view layout");
 }
 
-// MARK: - UIPickerView Delegate & DataSource
+// MARK: - Model Segmented Control Action
+
+// MARK: - UIPickerViewDataSource Methods
 
 - (NSInteger)numberOfComponentsInPickerView:(UIPickerView *)pickerView {
+    // Only one column for model selection
     return 1;
 }
 
 - (NSInteger)pickerView:(UIPickerView *)pickerView numberOfRowsInComponent:(NSInteger)component {
+    // Return number of available models
     return [self.availableModels count];
 }
 
-// Use viewForRow instead of titleForRow to customize text appearance and ensure visibility
+// MARK: - UIPickerViewDelegate Methods
+
 - (UIView *)pickerView:(UIPickerView *)pickerView viewForRow:(NSInteger)row forComponent:(NSInteger)component reusingView:(UIView *)view {
-    UILabel *pickerLabel;
-    if (view) {
-        pickerLabel = (UILabel *)view;
-    } else {
-        pickerLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, pickerView.bounds.size.width - 20, 44)];
-        pickerLabel.font = [UIFont systemFontOfSize:16];
-        pickerLabel.textAlignment = NSTextAlignmentCenter;
-        pickerLabel.textColor = [UIColor blackColor]; // Ensure text color is black for visibility
-        pickerLabel.backgroundColor = [UIColor clearColor];
+    // Create a label with explicit text color to ensure visibility
+    UILabel *label = (UILabel *)view;
+    if (!label) {
+        label = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, pickerView.frame.size.width, 44)];
+        label.textColor = [UIColor blackColor];
+        label.font = [UIFont systemFontOfSize:16];
+        label.textAlignment = NSTextAlignmentCenter;
     }
     
-    pickerLabel.text = [self.availableModels objectAtIndex:row];
-    return pickerLabel;
+    // Set the model name for the row
+    label.text = [self.availableModels objectAtIndex:row];
+    return label;
 }
 
 - (void)pickerView:(UIPickerView *)pickerView didSelectRow:(NSInteger)row inComponent:(NSInteger)component {
-    NSString *selectedModel = [self.availableModels objectAtIndex:row];
-    NSString *modelPath = [self.modelPaths objectForKey:selectedModel];
-    
-    NSLog(@"DEBUG: Selected model: %@ (%@)", selectedModel, modelPath);
-    [self prependDebugText:[NSString stringWithFormat:@"Selected model: %@\n", selectedModel]];
+    // Handle model selection
+    [self dropdownDidSelectModelAtIndex:row];
+}
+
+- (void)dropdownDidSelectModelAtIndex:(NSInteger)row {
+    if (row >= 0 && row < [self.availableModels count]) {
+        NSString *selectedModel = [self.availableModels objectAtIndex:row];
+        NSString *modelPath = [self.modelPaths objectForKey:selectedModel];
+        
+        // Update the text field with the selected model
+        self.modelDropdownTextField.text = selectedModel;
+        
+        NSLog(@"DEBUG: Selected model: %@ (%@)", selectedModel, modelPath);
+        [self prependDebugText:[NSString stringWithFormat:@"Selected model: %@\n", selectedModel]];
+    }
+}
+
+- (void)doneButtonTapped {
+    // Dismiss the picker view
+    [self.modelDropdownTextField resignFirstResponder];
 }
 
 // MARK: - Model Initialization
@@ -504,25 +576,24 @@ static bool token_callback(const char* token) {
         return;
     }
     
-    // Get selected model from picker view
-    NSInteger selectedRow = [self.modelPickerView selectedRowInComponent:0];
-    NSString *selectedModel = nil;
+    // Get selected model from dropdown
+    NSString *selectedModel = self.modelDropdownTextField.text;
+    NSInteger selectedIndex = [self.availableModels indexOfObject:selectedModel];
     
-    if (selectedRow >= 0 && selectedRow < [self.availableModels count]) {
-        selectedModel = [self.availableModels objectAtIndex:selectedRow];
-        modelPath = [self.modelPaths objectForKey:selectedModel];
+    if (selectedIndex == NSNotFound || selectedIndex >= [self.availableModels count]) {
+        // Fallback to first model if no selection or invalid selection
+        selectedIndex = 0;
+        selectedModel = [self.availableModels objectAtIndex:selectedIndex];
         
-        NSLog(@"DEBUG: Selected model: %@", selectedModel);
-        NSLog(@"DEBUG: Model path: %@", modelPath);
-    } else {
-        // Fallback to first model if no selection
-        selectedRow = 0;
-        selectedModel = [self.availableModels objectAtIndex:selectedRow];
-        modelPath = [self.modelPaths objectForKey:selectedModel];
+        NSLog(@"DEBUG: No valid model selected, using first model: %@", selectedModel);
         
-        NSLog(@"DEBUG: No model selected, using first model: %@", selectedModel);
-        NSLog(@"DEBUG: Model path: %@", modelPath);
+        // Update the dropdown to show the selected model
+        [self dropdownDidSelectModelAtIndex:selectedIndex];
     }
+    
+    modelPath = [self.modelPaths objectForKey:selectedModel];
+    NSLog(@"DEBUG: Selected model: %@", selectedModel);
+    NSLog(@"DEBUG: Model path: %@", modelPath);
     
     if (!modelPath) {
         NSString *errorMsg = @"Error: Could not get path for selected model.\n";
@@ -534,7 +605,6 @@ static bool token_callback(const char* token) {
     
     // Prepend new content to show at the top
     [self prependDebugText:[NSString stringWithFormat:@"Trying to load model: %@\n", selectedModel]];
-    [self prependDebugText:[NSString stringWithFormat:@"Model path: %@\n", modelPath]];
     
     // Initialize model in background thread
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{        
@@ -898,7 +968,7 @@ static bool token_callback(const char* token) {
         
         NSString *userPrompt = self.promptTextField.text;
         NSLog(@"DEBUG: Using user prompt: %@", userPrompt);
-        if ([userPrompt length] == 0) {
+        if ([userPrompt length] == 0 || [userPrompt isEqualToString:@"Enter your prompt here..."]) {
             NSLog(@"DEBUG: Empty prompt - cannot generate text");
             [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Please enter a prompt.\n"]];
             [self prependDebugText:@"Error: Empty prompt. Please enter text to generate a response.\n"];
@@ -956,7 +1026,8 @@ static bool token_callback(const char* token) {
                     }
                     
                     // Clear the prompt text field after clicking the button (regardless of success/failure)
-                    self.promptTextField.text = @"";
+                    [self.promptTextField setText:@"Enter your prompt here..."];
+                    [self.promptTextField setTextColor:[UIColor lightGrayColor]];
                     
                     self.isGenerating = NO;
                     [self updateButtonStates]; // Enable relevant buttons
@@ -997,7 +1068,8 @@ static bool token_callback(const char* token) {
                     }
                     
                     // Clear the prompt text field after clicking the button (regardless of success/failure)
-                    self.promptTextField.text = @"";
+                    self.promptTextField.text = @"Enter your prompt here...";
+                    [self.promptTextField setTextColor:[UIColor lightGrayColor]];
                     
                     self.isGenerating = NO;
                     [self updateButtonStates]; // Enable relevant buttons
@@ -1029,7 +1101,7 @@ static bool token_callback(const char* token) {
         
         NSString *userPrompt = self.promptTextField.text;
         NSLog(@"DEBUG: Conversation user prompt: %@", userPrompt);
-        if ([userPrompt length] == 0) {
+        if ([userPrompt length] == 0 || [userPrompt isEqualToString:@"Enter your prompt here..."]) {
             NSLog(@"DEBUG: Empty conversation prompt - returning");
             [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Please enter a prompt.\n"]];
             [self prependDebugText:@"Error: Empty prompt. Please enter text to start a conversation.\n"];
@@ -1080,8 +1152,9 @@ static bool token_callback(const char* token) {
                 }
                 
                 // Clear the prompt text field after clicking the button (regardless of success/failure)
-                self.promptTextField.text = @"";
-                
+                [self.promptTextField setText:@"Enter your prompt here..."];
+                [self.promptTextField setTextColor:[UIColor lightGrayColor]];
+
                 self.isGenerating = NO;
                 [self updateButtonStates]; // Enable relevant buttons
             });
@@ -1103,7 +1176,7 @@ static bool token_callback(const char* token) {
         
         NSString *prompt = self.promptTextField.text;
         NSLog(@"DEBUG: Embedding prompt: %@", prompt);
-        if ([prompt length] == 0) {
+        if ([prompt length] == 0 || [prompt isEqualToString:@"Enter your prompt here..."]) {
             NSLog(@"DEBUG: Empty embedding prompt - returning");
             [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Please enter a prompt.\n"]];
             [self prependDebugText:@"Error: Empty prompt. Please enter text to generate embeddings.\n"];
@@ -1144,7 +1217,14 @@ static bool token_callback(const char* token) {
                     llama_mobile_free_float_array(embedding);
                     
                     // Clear the prompt text field after successful generation
-                    self.promptTextField.text = @"";
+                    if ([self.promptTextField isKindOfClass:[UITextView class]]) {
+                        UITextView *textView = (UITextView *)self.promptTextField;
+                        [textView setText:@"Enter your prompt here..."];
+                        [textView setTextColor:[UIColor lightGrayColor]];
+                    } else if ([self.promptTextField isKindOfClass:[UITextField class]]) {
+                        UITextField *textField = (UITextField *)self.promptTextField;
+                        [textField setText:@""];
+                    }
                 } else {
                     NSLog(@"DEBUG: Embedding generation failed - count is zero");
                     [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Error: Failed to generate embeddings.\n"]];
@@ -1157,7 +1237,8 @@ static bool token_callback(const char* token) {
     // MARK: - UI Helpers
     
     - (IBAction)clearPressed:(id)sender {
-        [self.promptTextField setText:@""];
+        [self.promptTextField setText:@"Enter your prompt here..."];
+        [self.promptTextField setTextColor:[UIColor lightGrayColor]];
         [self.outputTextView setText:@""];
         [self.currentOutput setString:@""];
         // Also clear the debug log text view
@@ -1174,6 +1255,9 @@ static bool token_callback(const char* token) {
         [self.conversationButton setEnabled:isModelInitialized && !self.isGenerating];
         [self.embeddingButton setEnabled:isModelInitialized && !self.isGenerating];
         [self.multimodalButton setEnabled:isModelInitialized && !self.isGenerating];
+        [self.ttsButton setEnabled:isModelInitialized && !self.isGenerating];
+        [self.playAudioButton setEnabled:self.audioSamples != nil && !self.isPlayingAudio];
+        [self.stopAudioButton setEnabled:self.isPlayingAudio];
     }
     
     - (void)prependDebugText:(NSString *)text {
@@ -1222,7 +1306,7 @@ static bool token_callback(const char* token) {
         
         NSString *prompt = self.promptTextField.text;
         NSLog(@"DEBUG: Multimodal user prompt: %@", prompt);
-        if ([prompt length] == 0) {
+        if ([prompt length] == 0 || [prompt isEqualToString:@"Enter your prompt here..."]) {
             NSLog(@"DEBUG: Empty multimodal prompt - returning");
             [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Please enter a prompt.\n"]];
             [self prependDebugText:@"Error: Empty prompt. Please enter text to start multimodal processing.\n"];
@@ -1371,6 +1455,22 @@ static bool token_callback(const char* token) {
         [picker dismissViewControllerAnimated:YES completion:nil];
     }
     
+    // MARK: - UITextView Delegate
+    
+    - (void)textViewDidBeginEditing:(UITextView *)textView {
+        if ([textView.text isEqualToString:@"Enter your prompt here..."] && [textView.textColor isEqual:[UIColor lightGrayColor]]) {
+            [textView setText:@""];
+            [textView setTextColor:[UIColor blackColor]];
+        }
+    }
+    
+    - (void)textViewDidEndEditing:(UITextView *)textView {
+        if ([textView.text isEqualToString:@""]) {
+            [textView setText:@"Enter your prompt here..."];
+            [textView setTextColor:[UIColor lightGrayColor]];
+        }
+    }
+    
     // MARK: - UITextField Delegate
     
     - (BOOL)textFieldShouldReturn:(UITextField *)textField {
@@ -1378,4 +1478,8 @@ static bool token_callback(const char* token) {
         return YES;
     }
 
-@end
+    // MARK: - Text-to-Speech (TTS)
+    
+    - (IBAction)ttsPressed:(id)sender {
+        NSLog(@"DEBUG: ttsPressed button clicked");
+        [self prependDebugText:@"Starting text-to-speech generation...\n
