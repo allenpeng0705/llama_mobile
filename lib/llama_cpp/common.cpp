@@ -1100,8 +1100,13 @@ common_init_result::common_init_result(common_params & params) :
             params.verbosity >= 4 ? LM_GGML_LOG_LEVEL_DEBUG : LM_GGML_LOG_LEVEL_ERROR);
     }
 
+    LOG_INF("%s: Attempting to load model from path: %s", __func__, params.model.path.c_str());
+    LOG_INF("%s: Model params: use_mmap=%d, n_gpu_layers=%d, use_mlock=%d", __func__, mparams.use_mmap, mparams.n_gpu_layers, mparams.use_mlock);
+    LOG_INF("%s: Fit params: %d", __func__, params.fit_params);
+    
     llama_model * model = llama_model_load_from_file(params.model.path.c_str(), mparams);
     if (model == NULL) {
+        LOG_ERR("%s: Failed to load model from file: %s", __func__, params.model.path.c_str());
         return;
     }
 

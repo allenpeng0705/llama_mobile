@@ -6,6 +6,7 @@ namespace llama_mobile {
 
 llama_mobile_tokenize_result llama_mobile_context::tokenize(const std::string &text, const std::vector<std::string> &media_paths) {
     if (media_paths.size() > 0) {
+    
         if (!isMultimodalEnabled()) {
             throw std::runtime_error("Multimodal is not enabled but media paths are provided");
         }
@@ -44,6 +45,8 @@ llama_mobile_tokenize_result llama_mobile_context::tokenize(const std::string &t
             .chunk_pos_media = chunk_pos_media,
         };
         return tokenize_result;
+    
+    //throw std::runtime_error("Multimodal is not enabled in this build");
     }
     
     std::vector<llama_token> text_tokens = common_tokenize(ctx, text, false);

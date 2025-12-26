@@ -41,18 +41,41 @@ static char* safe_strdup(const std::string& str) {
 extern "C" {
 
 llama_mobile_context_handle_t llama_mobile_init_context_c(const llama_mobile_init_params_c_t* params) {
-    if (!params || !params->model_path) {
+    std::cout << "[FFI] llama_mobile_init_context_c called with params: " << params << std::endl;
+    
+    if (!params) {
+        std::cerr << "[FFI] Error: params is null" << std::endl;
+        return nullptr;
+    }
+    
+    if (!params->model_path) {
+        std::cerr << "[FFI] Error: params->model_path is null" << std::endl;
         return nullptr;
     }
 
+    std::cout << "[FFI] Model path: " << params->model_path << std::endl;
+    std::cout << "[FFI] Parameters: " << std::endl;
+    std::cout << "[FFI]   n_ctx: " << params->n_ctx << std::endl;
+    std::cout << "[FFI]   n_batch: " << params->n_batch << std::endl;
+    std::cout << "[FFI]   n_ubatch: " << params->n_ubatch << std::endl;
+    std::cout << "[FFI]   n_gpu_layers: " << params->n_gpu_layers << std::endl;
+    std::cout << "[FFI]   n_threads: " << params->n_threads << std::endl;
+    std::cout << "[FFI]   use_mmap: " << params->use_mmap << std::endl;
+    std::cout << "[FFI]   use_mlock: " << params->use_mlock << std::endl;
+    std::cout << "[FFI]   embedding: " << params->embedding << std::endl;
+    
     llama_mobile::llama_mobile_context* context = nullptr;
     try {
+        std::cout << "[FFI] Creating new llama_mobile_context..." << std::endl;
         context = new llama_mobile::llama_mobile_context();
+        std::cout << "[FFI] Created context: " << context << std::endl;
 
         common_params cpp_params;
+        std::cout << "[FFI] Initializing common_params..." << std::endl;
         cpp_params.model.path = params->model_path;
         if (params->chat_template) {
             cpp_params.chat_template = params->chat_template;
+            std::cout << "[FFI] Chat template: " << params->chat_template << std::endl;
         }
         cpp_params.n_ctx = params->n_ctx;
         cpp_params.n_batch = params->n_batch;
@@ -66,39 +89,45 @@ llama_mobile_context_handle_t llama_mobile_init_context_c(const llama_mobile_ini
         cpp_params.embd_normalize = params->embd_normalize;
 
         if (params->cache_type_k) {
+             std::cout << "[FFI] Processing cache_type_k: " << params->cache_type_k << std::endl;
              try {
                   cpp_params.cache_type_k = llama_mobile::kv_cache_type_from_str(params->cache_type_k);
+                  std::cout << "[FFI] cache_type_k parsed successfully" << std::endl;
              } catch (const std::exception& e) {
-                 std::cerr << "Warning: Invalid cache_type_k: " << params->cache_type_k << " Error: " << e.what() << std::endl;
+                 std::cerr << "[FFI] Warning: Invalid cache_type_k: " << params->cache_type_k << " Error: " << e.what() << std::endl;
                  delete context;
                  return nullptr;
              }
         }
         if (params->cache_type_v) {
+            std::cout << "[FFI] Processing cache_type_v: " << params->cache_type_v << std::endl;
             try {
                 cpp_params.cache_type_v = llama_mobile::kv_cache_type_from_str(params->cache_type_v);
+                std::cout << "[FFI] cache_type_v parsed successfully" << std::endl;
             } catch (const std::exception& e) {
-                std::cerr << "Warning: Invalid cache_type_v: " << params->cache_type_v << " Error: " << e.what() << std::endl;
+                std::cerr << "[FFI] Warning: Invalid cache_type_v: " << params->cache_type_v << " Error: " << e.what() << std::endl;
                 delete context;
                 return nullptr;
             }
         }
 
-
-
+        std::cout << "[FFI] Calling context->loadModel()..." << std::endl;
         if (!context->loadModel(cpp_params)) {
+            std::cerr << "[FFI] Error: context->loadModel() returned false" << std::endl;
             delete context;
             return nullptr;
         }
+        std::cout << "[FFI] context->loadModel() succeeded" << std::endl;
 
+        std::cout << "[FFI] Returning context handle: " << reinterpret_cast<void*>(context) << std::endl;
         return reinterpret_cast<llama_mobile_context_handle_t>(context);
 
     } catch (const std::exception& e) {
-        std::cerr << "Error initializing context: " << e.what() << std::endl;
+        std::cerr << "[FFI] Error initializing context: " << e.what() << std::endl;
         if (context) delete context;
         return nullptr;
     } catch (...) {
-        std::cerr << "Unknown error initializing context." << std::endl;
+        std::cerr << "[FFI] Unknown error initializing context." << std::endl;
         if (context) delete context;
         return nullptr;
     }

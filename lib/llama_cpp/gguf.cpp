@@ -1,6 +1,7 @@
 #include "ggml.h"
 #include "ggml-backend.h"
 #include "ggml-impl.h"
+#include "llama-impl.h"
 #include "gguf.h"
 
 #include <cinttypes>
@@ -915,12 +916,19 @@ int64_t lm_gguf_find_tensor(const struct lm_gguf_context * ctx, const char * nam
     int64_t tensor_id = -1;
 
     const int64_t n_tensors = lm_gguf_get_n_tensors(ctx);
+    LLAMA_LOG_INFO("lm_gguf_find_tensor: searching for tensor '%s' in %" PRId64 " tensors", name, n_tensors);
 
     for (int64_t i = 0; i < n_tensors; ++i) {
-        if (strcmp(name, lm_gguf_get_tensor_name(ctx, i)) == 0) {
+        const char * tensor_name = lm_gguf_get_tensor_name(ctx, i);
+        if (strcmp(name, tensor_name) == 0) {
             tensor_id = i;
+            LLAMA_LOG_INFO("lm_gguf_find_tensor: found tensor '%s' at index %" PRId64, name, tensor_id);
             break;
         }
+    }
+
+    if (tensor_id < 0) {
+        LLAMA_LOG_ERROR("lm_gguf_find_tensor: tensor '%s' NOT found", name);
     }
 
     return tensor_id;

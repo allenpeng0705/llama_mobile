@@ -138,37 +138,60 @@ lm_ggml_metal_library_t lm_ggml_metal_library_init(lm_ggml_metal_device_t dev) {
         NSBundle * bundle = [NSBundle bundleForClass:[LMGGMLMetalClass class]];
 #endif
 
-        NSString * path_lib = [bundle pathForResource:@"default" ofType:@"metallib"];
+        NSString * path_lib = [bundle pathForResource:@"ggml-llama" ofType:@"metallib"];
+        if (path_lib == nil) {
+            path_lib = [bundle pathForResource:@"ggml-llama-sim" ofType:@"metallib"];
+        }
         if (path_lib == nil) {
             // Try to find the resource in the directory where the current binary located.
             NSString * bin_cur = [[NSProcessInfo processInfo] arguments][0];
             NSString * bin_dir = [bin_cur stringByDeletingLastPathComponent];
 
-            NSString * path_lib_default = [NSString pathWithComponents:@[bin_dir, @"default.metallib"]];
-            if ([[NSFileManager defaultManager] isReadableFileAtPath:path_lib_default]) {
-                LM_GGML_LOG_INFO("%s: found '%s'\n", __func__, [path_lib_default UTF8String]);
-
-                NSDictionary * atts = [[NSFileManager defaultManager] attributesOfItemAtPath:path_lib_default error:&error];
+            NSString * path_lib_llama = [NSString pathWithComponents:@[bin_dir, @"ggml-llama.metallib"]];
+            NSString * path_lib_llama_sim = [NSString pathWithComponents:@[bin_dir, @"ggml-llama-sim.metallib"]];
+            
+            if ([[NSFileManager defaultManager] isReadableFileAtPath:path_lib_llama]) {
+                LM_GGML_LOG_INFO("%s: found '%s'\n", __func__, [path_lib_llama UTF8String]);
+                
+                NSDictionary * atts = [[NSFileManager defaultManager] attributesOfItemAtPath:path_lib_llama error:&error];
                 if (atts && atts[NSFileType] == NSFileTypeSymbolicLink) {
                     // Optionally, if this is a symlink, try to resolve it.
-                    path_lib_default = [[NSFileManager defaultManager] destinationOfSymbolicLinkAtPath:path_lib_default error:&error];
-                    if (path_lib_default && [path_lib_default length] > 0 && ![[path_lib_default substringToIndex:1] isEqualToString:@"/"]) {
+                    path_lib_llama = [[NSFileManager defaultManager] destinationOfSymbolicLinkAtPath:path_lib_llama error:&error];
+                    if (path_lib_llama && [path_lib_llama length] > 0 && ![[path_lib_llama substringToIndex:1] isEqualToString:@"/"]) {
                         // It is a relative path, adding the binary directory as directory prefix.
-                        path_lib_default = [NSString pathWithComponents:@[bin_dir, path_lib_default]];
+                        path_lib_llama = [NSString pathWithComponents:@[bin_dir, path_lib_llama]];
                     }
-                    if (!path_lib_default || ![[NSFileManager defaultManager] isReadableFileAtPath:path_lib_default]) {
+                    if (!path_lib_llama || ![[NSFileManager defaultManager] isReadableFileAtPath:path_lib_llama]) {
                         // Link to the resource could not be resolved.
-                        path_lib_default = nil;
+                        path_lib_llama = nil;
                     } else {
-                        LM_GGML_LOG_INFO("%s: symlink resolved '%s'\n", __func__, [path_lib_default UTF8String]);
+                        LM_GGML_LOG_INFO("%s: symlink resolved '%s'\n", __func__, [path_lib_llama UTF8String]);
                     }
                 }
+                path_lib = path_lib_llama;
+            } else if ([[NSFileManager defaultManager] isReadableFileAtPath:path_lib_llama_sim]) {
+                LM_GGML_LOG_INFO("%s: found '%s'\n", __func__, [path_lib_llama_sim UTF8String]);
+                
+                NSDictionary * atts = [[NSFileManager defaultManager] attributesOfItemAtPath:path_lib_llama_sim error:&error];
+                if (atts && atts[NSFileType] == NSFileTypeSymbolicLink) {
+                    // Optionally, if this is a symlink, try to resolve it.
+                    path_lib_llama_sim = [[NSFileManager defaultManager] destinationOfSymbolicLinkAtPath:path_lib_llama_sim error:&error];
+                    if (path_lib_llama_sim && [path_lib_llama_sim length] > 0 && ![[path_lib_llama_sim substringToIndex:1] isEqualToString:@"/"]) {
+                        // It is a relative path, adding the binary directory as directory prefix.
+                        path_lib_llama_sim = [NSString pathWithComponents:@[bin_dir, path_lib_llama_sim]];
+                    }
+                    if (!path_lib_llama_sim || ![[NSFileManager defaultManager] isReadableFileAtPath:path_lib_llama_sim]) {
+                        // Link to the resource could not be resolved.
+                        path_lib_llama_sim = nil;
+                    } else {
+                        LM_GGML_LOG_INFO("%s: symlink resolved '%s'\n", __func__, [path_lib_llama_sim UTF8String]);
+                    }
+                }
+                path_lib = path_lib_llama_sim;
             } else {
                 // The resource couldn't be found in the binary's directory.
-                path_lib_default = nil;
+                path_lib = nil;
             }
-
-            path_lib = path_lib_default;
         }
 
         if (path_lib != nil) {
@@ -182,7 +205,7 @@ lm_ggml_metal_library_t lm_ggml_metal_library_init(lm_ggml_metal_device_t dev) {
                 return nil;
             }
         } else {
-            LM_GGML_LOG_INFO("%s: default.metallib not found, loading from source\n", __func__);
+            LM_GGML_LOG_INFO("%s: ggml-llama.metallib or ggml-llama-sim.metallib not found, loading from source\n", __func__);
 
             NSString * path_source;
             NSString * path_resource = [[NSProcessInfo processInfo].environment objectForKey:@"LM_GGML_METAL_PATH_RESOURCES"];
@@ -196,8 +219,11 @@ lm_ggml_metal_library_t lm_ggml_metal_library_init(lm_ggml_metal_device_t dev) {
             }
 
             if (path_source == nil) {
-                LM_GGML_LOG_WARN("%s: error: could not use bundle path to find ggml-metal.metal, falling back to trying cwd\n", __func__);
-                path_source = @"ggml-metal.metal";
+                LM_GGML_LOG_WARN("%s: error: could not use bundle path to find ggml-metal.metal, trying app bundle directory\n", __func__);
+                // Try to find the file in the app bundle's main directory
+                NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
+                path_source = [bundlePath stringByAppendingPathComponent:@"ggml-metal.metal"];
+                LM_GGML_LOG_INFO("%s: trying path: %s\n", __func__, [path_source UTF8String]);
             }
 
             LM_GGML_LOG_INFO("%s: loading '%s'\n", __func__, [path_source UTF8String]);

@@ -940,6 +940,12 @@ static struct llama_model * llama_model_load_from_file_impl(
                 props.memory_free/1024/1024);
     }
 
+    // If no GPU layers are requested, clear all GPU devices to prevent Metal initialization
+    if (params.n_gpu_layers <= 0) {
+        LLAMA_LOG_INFO("%s: n_gpu_layers <= 0, clearing all GPU devices\n", __func__);
+        model->devices.clear();
+    }
+
     const int status = llama_model_load(path_model, splits, *model, params);
     LM_GGML_ASSERT(status <= 0);
     if (status < 0) {

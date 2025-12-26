@@ -1,0 +1,92 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     '/Users/shileipeng/Documents/mygithub/llama_mobile/examples/iOSFrameworkExample/build/Release-iphoneos/iOSFrameworkExample.app/iOSFrameworkExample'
+relocations:
+  - { offset: 0x880EA, size: 0x8, addend: 0x0, symName: '-[AppDelegate application:didFinishLaunchingWithOptions:]', symObjAddr: 0x0, symBinAddr: 0x100004000, symSize: 0x200 }
+  - { offset: 0x88128, size: 0x8, addend: 0x0, symName: '-[AppDelegate application:didFinishLaunchingWithOptions:]', symObjAddr: 0x0, symBinAddr: 0x100004000, symSize: 0x200 }
+  - { offset: 0x88261, size: 0x8, addend: 0x0, symName: '-[AppDelegate applicationWillResignActive:]', symObjAddr: 0x200, symBinAddr: 0x100004200, symSize: 0x4 }
+  - { offset: 0x8829C, size: 0x8, addend: 0x0, symName: '-[AppDelegate applicationDidEnterBackground:]', symObjAddr: 0x204, symBinAddr: 0x100004204, symSize: 0x4 }
+  - { offset: 0x882D7, size: 0x8, addend: 0x0, symName: '-[AppDelegate applicationWillEnterForeground:]', symObjAddr: 0x208, symBinAddr: 0x100004208, symSize: 0x4 }
+  - { offset: 0x88312, size: 0x8, addend: 0x0, symName: '-[AppDelegate applicationDidBecomeActive:]', symObjAddr: 0x20C, symBinAddr: 0x10000420C, symSize: 0x4 }
+  - { offset: 0x8834D, size: 0x8, addend: 0x0, symName: '-[AppDelegate applicationWillTerminate:]', symObjAddr: 0x210, symBinAddr: 0x100004210, symSize: 0x4 }
+  - { offset: 0x88388, size: 0x8, addend: 0x0, symName: '-[AppDelegate window]', symObjAddr: 0x214, symBinAddr: 0x100004214, symSize: 0x10 }
+  - { offset: 0x883BF, size: 0x8, addend: 0x0, symName: '-[AppDelegate setWindow:]', symObjAddr: 0x224, symBinAddr: 0x100004224, symSize: 0x14 }
+  - { offset: 0x88400, size: 0x8, addend: 0x0, symName: '-[AppDelegate .cxx_destruct]', symObjAddr: 0x238, symBinAddr: 0x100004238, symSize: 0x14 }
+  - { offset: 0x885E7, size: 0x8, addend: 0x0, symName: '-[ViewController viewDidLoad]', symObjAddr: 0x0, symBinAddr: 0x10000424C, symSize: 0xE98 }
+  - { offset: 0x88601, size: 0x8, addend: 0x0, symName: _tokenCallbackViewController, symObjAddr: 0x19110, symBinAddr: 0x10001A138, symSize: 0x0 }
+  - { offset: 0x88880, size: 0x8, addend: 0x0, symName: '-[ViewController viewDidLoad]', symObjAddr: 0x0, symBinAddr: 0x10000424C, symSize: 0xE98 }
+  - { offset: 0x8899D, size: 0x8, addend: 0x0, symName: '-[ViewController viewWillAppear:]', symObjAddr: 0xE98, symBinAddr: 0x1000050E4, symSize: 0x94 }
+  - { offset: 0x88A0A, size: 0x8, addend: 0x0, symName: '-[ViewController viewDidAppear:]', symObjAddr: 0xF2C, symBinAddr: 0x100005178, symSize: 0xE0 }
+  - { offset: 0x88A85, size: 0x8, addend: 0x0, symName: '-[ViewController viewWillDisappear:]', symObjAddr: 0x100C, symBinAddr: 0x100005258, symSize: 0x98 }
+  - { offset: 0x88AF3, size: 0x8, addend: 0x0, symName: '-[ViewController keyboardWillShow:]', symObjAddr: 0x10A4, symBinAddr: 0x1000052F0, symSize: 0xA0 }
+  - { offset: 0x88B56, size: 0x8, addend: 0x0, symName: '-[ViewController keyboardWillHide:]', symObjAddr: 0x1144, symBinAddr: 0x100005390, symSize: 0x60 }
+  - { offset: 0x88B95, size: 0x8, addend: 0x0, symName: '-[ViewController initializePressed:]', symObjAddr: 0x11A4, symBinAddr: 0x1000053F0, symSize: 0xA00 }
+  - { offset: 0x88EE0, size: 0x8, addend: 0x0, symName: '___36-[ViewController initializePressed:]_block_invoke', symObjAddr: 0x1BA4, symBinAddr: 0x100005DF0, symSize: 0x988 }
+  - { offset: 0x89650, size: 0x8, addend: 0x0, symName: _progress_callback, symObjAddr: 0x252C, symBinAddr: 0x100006778, symSize: 0x38 }
+  - { offset: 0x89685, size: 0x8, addend: 0x0, symName: '___36-[ViewController initializePressed:]_block_invoke_2', symObjAddr: 0x2564, symBinAddr: 0x1000067B0, symSize: 0x88 }
+  - { offset: 0x896E5, size: 0x8, addend: 0x0, symName: ___copy_helper_block_e8_32s40s, symObjAddr: 0x25EC, symBinAddr: 0x100006838, symSize: 0x28 }
+  - { offset: 0x8970E, size: 0x8, addend: 0x0, symName: ___destroy_helper_block_e8_32s40s, symObjAddr: 0x2614, symBinAddr: 0x100006860, symSize: 0x28 }
+  - { offset: 0x8972D, size: 0x8, addend: 0x0, symName: '-[ViewController validateModelFile:]', symObjAddr: 0x263C, symBinAddr: 0x100006888, symSize: 0x7A8 }
+  - { offset: 0x89AE9, size: 0x8, addend: 0x0, symName: '-[ViewController completePressed:]', symObjAddr: 0x2DE4, symBinAddr: 0x100007030, symSize: 0x34 }
+  - { offset: 0x89B38, size: 0x8, addend: 0x0, symName: '-[ViewController generatePressed:]', symObjAddr: 0x2E18, symBinAddr: 0x100007064, symSize: 0x34 }
+  - { offset: 0x89B87, size: 0x8, addend: 0x0, symName: '-[ViewController generateTextWithMode:]', symObjAddr: 0x2E4C, symBinAddr: 0x100007098, symSize: 0x424 }
+  - { offset: 0x89C69, size: 0x8, addend: 0x0, symName: '___39-[ViewController generateTextWithMode:]_block_invoke', symObjAddr: 0x3270, symBinAddr: 0x1000074BC, symSize: 0x1B4 }
+  - { offset: 0x89EB0, size: 0x8, addend: 0x0, symName: _token_callback, symObjAddr: 0x3424, symBinAddr: 0x100007670, symSize: 0x7C }
+  - { offset: 0x89EF1, size: 0x8, addend: 0x0, symName: '___39-[ViewController generateTextWithMode:]_block_invoke_2', symObjAddr: 0x34A0, symBinAddr: 0x1000076EC, symSize: 0x1DC }
+  - { offset: 0x89FA4, size: 0x8, addend: 0x0, symName: ___copy_helper_block_e8_32s, symObjAddr: 0x367C, symBinAddr: 0x1000078C8, symSize: 0x8 }
+  - { offset: 0x89FCB, size: 0x8, addend: 0x0, symName: ___destroy_helper_block_e8_32s, symObjAddr: 0x3684, symBinAddr: 0x1000078D0, symSize: 0x8 }
+  - { offset: 0x89FEA, size: 0x8, addend: 0x0, symName: '___39-[ViewController generateTextWithMode:]_block_invoke.366', symObjAddr: 0x368C, symBinAddr: 0x1000078D8, symSize: 0x274 }
+  - { offset: 0x8A0CB, size: 0x8, addend: 0x0, symName: ___copy_helper_block_e8_32s40s48s, symObjAddr: 0x3900, symBinAddr: 0x100007B4C, symSize: 0x30 }
+  - { offset: 0x8A0F4, size: 0x8, addend: 0x0, symName: ___destroy_helper_block_e8_32s40s48s, symObjAddr: 0x3930, symBinAddr: 0x100007B7C, symSize: 0x30 }
+  - { offset: 0x8A113, size: 0x8, addend: 0x0, symName: '-[ViewController conversationPressed:]', symObjAddr: 0x3960, symBinAddr: 0x100007BAC, symSize: 0x2DC }
+  - { offset: 0x8A1E3, size: 0x8, addend: 0x0, symName: '___38-[ViewController conversationPressed:]_block_invoke', symObjAddr: 0x3C3C, symBinAddr: 0x100007E88, symSize: 0xB0 }
+  - { offset: 0x8A31B, size: 0x8, addend: 0x0, symName: '___38-[ViewController conversationPressed:]_block_invoke_2', symObjAddr: 0x3CEC, symBinAddr: 0x100007F38, symSize: 0x230 }
+  - { offset: 0x8A3D7, size: 0x8, addend: 0x0, symName: '-[ViewController embeddingPressed:]', symObjAddr: 0x3F1C, symBinAddr: 0x100008168, symSize: 0x2DC }
+  - { offset: 0x8A4A7, size: 0x8, addend: 0x0, symName: '___35-[ViewController embeddingPressed:]_block_invoke', symObjAddr: 0x41F8, symBinAddr: 0x100008444, symSize: 0x9C }
+  - { offset: 0x8A59D, size: 0x8, addend: 0x0, symName: '___35-[ViewController embeddingPressed:]_block_invoke_2', symObjAddr: 0x4294, symBinAddr: 0x1000084E0, symSize: 0x36C }
+  - { offset: 0x8A6A0, size: 0x8, addend: 0x0, symName: '-[ViewController clearPressed:]', symObjAddr: 0x4600, symBinAddr: 0x10000884C, symSize: 0x90 }
+  - { offset: 0x8A6E1, size: 0x8, addend: 0x0, symName: '-[ViewController updateButtonStates]', symObjAddr: 0x4690, symBinAddr: 0x1000088DC, symSize: 0x154 }
+  - { offset: 0x8A722, size: 0x8, addend: 0x0, symName: '-[ViewController prependDebugText:]', symObjAddr: 0x47E4, symBinAddr: 0x100008A30, symSize: 0x1EC }
+  - { offset: 0x8A7C2, size: 0x8, addend: 0x0, symName: '___35-[ViewController prependDebugText:]_block_invoke', symObjAddr: 0x49D0, symBinAddr: 0x100008C1C, symSize: 0xC }
+  - { offset: 0x8A815, size: 0x8, addend: 0x0, symName: '-[ViewController multimodalPressed:]', symObjAddr: 0x49DC, symBinAddr: 0x100008C28, symSize: 0x214 }
+  - { offset: 0x8A8E0, size: 0x8, addend: 0x0, symName: '-[ViewController processImageWithPrompt:imagePath:]', symObjAddr: 0x4BF0, symBinAddr: 0x100008E3C, symSize: 0x368 }
+  - { offset: 0x8A97F, size: 0x8, addend: 0x0, symName: '___51-[ViewController processImageWithPrompt:imagePath:]_block_invoke', symObjAddr: 0x4F58, symBinAddr: 0x1000091A4, symSize: 0x12C }
+  - { offset: 0x8AAC0, size: 0x8, addend: 0x0, symName: '___51-[ViewController processImageWithPrompt:imagePath:]_block_invoke_2', symObjAddr: 0x5084, symBinAddr: 0x1000092D0, symSize: 0x174 }
+  - { offset: 0x8AB3A, size: 0x8, addend: 0x0, symName: '-[ViewController imagePickerController:didFinishPickingMediaWithInfo:]', symObjAddr: 0x51F8, symBinAddr: 0x100009444, symSize: 0x1F8 }
+  - { offset: 0x8AC2D, size: 0x8, addend: 0x0, symName: '___70-[ViewController imagePickerController:didFinishPickingMediaWithInfo:]_block_invoke', symObjAddr: 0x53F0, symBinAddr: 0x10000963C, symSize: 0x60 }
+  - { offset: 0x8ACA0, size: 0x8, addend: 0x0, symName: '___70-[ViewController imagePickerController:didFinishPickingMediaWithInfo:]_block_invoke_2', symObjAddr: 0x5450, symBinAddr: 0x10000969C, symSize: 0x9C }
+  - { offset: 0x8ACE2, size: 0x8, addend: 0x0, symName: '-[ViewController imagePickerControllerDidCancel:]', symObjAddr: 0x54EC, symBinAddr: 0x100009738, symSize: 0x10 }
+  - { offset: 0x8AD23, size: 0x8, addend: 0x0, symName: '-[ViewController textFieldShouldReturn:]', symObjAddr: 0x54FC, symBinAddr: 0x100009748, symSize: 0x1C }
+  - { offset: 0x8AD68, size: 0x8, addend: 0x0, symName: '-[ViewController modelContext]', symObjAddr: 0x5518, symBinAddr: 0x100009764, symSize: 0x10 }
+  - { offset: 0x8AD9F, size: 0x8, addend: 0x0, symName: '-[ViewController setModelContext:]', symObjAddr: 0x5528, symBinAddr: 0x100009774, symSize: 0x10 }
+  - { offset: 0x8ADDC, size: 0x8, addend: 0x0, symName: '-[ViewController currentOutput]', symObjAddr: 0x5538, symBinAddr: 0x100009784, symSize: 0x10 }
+  - { offset: 0x8AE13, size: 0x8, addend: 0x0, symName: '-[ViewController setCurrentOutput:]', symObjAddr: 0x5548, symBinAddr: 0x100009794, symSize: 0x14 }
+  - { offset: 0x8AE54, size: 0x8, addend: 0x0, symName: '-[ViewController isGenerating]', symObjAddr: 0x555C, symBinAddr: 0x1000097A8, symSize: 0x10 }
+  - { offset: 0x8AE8B, size: 0x8, addend: 0x0, symName: '-[ViewController setIsGenerating:]', symObjAddr: 0x556C, symBinAddr: 0x1000097B8, symSize: 0x10 }
+  - { offset: 0x8AEC6, size: 0x8, addend: 0x0, symName: '-[ViewController promptTextField]', symObjAddr: 0x557C, symBinAddr: 0x1000097C8, symSize: 0x20 }
+  - { offset: 0x8AEFD, size: 0x8, addend: 0x0, symName: '-[ViewController setPromptTextField:]', symObjAddr: 0x559C, symBinAddr: 0x1000097E8, symSize: 0x14 }
+  - { offset: 0x8AF3E, size: 0x8, addend: 0x0, symName: '-[ViewController outputTextView]', symObjAddr: 0x55B0, symBinAddr: 0x1000097FC, symSize: 0x20 }
+  - { offset: 0x8AF75, size: 0x8, addend: 0x0, symName: '-[ViewController setOutputTextView:]', symObjAddr: 0x55D0, symBinAddr: 0x10000981C, symSize: 0x14 }
+  - { offset: 0x8AFB6, size: 0x8, addend: 0x0, symName: '-[ViewController generateButton]', symObjAddr: 0x55E4, symBinAddr: 0x100009830, symSize: 0x20 }
+  - { offset: 0x8AFED, size: 0x8, addend: 0x0, symName: '-[ViewController setGenerateButton:]', symObjAddr: 0x5604, symBinAddr: 0x100009850, symSize: 0x14 }
+  - { offset: 0x8B02E, size: 0x8, addend: 0x0, symName: '-[ViewController clearButton]', symObjAddr: 0x5618, symBinAddr: 0x100009864, symSize: 0x20 }
+  - { offset: 0x8B065, size: 0x8, addend: 0x0, symName: '-[ViewController setClearButton:]', symObjAddr: 0x5638, symBinAddr: 0x100009884, symSize: 0x14 }
+  - { offset: 0x8B0A6, size: 0x8, addend: 0x0, symName: '-[ViewController embeddingButton]', symObjAddr: 0x564C, symBinAddr: 0x100009898, symSize: 0x20 }
+  - { offset: 0x8B0DD, size: 0x8, addend: 0x0, symName: '-[ViewController setEmbeddingButton:]', symObjAddr: 0x566C, symBinAddr: 0x1000098B8, symSize: 0x14 }
+  - { offset: 0x8B11E, size: 0x8, addend: 0x0, symName: '-[ViewController conversationButton]', symObjAddr: 0x5680, symBinAddr: 0x1000098CC, symSize: 0x20 }
+  - { offset: 0x8B155, size: 0x8, addend: 0x0, symName: '-[ViewController setConversationButton:]', symObjAddr: 0x56A0, symBinAddr: 0x1000098EC, symSize: 0x14 }
+  - { offset: 0x8B196, size: 0x8, addend: 0x0, symName: '-[ViewController initializeButton]', symObjAddr: 0x56B4, symBinAddr: 0x100009900, symSize: 0x20 }
+  - { offset: 0x8B1CD, size: 0x8, addend: 0x0, symName: '-[ViewController setInitializeButton:]', symObjAddr: 0x56D4, symBinAddr: 0x100009920, symSize: 0x14 }
+  - { offset: 0x8B20E, size: 0x8, addend: 0x0, symName: '-[ViewController completeButton]', symObjAddr: 0x56E8, symBinAddr: 0x100009934, symSize: 0x20 }
+  - { offset: 0x8B245, size: 0x8, addend: 0x0, symName: '-[ViewController setCompleteButton:]', symObjAddr: 0x5708, symBinAddr: 0x100009954, symSize: 0x14 }
+  - { offset: 0x8B286, size: 0x8, addend: 0x0, symName: '-[ViewController multimodalButton]', symObjAddr: 0x571C, symBinAddr: 0x100009968, symSize: 0x20 }
+  - { offset: 0x8B2BD, size: 0x8, addend: 0x0, symName: '-[ViewController setMultimodalButton:]', symObjAddr: 0x573C, symBinAddr: 0x100009988, symSize: 0x14 }
+  - { offset: 0x8B2FE, size: 0x8, addend: 0x0, symName: '-[ViewController activityIndicator]', symObjAddr: 0x5750, symBinAddr: 0x10000999C, symSize: 0x20 }
+  - { offset: 0x8B335, size: 0x8, addend: 0x0, symName: '-[ViewController setActivityIndicator:]', symObjAddr: 0x5770, symBinAddr: 0x1000099BC, symSize: 0x14 }
+  - { offset: 0x8B376, size: 0x8, addend: 0x0, symName: '-[ViewController debugLogTextView]', symObjAddr: 0x5784, symBinAddr: 0x1000099D0, symSize: 0x10 }
+  - { offset: 0x8B3AD, size: 0x8, addend: 0x0, symName: '-[ViewController setDebugLogTextView:]', symObjAddr: 0x5794, symBinAddr: 0x1000099E0, symSize: 0x14 }
+  - { offset: 0x8B3EE, size: 0x8, addend: 0x0, symName: '-[ViewController .cxx_destruct]', symObjAddr: 0x57A8, symBinAddr: 0x1000099F4, symSize: 0xE0 }
+  - { offset: 0x8B421, size: 0x8, addend: 0x0, symName: ___token_callback_block_invoke, symObjAddr: 0x5888, symBinAddr: 0x100009AD4, symSize: 0xEC }
+  - { offset: 0x8BD4F, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x0, symBinAddr: 0x100009BC0, symSize: 0x78 }
+  - { offset: 0x8BD5D, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x0, symBinAddr: 0x100009BC0, symSize: 0x78 }
+...

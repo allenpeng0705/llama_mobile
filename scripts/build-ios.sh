@@ -10,7 +10,7 @@ fi
 function cp_headers() {
   mkdir -p "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/$1/llama_mobile.framework/Headers"
   # Only copy the public API header, not all internal headers
-  cp "$ROOT_DIR/lib/llama_mobile_api.h" "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/$1/llama_mobile.framework/Headers/"
+  cp "$ROOT_DIR/lib/llama_mobile_unified.h" "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/$1/llama_mobile.framework/Headers/"
 }
 
 function build_framework() {
@@ -62,6 +62,16 @@ function build_framework() {
     cp "$ROOT_DIR/lib/llama_cpp/ggml-llama.metallib" "$FRAMEWORK_DEST/ggml-llama.metallib"
   fi
 
+  # Code sign the framework
+  echo "Signing the framework..."
+  if codesign --force --deep --sign "Apple Development" "$FRAMEWORK_DEST"; then
+    echo "✓ Framework signed successfully"
+  else
+    echo "✗ Failed to sign the framework"
+    echo "Note: Manual signing may be required. Try running:"
+    echo "codesign --force --deep --sign 'Apple Development' '$FRAMEWORK_DEST'"
+  fi
+
   rm -rf ./*
   cd ..
 }
@@ -87,8 +97,8 @@ if [ ! -f "$ROOT_DIR/lib/llama_cpp/ggml-llama.metallib" ] || [ ! -f "$ROOT_DIR/l
   echo "Missing metallib files. Generating..."
   cd "$ROOT_DIR/lib/llama_cpp"
   
-  # Generate iPhoneOS metallib
-  if xcrun --sdk iphoneos metal -c ggml-metal.metal -o ggml-metal.air -DGGML_METAL_USE_BF16=1 && xcrun --sdk iphoneos metallib ggml-metal.air -o ggml-llama.metallib; then
+  # Generate iPhoneOS metallib with compatible Metal language version and deployment target
+  if xcrun --sdk iphoneos metal -c ggml-metal.metal -o ggml-metal.air -DGGML_METAL_USE_BF16=1 -std=ios-metal2.3 -mtargetos=ios13.0 && xcrun --sdk iphoneos metallib ggml-metal.air -o ggml-llama.metallib; then
     rm ggml-metal.air
     echo "✓ iPhoneOS metallib generated"
   else
@@ -96,8 +106,8 @@ if [ ! -f "$ROOT_DIR/lib/llama_cpp/ggml-llama.metallib" ] || [ ! -f "$ROOT_DIR/l
     exit 1
   fi
   
-  # Generate simulator metallib
-  if xcrun --sdk iphonesimulator metal -c ggml-metal.metal -o ggml-metal.air -DGGML_METAL_USE_BF16=1 && xcrun --sdk iphonesimulator metallib ggml-metal.air -o ggml-llama-sim.metallib; then
+  # Generate simulator metallib with compatible Metal language version and deployment target
+  if xcrun --sdk iphonesimulator metal -c ggml-metal.metal -o ggml-metal.air -DGGML_METAL_USE_BF16=1 -std=ios-metal2.3 -mtargetos=ios13.0 && xcrun --sdk iphonesimulator metallib ggml-metal.air -o ggml-llama-sim.metallib; then
     rm ggml-metal.air
     echo "✓ Simulator metallib generated"
   else
@@ -120,13 +130,14 @@ build_framework "iOS" "arm64;x86_64" "iphonesimulator" "ios-arm64_x86_64-simulat
 build_framework "iOS" "arm64" "iphoneos" "ios-arm64" "build-ios"
 rm -rf build-ios
 
-rm -rf build-tvos
-mkdir -p build-tvos
+# Skip tvOS build for now
+# rm -rf build-tvos
+# mkdir -p build-tvos
 
 # Build tvOS frameworks
-build_framework "tvOS" "arm64;x86_64" "appletvsimulator" "tvos-arm64_x86_64-simulator" "build-tvos"
-build_framework "tvOS" "arm64" "appletvos" "tvos-arm64" "build-tvos"
-rm -rf build-tvos
+# build_framework "tvOS" "arm64;x86_64" "appletvsimulator" "tvos-arm64_x86_64-simulator" "build-tvos"
+# build_framework "tvOS" "arm64" "appletvos" "tvos-arm64" "build-tvos"
+# rm -rf build-tvos
 
 t1=$(date +%s)
 echo "Total time: $((t1 - t0)) seconds"

@@ -587,6 +587,13 @@ extern "C" {
 #endif
 
 /**
+ * @brief Global verbosity flag for debug logging.
+ * 
+ * Set this to true to enable verbose debug logging from the llama_mobile library.
+ */
+extern bool llama_mobile_verbose;
+
+/**
  * @brief Opaque handle to the llama_mobile context.
  * 
  * This handle encapsulates the model state, configuration, and all necessary 

@@ -131,3 +131,125 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 6. Expand model support and compatibility
 
 Stay tuned for updates as we continue to develop and expand the framework!
+
+## Building Instructions
+
+### Prerequisites
+
+- macOS with Xcode installed (for iOS builds)
+- CMake 3.20 or later
+- Python 3.x (for some utility scripts)
+- iOS 13.0+ deployment target for mobile apps
+
+### Core Library
+
+```bash
+# Build core library
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+```
+
+### iOS Framework
+
+The iOS framework requires precompiled Metal libraries for optimal performance. The build process handles this automatically.
+
+```bash
+# Build iOS framework with precompiled Metal libraries
+./scripts/build-ios.sh
+```
+
+#### Metal Library Compilation Details
+
+The iOS framework relies on precompiled Metal shader libraries (`ggml-llama.metallib` for devices and `ggml-llama-sim.metallib` for simulators). These are automatically generated during the build process with:
+
+- **Metal Language Version**: `ios-metal2.3` (compatible with iOS 13.0+)
+- **Deployment Target**: iOS 14.0 (compatible with the core library requirements)
+
+The build script (`scripts/build-ios.sh`) handles:
+1. Compiling Metal shaders from `lib/llama_cpp/ggml-metal.metal`
+2. Generating device and simulator-specific metallib files
+3. Assembling the `llama_mobile.xcframework`
+4. Copying necessary resources
+
+#### Verifying Metal Libraries
+
+To verify the deployment target of the generated metallib files:
+
+```bash
+# Check device metallib deployment target
+strings lib/llama_cpp/ggml-llama.metallib | grep -i "apple-ios"
+
+# Check simulator metallib deployment target
+strings lib/llama_cpp/ggml-llama-sim.metallib | grep -i "apple-ios"
+```
+
+### iOS Example App
+
+To run the iOS example app:
+
+1. Open `examples/iOSFrameworkExample/iOSFrameworkExample.xcodeproj` in Xcode
+2. Select a target device or simulator
+3. Build and run the project
+
+### Future Building Instructions (Planned)
+
+#### Android Framework
+```bash
+# Planned Android build script
+./scripts/build-android.sh
+```
+
+#### Flutter Plugin
+```bash
+# Planned Flutter build script
+./scripts/build-flutter.sh
+```
+
+#### ReactNative Plugin
+```bash
+# Planned ReactNative build script
+./scripts/build-reactnative.sh
+```
+
+#### Capacitor Plugin
+```bash
+# Planned Capacitor build script
+./scripts/build-capacitor.sh
+```
+
+## Integration Guide
+
+### iOS Integration
+
+1. Add `llama_mobile.xcframework` to your Xcode project
+2. Link against required system frameworks (Metal, MetalKit)
+3. Import the framework in your code:
+   ```swift
+   import llama_mobile
+   ```
+4. Initialize the library and load models as needed
+
+### Future Integrations (Planned)
+
+- **Android**: AAR library with Java/Kotlin bindings
+- **Flutter**: Dart plugin with native platform implementations
+- **ReactNative**: JavaScript/TypeScript wrapper around native modules
+- **Capacitor**: Web-compatible plugin for cross-platform web apps
+
+## Troubleshooting
+
+### Metal Library Deployment Target Errors
+
+If you encounter errors like:
+```
+This library is using a deployment target (0x00020008) that is not supported on this OS
+```
+
+This indicates incompatible Metal library deployment targets. The build script ensures compatibility by:
+- Using `ios-metal2.3` language version (iOS 13.0+ compatible)
+- Setting explicit deployment targets for both device and simulator builds
+
+### Build Script Issues
+
+Ensure all dependencies are installed and that you're running the scripts from the project root directory.

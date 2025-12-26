@@ -2,6 +2,25 @@
 
 A lightweight, high-performance iOS framework for running large language models (LLMs) locally on iOS devices, based on llama.cpp.
 
+## Framework Type
+
+llama_mobile iOS Framework is a **dynamic library** distributed as an XCFramework. This means:
+
+### Dynamic Library vs Static Library
+
+| Feature | Static Library | Dynamic Library |
+|---------|----------------|-----------------|
+| Linking | Linked at compile time | Loaded at runtime |
+| File Size | Increases app binary size | Does not increase app binary size |
+| Updates | Requires app update to change | Can be updated independently (rare on iOS) |
+| Memory Usage | Duplicated if used by multiple apps | Shared between apps (not applicable on iOS due to sandboxing) |
+| Loading Time | Slightly faster app launch | Slightly slower app launch (negligible for most cases) |
+
+On iOS, dynamic libraries offer several advantages:
+- Smaller app binary size as the library code is not embedded
+- Better code isolation and security
+- Support for platform-specific optimizations like Metal acceleration
+
 ## Features
 
 - 📱 **Local inference**: Run LLMs entirely on-device without internet connectivity
@@ -287,6 +306,30 @@ llama_mobile_free(ctx);
    ```
    llama_mobile-ios/llama_mobile.xcframework
    ```
+
+## iOS Framework Example
+
+A demo iOS application named `iOSFrameworkExample` is available in the `examples` folder to help you understand how to use the llama_mobile framework in practice. This example demonstrates:
+
+- Complete integration with the framework
+- Testing all major APIs (initialization, completion, conversation, embeddings)
+- Loading models from the `lib/models` directory
+- Running on both simulator and physical devices
+
+### How to Use the Example
+
+1. Open `examples/iOSFrameworkExample/iOSFrameworkExample.xcodeproj` in Xcode
+2. Ensure you have a GGUF model in the `lib/models` directory (e.g., `llama-2-7b-chat.Q4_K_M.gguf`)
+3. Select a simulator or physical device as the run destination
+4. Build and run the application
+
+### Key Features Demonstrated
+
+- **Model Initialization**: Loading models from the `lib/models` directory with custom parameters
+- **Text Completion**: Generating text from prompts with streaming support
+- **Conversational Interface**: Maintaining conversation history and generating responses
+- **Embeddings**: Creating text embeddings for semantic understanding
+- **Multi-architecture Support**: Working on both simulator (arm64/x86_64) and device (arm64)
 
 ## Troubleshooting
 

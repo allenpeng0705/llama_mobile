@@ -12,6 +12,7 @@ static llama_mobile_init_params_c_t convert_init_params(const llama_mobile_init_
         ffi_params.chat_template = api_params->chat_template;
         ffi_params.n_ctx = api_params->n_ctx;
         ffi_params.n_batch = api_params->n_batch;
+        ffi_params.n_ubatch = (api_params->n_batch > 0) ? api_params->n_batch : 512; // Set n_ubatch to match n_batch or default
         ffi_params.n_gpu_layers = api_params->n_gpu_layers;
         ffi_params.n_threads = api_params->n_threads;
         ffi_params.use_mmap = api_params->use_mmap;
@@ -110,13 +111,9 @@ LLAMA_MOBILE_API llama_mobile_context_t llama_mobile_init_simple(
     params.n_gpu_layers = n_gpu_layers;
     params.n_threads = (n_threads > 0) ? n_threads : 4;  // Default 4
     params.progress_callback = progress_callback;
+    params.embedding = false;  // Disable embedding mode for simple init
     params.use_mmap = true;  // Sensible defaults
-    params.n_batch = 512;
-    params.temperature = 0.8;
-    params.top_k = 40;
-    params.top_p = 0.95;
-    params.min_p = 0.05;
-    params.penalty_repeat = 1.1;
+    params.n_batch = 512;  // Set n_batch which will be used for n_ubatch in convert_init_params
     
     return llama_mobile_init(&params);
 }

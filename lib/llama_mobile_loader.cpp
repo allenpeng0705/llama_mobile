@@ -4,30 +4,44 @@
 
 namespace llama_mobile {
 
-bool llama_mobile_context::loadModel(common_params &params_)
-{
+bool llama_mobile_context::loadModel(common_params &params_) {
     params = params_;
+    LOG_INFO("Starting model loading process for: %s", params.model.path.c_str());
+    LOG_INFO("Parameters: n_ctx=%d, n_batch=%d, n_gpu_layers=%d, use_mmap=%d, use_mlock=%d", 
+             params.n_ctx, params.n_batch, params.n_gpu_layers, params.use_mmap, params.use_mlock);
+    
     llama_init = common_init_from_params(params);
-    if (llama_init == nullptr)
-    {
+    LOG_INFO("common_init_from_params returned: %p", llama_init.get());
+    
+    if (llama_init == nullptr) {
         LOG_ERROR("unable to initialize model context: %s", params.model.path.c_str());
         return false;
     }
+    
     model = llama_init->model();
+    LOG_INFO("model pointer: %p", model);
+    
     ctx = llama_init->context();
-    if (model == nullptr)
-    {
+    LOG_INFO("context pointer: %p", ctx);
+    
+    if (model == nullptr) {
         LOG_ERROR("unable to load model: %s", params.model.path.c_str());
         return false;
     }
-    if (ctx == nullptr)
-    {
+    
+    if (ctx == nullptr) {
         LOG_ERROR("unable to create context: %s", params.model.path.c_str());
         return false;
     }
+    
+    LOG_INFO("Model and context loaded successfully. Proceeding with template initialization.");
     templates = common_chat_templates_init(model, params.chat_template);
+    LOG_INFO("Templates initialized: %p", templates.get());
+    
     n_ctx = llama_n_ctx(ctx);
+    LOG_INFO("Context size: %d", n_ctx);
 
+    LOG_INFO("Model loading process completed successfully!");
     return true;
 }
 

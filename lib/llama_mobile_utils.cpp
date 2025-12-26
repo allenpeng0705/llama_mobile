@@ -9,9 +9,9 @@
 #include <string.h>
 #include <sstream>
 
-namespace llama_mobile {
+bool llama_mobile_verbose = true;
 
-bool llama_mobile_verbose = true; 
+namespace llama_mobile {
 
 void log(const char *level, const char *function, int line,
                 const char *format, ...)
@@ -29,7 +29,7 @@ void log(const char *level, const char *function, int line,
         } else if (strcmp(level, "INFO") == 0) {
             priority = ANDROID_LOG_INFO;
         } else {
-             if (!llama_mobile_verbose && strcmp(level, "VERBOSE") == 0) {
+             if (!::llama_mobile_verbose && strcmp(level, "VERBOSE") == 0) {
                  va_end(args);
                  return;
              }
@@ -38,7 +38,7 @@ void log(const char *level, const char *function, int line,
         __android_log_vprint(priority, "Cactus", prefix, args);
         va_end(args);
     #else
-        if (!llama_mobile_verbose && strcmp(level, "VERBOSE") == 0) {
+        if (!::llama_mobile_verbose && strcmp(level, "VERBOSE") == 0) {
             return;
         }
         printf("[%s] %s:%d ", level, function, line);

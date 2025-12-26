@@ -32,14 +32,71 @@ struct llama_model_loader {
         lm_ggml_tensor * tensor;
 
         llama_tensor_weight(const llama_file * file, uint16_t idx, const struct lm_gguf_context * lm_gguf_ctx, lm_ggml_tensor * tensor) : idx(idx), tensor(tensor) {
-            const int tensor_idx = lm_gguf_find_tensor(lm_gguf_ctx,  lm_ggml_get_name(tensor));
-            if (tensor_idx < 0) {
-                throw std::runtime_error(format("tensor '%s' not found in the model", lm_ggml_get_name(tensor)));
+            const char * tensor_name = lm_ggml_get_name(tensor);
+            
+            // Detailed logging for tensor lookup and index validation
+            LLAMA_LOG_INFO("llama_tensor_weight: Processing tensor '%s'", tensor_name);
+            LLAMA_LOG_INFO("llama_tensor_weight: Input params - file_idx=%u, lm_gguf_ctx=%p, tensor=%p", idx, lm_gguf_ctx, tensor);
+            
+            if (!lm_gguf_ctx) {
+                LLAMA_LOG_ERROR("llama_tensor_weight: ERROR - lm_gguf_ctx is NULL");
+                throw std::runtime_error(format("lm_gguf_ctx is NULL for tensor '%s'", tensor_name));
             }
-
-            offs = lm_gguf_get_data_offset(lm_gguf_ctx) + lm_gguf_get_tensor_offset(lm_gguf_ctx, tensor_idx);
-            if (offs + lm_ggml_nbytes(tensor) < offs || offs + lm_ggml_nbytes(tensor) > file->size()) {
-                throw std::runtime_error(format("tensor '%s' data is not within the file bounds, model is corrupted or incomplete", lm_ggml_get_name(tensor)));
+            
+            if (!tensor) {
+                LLAMA_LOG_ERROR("llama_tensor_weight: ERROR - tensor is NULL");
+                throw std::runtime_error(format("tensor is NULL for tensor '%s'", tensor_name));
+            }
+            
+            if (!tensor_name || strlen(tensor_name) == 0) {
+                LLAMA_LOG_ERROR("llama_tensor_weight: ERROR - tensor name is NULL or empty");
+                throw std::runtime_error("tensor name is NULL or empty");
+            }
+            
+            LLAMA_LOG_INFO("llama_tensor_weight: Looking up tensor '%s' in GGUF context", tensor_name);
+            const int tensor_idx = lm_gguf_find_tensor(lm_gguf_ctx, tensor_name);
+            
+            LLAMA_LOG_INFO("llama_tensor_weight: lm_gguf_find_tensor returned index %d for tensor '%s'", tensor_idx, tensor_name);
+            
+            if (tensor_idx < 0) {
+                LLAMA_LOG_ERROR("llama_tensor_weight: ERROR - tensor '%s' not found in the model", tensor_name);
+                throw std::runtime_error(format("tensor '%s' not found in the model", tensor_name));
+            }
+            
+            // Validate the tensor index is valid
+            const int n_tensors = lm_gguf_get_n_tensors(lm_gguf_ctx);
+            LLAMA_LOG_INFO("llama_tensor_weight: GGUF context has %d total tensors, requested index %d", n_tensors, tensor_idx);
+            
+            if (tensor_idx >= n_tensors) {
+                LLAMA_LOG_ERROR("llama_tensor_weight: ERROR - tensor index %d out of bounds (max %d) for tensor '%s'", tensor_idx, n_tensors - 1, tensor_name);
+                throw std::runtime_error(format("tensor index %d out of bounds for tensor '%s'", tensor_idx, tensor_name));
+            }
+            
+            const size_t data_offset = lm_gguf_get_data_offset(lm_gguf_ctx);
+            LLAMA_LOG_INFO("llama_tensor_weight: Data offset from GGUF context: %zu", data_offset);
+            
+            const size_t tensor_offset = lm_gguf_get_tensor_offset(lm_gguf_ctx, tensor_idx);
+            LLAMA_LOG_INFO("llama_tensor_weight: Tensor offset for index %d: %zu", tensor_idx, tensor_offset);
+            
+            if (tensor_offset == (size_t)-1) {
+                LLAMA_LOG_ERROR("llama_tensor_weight: ERROR - Invalid tensor offset (0x%zx) for tensor '%s' at index %d", tensor_offset, tensor_name, tensor_idx);
+                throw std::runtime_error(format("invalid tensor offset for tensor '%s'", tensor_name));
+            }
+            
+            offs = data_offset + tensor_offset;
+            LLAMA_LOG_INFO("llama_tensor_weight: Calculated total offset for tensor '%s': %zu (data_offset=%zu + tensor_offset=%zu)", tensor_name, offs, data_offset, tensor_offset);
+            
+            LLAMA_LOG_INFO("llama_tensor_weight: tensor '%s' data offset: %zu + %zu = %zu", tensor_name, data_offset, tensor_offset, offs);
+            
+            const size_t tensor_size = lm_ggml_nbytes(tensor);
+            const size_t end_offs = offs + tensor_size;
+            
+            LLAMA_LOG_INFO("llama_tensor_weight: tensor '%s' size: %zu bytes, ends at %zu (file size: %zu)", 
+                          tensor_name, tensor_size, end_offs, file->size());
+            
+            if (end_offs < offs || end_offs > file->size()) {
+                LLAMA_LOG_ERROR("llama_tensor_weight: tensor '%s' data is not within the file bounds", tensor_name);
+                throw std::runtime_error(format("tensor '%s' data is not within the file bounds, model is corrupted or incomplete", tensor_name));
             }
         }
     };

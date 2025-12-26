@@ -10,3 +10,10 @@ examples/.DS_Store
 /docs
 /.vscode
 /build
+/examples/iOSFrameworkExample/build/XCBuildData
+/examples/iOSFrameworkExample/iOSFrameworkExample.xcodeproj/project.xcworkspace/xcuserdata
+/examples/iOSFrameworkExample/iOSFrameworkExample.xcodeproj/xcuserdata
+/examples/iOSFrameworkExample/build/iOSFrameworkExample.build
+/examples/iOSFrameworkExample/build/ExplicitPrecompiledModules
+/examples/iOSFrameworkExample/iOSFrameworkExample/models
+/examples/iOSFrameworkExample/models

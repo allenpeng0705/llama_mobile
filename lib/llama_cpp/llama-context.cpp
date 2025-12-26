@@ -2400,10 +2400,16 @@ llama_context_params llama_context_default_params() {
 llama_context * llama_init_from_model(
                  llama_model * model,
         llama_context_params   params) {
+    LLAMA_LOG_INFO("%s: entering function with model=%p, params=%p\n", __func__, model, &params);
+    
     if (!model) {
         LLAMA_LOG_ERROR("%s: model cannot be NULL\n", __func__);
         return nullptr;
     }
+    
+    LLAMA_LOG_INFO("%s: model architecture=%d, n_ctx_train=%d\n", __func__, model->arch, model->hparams.n_ctx_train);
+    LLAMA_LOG_INFO("%s: context params - n_batch=%d, n_ubatch=%d, n_ctx=%d\n", 
+                   __func__, params.n_batch, params.n_ubatch, params.n_ctx);
 
     if (params.n_batch == 0 && params.n_ubatch == 0) {
         LLAMA_LOG_ERROR("%s: n_batch and n_ubatch cannot both be zero\n", __func__);
@@ -2422,20 +2428,28 @@ llama_context * llama_init_from_model(
 
     if (params.flash_attn_type == LLAMA_FLASH_ATTN_TYPE_AUTO && lm_ggml_is_quantized(params.type_k)) {
         const uint32_t blck_size = lm_ggml_blck_size(params.type_k);
+        LLAMA_LOG_INFO("%s: Checking K cache compatibility - type=%s, block_size=%u, n_embd_head_k=%u\n",
+                      __func__, lm_ggml_type_name(params.type_k), blck_size, model->hparams.n_embd_head_k);
+        
         if (model->hparams.n_embd_head_k % blck_size != 0) {
             LLAMA_LOG_ERROR("%s: K cache type %s with block size %u does not divide n_embd_head_k=%u\n",
                 __func__, lm_ggml_type_name(params.type_k), blck_size, model->hparams.n_embd_head_k);
             return nullptr;
         }
+        LLAMA_LOG_INFO("%s: K cache type is compatible\n", __func__);
     }
 
     if (params.flash_attn_type == LLAMA_FLASH_ATTN_TYPE_AUTO && lm_ggml_is_quantized(params.type_v)) {
         const uint32_t blck_size = lm_ggml_blck_size(params.type_v);
+        LLAMA_LOG_INFO("%s: Checking V cache compatibility - type=%s, block_size=%u, n_embd_head_v=%u\n",
+                      __func__, lm_ggml_type_name(params.type_v), blck_size, model->hparams.n_embd_head_v);
+        
         if (model->hparams.n_embd_head_v % blck_size != 0) {
             LLAMA_LOG_ERROR("%s: V cache type %s with block size %u does not divide n_embd_head_k=%u\n",
                 __func__, lm_ggml_type_name(params.type_v), blck_size, model->hparams.n_embd_head_v);
             return nullptr;
         }
+        LLAMA_LOG_INFO("%s: V cache type is compatible\n", __func__);
     }
 
     if (lm_ggml_is_quantized(params.type_v) && params.flash_attn_type == LLAMA_FLASH_ATTN_TYPE_DISABLED) {
@@ -2451,12 +2465,16 @@ llama_context * llama_init_from_model(
     }
 
     try {
+        LLAMA_LOG_INFO("%s: Creating new llama_context...\n", __func__);
         auto * ctx = new llama_context(*model, params);
+        LLAMA_LOG_INFO("%s: Successfully created llama_context=%p\n", __func__, ctx);
         return ctx;
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("%s: failed to initialize the context: %s\n", __func__, err.what());
+        LLAMA_LOG_ERROR("%s: This could be due to null tensor indices in GGUF parsing\n", __func__);
     }
 
+    LLAMA_LOG_ERROR("%s: Exiting with nullptr\n", __func__);
     return nullptr;
 }
 
