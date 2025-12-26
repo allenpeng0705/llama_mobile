@@ -27,6 +27,12 @@
 @property (weak, nonatomic) IBOutlet UIActivityIndicatorView *activityIndicator;
 @property (nonatomic, strong) UITextView *debugLogTextView;
 
+// Model selection UI
+@property (nonatomic, strong) UILabel *modelLabel;
+@property (nonatomic, strong) UIPickerView *modelPickerView;
+@property (nonatomic, strong) NSArray *availableModels;
+@property (nonatomic, strong) NSMutableDictionary *modelPaths;
+
 // Actions
 - (IBAction)generatePressed:(id)sender;
 - (IBAction)clearPressed:(id)sender;

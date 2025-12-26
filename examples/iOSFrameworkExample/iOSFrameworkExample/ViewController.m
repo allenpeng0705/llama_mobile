@@ -8,7 +8,7 @@
 #import "ViewController.h"
 #include <sys/stat.h>
 
-@interface ViewController ()
+@interface ViewController () <UIPickerViewDelegate, UIPickerViewDataSource>
 
 @end
 
@@ -52,7 +52,7 @@ static bool token_callback(const char* token) {
     // Set a light background color for better visibility
     self.view.backgroundColor = [UIColor whiteColor];
     
-    // Create debug log text view at the top of the screen
+    // Create debug log text view first
     self.debugLogTextView = [[UITextView alloc] initWithFrame:CGRectZero];
     self.debugLogTextView.translatesAutoresizingMaskIntoConstraints = NO;
     self.debugLogTextView.backgroundColor = [UIColor lightGrayColor];
@@ -63,15 +63,10 @@ static bool token_callback(const char* token) {
     self.debugLogTextView.scrollEnabled = YES;
     self.debugLogTextView.layer.borderWidth = 1.0;
     self.debugLogTextView.layer.borderColor = [UIColor blackColor].CGColor;
-    [self.view insertSubview:self.debugLogTextView atIndex:0];
+    [self.view addSubview:self.debugLogTextView];
     
-    // Layout constraints for debug log text view
-    // Position debug log below output text view
-    NSLayoutConstraint *topConstraint = [self.debugLogTextView.topAnchor constraintEqualToAnchor:self.outputTextView.bottomAnchor constant:8.0];
-    NSLayoutConstraint *leadingConstraint = [self.debugLogTextView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16.0];
-    NSLayoutConstraint *trailingConstraint = [self.debugLogTextView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16.0];
-    NSLayoutConstraint *heightConstraint = [self.debugLogTextView.heightAnchor constraintEqualToConstant:100.0]; // Set height
-    [NSLayoutConstraint activateConstraints:@[topConstraint, leadingConstraint, trailingConstraint, heightConstraint]];
+    // Add model picker view at the top
+    [self setupModelPickerView];
     
     // Improve UI visibility with enhanced styling
     
@@ -81,10 +76,6 @@ static bool token_callback(const char* token) {
     [self.outputTextView setFont:[UIFont systemFontOfSize:16]];
     [self.outputTextView setTextAlignment:NSTextAlignmentLeft];
     
-    // Reposition promptTextField below debugLogTextView
-    NSLayoutConstraint *promptTopConstraint = [self.promptTextField.topAnchor constraintEqualToAnchor:self.debugLogTextView.bottomAnchor constant:16.0];
-    promptTopConstraint.priority = UILayoutPriorityRequired;
-    [promptTopConstraint setActive:YES];
     
     // Prompt text field - improve visibility and appearance
     [self.promptTextField setTextColor:[UIColor blackColor]];
@@ -118,6 +109,12 @@ static bool token_callback(const char* token) {
     self.modelContext = NULL;
     self.currentOutput = [NSMutableString string];
     self.isGenerating = NO;
+    
+    // Initialize model selection data structures
+    self.modelPaths = [NSMutableDictionary dictionary];
+    
+    // Scan app bundle for all GGUF model files
+    [self scanForModelFiles];
     
     // Disable buttons until model is initialized
     [self updateButtonStates];
@@ -168,6 +165,323 @@ static bool token_callback(const char* token) {
     self.outputTextView.contentInset = UIEdgeInsetsZero;
 }
 
+// MARK: - Model Selection
+
+- (void)scanForModelFiles {
+    NSLog(@"DEBUG: Scanning for model files in app bundle");
+    
+    // Get the main bundle
+    NSBundle *mainBundle = [NSBundle mainBundle];
+    NSString *bundlePath = [mainBundle bundlePath];
+    
+    // Scan the bundle root directory for GGUF files
+    [self scanDirectory:bundlePath forFilesWithExtension:@"gguf"];
+    
+    // Also check if there's a models directory
+    NSString *modelsDirPath = [bundlePath stringByAppendingPathComponent:@"models"];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:modelsDirPath isDirectory:NULL]) {
+        [self scanDirectory:modelsDirPath forFilesWithExtension:@"gguf"];
+    }
+    
+    // Extract the available model names from the dictionary keys, sorted alphabetically
+    self.availableModels = [[self.modelPaths allKeys] sortedArrayUsingSelector:@selector(caseInsensitiveCompare:)];
+    
+    NSLog(@"DEBUG: Found %lu model files:", (unsigned long)[self.availableModels count]);
+    for (NSString *modelName in self.availableModels) {
+        NSLog(@"DEBUG:   - %@: %@", modelName, [self.modelPaths objectForKey:modelName]);
+    }
+    
+    [self prependDebugText:[NSString stringWithFormat:@"Found %lu model files in bundle\n", (unsigned long)[self.availableModels count]]];
+}
+
+- (void)scanDirectory:(NSString *)directoryPath forFilesWithExtension:(NSString *)extension {
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSError *error = nil;
+    NSArray *files = [fileManager contentsOfDirectoryAtPath:directoryPath error:&error];
+    
+    if (error) {
+        NSLog(@"ERROR: Failed to scan directory %@: %@", directoryPath, error);
+        return;
+    }
+    
+    for (NSString *file in files) {
+        NSString *filePath = [directoryPath stringByAppendingPathComponent:file];
+        
+        // Check if it's a file (not a directory)
+        BOOL isDirectory;
+        if ([fileManager fileExistsAtPath:filePath isDirectory:&isDirectory] && !isDirectory) {
+            // Check if it has the right extension (case-insensitive)
+            if ([[file pathExtension] caseInsensitiveCompare:extension] == NSOrderedSame) {
+                // Use the filename without extension as the display name
+                NSString *modelName = [file stringByDeletingPathExtension];
+                [self.modelPaths setObject:filePath forKey:modelName];
+            }
+        }
+    }
+}
+
+- (void)setupModelPickerView {
+    // Create model label
+    self.modelLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    self.modelLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    self.modelLabel.text = @"Select Model:";
+    self.modelLabel.textColor = [UIColor blackColor];
+    self.modelLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
+    [self.view addSubview:self.modelLabel];
+    [self.view bringSubviewToFront:self.modelLabel];
+    
+    // Create model picker view
+    self.modelPickerView = [[UIPickerView alloc] initWithFrame:CGRectZero];
+    self.modelPickerView.translatesAutoresizingMaskIntoConstraints = NO;
+    self.modelPickerView.delegate = self;
+    self.modelPickerView.dataSource = self;
+    self.modelPickerView.backgroundColor = [UIColor whiteColor];
+    [self.modelPickerView.layer setBorderWidth:1.0];
+    [self.modelPickerView.layer setBorderColor:[UIColor blackColor].CGColor];
+    [self.view addSubview:self.modelPickerView];
+    [self.view bringSubviewToFront:self.modelPickerView];
+    
+    // Remove all existing constraints that involve outputTextView, promptTextField, or debugLogTextView positions
+    // This ensures we have a clean slate for our new layout
+    NSMutableArray *constraintsToRemove = [NSMutableArray array];
+    
+    // Check all constraints affecting the view and its subviews
+    // Get all constraints in the view hierarchy
+    NSArray *allConstraints = [self.view constraintsAffectingLayoutForAxis:UILayoutConstraintAxisVertical];
+    allConstraints = [allConstraints arrayByAddingObjectsFromArray:[self.view constraintsAffectingLayoutForAxis:UILayoutConstraintAxisHorizontal]];
+    
+    for (NSLayoutConstraint *constraint in allConstraints) {
+        // Check if constraint involves any of our key views
+        BOOL involvesOutputTextView = (constraint.firstItem == self.outputTextView || constraint.secondItem == self.outputTextView);
+        BOOL involvesPromptTextField = (constraint.firstItem == self.promptTextField || constraint.secondItem == self.promptTextField);
+        BOOL involvesDebugLogTextView = (constraint.firstItem == self.debugLogTextView || constraint.secondItem == self.debugLogTextView);
+        
+        // If constraint involves any of these views, we'll remove it to avoid conflicts
+        if (involvesOutputTextView || involvesPromptTextField || involvesDebugLogTextView) {
+            [constraintsToRemove addObject:constraint];
+        }
+    }
+    
+    // Deactivate all the constraints we want to remove
+    if ([constraintsToRemove count] > 0) {
+        [NSLayoutConstraint deactivateConstraints:constraintsToRemove];
+        NSLog(@"DEBUG: Deactivated %lu conflicting constraints", (unsigned long)[constraintsToRemove count]);
+    }
+    
+    // Set up constraints for the new layout order
+    // 1. Model label at the very top
+    NSLayoutConstraint *labelTopConstraint = [self.modelLabel.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:16.0];
+    NSLayoutConstraint *labelLeadingConstraint = [self.modelLabel.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16.0];
+    NSLayoutConstraint *labelTrailingConstraint = [self.modelLabel.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16.0];
+    
+    // 2. Model picker below the label
+    NSLayoutConstraint *pickerTopConstraint = [self.modelPickerView.topAnchor constraintEqualToAnchor:self.modelLabel.bottomAnchor constant:8.0];
+    NSLayoutConstraint *pickerLeadingConstraint = [self.modelPickerView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16.0];
+    NSLayoutConstraint *pickerTrailingConstraint = [self.modelPickerView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16.0];
+    NSLayoutConstraint *pickerHeightConstraint = [self.modelPickerView.heightAnchor constraintEqualToConstant:100.0]; // Reduced height for better space utilization
+    
+    // 3. Output text view below the picker
+    NSLayoutConstraint *outputTopConstraint = [self.outputTextView.topAnchor constraintEqualToAnchor:self.modelPickerView.bottomAnchor constant:16.0];
+    NSLayoutConstraint *outputLeadingConstraint = [self.outputTextView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16.0];
+    NSLayoutConstraint *outputTrailingConstraint = [self.outputTextView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16.0];
+    NSLayoutConstraint *outputHeightConstraint = [self.outputTextView.heightAnchor constraintEqualToConstant:200.0]; // Explicit height constraint to prevent covering debug log
+    
+    // 4. Debug log below output text view
+    NSLayoutConstraint *debugTopConstraint = [self.debugLogTextView.topAnchor constraintEqualToAnchor:self.outputTextView.bottomAnchor constant:8.0];
+    NSLayoutConstraint *debugLeadingConstraint = [self.debugLogTextView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16.0];
+    NSLayoutConstraint *debugTrailingConstraint = [self.debugLogTextView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16.0];
+    NSLayoutConstraint *debugHeightConstraint = [self.debugLogTextView.heightAnchor constraintEqualToConstant:100.0];
+    
+    // 5. Prompt text field below debug log
+    NSLayoutConstraint *promptTopConstraint = [self.promptTextField.topAnchor constraintEqualToAnchor:self.debugLogTextView.bottomAnchor constant:16.0];
+    NSLayoutConstraint *promptLeadingConstraint = [self.promptTextField.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16.0];
+    NSLayoutConstraint *promptTrailingConstraint = [self.promptTextField.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16.0];
+    NSLayoutConstraint *promptBottomConstraint = [self.promptTextField.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-16.0];
+    
+    // Create buttons container to manage the button grid layout
+    UIView *buttonsContainer = [[UIView alloc] initWithFrame:CGRectZero];
+    buttonsContainer.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:buttonsContainer];
+    [self.view bringSubviewToFront:buttonsContainer];
+    
+    // Set up constraints for buttons container
+    NSLayoutConstraint *buttonsTopConstraint = [buttonsContainer.topAnchor constraintEqualToAnchor:self.outputTextView.bottomAnchor constant:8.0];
+    NSLayoutConstraint *buttonsLeadingConstraint = [buttonsContainer.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:16.0];
+    NSLayoutConstraint *buttonsTrailingConstraint = [buttonsContainer.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-16.0];
+    
+    // Now reposition debug log to be below buttons container
+    debugTopConstraint = [self.debugLogTextView.topAnchor constraintEqualToAnchor:buttonsContainer.bottomAnchor constant:8.0];
+    
+    // Position prompt text field below debug log
+    promptTopConstraint = [self.promptTextField.topAnchor constraintEqualToAnchor:self.debugLogTextView.bottomAnchor constant:16.0];
+    
+    // Create button constraints for a grid layout
+    NSLayoutConstraint *initializeTopConstraint = [self.initializeButton.topAnchor constraintEqualToAnchor:buttonsContainer.topAnchor constant:0.0];
+    NSLayoutConstraint *initializeLeadingConstraint = [self.initializeButton.leadingAnchor constraintEqualToAnchor:buttonsContainer.leadingAnchor constant:0.0];
+    NSLayoutConstraint *initializeTrailingConstraint = [self.initializeButton.trailingAnchor constraintEqualToAnchor:buttonsContainer.trailingAnchor constant:0.0];
+    NSLayoutConstraint *initializeHeightConstraint = [self.initializeButton.heightAnchor constraintEqualToConstant:44.0];
+    
+    NSLayoutConstraint *generateTopConstraint = [self.generateButton.topAnchor constraintEqualToAnchor:self.initializeButton.bottomAnchor constant:8.0];
+    NSLayoutConstraint *generateLeadingConstraint = [self.generateButton.leadingAnchor constraintEqualToAnchor:buttonsContainer.leadingAnchor constant:0.0];
+    NSLayoutConstraint *generateTrailingConstraint = [self.generateButton.trailingAnchor constraintEqualToAnchor:buttonsContainer.centerXAnchor constant:-4.0];
+    NSLayoutConstraint *generateHeightConstraint = [self.generateButton.heightAnchor constraintEqualToConstant:44.0];
+    
+    NSLayoutConstraint *completeTopConstraint = [self.completeButton.topAnchor constraintEqualToAnchor:self.generateButton.topAnchor constant:0.0];
+    NSLayoutConstraint *completeLeadingConstraint = [self.completeButton.leadingAnchor constraintEqualToAnchor:buttonsContainer.centerXAnchor constant:4.0];
+    NSLayoutConstraint *completeTrailingConstraint = [self.completeButton.trailingAnchor constraintEqualToAnchor:buttonsContainer.trailingAnchor constant:0.0];
+    NSLayoutConstraint *completeHeightConstraint = [self.completeButton.heightAnchor constraintEqualToConstant:44.0];
+    
+    NSLayoutConstraint *conversationTopConstraint = [self.conversationButton.topAnchor constraintEqualToAnchor:self.generateButton.bottomAnchor constant:8.0];
+    NSLayoutConstraint *conversationLeadingConstraint = [self.conversationButton.leadingAnchor constraintEqualToAnchor:buttonsContainer.leadingAnchor constant:0.0];
+    NSLayoutConstraint *conversationTrailingConstraint = [self.conversationButton.trailingAnchor constraintEqualToAnchor:buttonsContainer.centerXAnchor constant:-4.0];
+    NSLayoutConstraint *conversationHeightConstraint = [self.conversationButton.heightAnchor constraintEqualToConstant:44.0];
+    
+    NSLayoutConstraint *embeddingTopConstraint = [self.embeddingButton.topAnchor constraintEqualToAnchor:self.conversationButton.topAnchor constant:0.0];
+    NSLayoutConstraint *embeddingLeadingConstraint = [self.embeddingButton.leadingAnchor constraintEqualToAnchor:buttonsContainer.centerXAnchor constant:4.0];
+    NSLayoutConstraint *embeddingTrailingConstraint = [self.embeddingButton.trailingAnchor constraintEqualToAnchor:buttonsContainer.trailingAnchor constant:0.0];
+    NSLayoutConstraint *embeddingHeightConstraint = [self.embeddingButton.heightAnchor constraintEqualToConstant:44.0];
+    
+    NSLayoutConstraint *multimodalTopConstraint = [self.multimodalButton.topAnchor constraintEqualToAnchor:self.conversationButton.bottomAnchor constant:8.0];
+    NSLayoutConstraint *multimodalLeadingConstraint = [self.multimodalButton.leadingAnchor constraintEqualToAnchor:buttonsContainer.leadingAnchor constant:0.0];
+    NSLayoutConstraint *multimodalTrailingConstraint = [self.multimodalButton.trailingAnchor constraintEqualToAnchor:buttonsContainer.trailingAnchor constant:0.0];
+    NSLayoutConstraint *multimodalHeightConstraint = [self.multimodalButton.heightAnchor constraintEqualToConstant:44.0];
+    
+    NSLayoutConstraint *clearTopConstraint = [self.clearButton.topAnchor constraintEqualToAnchor:self.multimodalButton.bottomAnchor constant:8.0];
+    NSLayoutConstraint *clearLeadingConstraint = [self.clearButton.leadingAnchor constraintEqualToAnchor:buttonsContainer.leadingAnchor constant:0.0];
+    NSLayoutConstraint *clearTrailingConstraint = [self.clearButton.trailingAnchor constraintEqualToAnchor:buttonsContainer.trailingAnchor constant:0.0];
+    NSLayoutConstraint *clearHeightConstraint = [self.clearButton.heightAnchor constraintEqualToConstant:44.0];
+    
+    // Set the bottom constraint of the buttons container to match the bottom of the clear button
+    NSLayoutConstraint *buttonsBottomConstraint = [buttonsContainer.bottomAnchor constraintEqualToAnchor:self.clearButton.bottomAnchor constant:0.0];
+    
+    // Activate all the new constraints
+    [NSLayoutConstraint activateConstraints:@[
+        // Model selection UI constraints
+        labelTopConstraint,
+        labelLeadingConstraint,
+        labelTrailingConstraint,
+        pickerTopConstraint,
+        pickerLeadingConstraint,
+        pickerTrailingConstraint,
+        pickerHeightConstraint,
+        
+        // Output text view constraints
+        outputTopConstraint,
+        outputLeadingConstraint,
+        outputTrailingConstraint,
+        outputHeightConstraint, // Add the explicit height constraint
+        
+        // Buttons container and buttons constraints
+        buttonsTopConstraint,
+        buttonsLeadingConstraint,
+        buttonsTrailingConstraint,
+        buttonsBottomConstraint,
+        
+        // Initialize button
+        initializeTopConstraint,
+        initializeLeadingConstraint,
+        initializeTrailingConstraint,
+        initializeHeightConstraint,
+        
+        // Generate button
+        generateTopConstraint,
+        generateLeadingConstraint,
+        generateTrailingConstraint,
+        generateHeightConstraint,
+        
+        // Complete button
+        completeTopConstraint,
+        completeLeadingConstraint,
+        completeTrailingConstraint,
+        completeHeightConstraint,
+        
+        // Conversation button
+        conversationTopConstraint,
+        conversationLeadingConstraint,
+        conversationTrailingConstraint,
+        conversationHeightConstraint,
+        
+        // Embedding button
+        embeddingTopConstraint,
+        embeddingLeadingConstraint,
+        embeddingTrailingConstraint,
+        embeddingHeightConstraint,
+        
+        // Multimodal button
+        multimodalTopConstraint,
+        multimodalLeadingConstraint,
+        multimodalTrailingConstraint,
+        multimodalHeightConstraint,
+        
+        // Clear button
+        clearTopConstraint,
+        clearLeadingConstraint,
+        clearTrailingConstraint,
+        clearHeightConstraint,
+        
+        // Debug log constraints
+        debugTopConstraint,
+        debugLeadingConstraint,
+        debugTrailingConstraint,
+        debugHeightConstraint,
+        
+        // Prompt text field constraints
+        promptTopConstraint,
+        promptLeadingConstraint,
+        promptTrailingConstraint,
+        promptBottomConstraint
+    ]];
+    
+    // Bring all buttons to front to ensure visibility
+    [self.view bringSubviewToFront:self.generateButton];
+    [self.view bringSubviewToFront:self.completeButton];
+    [self.view bringSubviewToFront:self.conversationButton];
+    [self.view bringSubviewToFront:self.embeddingButton];
+    [self.view bringSubviewToFront:self.multimodalButton];
+    [self.view bringSubviewToFront:self.initializeButton];
+    [self.view bringSubviewToFront:self.clearButton];
+    
+    // Bring debug log view to front to ensure visibility
+    [self.view bringSubviewToFront:self.debugLogTextView];
+    
+    NSLog(@"DEBUG: Model picker view setup completed");
+}
+
+// MARK: - UIPickerView Delegate & DataSource
+
+- (NSInteger)numberOfComponentsInPickerView:(UIPickerView *)pickerView {
+    return 1;
+}
+
+- (NSInteger)pickerView:(UIPickerView *)pickerView numberOfRowsInComponent:(NSInteger)component {
+    return [self.availableModels count];
+}
+
+// Use viewForRow instead of titleForRow to customize text appearance and ensure visibility
+- (UIView *)pickerView:(UIPickerView *)pickerView viewForRow:(NSInteger)row forComponent:(NSInteger)component reusingView:(UIView *)view {
+    UILabel *pickerLabel;
+    if (view) {
+        pickerLabel = (UILabel *)view;
+    } else {
+        pickerLabel = [[UILabel alloc] initWithFrame:CGRectMake(0, 0, pickerView.bounds.size.width - 20, 44)];
+        pickerLabel.font = [UIFont systemFontOfSize:16];
+        pickerLabel.textAlignment = NSTextAlignmentCenter;
+        pickerLabel.textColor = [UIColor blackColor]; // Ensure text color is black for visibility
+        pickerLabel.backgroundColor = [UIColor clearColor];
+    }
+    
+    pickerLabel.text = [self.availableModels objectAtIndex:row];
+    return pickerLabel;
+}
+
+- (void)pickerView:(UIPickerView *)pickerView didSelectRow:(NSInteger)row inComponent:(NSInteger)component {
+    NSString *selectedModel = [self.availableModels objectAtIndex:row];
+    NSString *modelPath = [self.modelPaths objectForKey:selectedModel];
+    
+    NSLog(@"DEBUG: Selected model: %@ (%@)", selectedModel, modelPath);
+    [self prependDebugText:[NSString stringWithFormat:@"Selected model: %@\n", selectedModel]];
+}
+
 // MARK: - Model Initialization
 
 - (IBAction)initializePressed:(id)sender {
@@ -179,109 +493,48 @@ static bool token_callback(const char* token) {
     [self.activityIndicator startAnimating];
     [self.outputTextView setText:@"Initializing model...\n"];
     
-    // Get model path from app bundle - DEBUG VERSION WITH EXTENSIVE LOGGING
-    NSBundle *mainBundle = [NSBundle mainBundle];
+    // Get selected model from picker view
+    NSString *modelPath = nil;
     
-    // Log bundle information
-    NSLog(@"DEBUG: Bundle path: %@", [mainBundle bundlePath]);
-    NSLog(@"DEBUG: Bundle executable: %@", [mainBundle executablePath]);
-    NSLog(@"DEBUG: Bundle identifier: %@", [mainBundle bundleIdentifier]);
-    
-    // Try to get model path with different approaches - prioritize bundle root first (where model was confirmed to exist)
-    NSString *modelPath = [mainBundle pathForResource:@"SmolLM-360M-Instruct.Q6_K" ofType:@"gguf"];
-    NSLog(@"DEBUG: Model path (simple): %@", modelPath);
-    
-    // Try with full filename in bundle root
-    NSString *modelPathWithExtension = [mainBundle pathForResource:@"SmolLM-360M-Instruct.Q6_K.gguf" ofType:nil];
-    NSLog(@"DEBUG: Model path (with extension in name): %@", modelPathWithExtension);
-    
-    
-    // Try with full filename in models directory
-    NSString *modelPathWithExtensionInModels = [mainBundle pathForResource:@"SmolLM-360M-Instruct.Q6_K.gguf" ofType:nil inDirectory:@"models"];
-    NSLog(@"DEBUG: Model path (with extension in name in models): %@", modelPathWithExtensionInModels);
-    
-    // Try with lowercase path in bundle root
-    NSString *modelPathLowercase = [mainBundle pathForResource:@"smollm-360m-instruct.q6_k" ofType:@"gguf"];
-    NSLog(@"DEBUG: Model path (lowercase): %@", modelPathLowercase);
-    
-    // Try with normal case in models directory
-    NSString *modelPathInModels = [mainBundle pathForResource:@"SmolLM-360M-Instruct.Q6_K" ofType:@"gguf" inDirectory:@"models"];
-    NSLog(@"DEBUG: Model path (in models): %@", modelPathInModels);
-    
-    // Try with lowercase in models directory
-    NSString *modelPathInModelsLowercase = [mainBundle pathForResource:@"smollm-360m-instruct.q6_k" ofType:@"gguf" inDirectory:@"models"];
-    NSLog(@"DEBUG: Model path (lowercase in models): %@", modelPathInModelsLowercase);
-    
-    // List all files in the bundle root for debugging
-    NSError *error = nil;
-    NSArray *bundleFiles = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:[mainBundle bundlePath] error:&error];
-    if (bundleFiles) {
-        NSLog(@"DEBUG: Bundle root contents (%lu files):", (unsigned long)[bundleFiles count]);
-        for (NSString *file in bundleFiles) {
-            NSLog(@"DEBUG:   - %@", file);
-        }
-    } else {
-        NSLog(@"DEBUG: Error listing bundle contents: %@", error);
-    }
-    
-    // Check for models directory contents
-    NSString *modelsDirPath = [[mainBundle bundlePath] stringByAppendingPathComponent:@"models"];
-    NSLog(@"DEBUG: Checking models directory: %@", modelsDirPath);
-    NSArray *modelsDirFiles = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:modelsDirPath error:&error];
-    if (modelsDirFiles) {
-        NSLog(@"DEBUG: Models directory contents (%lu files):", (unsigned long)[modelsDirFiles count]);
-        for (NSString *file in modelsDirFiles) {
-            NSLog(@"DEBUG:   - %@", file);
-        }
-    } else {
-        NSLog(@"DEBUG: Error listing models directory: %@", error);
-    }
-    
-    // Check if any model path works - prioritize bundle root first (where model was confirmed to exist)
-    NSString *finalModelPath = nil;
-    
-    // Log file existence checks - update order to match priority
-    NSLog(@"DEBUG: Checking file existence at simple path: %@ -> %d", modelPath, [[NSFileManager defaultManager] fileExistsAtPath:modelPath]);
-    NSLog(@"DEBUG: Checking file existence at path with full name: %@ -> %d", modelPathWithExtension, [[NSFileManager defaultManager] fileExistsAtPath:modelPathWithExtension]);
-    NSLog(@"DEBUG: Checking file existence at lowercase path: %@ -> %d", modelPathLowercase, [[NSFileManager defaultManager] fileExistsAtPath:modelPathLowercase]);
-    NSLog(@"DEBUG: Checking file existence at models directory path: %@ -> %d", modelPathInModels, [[NSFileManager defaultManager] fileExistsAtPath:modelPathInModels]);
-    NSLog(@"DEBUG: Checking file existence at models directory with full name: %@ -> %d", modelPathWithExtensionInModels, [[NSFileManager defaultManager] fileExistsAtPath:modelPathWithExtensionInModels]);
-    NSLog(@"DEBUG: Checking file existence at lowercase models path: %@ -> %d", modelPathInModelsLowercase, [[NSFileManager defaultManager] fileExistsAtPath:modelPathInModelsLowercase]);
-    
-    // Update order to prioritize bundle root paths first
-    if (modelPath && [[NSFileManager defaultManager] fileExistsAtPath:modelPath]) {
-        finalModelPath = modelPath;
-        NSLog(@"DEBUG: Model found at simple path");
-    } else if (modelPathWithExtension && [[NSFileManager defaultManager] fileExistsAtPath:modelPathWithExtension]) {
-        finalModelPath = modelPathWithExtension;
-        NSLog(@"DEBUG: Model found at path with full name");
-    } else if (modelPathLowercase && [[NSFileManager defaultManager] fileExistsAtPath:modelPathLowercase]) {
-        finalModelPath = modelPathLowercase;
-        NSLog(@"DEBUG: Model found at lowercase path");
-    } else if (modelPathInModels && [[NSFileManager defaultManager] fileExistsAtPath:modelPathInModels]) {
-        finalModelPath = modelPathInModels;
-        NSLog(@"DEBUG: Model found at models directory path");
-    } else if (modelPathWithExtensionInModels && [[NSFileManager defaultManager] fileExistsAtPath:modelPathWithExtensionInModels]) {
-        finalModelPath = modelPathWithExtensionInModels;
-        NSLog(@"DEBUG: Model found at models directory path with full name");
-    } else if (modelPathInModelsLowercase && [[NSFileManager defaultManager] fileExistsAtPath:modelPathInModelsLowercase]) {
-        finalModelPath = modelPathInModelsLowercase;
-        NSLog(@"DEBUG: Model found at lowercase path in models directory");
-    }
-    
-    if (!finalModelPath) {
-        NSString *errorMsg = [NSString stringWithFormat:@"Error: Model file not found in app bundle. Check logs for bundle contents.\n"];
+    if ([self.availableModels count] == 0) {
+        NSString *errorMsg = @"Error: No model files found in app bundle.\n";
         [self.outputTextView setText:errorMsg];
-        NSLog(@"ERROR: Model file not found in any expected location");
+        NSLog(@"ERROR: No model files found in app bundle");
         [self.activityIndicator stopAnimating];
         return;
     }
     
-    // Use the working model path
-    modelPath = finalModelPath;
-    NSLog(@"DEBUG: FINAL MODEL PATH BEING USED: %@", modelPath);
+    // Get selected model from picker view
+    NSInteger selectedRow = [self.modelPickerView selectedRowInComponent:0];
+    NSString *selectedModel = nil;
+    
+    if (selectedRow >= 0 && selectedRow < [self.availableModels count]) {
+        selectedModel = [self.availableModels objectAtIndex:selectedRow];
+        modelPath = [self.modelPaths objectForKey:selectedModel];
+        
+        NSLog(@"DEBUG: Selected model: %@", selectedModel);
+        NSLog(@"DEBUG: Model path: %@", modelPath);
+    } else {
+        // Fallback to first model if no selection
+        selectedRow = 0;
+        selectedModel = [self.availableModels objectAtIndex:selectedRow];
+        modelPath = [self.modelPaths objectForKey:selectedModel];
+        
+        NSLog(@"DEBUG: No model selected, using first model: %@", selectedModel);
+        NSLog(@"DEBUG: Model path: %@", modelPath);
+    }
+    
+    if (!modelPath) {
+        NSString *errorMsg = @"Error: Could not get path for selected model.\n";
+        [self.outputTextView setText:errorMsg];
+        NSLog(@"ERROR: Could not get path for selected model");
+        [self.activityIndicator stopAnimating];
+        return;
+    }
+    
     // Prepend new content to show at the top
-        [self prependDebugText:[NSString stringWithFormat:@"Trying to load model from: %@\n", modelPath]];
+    [self prependDebugText:[NSString stringWithFormat:@"Trying to load model: %@\n", selectedModel]];
+    [self prependDebugText:[NSString stringWithFormat:@"Model path: %@\n", modelPath]];
     
     // Initialize model in background thread
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{        
@@ -348,7 +601,7 @@ static bool token_callback(const char* token) {
             NSLog(@"DEBUG: Testing direct file opening with read access...");
             NSFileHandle *readHandle = [NSFileHandle fileHandleForReadingAtPath:modelPath];
             if (readHandle) {
-                NSLog(@"DEBUG: SUCCESS: File opened successfully for reading");
+                 NSLog(@"DEBUG: SUCCESS: File opened successfully for reading");
                 
                 // Test reading some data from the file
                 NSLog(@"DEBUG: Testing file reading...");
@@ -422,16 +675,16 @@ static bool token_callback(const char* token) {
             int32_t gpuLayers = isSimulator ? 0 : 20;
             
             NSLog(@"DEBUG: Running on %@", isSimulator ? @"SIMULATOR" : @"REAL DEVICE");
-            // Set up detailed parameters following user's example exactly
+            // Set up detailed parameters with optimal settings
             llama_mobile_init_params_t params = {0}; // Initialize all fields to zero first
             params.model_path = [modelPath UTF8String];
-            params.n_ctx = 2048;
-            params.n_gpu_layers = gpuLayers;
-            params.n_threads = 4;
+            params.n_ctx = 2048;                   // Context window size
+            params.n_gpu_layers = gpuLayers;       // 0 for simulator, 20 for real device
+            params.n_threads = 4;                  // Number of CPU threads (optimal for most iOS devices)
             params.progress_callback = progress_callback;
             params.embedding = false;
-            params.use_mmap = true;
-            params.n_batch = 512;
+            params.use_mmap = true;                // Use memory mapping for better memory usage
+            params.n_batch = 512;                  // Batch size for generation
             
             // Log all parameters as per user's example
             NSLog(@"DEBUG: Calling llama_mobile_init with parameters from user's example:");
@@ -467,11 +720,15 @@ static bool token_callback(const char* token) {
                 [self.activityIndicator stopAnimating];
                 
                 if (self.modelContext != NULL) {
-                    // Prepend success message to show at the top
+                    // Update output text view with success message
+                    [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Model initialized successfully!\n"]];
+                    // Prepend success message to debug log
                     [self prependDebugText:@"Model initialized successfully with user's parameters!\n"];
                     [self updateButtonStates];
                 } else {
-                    // Prepend error message to show at the top
+                    // Update output text view with error message
+                    [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Error: Initialization failed.\n"]];
+                    // Prepend error message to debug log
                     [self prependDebugText:@"Error: Initialization failed with both use_mmap=true and use_mmap=false.\n"];
                     NSLog(@"ERROR: llama_mobile_init returned NULL in both attempts");
                     
@@ -613,11 +870,13 @@ static bool token_callback(const char* token) {
     
     - (IBAction)completePressed:(id)sender {
         NSLog(@"DEBUG: completePressed button clicked");
+        [self prependDebugText:@"Starting advanced completion...\n"];
         [self generateTextWithMode:@"completion"];
     }
     
     - (IBAction)generatePressed:(id)sender {
         NSLog(@"DEBUG: generatePressed button clicked");
+        [self prependDebugText:@"Starting text generation...\n"];
         [self generateTextWithMode:@"simple"];
     }
     
@@ -626,30 +885,39 @@ static bool token_callback(const char* token) {
         if (self.modelContext == NULL) {
             NSLog(@"DEBUG: Model not initialized - cannot generate text");
             [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Error: Model not initialized.\n"]];
+            [self prependDebugText:@"Error: Model not initialized. Please initialize the model first.\n"];
             return;
         }
         
         if (self.isGenerating) {
             NSLog(@"DEBUG: Generation already in progress - ignoring request");
             [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Generation already in progress.\n"]];
+            [self prependDebugText:@"Error: Generation already in progress. Please wait for current generation to complete.\n"];
             return;
         }
         
-        NSString *prompt = self.promptTextField.text;
-        NSLog(@"DEBUG: Using prompt: %@", prompt);
-        if ([prompt length] == 0) {
+        NSString *userPrompt = self.promptTextField.text;
+        NSLog(@"DEBUG: Using user prompt: %@", userPrompt);
+        if ([userPrompt length] == 0) {
             NSLog(@"DEBUG: Empty prompt - cannot generate text");
             [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Please enter a prompt.\n"]];
+            [self prependDebugText:@"Error: Empty prompt. Please enter text to generate a response.\n"];
             return;
         }
         
+        // Add a system prompt to guide the model's responses
+        NSString *systemPrompt = @"System: You are a helpful assistant. Answer concisely and clearly.\n";
+        NSString *prompt = [systemPrompt stringByAppendingFormat:@"User: %@\nAssistant:", userPrompt];
+        NSLog(@"DEBUG: Full prompt with system instruction: %@", prompt);
+        
         self.isGenerating = YES;
-        [self.generateButton setEnabled:NO];
+        [self updateButtonStates]; // Disable all generation buttons
         [self.activityIndicator startAnimating];
         
         NSLog(@"DEBUG: Starting text generation with mode: %@", mode);
         [self.outputTextView setText:[self.outputTextView.text stringByAppendingFormat:@"Generating for prompt: %@\n", prompt]];
         [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"\nGenerated text:\n"]];
+        [self prependDebugText:[NSString stringWithFormat:@"Generation started with %@ mode...\n", mode]];
         
         // Clear current output
         [self.currentOutput setString:@""];
@@ -663,8 +931,8 @@ static bool token_callback(const char* token) {
                 // Advanced completion with streaming
                 llama_mobile_completion_params_t completion_params = {
                     .prompt = [prompt UTF8String],
-                    .max_tokens = 200,
-                    .temperature = 0.7,
+                    .max_tokens = 300,         // Increased for more detailed responses
+                    .temperature = 0.7,        // Optimal balance between creativity and coherence
                     .top_k = 50,
                     .top_p = 0.9,
                     .token_callback = token_callback
@@ -679,14 +947,19 @@ static bool token_callback(const char* token) {
                     if (status == 0) {
                         NSLog(@"DEBUG: Completion successful - tokens generated: %d", result.tokens_generated);
                         [self.outputTextView setText:[self.outputTextView.text stringByAppendingFormat:@"\n\nGeneration completed. Tokens generated: %d\n", result.tokens_generated]];
+                        [self prependDebugText:[NSString stringWithFormat:@"%@ generation completed successfully. Tokens generated: %d\n", mode, result.tokens_generated]];
                         llama_mobile_free_completion_result((llama_mobile_completion_result_t *)&result);
                     } else {
                         NSLog(@"DEBUG: Completion failed with status: %d", status);
                         [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"\n\nError: Generation failed.\n"]];
+                        [self prependDebugText:[NSString stringWithFormat:@"Error: %@ generation failed with status code %d\n", mode, status]];
                     }
                     
+                    // Clear the prompt text field after clicking the button (regardless of success/failure)
+                    self.promptTextField.text = @"";
+                    
                     self.isGenerating = NO;
-                    [self.generateButton setEnabled:YES];
+                    [self updateButtonStates]; // Enable relevant buttons
                     [self.activityIndicator stopAnimating];
                     
                     // Clear the static reference to prevent memory leaks
@@ -699,8 +972,8 @@ static bool token_callback(const char* token) {
                 int status = llama_mobile_completion_simple(
                                                             self.modelContext,
                                                             [prompt UTF8String],
-                                                            100,          // Max tokens
-                                                            0.8,          // Temperature
+                                                            300,          // Increased for more detailed responses
+                                                            0.7,          // Consistent temperature with streaming
                                                             NULL,         // Token callback
                                                             &result
                                                             );
@@ -712,6 +985,7 @@ static bool token_callback(const char* token) {
                         NSString *generatedText = [NSString stringWithUTF8String:result.text];
                         [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:generatedText]];
                         [self.outputTextView setText:[self.outputTextView.text stringByAppendingFormat:@"\n\nTokens generated: %d\n", result.tokens_generated]];
+                        [self prependDebugText:[NSString stringWithFormat:@"%@ generation completed successfully. Tokens generated: %d\n", mode, result.tokens_generated]];
                         
                         // Free the result when done
                         llama_mobile_free_completion_result((llama_mobile_completion_result_t *)&result);
@@ -719,10 +993,14 @@ static bool token_callback(const char* token) {
                     } else {
                         NSLog(@"DEBUG: Simple generation failed with status: %d", status);
                         [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"\n\nError: Generation failed.\n"]];
+                        [self prependDebugText:[NSString stringWithFormat:@"Error: %@ generation failed with status code %d\n", mode, status]];
                     }
                     
+                    // Clear the prompt text field after clicking the button (regardless of success/failure)
+                    self.promptTextField.text = @"";
+                    
                     self.isGenerating = NO;
-                    [self.generateButton setEnabled:YES];
+                    [self updateButtonStates]; // Enable relevant buttons
                     [self.activityIndicator stopAnimating];
                 });
             }
@@ -733,23 +1011,43 @@ static bool token_callback(const char* token) {
     
     - (IBAction)conversationPressed:(id)sender {
         NSLog(@"DEBUG: conversationPressed button clicked");
+        [self prependDebugText:@"Starting conversation...\n"];
+        
         if (self.modelContext == NULL) {
             NSLog(@"DEBUG: Model not initialized - cannot start conversation");
             [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Error: Model not initialized.\n"]];
+            [self prependDebugText:@"Error: Model not initialized. Please initialize the model first.\n"];
             return;
         }
         
-        NSString *prompt = self.promptTextField.text;
-        NSLog(@"DEBUG: Conversation prompt: %@", prompt);
-        if ([prompt length] == 0) {
+        if (self.isGenerating) {
+            NSLog(@"DEBUG: Generation already in progress - cannot start conversation");
+            [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Generation already in progress.\n"]];
+            [self prependDebugText:@"Error: Generation already in progress. Please wait for current generation to complete.\n"];
+            return;
+        }
+        
+        NSString *userPrompt = self.promptTextField.text;
+        NSLog(@"DEBUG: Conversation user prompt: %@", userPrompt);
+        if ([userPrompt length] == 0) {
             NSLog(@"DEBUG: Empty conversation prompt - returning");
             [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Please enter a prompt.\n"]];
+            [self prependDebugText:@"Error: Empty prompt. Please enter text to start a conversation.\n"];
             return;
         }
         
-        NSLog(@"DEBUG: Starting conversation generation");
+        // Add a system prompt to guide the model's responses in conversation mode
+        NSString *systemPrompt = @"System: You are a helpful assistant. Answer concisely and clearly.\n";
+        NSString *prompt = [systemPrompt stringByAppendingFormat:@"User: %@\nAssistant:", userPrompt];
+        NSLog(@"DEBUG: Full conversation prompt with system instruction: %@", prompt);
+        
+        self.isGenerating = YES;
+        [self updateButtonStates]; // Disable all generation buttons
         [self.activityIndicator startAnimating];
+        
+        NSLog(@"DEBUG: Starting conversation generation");
         [self.outputTextView setText:[self.outputTextView.text stringByAppendingFormat:@"Conversation: %@\n", prompt]];
+        [self prependDebugText:@"Conversation generation started...\n"];
         
         // Generate conversation response in background thread
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{        
@@ -758,7 +1056,7 @@ static bool token_callback(const char* token) {
             int status = llama_mobile_generate_response_simple(
                                                                self.modelContext,
                                                                [prompt UTF8String],
-                                                               100,          // Max tokens
+                                                               300,          // Increased for more detailed responses
                                                                &conv_result
                                                                );
             
@@ -771,13 +1069,21 @@ static bool token_callback(const char* token) {
                     NSString *response = [NSString stringWithUTF8String:conv_result.text];
                     [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:response]];
                     [self.outputTextView setText:[self.outputTextView.text stringByAppendingFormat:@"\n\nTime to first token: %lld ms\nTotal time: %lld ms\n", conv_result.time_to_first_token, conv_result.total_time]];
+                    [self prependDebugText:[NSString stringWithFormat:@"Conversation completed successfully. Time to first token: %lld ms, total time: %lld ms\n", conv_result.time_to_first_token, conv_result.total_time]];
                     
                     // Free resources
                     llama_mobile_free_string(conv_result.text);
                 } else {
                     NSLog(@"DEBUG: Conversation failed with status: %d", status);
                     [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"\n\nError: Conversation failed.\n"]];
+                    [self prependDebugText:[NSString stringWithFormat:@"Error: Conversation generation failed with status code %d\n", status]];
                 }
+                
+                // Clear the prompt text field after clicking the button (regardless of success/failure)
+                self.promptTextField.text = @"";
+                
+                self.isGenerating = NO;
+                [self updateButtonStates]; // Enable relevant buttons
             });
         });
     }
@@ -786,9 +1092,12 @@ static bool token_callback(const char* token) {
     
     - (IBAction)embeddingPressed:(id)sender {
         NSLog(@"DEBUG: embeddingPressed button clicked");
+        [self prependDebugText:@"Generating embeddings...\n"];
+        
         if (self.modelContext == NULL) {
             NSLog(@"DEBUG: Model not initialized - cannot generate embeddings");
             [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Error: Model not initialized.\n"]];
+            [self prependDebugText:@"Error: Model not initialized. Cannot generate embeddings.\n"];
             return;
         }
         
@@ -797,6 +1106,7 @@ static bool token_callback(const char* token) {
         if ([prompt length] == 0) {
             NSLog(@"DEBUG: Empty embedding prompt - returning");
             [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Please enter a prompt.\n"]];
+            [self prependDebugText:@"Error: Empty prompt. Please enter text to generate embeddings.\n"];
             return;
         }
         
@@ -828,12 +1138,17 @@ static bool token_callback(const char* token) {
                     }
                     [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:embeddingText]];
                     [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"\n...\n"]];
+                    [self prependDebugText:[NSString stringWithFormat:@"Embedding generation successful. Dimension: %d\n", embedding.count]];
                     
                     // Free embedding when done
                     llama_mobile_free_float_array(embedding);
+                    
+                    // Clear the prompt text field after successful generation
+                    self.promptTextField.text = @"";
                 } else {
                     NSLog(@"DEBUG: Embedding generation failed - count is zero");
                     [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Error: Failed to generate embeddings.\n"]];
+                    [self prependDebugText:@"Error: Failed to generate embeddings.\n"];
                 }
             });
         });
@@ -845,6 +1160,11 @@ static bool token_callback(const char* token) {
         [self.promptTextField setText:@""];
         [self.outputTextView setText:@""];
         [self.currentOutput setString:@""];
+        // Also clear the debug log text view
+        if (self.debugLogTextView) {
+            [self.debugLogTextView setText:@""];
+        }
+        [self prependDebugText:@"UI cleared.\n"];
     }
     
     - (void)updateButtonStates {
@@ -883,14 +1203,29 @@ static bool token_callback(const char* token) {
     // MARK: - Multimodal Support
     
     - (IBAction)multimodalPressed:(id)sender {
+        NSLog(@"DEBUG: multimodalPressed button clicked");
+        [self prependDebugText:@"Starting multimodal processing...\n"];
+        
         if (self.modelContext == NULL) {
-            [self prependDebugText:@"Error: Model not initialized.\n"];
+            NSLog(@"DEBUG: Model not initialized - cannot use multimodal");
+            [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Error: Model not initialized.\n"]];
+            [self prependDebugText:@"Error: Model not initialized. Please initialize the model first.\n"];
+            return;
+        }
+        
+        if (self.isGenerating) {
+            NSLog(@"DEBUG: Generation already in progress - cannot start multimodal");
+            [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Generation already in progress.\n"]];
+            [self prependDebugText:@"Error: Generation already in progress. Please wait for current generation to complete.\n"];
             return;
         }
         
         NSString *prompt = self.promptTextField.text;
+        NSLog(@"DEBUG: Multimodal user prompt: %@", prompt);
         if ([prompt length] == 0) {
-            [self prependDebugText:@"Please enter a prompt.\n"];
+            NSLog(@"DEBUG: Empty multimodal prompt - returning");
+            [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Please enter a prompt.\n"]];
+            [self prependDebugText:@"Error: Empty prompt. Please enter text to start multimodal processing.\n"];
             return;
         }
         
@@ -898,15 +1233,20 @@ static bool token_callback(const char* token) {
         NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
         NSString *mmprojPath = [[bundlePath stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
         mmprojPath = [mmprojPath stringByAppendingPathComponent:@"lib/models/mmproj-model.f16.gguf"];
+        NSLog(@"DEBUG: Looking for mmproj file at: %@", mmprojPath);
         
         if ([[NSFileManager defaultManager] fileExistsAtPath:mmprojPath]) {
+            [self prependDebugText:[NSString stringWithFormat:@"Initializing multimodal support from: %@\n", mmprojPath]];
             int status = llama_mobile_init_multimodal_simple(self.modelContext, [mmprojPath UTF8String]);
             if (status != 0) {
+                NSLog(@"DEBUG: Failed to initialize multimodal support with status: %d", status);
+                [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Error: Failed to initialize multimodal support.\n"]];
                 [self prependDebugText:@"Error: Failed to initialize multimodal support.\n"];
                 return;
             }
-            [self prependDebugText:@"Multimodal support initialized.\n"];
+            [self prependDebugText:@"Multimodal support initialized successfully.\n"];
         } else {
+            NSLog(@"DEBUG: Multimodal projection file not found, falling back to text only");
             [self prependDebugText:@"Warning: Multimodal projection file not found. Using text only.\n"];
             // Proceed with text-only completion
             [self generateTextWithMode:@"completion"];
@@ -914,6 +1254,8 @@ static bool token_callback(const char* token) {
         }
         
         // Show image picker to select an image for multimodal completion
+        NSLog(@"DEBUG: Showing image picker for multimodal processing");
+        [self prependDebugText:@"Opening image picker for multimodal processing...\n"];
         UIImagePickerController *imagePicker = [[UIImagePickerController alloc] init];
         imagePicker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
         imagePicker.delegate = self;
@@ -921,18 +1263,23 @@ static bool token_callback(const char* token) {
     }
     
     - (void)processImageWithPrompt:(NSString *)prompt imagePath:(NSString *)imagePath {
+        NSLog(@"DEBUG: processImageWithPrompt called with prompt: %@, imagePath: %@", prompt, imagePath);
+        
         if (self.isGenerating) {
+            NSLog(@"DEBUG: Generation already in progress - cannot process image");
             [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Generation already in progress.\n"]];
+            [self prependDebugText:@"Error: Generation already in progress. Please wait for current generation to complete.\n"];
             return;
         }
         
         self.isGenerating = YES;
-        [self.generateButton setEnabled:NO];
+        [self updateButtonStates]; // Disable all generation buttons
         [self.activityIndicator startAnimating];
         
-        [self.outputTextView setText:[self.outputTextView.text stringByAppendingFormat:@"Generating for prompt: %@\n", prompt]];
-        [self.outputTextView setText:[self.outputTextView.text stringByAppendingFormat:@"Using image: %@\n\n", imagePath]];
+        [self.outputTextView setText:[self.outputTextView.text stringByAppendingFormat:@"Multimodal Generation: %@\n", prompt]];
+        [self.outputTextView setText:[self.outputTextView.text stringByAppendingFormat:@"Using image: %@\n\n", [imagePath lastPathComponent]]];
         [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Generated text:\n"]];
+        [self prependDebugText:@"Multimodal generation started with image...\n"];
         
         // Clear current output
         [self.currentOutput setString:@""];
@@ -963,20 +1310,27 @@ static bool token_callback(const char* token) {
                 .token_callback = token_callback
             };
             
+            NSLog(@"DEBUG: Calling llama_mobile_multimodal_completion");
             llama_mobile_completion_result_t result;
             int status = llama_mobile_multimodal_completion(self.modelContext, &completion_params, localMediaPaths, mediaCount, &result);
             
             dispatch_async(dispatch_get_main_queue(), ^{                
+                [self.activityIndicator stopAnimating];
+                NSLog(@"DEBUG: Multimodal generation finished with status: %d", status);
+                
                 if (status == 0) {
+                    NSLog(@"DEBUG: Multimodal generation successful - tokens generated: %d", result.tokens_generated);
                     [self.outputTextView setText:[self.outputTextView.text stringByAppendingFormat:@"\n\nGeneration completed. Tokens generated: %d\n", result.tokens_generated]];
+                    [self prependDebugText:[NSString stringWithFormat:@"Multimodal generation completed successfully. Tokens generated: %d\n", result.tokens_generated]];
                     llama_mobile_free_completion_result((llama_mobile_completion_result_t *)&result);
                 } else {
+                    NSLog(@"DEBUG: Multimodal generation failed with status: %d", status);
                     [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"\n\nError: Multimodal generation failed.\n"]];
+                    [self prependDebugText:[NSString stringWithFormat:@"Error: Multimodal generation failed with status code %d\n", status]];
                 }
                 
                 self.isGenerating = NO;
-                [self.generateButton setEnabled:YES];
-                [self.activityIndicator stopAnimating];
+                [self updateButtonStates]; // Enable relevant buttons
                 
                 // Clear the static reference to prevent memory leaks
                 tokenCallbackViewController = nil;
