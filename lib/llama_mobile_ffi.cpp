@@ -465,7 +465,7 @@ void llama_mobile_free_float_array_c(llama_mobile_float_array_c_t arr) {
     }
 }
 
-void llama_mobile_free_completion_result_members_c(llama_mobile_completion_result_c_t* result) {
+LLAMA_MOBILE_FFI_EXPORT void llama_mobile_free_completion_result_members_c(llama_mobile_completion_result_c_t* result) {
     if (result) {
         llama_mobile_free_string_c(result->text);
         llama_mobile_free_string_c(result->stopping_word);
@@ -1291,7 +1291,7 @@ bool llama_mobile_is_conversation_active_c(llama_mobile_context_handle_t handle)
     }
 }
 
-void llama_mobile_free_conversation_result_members_c(llama_mobile_conversation_result_c_t* result) {
+LLAMA_MOBILE_FFI_EXPORT void llama_mobile_free_conversation_result_members_c(llama_mobile_conversation_result_c_t* result) {
     if (result) {
         llama_mobile_free_string_c(result->text);
         result->text = nullptr;

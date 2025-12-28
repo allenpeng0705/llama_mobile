@@ -58,6 +58,9 @@
 #include <string.h>
 #include <stdio.h>
 
+// Include FFI headers for C API functions
+#include "llama_mobile_ffi.h"
+
 // Forward declarations
 struct mtmd_context;
 
@@ -1051,115 +1054,7 @@ LLAMA_MOBILE_API void llama_mobile_free_conversation_result(llama_mobile_convers
  */
 typedef struct llama_mobile_context_opaque* llama_mobile_context_handle_t;
 
-/**
- * @brief FFI initialization parameters for the llama_mobile context.
- * 
- * This struct contains all configuration options for loading and initializing 
- * a model through the FFI interface.
- */
-typedef struct llama_mobile_init_params_c {
-    const char* model_path;          /**< Path to the model file (required) */
-    const char* chat_template;       /**< Chat template to use (optional, NULL for default) */
 
-    int32_t n_ctx;                   /**< Size of the context window (default: 512) */
-    int32_t n_batch;                 /**< Batch size for inference (default: 512) */
-    int32_t n_ubatch;                /**< Micro-batch size for processing (default: 512) */
-    int32_t n_gpu_layers;            /**< Number of layers to offload to GPU (default: 0) */
-    int32_t n_threads;               /**< Number of CPU threads to use (default: 4) */
-    bool use_mmap;                   /**< Use memory-mapped I/O for model loading (default: true) */
-    bool use_mlock;                  /**< Lock model in memory (default: false) */
-    bool embedding;                  /**< Enable embedding mode (default: false) */
-    int32_t pooling_type;            /**< Embedding pooling type (0: none, 1: mean, 2: max) */
-    int32_t embd_normalize;          /**< Normalize embeddings (default: 0) */
-    bool flash_attn;                 /**< Use Flash Attention if available (default: false) */
-    const char* cache_type_k;        /**< Cache type for key tensors (e.g., "f16", "q4_0") */
-    const char* cache_type_v;        /**< Cache type for value tensors (e.g., "f16", "q4_0") */
-    void (*progress_callback)(float progress); /**< Model loading progress callback (optional) */
-
-} llama_mobile_init_params_c_t;
-
-/**
- * @brief FFI completion parameters for text generation.
- * 
- * This struct contains all options for text generation through the FFI interface.
- */
-typedef struct llama_mobile_completion_params_c {
-    const char* prompt;              /**< Input prompt text (required) */
-    int32_t n_predict;               /**< Maximum number of tokens to generate (default: 128) */
-    int32_t n_threads;               /**< Number of CPU threads to use for generation */
-    int32_t seed;                    /**< Random seed for reproducibility */
-    double temperature;              /**< Sampling temperature (0.0-1.0, default: 0.8) */
-    int32_t top_k;                   /**< Top-K sampling parameter (default: 40) */
-    double top_p;                    /**< Top-P sampling parameter (default: 0.95) */
-    double min_p;                    /**< Min-P sampling parameter (default: 0.05) */
-    double typical_p;                /**< Typical-P sampling parameter (default: 1.0) */
-    int32_t penalty_last_n;          /**< Number of last tokens to apply repetition penalty to */
-    double penalty_repeat;           /**< Repeat penalty (default: 1.1) */
-    double penalty_freq;             /**< Frequency penalty (default: 0.0) */
-    double penalty_present;          /**< Presence penalty (default: 0.0) */
-    int32_t mirostat;                /**< Mirostat sampling mode (0: disabled, 1: v1, 2: v2) */
-    double mirostat_tau;             /**< Mirostat target entropy (default: 5.0) */
-    double mirostat_eta;             /**< Mirostat learning rate (default: 0.1) */
-    bool ignore_eos;                 /**< Ignore end-of-sequence tokens if true */
-    int32_t n_probs;                 /**< Number of top probabilities to include in output */
-    const char** stop_sequences;     /**< Array of stop sequences to terminate generation */
-    int stop_sequence_count;         /**< Number of stop sequences in the array */
-    const char* grammar;             /**< BNF grammar for constrained generation */
-    bool (*token_callback)(const char* token_json); /**< Streaming callback for generated tokens */
-
-} llama_mobile_completion_params_c_t;
-
-/**
- * @brief FFI array of token IDs.
- * 
- * This struct contains an array of token IDs used for tokenization/detokenization through the FFI interface.
- */
-typedef struct llama_mobile_token_array_c {
-    int32_t* tokens;   /**< Array of token IDs */
-    int32_t count;     /**< Number of tokens in the array */
-} llama_mobile_token_array_c_t;
-
-/**
- * @brief FFI array of float values.
- * 
- * This struct contains an array of floating-point values used for embeddings and other numerical data through the FFI interface.
- */
-typedef struct llama_mobile_float_array_c {
-    float* values;     /**< Array of float values */
-    int32_t count;     /**< Number of values in the array */
-} llama_mobile_float_array_c_t;
-
-/**
- * @brief FFI result of a completion generation.
- * 
- * This struct contains the generated text and metadata about the completion process through the FFI interface.
- */
-typedef struct llama_mobile_completion_result_c {
-    char* text;                  /**< Generated text (null-terminated string) */
-    int32_t tokens_predicted;    /**< Number of tokens actually generated */
-    int32_t tokens_evaluated;    /**< Number of tokens processed from the input prompt */
-    bool truncated;              /**< Whether the output was truncated due to context limitations */
-    bool stopped_eos;            /**< Whether generation stopped due to EOS (end-of-sequence) token */
-    bool stopped_word;           /**< Whether generation stopped due to hitting a stop sequence */
-    bool stopped_limit;          /**< Whether generation stopped due to reaching max_tokens limit */
-    char* stopping_word;         /**< The stop sequence that triggered stopping (if any) */
-} llama_mobile_completion_result_c_t;
-
-/**
- * @brief FFI result of a tokenization operation with optional media support.
- * 
- * This struct contains the tokenized text and metadata about any media processed during tokenization through the FFI interface.
- */
-typedef struct llama_mobile_tokenize_result_c {
-    llama_mobile_token_array_c_t tokens;       /**< Generated tokens */
-    bool has_media;                            /**< Whether the input contained media */
-    char** bitmap_hashes;                      /**< Hashes of processed media */
-    int bitmap_hash_count;                     /**< Number of bitmap hashes */
-    size_t* chunk_positions;                   /**< Positions of text chunks */
-    int chunk_position_count;                  /**< Number of text chunk positions */
-    size_t* chunk_positions_media;             /**< Positions of media chunks */
-    int chunk_position_media_count;            /**< Number of media chunk positions */
-} llama_mobile_tokenize_result_c_t;
 
 /**
  * @brief Initialize a new llama_mobile context through the FFI interface.
@@ -1411,56 +1306,11 @@ LLAMA_MOBILE_FFI_EXPORT void llama_mobile_release_vocoder_c(llama_mobile_context
 
 // **HIGH PRIORITY ADDITIONS**
 
-/**
- * @brief FFI structure for a single LoRA adapter configuration.
- * 
- * LoRA (Low-Rank Adaptation) adapters allow fine-tuning a model without modifying
- * the base model weights. This structure defines a single adapter configuration.
- */
-typedef struct {
-    const char* path;       /**< Path to the LoRA adapter file */
-    float scale;            /**< LoRA adapter scale factor (typically 1.0) */
-} llama_mobile_lora_adapter_c_t;
+// LoRA adapter structs are defined in llama_mobile_ffi.h
 
-/**
- * @brief FFI structure for an array of LoRA adapter configurations.
- * 
- * This structure contains an array of LoRA adapter configurations and the count
- * of adapters in the array.
- */
-typedef struct {
-    llama_mobile_lora_adapter_c_t* adapters;  /**< Array of LoRA adapter configurations */
-    int32_t count;                             /**< Number of adapters in the array */
-} llama_mobile_lora_adapters_c_t;
+// Benchmark result struct is defined in llama_mobile_ffi.h
 
-/**
- * @brief FFI structure for benchmark results.
- * 
- * This structure contains detailed benchmark results including model information,
- * prompt processing times, and token generation performance metrics.
- */
-typedef struct {
-    char* model_name;       /**< Name of the model used for benchmarking */
-    int64_t model_size;     /**< Model size in bytes */
-    int64_t model_params;   /**< Number of model parameters */
-    double pp_avg;          /**< Average prompt processing time in milliseconds */
-    double pp_std;          /**< Standard deviation of prompt processing time */
-    double tg_avg;          /**< Average token generation time in milliseconds */
-    double tg_std;          /**< Standard deviation of token generation time */
-} llama_mobile_bench_result_c_t;
-
-/**
- * @brief FFI structure for conversation results.
- * 
- * This structure contains the generated response text and detailed timing
- * information for conversational interactions.
- */
-typedef struct {
-    char* text;                          /**< Generated response text */
-    int64_t time_to_first_token;         /**< Time to generate first token in milliseconds */
-    int64_t total_time;                  /**< Total generation time in milliseconds */
-    int32_t tokens_generated;            /**< Number of tokens generated in the response */
-} llama_mobile_conversation_result_c_t;
+// Conversation result struct is defined in llama_mobile_ffi.h
 
 // **HIGH PRIORITY: Benchmarking**
 /**
@@ -1524,16 +1374,7 @@ LLAMA_MOBILE_FFI_EXPORT bool llama_mobile_validate_chat_template_c(llama_mobile_
 LLAMA_MOBILE_FFI_EXPORT char* llama_mobile_get_formatted_chat_c(llama_mobile_context_handle_t handle, const char* messages, const char* chat_template);
 
 // **ADVANCED: Chat with Jinja and Tools Support**
-/**
- * @brief FFI result of formatted chat with Jinja and tools support.
- */
-typedef struct {
-    char* prompt;                /**< Formatted chat prompt */
-    char* json_schema;           /**< JSON schema for structured outputs */
-    char* tools;                 /**< Available tools for function calling */
-    char* tool_choice;           /**< Tool choice strategy */
-    bool parallel_tool_calls;    /**< Whether parallel tool calls are enabled */
-} llama_mobile_chat_result_c_t;
+// Chat result struct is defined in llama_mobile_ffi.h
 
 /**
  * @brief Format chat messages with Jinja templates and tools support through the FFI interface.

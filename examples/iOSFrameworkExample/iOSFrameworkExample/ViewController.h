@@ -6,12 +6,12 @@
 //
 
 #import <UIKit/UIKit.h>
-#include <llama_mobile/llama_mobile_unified.h>
+#import <AVFoundation/AVFoundation.h>
+#import <llama_mobile_unified.h>
 
 @interface ViewController : UIViewController <UIImagePickerControllerDelegate, UINavigationControllerDelegate, UITextViewDelegate, UITextFieldDelegate, UIPickerViewDataSource, UIPickerViewDelegate>
 
 @property (nonatomic, assign) llama_mobile_context_t modelContext;
-@property (nonatomic, assign) llama_mobile_context_vocoder_t vocoderContext;
 @property (nonatomic, strong) NSMutableString *currentOutput;
 @property (nonatomic, assign) BOOL isGenerating;
 @property (nonatomic, assign) BOOL isPlayingAudio;
@@ -20,23 +20,23 @@
 @property (nonatomic, strong) AVAudioPlayerNode *audioPlayerNode;
 
 // UI Elements
-@property (weak, nonatomic) IBOutlet UITextView *promptTextField;
-@property (weak, nonatomic) IBOutlet UITextView *outputTextView;
-@property (weak, nonatomic) IBOutlet UIButton *generateButton;
-@property (weak, nonatomic) IBOutlet UIButton *clearButton;
-@property (weak, nonatomic) IBOutlet UIButton *embeddingButton;
-@property (weak, nonatomic) IBOutlet UIButton *conversationButton;
-@property (weak, nonatomic) IBOutlet UIButton *initializeButton;
-@property (weak, nonatomic) IBOutlet UIButton *completeButton;
-@property (weak, nonatomic) IBOutlet UIButton *multimodalButton;
-@property (weak, nonatomic) IBOutlet UIButton *ttsButton;
-@property (weak, nonatomic) IBOutlet UIActivityIndicatorView *activityIndicator;
+@property (strong, nonatomic) UITextView *promptTextField;
+@property (strong, nonatomic) UITextView *outputTextView;
+@property (strong, nonatomic) UIButton *generateButton;
+@property (strong, nonatomic) UIButton *clearButton;
+@property (strong, nonatomic) UIButton *embeddingButton;
+@property (strong, nonatomic) UIButton *conversationButton;
+@property (strong, nonatomic) UIButton *initializeButton;
+@property (strong, nonatomic) UIButton *completeButton;
+@property (strong, nonatomic) UIButton *multimodalButton;
+@property (strong, nonatomic) UIButton *ttsButton;
+@property (strong, nonatomic) UIActivityIndicatorView *activityIndicator;
 @property (nonatomic, strong) UITextView *debugLogTextView;
 @property (nonatomic, strong) UIScrollView *scrollView;
 
 // TTS UI
-@property (weak, nonatomic) IBOutlet UIButton *playAudioButton;
-@property (weak, nonatomic) IBOutlet UIButton *stopAudioButton;
+@property (strong, nonatomic) UIButton *playAudioButton;
+@property (strong, nonatomic) UIButton *stopAudioButton;
 
 // Model selection UI
 @property (nonatomic, strong) UILabel *modelLabel;

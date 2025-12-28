@@ -89,12 +89,12 @@ static void convert_conversation_result(const llama_mobile_conversation_result_c
 extern "C" {
 #endif
 
-LLAMA_MOBILE_API llama_mobile_context_t llama_mobile_init(const llama_mobile_init_params_t* params) {
+llama_mobile_context_t llama_mobile_init(const llama_mobile_init_params_t* params) {
     llama_mobile_init_params_c_t ffi_params = convert_init_params(params);
     return (llama_mobile_context_t) llama_mobile_init_context_c(&ffi_params);
 }
 
-LLAMA_MOBILE_API llama_mobile_context_t llama_mobile_init_simple(
+llama_mobile_context_t llama_mobile_init_simple(
     const char* model_path,
     int32_t n_ctx,
     int32_t n_gpu_layers,
@@ -118,11 +118,11 @@ LLAMA_MOBILE_API llama_mobile_context_t llama_mobile_init_simple(
     return llama_mobile_init(&params);
 }
 
-LLAMA_MOBILE_API void llama_mobile_free(llama_mobile_context_t ctx) {
+void llama_mobile_free(llama_mobile_context_t ctx) {
     llama_mobile_free_context_c((llama_mobile_context_handle_t) ctx);
 }
 
-LLAMA_MOBILE_API int llama_mobile_completion(
+int llama_mobile_completion(
     llama_mobile_context_t ctx,
     const llama_mobile_completion_params_t* params,
     llama_mobile_completion_result_t* result) {
@@ -146,7 +146,7 @@ LLAMA_MOBILE_API int llama_mobile_completion(
     return status;
 }
 
-LLAMA_MOBILE_API int llama_mobile_completion_simple(
+int llama_mobile_completion_simple(
     llama_mobile_context_t ctx,
     const char* prompt,
     int32_t max_tokens,
@@ -173,7 +173,7 @@ LLAMA_MOBILE_API int llama_mobile_completion_simple(
     return llama_mobile_completion(ctx, &params, result);
 }
 
-LLAMA_MOBILE_API int llama_mobile_multimodal_completion(
+int llama_mobile_multimodal_completion(
     llama_mobile_context_t ctx,
     const llama_mobile_completion_params_t* params,
     const char** media_paths,
@@ -201,11 +201,11 @@ LLAMA_MOBILE_API int llama_mobile_multimodal_completion(
     return status;
 }
 
-LLAMA_MOBILE_API void llama_mobile_stop_completion(llama_mobile_context_t ctx) {
+void llama_mobile_stop_completion(llama_mobile_context_t ctx) {
     llama_mobile_stop_completion_c((llama_mobile_context_handle_t) ctx);
 }
 
-LLAMA_MOBILE_API llama_mobile_token_array_t llama_mobile_tokenize(
+llama_mobile_token_array_t llama_mobile_tokenize(
     llama_mobile_context_t ctx,
     const char* text) {
     
@@ -216,7 +216,7 @@ LLAMA_MOBILE_API llama_mobile_token_array_t llama_mobile_tokenize(
     return convert_token_array(ffi_result);
 }
 
-LLAMA_MOBILE_API char* llama_mobile_detokenize(
+char* llama_mobile_detokenize(
     llama_mobile_context_t ctx,
     const int32_t* tokens,
     int32_t count) {
@@ -227,7 +227,7 @@ LLAMA_MOBILE_API char* llama_mobile_detokenize(
         count);
 }
 
-LLAMA_MOBILE_API llama_mobile_float_array_t llama_mobile_embedding(
+llama_mobile_float_array_t llama_mobile_embedding(
     llama_mobile_context_t ctx,
     const char* text) {
     
@@ -238,7 +238,7 @@ LLAMA_MOBILE_API llama_mobile_float_array_t llama_mobile_embedding(
     return convert_float_array(ffi_result);
 }
 
-LLAMA_MOBILE_API int llama_mobile_apply_lora_adapters(
+int llama_mobile_apply_lora_adapters(
     llama_mobile_context_t ctx,
     const llama_mobile_lora_adapter_t* adapters,
     int count) {
@@ -256,11 +256,11 @@ LLAMA_MOBILE_API int llama_mobile_apply_lora_adapters(
         &ffi_adapters);
 }
 
-LLAMA_MOBILE_API void llama_mobile_remove_lora_adapters(llama_mobile_context_t ctx) {
+void llama_mobile_remove_lora_adapters(llama_mobile_context_t ctx) {
     llama_mobile_remove_lora_adapters_c((llama_mobile_context_handle_t) ctx);
 }
 
-LLAMA_MOBILE_API int llama_mobile_init_multimodal(
+int llama_mobile_init_multimodal(
     llama_mobile_context_t ctx,
     const char* mmproj_path,
     bool use_gpu) {
@@ -271,7 +271,7 @@ LLAMA_MOBILE_API int llama_mobile_init_multimodal(
         use_gpu);
 }
 
-LLAMA_MOBILE_API int llama_mobile_init_multimodal_simple(
+int llama_mobile_init_multimodal_simple(
     llama_mobile_context_t ctx,
     const char* mmproj_path) {
     
@@ -283,15 +283,15 @@ LLAMA_MOBILE_API int llama_mobile_init_multimodal_simple(
     return llama_mobile_init_multimodal(ctx, mmproj_path, true);
 }
 
-LLAMA_MOBILE_API bool llama_mobile_is_multimodal_enabled(llama_mobile_context_t ctx) {
+bool llama_mobile_is_multimodal_enabled(llama_mobile_context_t ctx) {
     return llama_mobile_is_multimodal_enabled_c((llama_mobile_context_handle_t) ctx);
 }
 
-LLAMA_MOBILE_API void llama_mobile_release_multimodal(llama_mobile_context_t ctx) {
+void llama_mobile_release_multimodal(llama_mobile_context_t ctx) {
     llama_mobile_release_multimodal_c((llama_mobile_context_handle_t) ctx);
 }
 
-LLAMA_MOBILE_API int llama_mobile_generate_response(
+int llama_mobile_generate_response(
     llama_mobile_context_t ctx,
     const char* user_message,
     int32_t max_tokens,
@@ -310,7 +310,7 @@ LLAMA_MOBILE_API int llama_mobile_generate_response(
     return 0;
 }
 
-LLAMA_MOBILE_API int llama_mobile_generate_response_simple(
+int llama_mobile_generate_response_simple(
     llama_mobile_context_t ctx,
     const char* user_message,
     int32_t max_tokens,
@@ -326,29 +326,29 @@ LLAMA_MOBILE_API int llama_mobile_generate_response_simple(
     return llama_mobile_generate_response(ctx, user_message, tokens_to_generate, result);
 }
 
-LLAMA_MOBILE_API void llama_mobile_clear_conversation(llama_mobile_context_t ctx) {
+void llama_mobile_clear_conversation(llama_mobile_context_t ctx) {
     llama_mobile_clear_conversation_c((llama_mobile_context_handle_t) ctx);
 }
 
-LLAMA_MOBILE_API void llama_mobile_free_string(char* str) {
+void llama_mobile_free_string(char* str) {
     llama_mobile_free_string_c(str);
 }
 
-LLAMA_MOBILE_API void llama_mobile_free_token_array(llama_mobile_token_array_t arr) {
+void llama_mobile_free_token_array(llama_mobile_token_array_t arr) {
     llama_mobile_token_array_c_t ffi_arr = {0};
     ffi_arr.tokens = arr.tokens;
     ffi_arr.count = arr.count;
     llama_mobile_free_token_array_c(ffi_arr);
 }
 
-LLAMA_MOBILE_API void llama_mobile_free_float_array(llama_mobile_float_array_t arr) {
+void llama_mobile_free_float_array(llama_mobile_float_array_t arr) {
     llama_mobile_float_array_c_t ffi_arr = {0};
     ffi_arr.values = arr.values;
     ffi_arr.count = arr.count;
     llama_mobile_free_float_array_c(ffi_arr);
 }
 
-LLAMA_MOBILE_API void llama_mobile_free_completion_result(llama_mobile_completion_result_t* result) {
+void llama_mobile_free_completion_result(llama_mobile_completion_result_t* result) {
     if (result) {
         llama_mobile_completion_result_c_t ffi_result = {0};
         ffi_result.text = result->text;
@@ -357,7 +357,7 @@ LLAMA_MOBILE_API void llama_mobile_free_completion_result(llama_mobile_completio
     }
 }
 
-LLAMA_MOBILE_API void llama_mobile_free_conversation_result(llama_mobile_conversation_result_t* result) {
+void llama_mobile_free_conversation_result(llama_mobile_conversation_result_t* result) {
     if (result) {
         llama_mobile_conversation_result_c_t ffi_result = {0};
         ffi_result.text = result->text;

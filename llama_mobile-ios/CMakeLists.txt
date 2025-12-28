@@ -34,9 +34,11 @@ add_definitions(
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../lib)
 set(LLAMA_CPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../lib/llama_cpp)
 
-# Define public headers - only expose the main API header
+# Define public headers - expose all necessary API headers
 set(PUBLIC_HEADERS
     ${SOURCE_DIR}/llama_mobile_unified.h
+    ${SOURCE_DIR}/llama_mobile_ffi.h
+    ${SOURCE_DIR}/llama_mobile_api.h
 )
 
 # Create library target
@@ -274,7 +276,7 @@ set_target_properties(llama_mobile PROPERTIES
 add_custom_command(
     TARGET llama_mobile POST_BUILD
     COMMAND mkdir -p "$<TARGET_FILE_DIR:llama_mobile>/Headers"
-    COMMAND cp -f "${PUBLIC_HEADERS}" "$<TARGET_FILE_DIR:llama_mobile>/Headers/"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${PUBLIC_HEADERS} "$<TARGET_FILE_DIR:llama_mobile>/Headers/"
     # Copy metallib files
     COMMAND cp -f "${CMAKE_CURRENT_SOURCE_DIR}/../lib/llama_cpp/ggml-llama-sim.metallib" "$<TARGET_FILE_DIR:llama_mobile>/"
     COMMENT "Copying public headers and metallib to framework"

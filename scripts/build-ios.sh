@@ -8,9 +8,23 @@ if ! command -v cmake &> /dev/null; then
 fi
 
 function cp_headers() {
+  # Create main directories
   mkdir -p "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/$1/llama_mobile.framework/Headers"
-  # Only copy the public API header, not all internal headers
+  
+  # Copy the public API header
   cp "$ROOT_DIR/lib/llama_mobile_unified.h" "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/$1/llama_mobile.framework/Headers/"
+  cp "$ROOT_DIR/lib/llama_mobile_ffi.h" "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/$1/llama_mobile.framework/Headers/"
+  cp "$ROOT_DIR/lib/llama_mobile_api.h" "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/$1/llama_mobile.framework/Headers/"
+
+  # Recursively copy all llama_cpp headers while preserving folder structure
+  rsync -av "$ROOT_DIR/lib/llama_cpp/" "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/$1/llama_mobile.framework/Headers/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
+  
+  # Copy external library headers to the root Headers directory for proper <angled> include support
+  mkdir -p "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/$1/llama_mobile.framework/Headers/nlohmann"
+  mkdir -p "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/$1/llama_mobile.framework/Headers/minja"
+  
+  cp "$ROOT_DIR/lib/llama_cpp/nlohmann"/*.hpp "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/$1/llama_mobile.framework/Headers/nlohmann/"
+  cp "$ROOT_DIR/lib/llama_cpp/minja"/*.hpp "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/$1/llama_mobile.framework/Headers/minja/"
 }
 
 function build_framework() {
@@ -61,6 +75,19 @@ function build_framework() {
   else
     cp "$ROOT_DIR/lib/llama_cpp/ggml-llama.metallib" "$FRAMEWORK_DEST/ggml-llama.metallib"
   fi
+  
+  # Create Modules directory with module map
+  mkdir -p "$FRAMEWORK_DEST/Modules"
+  MODULE_MAP="$FRAMEWORK_DEST/Modules/module.modulemap"
+  cat > "$MODULE_MAP" << EOL
+framework module llama_mobile {
+    umbrella header "llama_mobile_unified.h"
+    
+    export *
+    module * { export * }
+}
+EOL
+  echo "✓ Created module map for $FRAMEWORK_DEST"
 
   # Code sign the framework
   echo "Signing the framework..."
@@ -141,3 +168,7 @@ rm -rf build-ios
 
 t1=$(date +%s)
 echo "Total time: $((t1 - t0)) seconds"
+
+echo "Build completed successfully!"
+echo "xcframework is available at: $ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework"
+echo "The project is configured to use this xcframework directly via absolute path reference."
