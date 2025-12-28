@@ -51,6 +51,7 @@
 @property (nonatomic, strong) UIPickerView *vocoderModelPickerView;
 @property (nonatomic, strong) NSArray *availableVocoderModels;
 @property (nonatomic, strong) NSMutableDictionary *vocoderModelPaths;
+@property (nonatomic, strong) NSString *selectedVocoderModelPath;
 
 // Projection file selection UI
 @property (nonatomic, strong) UILabel *projectionFileLabel;

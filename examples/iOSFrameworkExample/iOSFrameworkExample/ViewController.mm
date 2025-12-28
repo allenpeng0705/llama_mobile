@@ -251,11 +251,18 @@ static bool token_callback(const char* token) {
     // Scan app bundle for all projection files
     [self scanForProjectionFiles];
     
+    // Scan app bundle for all vocoder model files
+    [self scanForVocoderModelFiles];
+    
     // Add model picker view after models are scanned
     [self setupModelPickerView];
     
+    // Add vocoder model picker view after vocoder models are scanned
+    [self setupVocoderModelPickerView];
+    
     // Add projection file picker view after projection files are scanned
     [self setupProjectionFilePickerView];
+
     
     // Disable buttons until model is initialized
     [self updateButtonStates];
@@ -346,6 +353,63 @@ static bool token_callback(const char* token) {
     [UIView animateWithDuration:animationDuration animations:^{ 
         [self.view layoutIfNeeded];
     }];
+}
+
+// MARK: - Vocoder Model Selection
+
+- (void)scanForVocoderModelFiles {
+    NSLog(@"DEBUG: Scanning for vocoder model files in app bundle");
+    
+    // Get the main bundle
+    NSBundle *mainBundle = [NSBundle mainBundle];
+    NSString *bundlePath = [mainBundle bundlePath];
+    
+    // Scan the bundle root directory for GGUF files
+    [self scanDirectoryForVocoderModels:bundlePath];
+    
+    // Also check if there's a models directory
+    NSString *modelsDirPath = [bundlePath stringByAppendingPathComponent:@"models"];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:modelsDirPath isDirectory:NULL]) {
+        [self scanDirectoryForVocoderModels:modelsDirPath];
+    }
+    
+    // Extract the available vocoder model names from the dictionary keys, sorted alphabetically
+    self.availableVocoderModels = [[self.vocoderModelPaths allKeys] sortedArrayUsingSelector:@selector(caseInsensitiveCompare:)];
+    
+    NSLog(@"DEBUG: Found %lu vocoder model files:", (unsigned long)[self.availableVocoderModels count]);
+    for (NSString *modelName in self.availableVocoderModels) {
+        NSLog(@"DEBUG:   - %@: %@", modelName, [self.vocoderModelPaths objectForKey:modelName]);
+    }
+}
+
+- (void)scanDirectoryForVocoderModels:(NSString *)directoryPath {
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSError *error = nil;
+    NSArray *files = [fileManager contentsOfDirectoryAtPath:directoryPath error:&error];
+    
+    if (error) {
+        NSLog(@"ERROR: Failed to scan directory %@ for vocoder models: %@", directoryPath, error);
+        return;
+    }
+    
+    for (NSString *file in files) {
+        // Skip mmproj files in vocoder scanning
+        if ([[file lowercaseString] containsString:@"mmproj"]) {
+            NSLog(@"DEBUG: Skipping mmproj file in vocoder scan: %@", file);
+            continue;
+        }
+        
+        NSString *filePath = [directoryPath stringByAppendingPathComponent:file];
+        
+        // Check if it's a file (not a directory) and has GGUF extension
+        BOOL isDirectory;
+        if ([fileManager fileExistsAtPath:filePath isDirectory:&isDirectory] && !isDirectory && 
+            [[file pathExtension] caseInsensitiveCompare:@"gguf"] == NSOrderedSame) {
+            // Use the filename without extension as the display name
+            NSString *modelName = [file stringByDeletingPathExtension];
+            [self.vocoderModelPaths setObject:filePath forKey:modelName];
+        }
+    }
 }
 
 // MARK: - Model Selection
@@ -519,8 +583,65 @@ static bool token_callback(const char* token) {
     [self.modelPickerView reloadAllComponents];
 }
 
+- (void)setupVocoderModelPickerView {
+    // Create vocoder model label
+    if (!self.vocoderModelLabel) {
+        self.vocoderModelLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+        self.vocoderModelLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        self.vocoderModelLabel.text = @"Select Vocoder Model:";
+        self.vocoderModelLabel.textColor = [UIColor blackColor];
+        self.vocoderModelLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
+        [self.view addSubview:self.vocoderModelLabel];
+    }
+    
+    // Create vocoder model dropdown text field
+    if (!self.vocoderModelDropdownTextField) {
+        self.vocoderModelDropdownTextField = [[UITextField alloc] init];
+        self.vocoderModelDropdownTextField.translatesAutoresizingMaskIntoConstraints = NO;
+        self.vocoderModelDropdownTextField.backgroundColor = [UIColor whiteColor];
+        [self.vocoderModelDropdownTextField.layer setBorderWidth:1.0];
+        [self.vocoderModelDropdownTextField.layer setBorderColor:[UIColor blackColor].CGColor];
+        [self.vocoderModelDropdownTextField.layer setCornerRadius:8.0];
+        self.vocoderModelDropdownTextField.textColor = [UIColor blackColor];
+        self.vocoderModelDropdownTextField.font = [UIFont systemFontOfSize:16];
+        self.vocoderModelDropdownTextField.textAlignment = NSTextAlignmentCenter;
+        self.vocoderModelDropdownTextField.userInteractionEnabled = YES;
+        self.vocoderModelDropdownTextField.delegate = self;
+        
+        // Add a down arrow button to indicate dropdown
+        UIButton *dropdownButton = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 30, 30)];
+        [dropdownButton setImage:[UIImage systemImageNamed:@"chevron.down"] forState:UIControlStateNormal];
+        [dropdownButton setTintColor:[UIColor blackColor]];
+        self.vocoderModelDropdownTextField.rightView = dropdownButton;
+        self.vocoderModelDropdownTextField.rightViewMode = UITextFieldViewModeAlways;
+        
+        // Create picker view
+        self.vocoderModelPickerView = [[UIPickerView alloc] init];
+        self.vocoderModelPickerView.backgroundColor = [UIColor whiteColor];
+        self.vocoderModelPickerView.dataSource = self;
+        self.vocoderModelPickerView.delegate = self;
+        
+        // Set picker as input view
+        self.vocoderModelDropdownTextField.inputView = self.vocoderModelPickerView;
+        
+        // Create a toolbar with done button
+        UIToolbar *toolbar = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, 44)];
+        UIBarButtonItem *doneButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(doneButtonTapped)];
+        UIBarButtonItem *flexSpace = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
+        [toolbar setItems:@[flexSpace, doneButton] animated:NO];
+        
+        // Set toolbar as input accessory view
+        self.vocoderModelDropdownTextField.inputAccessoryView = toolbar;
+        
+        [self.view addSubview:self.vocoderModelDropdownTextField];
+    }
+    
+    // Reload picker data to ensure vocoder models are displayed
+    [self.vocoderModelPickerView reloadAllComponents];
+}
+
 - (void)setupProjectionFilePickerView {
-    // Create projection file label
+    // Create projection file label",
     if (!self.projectionFileLabel) {
         self.projectionFileLabel = [[UILabel alloc] initWithFrame:CGRectZero];
         self.projectionFileLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -639,6 +760,12 @@ static bool token_callback(const char* token) {
     [self.mainStackView addArrangedSubview:self.projectionFileDropdownTextField];
     // Set a proper height for the dropdown text field
     [self.projectionFileDropdownTextField.heightAnchor constraintEqualToConstant:44.0].active = YES;
+    
+    // Add vocoder model selection section to the stack view
+    [self.mainStackView addArrangedSubview:self.vocoderModelLabel];
+    [self.mainStackView addArrangedSubview:self.vocoderModelDropdownTextField];
+    // Set a proper height for the dropdown text field
+    [self.vocoderModelDropdownTextField.heightAnchor constraintEqualToConstant:44.0].active = YES;
     
     // Add image picker section for multimodal testing
     if (!self.imagePickerButton) {
@@ -858,6 +985,8 @@ static bool token_callback(const char* token) {
         return [self.availableModels count];
     } else if (pickerView == self.projectionFilePickerView) {
         return [self.availableProjectionFiles count];
+    } else if (pickerView == self.vocoderModelPickerView) {
+        return [self.availableVocoderModels count];
     }
     return 0;
 }
@@ -879,6 +1008,8 @@ static bool token_callback(const char* token) {
         label.text = [self.availableModels objectAtIndex:row];
     } else if (pickerView == self.projectionFilePickerView) {
         label.text = [self.availableProjectionFiles objectAtIndex:row];
+    } else if (pickerView == self.vocoderModelPickerView) {
+        label.text = [self.availableVocoderModels objectAtIndex:row];
     }
     return label;
 }
@@ -889,6 +1020,8 @@ static bool token_callback(const char* token) {
         [self dropdownDidSelectModelAtIndex:row];
     } else if (pickerView == self.projectionFilePickerView) {
         [self dropdownDidSelectProjectionFileAtIndex:row];
+    } else if (pickerView == self.vocoderModelPickerView) {
+        [self dropdownDidSelectVocoderModelAtIndex:row];
     }
 }
 
@@ -918,9 +1051,27 @@ static bool token_callback(const char* token) {
     }
 }
 
+- (void)dropdownDidSelectVocoderModelAtIndex:(NSInteger)row {
+    if (row >= 0 && row < [self.availableVocoderModels count]) {
+        NSString *selectedVocoderModel = [self.availableVocoderModels objectAtIndex:row];
+        NSString *vocoderModelPath = [self.vocoderModelPaths objectForKey:selectedVocoderModel];
+        
+        // Update the text field with the selected vocoder model
+        self.vocoderModelDropdownTextField.text = selectedVocoderModel;
+        
+        // Set the selected vocoder model path
+        self.selectedVocoderModelPath = vocoderModelPath;
+        
+        NSLog(@"DEBUG: Selected vocoder model: %@ (%@)", selectedVocoderModel, vocoderModelPath);
+        [self prependDebugText:[NSString stringWithFormat:@"Selected vocoder model: %@\n", selectedVocoderModel]];
+    }
+}
+
 - (void)doneButtonTapped {
     // Dismiss the picker view
     [self.modelDropdownTextField resignFirstResponder];
+    [self.projectionFileDropdownTextField resignFirstResponder];
+    [self.vocoderModelDropdownTextField resignFirstResponder];
 }
 
 // MARK: - Model Initialization
@@ -1960,15 +2111,14 @@ static bool token_callback(const char* token) {
             return;
         }
         
-        // Get the model path from the modelPaths dictionary
-        NSString *vocoderModelPath = [self.modelPaths objectForKey:selectedModel];
-        if (!vocoderModelPath || ![[NSFileManager defaultManager] fileExistsAtPath:vocoderModelPath]) {
-            [self prependDebugText:[NSString stringWithFormat:@"Error: Selected model '%@' not found.\n", selectedModel]];
+        // Get the selected vocoder model path
+        if (!self.selectedVocoderModelPath || ![[NSFileManager defaultManager] fileExistsAtPath:self.selectedVocoderModelPath]) {
+            [self prependDebugText:@"Error: No vocoder model selected or vocoder model not found.\n"];
             return;
         }
         
         // Initialize vocoder
-        int vocoderStatus = llama_mobile_init_vocoder_c(self.modelContext, [vocoderModelPath UTF8String]);
+        int vocoderStatus = llama_mobile_init_vocoder_c(self.modelContext, [self.selectedVocoderModelPath UTF8String]);
         if (vocoderStatus != 0) {
             [self prependDebugText:@"Error: Failed to initialize vocoder.\n"];
             return;
