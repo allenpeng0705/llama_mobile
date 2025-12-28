@@ -1534,9 +1534,9 @@ std::vector<llama_token> common_tokenize(
 
 std::vector<llama_token> common_tokenize(
     const struct llama_vocab * vocab,
-           const std::string & text,
-                        bool   add_special,
-                        bool   parse_special) {
+             const std::string & text,
+                          bool   add_special,
+                          bool   parse_special) {
     // upper limit for the number of tokens
     int n_tokens = text.length() + 2 * add_special;
     std::vector<llama_token> result(n_tokens);

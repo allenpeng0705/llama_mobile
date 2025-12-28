@@ -43,10 +43,27 @@ static bool token_callback(const char* token) {
         return false;
     }
     
+    // Check if token is valid
+    if (!token) {
+        return true;
+    }
+    
     dispatch_async(dispatch_get_main_queue(), ^{                
-        NSString *tokenStr = [NSString stringWithUTF8String:token];
-        [tokenCallbackViewController.currentOutput appendString:tokenStr];
-        [tokenCallbackViewController.outputTextView setText:[tokenCallbackViewController.outputTextView.text stringByAppendingString:tokenStr]];
+        NSString *tokenStr = [NSString stringWithUTF8String:token]; 
+        
+        // Ensure tokenStr is not nil and currentOutput is mutable and valid
+        if (tokenStr && tokenCallbackViewController.currentOutput) {
+            // Make sure currentOutput is mutable
+            if (![tokenCallbackViewController.currentOutput isKindOfClass:[NSMutableString class]]) {
+                // If somehow it's become immutable, recreate it
+                tokenCallbackViewController.currentOutput = [NSMutableString string];
+            }
+            // Check if tokenStr is empty or contains only whitespace
+            if (![tokenStr isEqualToString:@""] && ![[tokenStr stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] isEqualToString:@""]) {
+                [tokenCallbackViewController.currentOutput appendString:tokenStr]; 
+                [tokenCallbackViewController.outputTextView setText:[tokenCallbackViewController.outputTextView.text stringByAppendingString:tokenStr]]; 
+            }
+        }
     });
     
     return true;
@@ -57,11 +74,17 @@ static bool token_callback(const char* token) {
 - (void)viewDidLoad {
     [super viewDidLoad];
     
+    // Configure view controller to respect safe area
+    self.edgesForExtendedLayout = UIRectEdgeNone;
+    self.extendedLayoutIncludesOpaqueBars = NO;
+    self.automaticallyAdjustsScrollViewInsets = NO;
+    
     NSLog(@"DEBUG: viewDidLoad called");
     NSLog(@"DEBUG: View bounds: %@", NSStringFromCGRect(self.view.bounds));
     NSLog(@"DEBUG: View superview: %@", self.view.superview);
     NSLog(@"DEBUG: View backgroundColor: %@", self.view.backgroundColor);
     NSLog(@"DEBUG: Number of subviews: %lu", (unsigned long)self.view.subviews.count);
+    NSLog(@"DEBUG: edgesForExtendedLayout: %lu", (unsigned long)self.edgesForExtendedLayout);
     
     // Set a light background color for better visibility
     self.view.backgroundColor = [UIColor whiteColor];
@@ -127,31 +150,14 @@ static bool token_callback(const char* token) {
     [self.outputTextView setTextAlignment:NSTextAlignmentLeft];
     [self.outputTextView setText:@""];
     
-    
-    // Prompt input - improve visibility and appearance
-    [self.promptTextField setTextColor:[UIColor blackColor]];
-    [self.promptTextField setBackgroundColor:[UIColor whiteColor]];
-    [self.promptTextField setFont:[UIFont systemFontOfSize:16]];
-    [self.promptTextField setTextAlignment:NSTextAlignmentLeft];
-    [self.promptTextField setUserInteractionEnabled:YES];
-    [self.promptTextField setDelegate:self];
-    
-    // UITextView-specific properties
-    [self.promptTextField setEditable:YES];
-    [self.promptTextField setScrollEnabled:YES];
-    [self.promptTextField setTextContainerInset:UIEdgeInsetsMake(8.0, 8.0, 8.0, 8.0)];
-    // Set placeholder text for text view
-    [self.promptTextField setText:@"Enter your prompt here..."];
-    [self.promptTextField setTextColor:[UIColor lightGrayColor]];
-    
-    // Increase height of prompt input field
-    [self.promptTextField.heightAnchor constraintEqualToConstant:120.0].active = YES;
-    
-    // Set layer properties for better appearance
-    [self.promptTextField.layer setCornerRadius:8.0];
-    [self.promptTextField.layer setBorderWidth:1.0];
-    [self.promptTextField.layer setBorderColor:[UIColor blackColor].CGColor];
-    [self.promptTextField setClipsToBounds:YES]; // Ensure content respects corner radius
+    // Add height constraint and corner radius to prompt text field
+    if (self.promptTextField) {
+        [self.promptTextField.heightAnchor constraintEqualToConstant:120.0].active = YES;
+        [self.promptTextField.layer setCornerRadius:8.0];
+        [self.promptTextField.layer setBorderWidth:1.0];
+        [self.promptTextField.layer setBorderColor:[UIColor blackColor].CGColor];
+        [self.promptTextField setClipsToBounds:YES]; // Ensure content respects corner radius
+    }
     
     // Initialize buttons programmatically since there's no storyboard
     if (!self.generateButton) {
@@ -233,11 +239,23 @@ static bool token_callback(const char* token) {
     // Initialize model selection data structures
     self.modelPaths = [NSMutableDictionary dictionary];
     
+    // Initialize vocoder model selection data structures
+    self.vocoderModelPaths = [NSMutableDictionary dictionary];
+    
+    // Initialize projection file selection data structures
+    self.projectionFilePaths = [NSMutableDictionary dictionary];
+    
     // Scan app bundle for all GGUF model files FIRST - this is critical for model picker
     [self scanForModelFiles];
     
+    // Scan app bundle for all projection files
+    [self scanForProjectionFiles];
+    
     // Add model picker view after models are scanned
     [self setupModelPickerView];
+    
+    // Add projection file picker view after projection files are scanned
+    [self setupProjectionFilePickerView];
     
     // Disable buttons until model is initialized
     [self updateButtonStates];
@@ -248,6 +266,9 @@ static bool token_callback(const char* token) {
     
     // Add debug log view to main stack view in setupModelPickerView
     // So we don't need to add it here
+    
+    // Setup the UI layout with safe area constraints
+    [self setupLayout];
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -255,6 +276,8 @@ static bool token_callback(const char* token) {
     NSLog(@"DEBUG: viewWillAppear called");
     NSLog(@"DEBUG: View bounds in viewWillAppear: %@", NSStringFromCGRect(self.view.bounds));
 }
+
+
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
@@ -354,7 +377,65 @@ static bool token_callback(const char* token) {
 
 }
 
+- (void)scanForProjectionFiles {
+    NSLog(@"DEBUG: Scanning for projection files in app bundle");
+    
+    // Get the main bundle
+    NSBundle *mainBundle = [NSBundle mainBundle];
+    NSString *bundlePath = [mainBundle bundlePath];
+    
+    // Scan for projection files - they typically contain "mmproj" in the name and use GGUF extension
+    // First check the bundle root directory
+    [self scanDirectoryForProjectionFiles:bundlePath];
+    
+    // Also check if there's a models directory
+    NSString *modelsDirPath = [bundlePath stringByAppendingPathComponent:@"models"];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:modelsDirPath isDirectory:NULL]) {
+        [self scanDirectoryForProjectionFiles:modelsDirPath];
+    }
+    
+    // Extract the available projection file names from the dictionary keys, sorted alphabetically
+    self.availableProjectionFiles = [[self.projectionFilePaths allKeys] sortedArrayUsingSelector:@selector(caseInsensitiveCompare:)];
+    
+    NSLog(@"DEBUG: Found %lu projection files:", (unsigned long)[self.availableProjectionFiles count]);
+    for (NSString *projectionFileName in self.availableProjectionFiles) {
+        NSLog(@"DEBUG:   - %@: %@", projectionFileName, [self.projectionFilePaths objectForKey:projectionFileName]);
+    }
+}
+
 - (void)scanDirectory:(NSString *)directoryPath forFilesWithExtension:(NSString *)extension {
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSError *error = nil;
+    NSArray *files = [fileManager contentsOfDirectoryAtPath:directoryPath error:&error];
+    
+    if (error) {
+        NSLog(@"ERROR: Failed to scan directory %@: %@", directoryPath, error);
+        return;
+    }
+    
+    for (NSString *file in files) {
+        // Skip mmproj files in model scanning
+        if ([[file lowercaseString] containsString:@"mmproj"]) {
+            NSLog(@"DEBUG: Skipping mmproj file in model scan: %@", file);
+            continue;
+        }
+        
+        NSString *filePath = [directoryPath stringByAppendingPathComponent:file];
+        
+        // Check if it's a file (not a directory)
+        BOOL isDirectory;
+        if ([fileManager fileExistsAtPath:filePath isDirectory:&isDirectory] && !isDirectory) {
+            // Check if it has the right extension (case-insensitive)
+            if ([[file pathExtension] caseInsensitiveCompare:extension] == NSOrderedSame) {
+                // Use the filename without extension as the display name
+                NSString *modelName = [file stringByDeletingPathExtension];
+                [self.modelPaths setObject:filePath forKey:modelName];
+            }
+        }
+    }
+}
+
+- (void)scanDirectoryForProjectionFiles:(NSString *)directoryPath {
     NSFileManager *fileManager = [NSFileManager defaultManager];
     NSError *error = nil;
     NSArray *files = [fileManager contentsOfDirectoryAtPath:directoryPath error:&error];
@@ -370,11 +451,12 @@ static bool token_callback(const char* token) {
         // Check if it's a file (not a directory)
         BOOL isDirectory;
         if ([fileManager fileExistsAtPath:filePath isDirectory:&isDirectory] && !isDirectory) {
-            // Check if it has the right extension (case-insensitive)
-            if ([[file pathExtension] caseInsensitiveCompare:extension] == NSOrderedSame) {
+            // Check if it contains "mmproj" (case-insensitive) and has GGUF extension
+            if ([[file lowercaseString] containsString:@"mmproj"] && 
+                [[file pathExtension] caseInsensitiveCompare:@"gguf"] == NSOrderedSame) {
                 // Use the filename without extension as the display name
-                NSString *modelName = [file stringByDeletingPathExtension];
-                [self.modelPaths setObject:filePath forKey:modelName];
+                NSString *projectionFileName = [file stringByDeletingPathExtension];
+                [self.projectionFilePaths setObject:filePath forKey:projectionFileName];
             }
         }
     }
@@ -435,16 +517,82 @@ static bool token_callback(const char* token) {
     
     // Reload picker data to ensure models are displayed
     [self.modelPickerView reloadAllComponents];
+}
+
+- (void)setupProjectionFilePickerView {
+    // Create projection file label
+    if (!self.projectionFileLabel) {
+        self.projectionFileLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+        self.projectionFileLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        self.projectionFileLabel.text = @"Select Projection File:";
+        self.projectionFileLabel.textColor = [UIColor blackColor];
+        self.projectionFileLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
+        [self.view addSubview:self.projectionFileLabel];
+    }
+    
+    // Create projection file dropdown text field
+    if (!self.projectionFileDropdownTextField) {
+        self.projectionFileDropdownTextField = [[UITextField alloc] init];
+        self.projectionFileDropdownTextField.translatesAutoresizingMaskIntoConstraints = NO;
+        self.projectionFileDropdownTextField.backgroundColor = [UIColor whiteColor];
+        [self.projectionFileDropdownTextField.layer setBorderWidth:1.0];
+        [self.projectionFileDropdownTextField.layer setBorderColor:[UIColor blackColor].CGColor];
+        [self.projectionFileDropdownTextField.layer setCornerRadius:8.0];
+        self.projectionFileDropdownTextField.textColor = [UIColor blackColor];
+        self.projectionFileDropdownTextField.font = [UIFont systemFontOfSize:16];
+        self.projectionFileDropdownTextField.textAlignment = NSTextAlignmentCenter;
+        self.projectionFileDropdownTextField.userInteractionEnabled = YES;
+        self.projectionFileDropdownTextField.delegate = self;
+        
+        // Add a down arrow button to indicate dropdown
+        UIButton *dropdownButton = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 30, 30)];
+        [dropdownButton setImage:[UIImage systemImageNamed:@"chevron.down"] forState:UIControlStateNormal];
+        [dropdownButton setTintColor:[UIColor blackColor]];
+        self.projectionFileDropdownTextField.rightView = dropdownButton;
+        self.projectionFileDropdownTextField.rightViewMode = UITextFieldViewModeAlways;
+        
+        // Create picker view
+        self.projectionFilePickerView = [[UIPickerView alloc] init];
+        self.projectionFilePickerView.backgroundColor = [UIColor whiteColor];
+        self.projectionFilePickerView.dataSource = self;
+        self.projectionFilePickerView.delegate = self;
+        
+        // Set picker as input view
+        self.projectionFileDropdownTextField.inputView = self.projectionFilePickerView;
+        
+        // Create a toolbar with done button
+        UIToolbar *toolbar = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, 44)];
+        UIBarButtonItem *doneButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone target:self action:@selector(doneButtonTapped)];
+        UIBarButtonItem *flexSpace = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
+        [toolbar setItems:@[flexSpace, doneButton] animated:NO];
+        
+        // Set toolbar as input accessory view
+        self.projectionFileDropdownTextField.inputAccessoryView = toolbar;
+        
+        [self.view addSubview:self.projectionFileDropdownTextField];
+    }
+    
+    // Reload picker data to ensure projection files are displayed
+    [self.projectionFilePickerView reloadAllComponents];
     
     // If there's only one model, select it by default
     if ([self.availableModels count] > 0) {
         [self.modelPickerView selectRow:0 inComponent:0 animated:NO];
-        [self dropdownDidSelectModelAtIndex:0];
+        self.modelDropdownTextField.text = [self.availableModels objectAtIndex:0];
     }
     
+    // If there's only one projection file, select it by default
+    if ([self.availableProjectionFiles count] > 0) {
+        [self.projectionFilePickerView selectRow:0 inComponent:0 animated:NO];
+        self.projectionFileDropdownTextField.text = [self.availableProjectionFiles objectAtIndex:0];
+    }
+        [self dropdownDidSelectModelAtIndex:0];
+}
+
+- (void)setupLayout {
     // Remove all existing constraints for all key views to start fresh
     NSArray *viewsToCleanup = @[
-        self.modelLabel, self.modelPickerView, self.outputTextView, 
+        self.modelLabel, self.outputTextView, 
         self.debugLogTextView, self.promptTextField, self.generateButton, 
         self.completeButton, self.conversationButton, self.embeddingButton,
         self.initializeButton, self.multimodalButton, self.clearButton
@@ -474,10 +622,10 @@ static bool token_callback(const char* token) {
         [self.view addSubview:self.mainStackView];
     } else {
         // Clear any existing arranged subviews
-    for (UIView *subview in self.mainStackView.arrangedSubviews) {
-        [self.mainStackView removeArrangedSubview:subview];
-        [subview removeFromSuperview];
-    }
+        for (UIView *subview in self.mainStackView.arrangedSubviews) {
+            [self.mainStackView removeArrangedSubview:subview];
+            [subview removeFromSuperview];
+        }
     }
     
     // Add model selection section to the stack view
@@ -485,6 +633,46 @@ static bool token_callback(const char* token) {
     [self.mainStackView addArrangedSubview:self.modelDropdownTextField];
     // Set a proper height for the dropdown text field
     [self.modelDropdownTextField.heightAnchor constraintEqualToConstant:44.0].active = YES;
+    
+    // Add projection file selection section to the stack view
+    [self.mainStackView addArrangedSubview:self.projectionFileLabel];
+    [self.mainStackView addArrangedSubview:self.projectionFileDropdownTextField];
+    // Set a proper height for the dropdown text field
+    [self.projectionFileDropdownTextField.heightAnchor constraintEqualToConstant:44.0].active = YES;
+    
+    // Add image picker section for multimodal testing
+    if (!self.imagePickerButton) {
+        self.imagePickerButton = [[UIButton alloc] init];
+        self.imagePickerButton.translatesAutoresizingMaskIntoConstraints = NO;
+        [self.imagePickerButton setTitle:@"Select Image" forState:UIControlStateNormal];
+        [self.imagePickerButton setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
+        [self.imagePickerButton setBackgroundColor:[UIColor colorWithRed:0.95 green:0.95 blue:0.95 alpha:1.0]];
+        [self.imagePickerButton.layer setCornerRadius:8.0];
+        [self.imagePickerButton.layer setBorderWidth:1.0];
+        [self.imagePickerButton.layer setBorderColor:[UIColor blackColor].CGColor];
+        [self.imagePickerButton addTarget:self action:@selector(imagePickerPressed:) forControlEvents:UIControlEventTouchUpInside];
+        [self.imagePickerButton setContentEdgeInsets:UIEdgeInsetsMake(8, 16, 8, 16)];
+        [self.imagePickerButton.heightAnchor constraintEqualToConstant:44.0].active = YES;
+    }
+    [self.mainStackView addArrangedSubview:self.imagePickerButton];
+    
+    // Add image view to display selected image
+    if (!self.selectedImageView) {
+        self.selectedImageView = [[UIImageView alloc] init];
+        self.selectedImageView.translatesAutoresizingMaskIntoConstraints = NO;
+        self.selectedImageView.backgroundColor = [UIColor colorWithRed:0.9 green:0.9 blue:0.9 alpha:1.0];
+        self.selectedImageView.layer.cornerRadius = 8.0;
+        self.selectedImageView.contentMode = UIViewContentModeScaleAspectFit;
+        self.selectedImageView.layer.borderWidth = 1.0;
+        self.selectedImageView.layer.borderColor = [UIColor grayColor].CGColor;
+        self.selectedImageView.clipsToBounds = YES;
+    }
+    [self.mainStackView addArrangedSubview:self.selectedImageView];
+    
+    // Activate constraints after adding to view hierarchy
+    [self.selectedImageView.heightAnchor constraintEqualToConstant:200.0].active = YES;
+    // Set a width constraint to ensure proper sizing
+    [self.selectedImageView.widthAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.widthAnchor multiplier:0.9 constant:-32.0].active = YES;
     
     // Set output text view height
     [self.outputTextView.heightAnchor constraintEqualToConstant:100.0].active = YES;
@@ -644,6 +832,17 @@ static bool token_callback(const char* token) {
     NSLog(@"DEBUG: Model picker view setup completed with stack view layout");
 }
 
+// MARK: - Image Picker Methods
+
+- (IBAction)imagePickerPressed:(id)sender {
+    NSLog(@"DEBUG: imagePickerPressed button clicked");
+    // Show image picker to select an image from photos
+    UIImagePickerController *imagePicker = [[UIImagePickerController alloc] init];
+    imagePicker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
+    imagePicker.delegate = self;
+    [self presentViewController:imagePicker animated:YES completion:nil];
+}
+
 // MARK: - Model Segmented Control Action
 
 // MARK: - UIPickerViewDataSource Methods
@@ -654,8 +853,13 @@ static bool token_callback(const char* token) {
 }
 
 - (NSInteger)pickerView:(UIPickerView *)pickerView numberOfRowsInComponent:(NSInteger)component {
-    // Return number of available models
-    return [self.availableModels count];
+    // Return number of available items based on which picker view is being used
+    if (pickerView == self.modelPickerView) {
+        return [self.availableModels count];
+    } else if (pickerView == self.projectionFilePickerView) {
+        return [self.availableProjectionFiles count];
+    }
+    return 0;
 }
 
 // MARK: - UIPickerViewDelegate Methods
@@ -670,14 +874,22 @@ static bool token_callback(const char* token) {
         label.textAlignment = NSTextAlignmentCenter;
     }
     
-    // Set the model name for the row
-    label.text = [self.availableModels objectAtIndex:row];
+    // Set the name based on which picker view is being used
+    if (pickerView == self.modelPickerView) {
+        label.text = [self.availableModels objectAtIndex:row];
+    } else if (pickerView == self.projectionFilePickerView) {
+        label.text = [self.availableProjectionFiles objectAtIndex:row];
+    }
     return label;
 }
 
 - (void)pickerView:(UIPickerView *)pickerView didSelectRow:(NSInteger)row inComponent:(NSInteger)component {
-    // Handle model selection
-    [self dropdownDidSelectModelAtIndex:row];
+    // Handle selection based on which picker view is being used
+    if (pickerView == self.modelPickerView) {
+        [self dropdownDidSelectModelAtIndex:row];
+    } else if (pickerView == self.projectionFilePickerView) {
+        [self dropdownDidSelectProjectionFileAtIndex:row];
+    }
 }
 
 - (void)dropdownDidSelectModelAtIndex:(NSInteger)row {
@@ -690,6 +902,19 @@ static bool token_callback(const char* token) {
         
         NSLog(@"DEBUG: Selected model: %@ (%@)", selectedModel, modelPath);
         [self prependDebugText:[NSString stringWithFormat:@"Selected model: %@\n", selectedModel]];
+    }
+}
+
+- (void)dropdownDidSelectProjectionFileAtIndex:(NSInteger)row {
+    if (row >= 0 && row < [self.availableProjectionFiles count]) {
+        NSString *selectedProjectionFile = [self.availableProjectionFiles objectAtIndex:row];
+        NSString *projectionFilePath = [self.projectionFilePaths objectForKey:selectedProjectionFile];
+        
+        // Update the text field with the selected projection file
+        self.projectionFileDropdownTextField.text = selectedProjectionFile;
+        
+        NSLog(@"DEBUG: Selected projection file: %@ (%@)", selectedProjectionFile, projectionFilePath);
+        [self prependDebugText:[NSString stringWithFormat:@"Selected projection file: %@\n", selectedProjectionFile]];
     }
 }
 
@@ -1398,6 +1623,10 @@ static bool token_callback(const char* token) {
         [self.outputTextView setText:@""];
         [self.currentOutput setString:@""];
         
+        // Clear the selected image
+        [self.selectedImageView setImage:nil];
+        [self.selectedImageView setNeedsDisplay];
+        
         // Check if text field has focus
         if (self.promptTextField.isFirstResponder) {
             // Keep text black since user might continue typing
@@ -1455,7 +1684,6 @@ static bool token_callback(const char* token) {
     
     - (IBAction)multimodalPressed:(id)sender {
         NSLog(@"DEBUG: multimodalPressed button clicked");
-        [self prependDebugText:@"Starting multimodal processing...\n"];
         
         if (self.modelContext == NULL) {
             NSLog(@"DEBUG: Model not initialized - cannot use multimodal");
@@ -1480,38 +1708,61 @@ static bool token_callback(const char* token) {
             return;
         }
         
-        // Initialize multimodal if not already done
-        NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
-        NSString *mmprojPath = [[bundlePath stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
-        mmprojPath = [mmprojPath stringByAppendingPathComponent:@"lib/models/mmproj-model.f16.gguf"];
-        NSLog(@"DEBUG: Looking for mmproj file at: %@", mmprojPath);
-        
-        if ([[NSFileManager defaultManager] fileExistsAtPath:mmprojPath]) {
-            [self prependDebugText:[NSString stringWithFormat:@"Initializing multimodal support from: %@\n", mmprojPath]];
-            // Use GPU for multimodal processing if available
-            int status = llama_mobile_init_multimodal_c(self.modelContext, [mmprojPath UTF8String], YES);
-            if (status != 0) {
-                NSLog(@"DEBUG: Failed to initialize multimodal support with status: %d", status);
-                [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Error: Failed to initialize multimodal support.\n"]];
-                [self prependDebugText:@"Error: Failed to initialize multimodal support.\n"];
-                return;
-            }
-            [self prependDebugText:@"Multimodal support initialized successfully.\n"];
-        } else {
-            NSLog(@"DEBUG: Multimodal projection file not found, falling back to text only");
-            [self prependDebugText:@"Warning: Multimodal projection file not found. Using text only.\n"];
-            // Proceed with text-only completion
-            [self generateTextWithMode:@"completion"];
+        // Check if we already have an image selected
+        if (!self.selectedImageView.image) {
+            NSLog(@"DEBUG: No image selected - opening image picker");
+            [self imagePickerPressed:sender];
             return;
         }
         
-        // Show image picker to select an image for multimodal completion
-        NSLog(@"DEBUG: Showing image picker for multimodal processing");
-        [self prependDebugText:@"Opening image picker for multimodal processing...\n"];
-        UIImagePickerController *imagePicker = [[UIImagePickerController alloc] init];
-        imagePicker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-        imagePicker.delegate = self;
-        [self presentViewController:imagePicker animated:YES completion:nil];
+        // If we have an image, proceed with multimodal processing
+        [self prependDebugText:@"Starting multimodal processing...\n"];
+        
+        // Initialize multimodal if not already done
+        NSString *selectedProjectionFileName = self.projectionFileDropdownTextField.text;
+        NSString *mmprojPath = [self.projectionFilePaths objectForKey:selectedProjectionFileName];
+        
+        if (!mmprojPath || ![[NSFileManager defaultManager] fileExistsAtPath:mmprojPath]) {
+            NSLog(@"DEBUG: Multimodal projection file not found or not selected");
+            [self prependDebugText:@"Error: Multimodal projection file not found or not selected. Please select a valid projection file.\n"];
+            [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Error: Multimodal projection file not found or not selected.\n"]];
+            return;
+        }
+        
+        NSLog(@"DEBUG: Using multimodal projection file at: %@", mmprojPath);
+        [self prependDebugText:[NSString stringWithFormat:@"Initializing multimodal support from: %@\n", mmprojPath]];
+        
+        // Use GPU for multimodal processing if available
+        int status = llama_mobile_init_multimodal_c(self.modelContext, [mmprojPath UTF8String], YES);
+        if (status != 0) {
+            NSLog(@"DEBUG: Failed to initialize multimodal support with status: %d", status);
+            [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Error: Failed to initialize multimodal support.\n"]];
+            [self prependDebugText:@"Error: Failed to initialize multimodal support.\n"];
+            return;
+        }
+        
+        [self prependDebugText:@"Multimodal support initialized successfully.\n"];
+        
+        // We already have an image selected, proceed with processing
+        NSLog(@"DEBUG: Already have image selected, proceeding with multimodal processing");
+        [self prependDebugText:@"Using selected image for multimodal processing...\n"];
+        
+        // Save the existing selected image to a temporary file and process it
+        UIImage *selectedImage = self.selectedImageView.image;
+        if (selectedImage) {
+            // Save image to temporary directory
+            NSString *tempDirectory = NSTemporaryDirectory();
+            NSString *tempImagePath = [tempDirectory stringByAppendingPathComponent:@"temp_image.jpg"];
+            NSData *imageData = UIImageJPEGRepresentation(selectedImage, 0.9);
+            
+            if ([imageData writeToFile:tempImagePath atomically:YES]) {
+                // Process the image with the current prompt
+                NSString *prompt = self.promptTextField.text;
+                [self processImageWithPrompt:prompt imagePath:tempImagePath];
+            } else {
+                [self.outputTextView setText:[self.outputTextView.text stringByAppendingString:@"Error: Failed to save image.\n"]];
+            }
+        }
     }
     
     - (void)processImageWithPrompt:(NSString *)prompt imagePath:(NSString *)imagePath {
@@ -1560,7 +1811,8 @@ static bool token_callback(const char* token) {
                 .top_k = 50,
                 .top_p = 0.9,
                 .n_threads = 4,
-                .seed = -1
+                .seed = -1,
+                .token_callback = token_callback
             };
             
             NSLog(@"DEBUG: Calling llama_mobile_multimodal_completion_c");
@@ -1603,6 +1855,18 @@ static bool token_callback(const char* token) {
         // Get the selected image
         UIImage *selectedImage = info[UIImagePickerControllerOriginalImage];
         if (selectedImage) {
+            NSLog(@"DEBUG: Selected image size: %@", NSStringFromCGSize(selectedImage.size));
+            NSLog(@"DEBUG: selectedImageView address: %p", self.selectedImageView);
+            NSLog(@"DEBUG: selectedImageView frame: %@", NSStringFromCGRect(self.selectedImageView.frame));
+            NSLog(@"DEBUG: selectedImageView hidden: %d", self.selectedImageView.hidden);
+            NSLog(@"DEBUG: selectedImageView alpha: %f", self.selectedImageView.alpha);
+            NSLog(@"DEBUG: selectedImageView superview: %@", self.selectedImageView.superview);
+            
+            // Set the image to the selectedImageView for visual feedback
+            self.selectedImageView.image = selectedImage;
+            [self.selectedImageView setNeedsDisplay];
+            NSLog(@"DEBUG: selectedImageView.image set to: %@", self.selectedImageView.image ? @"YES" : @"NO");
+            
             // Save image to temporary directory
             NSString *tempDirectory = NSTemporaryDirectory();
             NSString *tempImagePath = [tempDirectory stringByAppendingPathComponent:@"temp_image.jpg"];
@@ -1633,16 +1897,29 @@ static bool token_callback(const char* token) {
     // MARK: - UITextView Delegate
     
     - (void)textViewDidBeginEditing:(UITextView *)textView {
-        if ([textView.text isEqualToString:@"Enter your prompt here..."] && [textView.textColor isEqual:[UIColor lightGrayColor]]) {
-            [textView setText:@""];
-            [textView setTextColor:[UIColor blackColor]];
+        // Only apply placeholder behavior to the prompt text view
+        if (textView == self.promptTextField) {
+            if ([textView.text isEqualToString:@"Enter your prompt here..."] && [textView.textColor isEqual:[UIColor lightGrayColor]]) {
+                [textView setText:@""];
+                [textView setTextColor:[UIColor blackColor]];
+            }
         }
     }
     
     - (void)textViewDidEndEditing:(UITextView *)textView {
-        if ([textView.text isEqualToString:@""]) {
-            [textView setText:@"Enter your prompt here..."];
-            [textView setTextColor:[UIColor lightGrayColor]];
+        // Only apply placeholder behavior to the prompt text view
+        if (textView == self.promptTextField) {
+            // Trim whitespace to handle empty strings with spaces
+            NSString *trimmedText = [textView.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            
+            // Show placeholder if text is empty or contains only whitespace
+            if ([trimmedText isEqualToString:@""]) {
+                [textView setText:@"Enter your prompt here..."];
+                [textView setTextColor:[UIColor lightGrayColor]];
+            } else {
+                // Ensure text color is black for actual content
+                [textView setTextColor:[UIColor blackColor]];
+            }
         }
     }
     
@@ -1676,10 +1953,17 @@ static bool token_callback(const char* token) {
             return;
         }
         
-        // Find the vocoder model file in the bundle
-        NSString *vocoderModelPath = [[NSBundle mainBundle] pathForResource:@"WavTokenizer-Large-75-F16" ofType:@"gguf"];
-        if (![[NSFileManager defaultManager] fileExistsAtPath:vocoderModelPath]) {
-            [self prependDebugText:@"Error: Vocoder model not found in bundle.\n"];
+        // Get the selected model from the dropdown
+        NSString *selectedModel = self.modelDropdownTextField.text;
+        if (!selectedModel || [selectedModel isEqualToString:@""]) {
+            [self prependDebugText:@"Error: No model selected.\n"];
+            return;
+        }
+        
+        // Get the model path from the modelPaths dictionary
+        NSString *vocoderModelPath = [self.modelPaths objectForKey:selectedModel];
+        if (!vocoderModelPath || ![[NSFileManager defaultManager] fileExistsAtPath:vocoderModelPath]) {
+            [self prependDebugText:[NSString stringWithFormat:@"Error: Selected model '%@' not found.\n", selectedModel]];
             return;
         }
         
@@ -1715,12 +1999,34 @@ static bool token_callback(const char* token) {
                 // Use the C API to get audio guide tokens
                 llama_mobile_token_array_c_t guideTokensC = llama_mobile_get_audio_guide_tokens_c(self.modelContext, [textToSpeak UTF8String]);
                 if (guideTokensC.tokens == NULL || guideTokensC.count == 0) {
-                    [self prependDebugText:@"Error: Failed to generate guide tokens.\n"];
-                    self.isGenerating = NO;
-                    dispatch_async(dispatch_get_main_queue(), ^{ 
-                        [self updateButtonStates];
-                    });
-                    return;
+                    [self prependDebugText:@"Warning: No guide tokens available (vocoder has no tokenizer). Using fallback approach.\n"];
+                    
+                    // Fallback: Use the proper audio completion formatting API
+                    char* formattedAudioPromptC = llama_mobile_get_formatted_audio_completion_c(self.modelContext, NULL, [textToSpeak UTF8String]);
+                    if (formattedAudioPromptC == NULL) {
+                        [self prependDebugText:@"Error: Failed to generate formatted audio prompt.\n"];
+                        self.isGenerating = NO;
+                        dispatch_async(dispatch_get_main_queue(), ^{ 
+                            [self updateButtonStates];
+                        });
+                        return;
+                    }
+                    
+                    // Convert to C++ string and free the C string
+                    std::string formattedAudioPrompt(formattedAudioPromptC);
+                    free(formattedAudioPromptC);
+                    
+                    // Tokenize the properly formatted audio prompt using main model's tokenizer
+                    guideTokensC = llama_mobile_tokenize_c(self.modelContext, formattedAudioPrompt.c_str());
+                    
+                    if (guideTokensC.tokens == NULL || guideTokensC.count == 0) {
+                        [self prependDebugText:@"Error: Failed to generate audio tokens using fallback approach.\n"];
+                        self.isGenerating = NO;
+                        dispatch_async(dispatch_get_main_queue(), ^{ 
+                            [self updateButtonStates];
+                        });
+                        return;
+                    }
                 }
                 
                 // Convert to std::vector for processing

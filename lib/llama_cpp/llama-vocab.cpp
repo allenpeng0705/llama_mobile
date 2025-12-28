@@ -2817,7 +2817,10 @@ std::vector<llama_token> llama_vocab::impl::tokenize(
         const std::string & raw_text,
         bool add_special,
         bool parse_special) const {
-    LM_GGML_ASSERT(tokenizer && "Tokenizer not initialized. Call llama_vocab::init_tokenizer() first.");
+    // Handle case where vocab has no tokenizer (LLAMA_VOCAB_TYPE_NONE)
+    if (tokenizer == nullptr) {
+        return {};
+    }
 
     std::vector<llama_token> output;
     std::forward_list<fragment_buffer_variant> fragment_buffer;
@@ -3815,6 +3818,10 @@ int32_t llama_tokenize(
                      int32_t   n_tokens_max,
                         bool   add_special,
                         bool   parse_special) {
+    // Check if vocab has no tokenizer
+    if (vocab->get_type() == LLAMA_VOCAB_TYPE_NONE) {
+        return 0; // Return 0 tokens for vocab without tokenizer
+    }
     return vocab->tokenize(text, text_len, tokens, n_tokens_max, add_special, parse_special);
 }
 

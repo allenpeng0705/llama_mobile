@@ -45,6 +45,25 @@
 @property (nonatomic, strong) NSArray *availableModels;
 @property (nonatomic, strong) NSMutableDictionary *modelPaths;
 
+// Vocoder model selection UI
+@property (nonatomic, strong) UILabel *vocoderModelLabel;
+@property (nonatomic, strong) UITextField *vocoderModelDropdownTextField;
+@property (nonatomic, strong) UIPickerView *vocoderModelPickerView;
+@property (nonatomic, strong) NSArray *availableVocoderModels;
+@property (nonatomic, strong) NSMutableDictionary *vocoderModelPaths;
+
+// Projection file selection UI
+@property (nonatomic, strong) UILabel *projectionFileLabel;
+@property (nonatomic, strong) UITextField *projectionFileDropdownTextField;
+@property (nonatomic, strong) UIPickerView *projectionFilePickerView;
+@property (nonatomic, strong) NSArray *availableProjectionFiles;
+@property (nonatomic, strong) NSMutableDictionary *projectionFilePaths;
+
+// Image picker for multimodal testing
+@property (nonatomic, strong) UIButton *imagePickerButton;
+@property (nonatomic, strong) UIImageView *selectedImageView;
+@property (nonatomic, strong) UIImage *selectedImage;
+
 // Actions
 - (IBAction)generatePressed:(id)sender;
 - (IBAction)clearPressed:(id)sender;
@@ -56,6 +75,7 @@
 - (IBAction)ttsPressed:(id)sender;
 - (IBAction)playAudioPressed:(id)sender;
 - (IBAction)stopAudioPressed:(id)sender;
+- (IBAction)imagePickerPressed:(id)sender;
 
 // Helper methods
 - (void)updateButtonStates;

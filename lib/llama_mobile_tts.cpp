@@ -1,5 +1,6 @@
 #include "llama_mobile.h"
 #include "llama_cpp/common.h"
+#include "llama_cpp/llama-vocab.h"
 #include <vector>
 #include <string>
 #include <regex>
@@ -316,6 +317,20 @@ bool llama_mobile_context::initVocoder(const std::string &vocoder_model_path) {
         return false;
     }
 
+    // Check vocab type and tokenizer model immediately after loading
+    const llama_vocab *vocab = llama_model_get_vocab(wrapper->model);
+    if (vocab != nullptr) {
+        enum llama_vocab_type vocab_type = vocab->get_type();
+        std::string tokenizer_model = vocab->get_tokenizer_model();
+        LOG_INFO("Vocoder model %s loaded with vocab type: %d, tokenizer_model: %s", 
+                vocoder_model_path.c_str(), vocab_type, tokenizer_model.c_str());
+        
+        if (vocab_type == LLAMA_VOCAB_TYPE_NONE) {
+            LOG_WARNING("Vocoder model %s has no tokenizer (LLAMA_VOCAB_TYPE_NONE), guide tokens generation will be disabled", 
+                      vocoder_model_path.c_str());
+        }
+    }
+
     wrapper->type = TTS_OUTETTS_V0_2;
     vocoder_wrapper = wrapper;
     has_vocoder = true;
@@ -378,16 +393,26 @@ std::string llama_mobile_context::getFormattedAudioCompletion(const std::string 
 }
 
 std::vector<llama_token> llama_mobile_context::getAudioCompletionGuideTokens(const std::string &text_to_speak) {
-    if (!model) {
-        LOG_ERROR("Model not loaded for guide token generation");
+    if (!isVocoderEnabled()) {
+        LOG_ERROR("Vocoder not enabled for guide token generation");
         return {};
     }
     
-    const llama_vocab * vocab = llama_model_get_vocab(model);
+    const llama_vocab * vocab = llama_model_get_vocab(vocoder_wrapper->model);
+    const std::string tokenizer_model = vocab->get_tokenizer_model();
+    LOG_INFO("Vocoder vocab type: %d, tokenizer_model: %s", vocab->get_type(), tokenizer_model.c_str());
+    
+    // Check if tokenizer is initialized
+    if (vocab->get_type() == LLAMA_VOCAB_TYPE_NONE || tokenizer_model == "none" || tokenizer_model == "no_vocab") {
+        LOG_ERROR("Vocoder model has no tokenizer (type: %d, model: %s), cannot generate guide tokens", 
+                 vocab->get_type(), tokenizer_model.c_str());
+        return {};
+    }
+    
     const tts_type type = getTTSType();
     std::string clean_text = process_text(text_to_speak, type);
 
-    const std::string& delimiter = (type == TTS_OUTETTS_V0_3 ? "<|space|>" : "<|text_sep|>");
+    const std::string& delimiter = (type == TTS_OUTETTS_V0_3 ? "<|space|>" : "<|text_sep|");
 
     std::vector<llama_token> result;
     size_t start = 0;
