@@ -2134,9 +2134,9 @@ static bool token_callback(const char* token) {
                 [self prependDebugText:@"Generating audio guide tokens...\n"];
                 
                 // Set up completion parameters
-                llama_mobile_completion_params_t params = {0};
+                llama_mobile_completion_params_c_t params = {0};
                 params.prompt = [textToSpeak UTF8String];
-                params.max_tokens = 500;
+                params.n_predict = 500; // Maximum number of audio tokens to generate
                 params.temperature = 0.7f;
                 params.top_k = 40;
                 params.top_p = 0.9f;
@@ -2144,48 +2144,87 @@ static bool token_callback(const char* token) {
                 params.penalty_repeat = 1.1f;
                 
                 // Generate audio tokens using the C API
-                [self prependDebugText:@"Generating audio guide tokens...\n"];
+                [self prependDebugText:@"Generating audio completion...\n"];
                 
-                // Use the C API to get audio guide tokens
-                llama_mobile_token_array_c_t guideTokensC = llama_mobile_get_audio_guide_tokens_c(self.modelContext, [textToSpeak UTF8String]);
-                if (guideTokensC.tokens == NULL || guideTokensC.count == 0) {
-                    [self prependDebugText:@"Warning: No guide tokens available (vocoder has no tokenizer). Using fallback approach.\n"];
-                    
-                    // Fallback: Use the proper audio completion formatting API
-                    char* formattedAudioPromptC = llama_mobile_get_formatted_audio_completion_c(self.modelContext, NULL, [textToSpeak UTF8String]);
-                    if (formattedAudioPromptC == NULL) {
-                        [self prependDebugText:@"Error: Failed to generate formatted audio prompt.\n"];
-                        self.isGenerating = NO;
-                        dispatch_async(dispatch_get_main_queue(), ^{ 
-                            [self updateButtonStates];
-                        });
-                        return;
-                    }
-                    
-                    // Convert to C++ string and free the C string
-                    std::string formattedAudioPrompt(formattedAudioPromptC);
-                    free(formattedAudioPromptC);
-                    
-                    // Tokenize the properly formatted audio prompt using main model's tokenizer
-                    guideTokensC = llama_mobile_tokenize_c(self.modelContext, formattedAudioPrompt.c_str());
-                    
-                    if (guideTokensC.tokens == NULL || guideTokensC.count == 0) {
-                        [self prependDebugText:@"Error: Failed to generate audio tokens using fallback approach.\n"];
-                        self.isGenerating = NO;
-                        dispatch_async(dispatch_get_main_queue(), ^{ 
-                            [self updateButtonStates];
-                        });
-                        return;
-                    }
+                // Always use the proper audio completion formatting API for TTS
+                char* formattedAudioPromptC = llama_mobile_get_formatted_audio_completion_c(self.modelContext, NULL, [textToSpeak UTF8String]);
+                if (formattedAudioPromptC == NULL) {
+                    [self prependDebugText:@"Error: Failed to generate formatted audio prompt.\n"];
+                    self.isGenerating = NO;
+                    dispatch_async(dispatch_get_main_queue(), ^{ 
+                        [self updateButtonStates];
+                    });
+                    return;
                 }
                 
-                // Convert to std::vector for processing
-                std::vector<llama_token> audioTokens(guideTokensC.tokens, guideTokensC.tokens + guideTokensC.count);
+                // Convert to C++ string and free the C string
+                std::string formattedAudioPrompt(formattedAudioPromptC);
+                free(formattedAudioPromptC);
                 
-                NSLog(@"DEBUG: Generated %ld audio tokens", audioTokens.size());
+                NSLog(@"DEBUG: Formatted audio prompt: %s", formattedAudioPrompt.c_str());
+                
+                // Update the completion params to use the formatted audio prompt
+                params.prompt = formattedAudioPrompt.c_str();
+                
+                // Now use the completion API to generate actual audio tokens
+                [self prependDebugText:@"Generating audio tokens using completion API...\n"];
+                
+                // Create a completion result structure
+                llama_mobile_completion_result_c_t result;
+                
+                // Call the completion API to generate audio tokens
+                int status = llama_mobile_completion_c(self.modelContext, &params, &result);
+                if (status != 0) {
+                    [self prependDebugText:@"Error: Audio completion generation failed.\n"];
+                    self.isGenerating = NO;
+                    dispatch_async(dispatch_get_main_queue(), ^{ 
+                        [self updateButtonStates];
+                    });
+                    return;
+                }
+                
+                // Check if any tokens were generated
+                if (result.tokens_predicted == 0) {
+                    [self prependDebugText:@"Warning: No audio tokens were predicted.\n"];
+                    // Still try to use the guide tokens
+                }
+                
+                // For TTS, we should directly use the completion result text
+                // to generate audio tokens. The completion API should have
+                // generated the appropriate audio tokens based on the prompt.
+                llama_mobile_token_array_c_t generatedAudioTokensC;
+                if (result.text != NULL && strlen(result.text) > 0) {
+                    // Tokenize the generated text to get the final audio tokens
+                    generatedAudioTokensC = llama_mobile_tokenize_c(self.modelContext, result.text);
+                    
+                    // Free the C array memory using the C API function
+                    if (generatedAudioTokensC.tokens == NULL || generatedAudioTokensC.count == 0) {
+                        [self prependDebugText:@"Warning: Failed to tokenize generated text.\n"];
+                        self.isGenerating = NO;
+                        dispatch_async(dispatch_get_main_queue(), ^{ 
+                            [self updateButtonStates];
+                        });
+                        return;
+                    }
+                } else {
+                    [self prependDebugText:@"Error: No text generated in completion.\n"];
+                    self.isGenerating = NO;
+                    dispatch_async(dispatch_get_main_queue(), ^{ 
+                        [self updateButtonStates];
+                    });
+                    return;
+                }
+                
+                // Convert generated tokens to vector
+                std::vector<llama_token> audioTokens(generatedAudioTokensC.tokens, generatedAudioTokensC.tokens + generatedAudioTokensC.count);
+                
+                // Free the generated tokens array since we've copied them to a vector
+                llama_mobile_free_token_array_c(generatedAudioTokensC);
+                
+                NSLog(@"DEBUG: Total audio tokens: %ld", audioTokens.size());
                 
                 if (audioTokens.empty()) {
-                    [self prependDebugText:@"Error: No audio tokens generated.\n"];
+                    [self prependDebugText:@"Error: No audio tokens available for decoding.\n"];
                     self.isGenerating = NO;
                     dispatch_async(dispatch_get_main_queue(), ^{ 
                         [self updateButtonStates];
@@ -2210,7 +2249,9 @@ static bool token_callback(const char* token) {
                 
                 // Free the C array memory using the C API functions
                 llama_mobile_free_float_array_c(audioDataC);
-                llama_mobile_free_token_array_c(guideTokensC);
+                
+                // Free the completion result members
+                llama_mobile_free_completion_result_members_c(&result);
                 
                 if (audioData.empty()) {
                     [self prependDebugText:@"Error: Failed to decode audio tokens.\n"];
