@@ -1394,10 +1394,20 @@ static bool token_callback(const char* token) {
     // MARK: - UI Helpers
     
     - (IBAction)clearPressed:(id)sender {
-        [self.promptTextField setText:@"Enter your prompt here..."];
-        [self.promptTextField setTextColor:[UIColor lightGrayColor]];
+        [self.promptTextField setText:@""];
         [self.outputTextView setText:@""];
         [self.currentOutput setString:@""];
+        
+        // Check if text field has focus
+        if (self.promptTextField.isFirstResponder) {
+            // Keep text black since user might continue typing
+            [self.promptTextField setTextColor:[UIColor blackColor]];
+        } else {
+            // Show placeholder if no focus
+            [self.promptTextField setText:@"Enter your prompt here..."];
+            [self.promptTextField setTextColor:[UIColor lightGrayColor]];
+        }
+        
         // Also clear the debug log text view
         if (self.debugLogTextView) {
             [self.debugLogTextView setText:@""];
