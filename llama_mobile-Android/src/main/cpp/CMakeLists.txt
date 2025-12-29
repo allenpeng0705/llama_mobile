@@ -32,3 +32,4 @@ add_library(llama_mobile_jni SHARED
 
 # Link libraries
 target_link_libraries(llama_mobile_jni PRIVATE llama_mobile)
+

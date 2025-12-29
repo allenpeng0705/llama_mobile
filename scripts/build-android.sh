@@ -20,11 +20,10 @@ show_help() {
     echo "  --ndk-version=VERSION   Use specific NDK version (default: 29.0.14206865)"
     echo ""
     echo "ANDROID_HOME Configuration:"
-    echo "  The script automatically detects ANDROID_HOME from:"
-    echo "  - Android Studio preferences (macOS/Linux)"
-    echo "  - Windows registry (Windows Git Bash)"
-    echo "  - Emulator preferences (macOS)"
-    echo "  - Common SDK paths based on OS"
+    echo "  The script automatically detects ANDROID_HOME from common SDK paths:"
+    echo "  - macOS: ~/Library/Android/sdk, ~/android-sdk"
+    echo "  - Linux: ~/Android/Sdk, ~/android-sdk, /opt/android-sdk"
+    echo "  - Windows: %USERPROFILE%/AppData/Local/Android/Sdk, %USERPROFILE%/Android/Sdk"
     echo ""
     echo "  If detection fails, set it manually:"
     echo "    # macOS/Linux: export ANDROID_HOME=/path/to/sdk && ./scripts/build-android.sh"
@@ -80,93 +79,31 @@ CMAKE_BUILD_TYPE=Release
 if [ -z "$ANDROID_HOME" ]; then
     echo "ANDROID_HOME not set, trying to detect from system..."
     
-    # Platform-specific detection
-    if [ "$(uname -s)" = "Darwin" ]; then
+    # Platform-specific detection - check common paths only
+    OS=$(uname -s)
+    
+    if [ "$OS" = "Darwin" ]; then
         # macOS
-        echo "Detecting on macOS..."
-        
-        # Try to detect from Android Studio preferences
-        if [ -f ~/Library/Application\ Support/Google/AndroidStudio*/options/jdk.table.xml ]; then
-            AS_CONFIG=$(ls -1 ~/Library/Application\ Support/Google/AndroidStudio*/options/jdk.table.xml | sort -r | head -1)
-            if [ -n "$AS_CONFIG" ]; then
-                echo "Found Android Studio config: $AS_CONFIG"
-                SDK_PATH=$(grep -A 10 "Android SDK" "$AS_CONFIG" | grep -o '"[^"/]*\/Android\/sdk"' | sed 's/"//g')
-                if [ -n "$SDK_PATH" ] && [ -d "$SDK_PATH" ]; then
-                    ANDROID_HOME=$SDK_PATH
-                    echo "✅ Detected ANDROID_HOME from Android Studio: $ANDROID_HOME"
-                fi
-            fi
-        fi
-        
-        # Try to detect from emulator preferences
-        if [ -z "$ANDROID_HOME" ] && [ -f ~/Library/Preferences/com.android.Emulator.plist ]; then
-            echo "Checking emulator preferences..."
-            SDK_PATH=$(defaults read ~/Library/Preferences/com.android.Emulator.plist 2>/dev/null | grep -o '"[^"/]*\/Android\/sdk"' | sed 's/"//g')
-            if [ -n "$SDK_PATH" ] && [ -d "$SDK_PATH" ]; then
-                ANDROID_HOME=$SDK_PATH
-                echo "✅ Detected ANDROID_HOME from emulator preferences: $ANDROID_HOME"
-            fi
-        fi
-        
-        # Fall back to default macOS path
-        if [ -z "$ANDROID_HOME" ]; then
-            DEFAULT_SDK=~/Library/Android/sdk
-            if [ -d "$DEFAULT_SDK" ]; then
-                ANDROID_HOME=$DEFAULT_SDK
-                echo "✅ Using default macOS ANDROID_HOME path: $ANDROID_HOME"
-            fi
-        fi
-        
-    elif [ "$(uname -s)" = "Linux" ]; then
+        COMMON_PATHS=("$HOME/Library/Android/sdk" "$HOME/android-sdk")
+    elif [ "$OS" = "Linux" ]; then
         # Linux
-        echo "Detecting on Linux..."
-        
-        # Try to detect from Android Studio preferences
-        if [ -f ~/.config/Google/AndroidStudio*/options/jdk.table.xml ]; then
-            AS_CONFIG=$(ls -1 ~/.config/Google/AndroidStudio*/options/jdk.table.xml | sort -r | head -1)
-            if [ -n "$AS_CONFIG" ]; then
-                echo "Found Android Studio config: $AS_CONFIG"
-                SDK_PATH=$(grep -A 10 "Android SDK" "$AS_CONFIG" | grep -o '"[^"/]*\/Android\/Sdk"' | sed 's/"//g')
-                if [ -n "$SDK_PATH" ] && [ -d "$SDK_PATH" ]; then
-                    ANDROID_HOME=$SDK_PATH
-                    echo "✅ Detected ANDROID_HOME from Android Studio: $ANDROID_HOME"
-                fi
-            fi
-        fi
-        
-        # Try common Linux paths
         COMMON_PATHS=("$HOME/Android/Sdk" "$HOME/android-sdk" "/opt/android-sdk")
-        for path in "${COMMON_PATHS[@]}"; do
-            if [ -z "$ANDROID_HOME" ] && [ -d "$path" ]; then
-                ANDROID_HOME=$path
-                echo "✅ Using common Linux ANDROID_HOME path: $ANDROID_HOME"
-                break
-            fi
-        done
-        
-    elif [ "$(uname -s)" = "MINGW32_NT" ] || [ "$(uname -s)" = "MINGW64_NT" ]; then
+    elif [[ "$OS" = MINGW* ]]; then
         # Windows (Git Bash)
-        echo "Detecting on Windows..."
-        
-        # Try to detect from registry
-        if command -v reg &> /dev/null; then
-            SDK_PATH=$(reg query "HKEY_CURRENT_USER\Software\Android SDK Tools" /v Path 2>/dev/null | grep -o '[A-Z]:\\\\[^ ]*' | head -1)
-            if [ -n "$SDK_PATH" ] && [ -d "$SDK_PATH" ]; then
-                ANDROID_HOME=$SDK_PATH
-                echo "✅ Detected ANDROID_HOME from Windows registry: $ANDROID_HOME"
-            fi
-        fi
-        
-        # Try common Windows paths
         COMMON_PATHS=("$USERPROFILE/AppData/Local/Android/Sdk" "$USERPROFILE/Android/Sdk")
-        for path in "${COMMON_PATHS[@]}"; do
-            if [ -z "$ANDROID_HOME" ] && [ -d "$path" ]; then
-                ANDROID_HOME=$path
-                echo "✅ Using common Windows ANDROID_HOME path: $ANDROID_HOME"
-                break
-            fi
-        done
+    else
+        echo "❌ Unsupported operating system: $OS"
+        exit 1
     fi
+    
+    # Check common paths first (fast and reliable)
+    for path in "${COMMON_PATHS[@]}"; do
+        if [ -d "$path" ]; then
+            ANDROID_HOME=$path
+            echo "✅ Detected ANDROID_HOME: $ANDROID_HOME"
+            break
+        fi
+    done
     
     # Final check: if still not found, prompt user
     if [ -z "$ANDROID_HOME" ] || [ ! -d "$ANDROID_HOME" ]; then
@@ -176,11 +113,11 @@ if [ -z "$ANDROID_HOME" ]; then
         echo ""
         echo "On macOS/Linux:"
         echo "  export ANDROID_HOME=/path/to/your/android/sdk"
-        echo "  ./build-android.sh"
+        echo "  ./scripts/build-android.sh"
         echo ""
         echo "On Windows (Git Bash):"
         echo "  export ANDROID_HOME=C:/path/to/your/android/sdk"
-        echo "  ./build-android.sh"
+        echo "  ./scripts/build-android.sh"
         echo ""
         echo "Or set it permanently in your shell configuration:"
         echo "  (e.g., add to ~/.bashrc, ~/.zshrc, or ~/.profile)"

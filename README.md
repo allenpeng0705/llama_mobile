@@ -145,10 +145,20 @@ Stay tuned for updates as we continue to develop and expand the framework!
 
 ### Prerequisites
 
-- macOS with Xcode installed (for iOS builds)
+#### Common Requirements
 - CMake 3.20 or later
 - Python 3.x (for some utility scripts)
+
+#### iOS Build Requirements
+- macOS with Xcode installed
 - iOS 13.0+ deployment target for mobile apps
+
+#### Android Build Requirements
+- Android Studio installed
+- Java Development Kit (JDK) 8 or later
+- Android SDK (API level 21 or higher)
+- Android NDK version 29.0.14206865 (required for building native libraries)
+- Set ANDROID_HOME environment variable pointing to your Android SDK directory
 
 ### Core Library
 
@@ -203,9 +213,64 @@ To run the iOS example app:
 
 ### Future Building Instructions (Planned)
 
-#### Android Framework
+#### Android Library and SDK
+
+Before building for Android, you need to ensure your development environment is properly configured:
+
+#### Finding SDK and NDK Paths from Android Studio
+
+You can find your SDK and NDK paths directly from Android Studio:
+
+1. **Open Android Studio Preferences/Settings**:
+   - On macOS: Android Studio → Preferences
+   - On Windows/Linux: File → Settings
+
+2. **Find Android SDK Path**:
+   - Navigate to: Appearance & Behavior → System Settings → Android SDK
+   - Your SDK path is displayed at the top of the window
+   - Example: `/Users/yourname/Library/Android/sdk` (macOS)
+
+3. **Find NDK Path**:
+   - Still in the Android SDK settings, select the "SDK Tools" tab
+   - Check the "Show Package Details" box
+   - Expand the "NDK (Side by side)" section
+   - Installed NDK versions are shown with their paths
+   - You can also see the overall NDK location at the top
+   - Example: `/Users/yourname/Library/Android/sdk/ndk/29.0.14206865`
+
+#### Setting ANDROID_HOME
+
+The build script will attempt to automatically detect your Android SDK path from common locations:
+- macOS: `~/Library/Android/sdk` or `~/android-sdk`
+- Linux: `~/Android/Sdk`, `~/android-sdk`, or `/opt/android-sdk`
+- Windows (Git Bash): `%USERPROFILE%/AppData/Local/Android/Sdk` or `%USERPROFILE%/Android/Sdk`
+
+If automatic detection fails, set ANDROID_HOME manually:
+
 ```bash
-# Planned Android build script
+# On macOS/Linux
+
+export ANDROID_HOME=/path/to/your/android/sdk
+./scripts/build-android.sh
+
+# On Windows (Git Bash)
+export ANDROID_HOME=C:/path/to/your/android/sdk
+./scripts/build-android.sh
+```
+
+#### Setting NDK Path
+
+The build script uses NDK version 29.0.14206865 by default. If you need to use a different NDK version, you can specify it:
+
+```bash
+# Build Android library with a specific NDK version
+./scripts/build-android.sh --ndk-version=29.0.14206865
+```
+
+#### Building Android Library
+
+```bash
+# Build Android library and SDK
 ./scripts/build-android.sh
 ```
 
