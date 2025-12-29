@@ -11,32 +11,17 @@ show_help() {
     echo "Builds the llama_mobile Flutter plugin and optionally the example app."
     echo ""
     echo "Options:"
-    echo "  -h, --help             Show this help message and exit"
-    echo "  -v, --verbose          Show verbose output for debugging"
-    echo "  --build-only           Only build the Flutter plugin (default behavior)"
-    echo "  --example-only         Only build the example app"
-    echo "  --build-and-example    Build both the plugin and the example app"
-    exit 0
+echo "  -h, --help             Show this help message and exit"
+exit 0
 }
-
-# Default behavior: build only the plugin
-BUILD_ONLY=true
-EXAMPLE_ONLY=false
-BUILD_AND_EXAMPLE=false
-VERBOSE=false
 
 # Parse command line arguments
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -h|--help) show_help ;;
-        -v|--verbose) VERBOSE=true ;;
-        --build-only) BUILD_ONLY=true ; EXAMPLE_ONLY=false ; BUILD_AND_EXAMPLE=false ;;
-        --example-only) BUILD_ONLY=false ; EXAMPLE_ONLY=true ; BUILD_AND_EXAMPLE=false ;;
-        --build-and-example) BUILD_ONLY=false ; EXAMPLE_ONLY=false ; BUILD_AND_EXAMPLE=true ;;
         *) echo "Unknown parameter: $1" ; show_help ;;
     esac
     shift
-
 done
 
 # Check if flutter is installed
@@ -47,17 +32,7 @@ fi
 
 echo "Using Flutter: $(flutter --version | head -n 1)"
 
-# Show directory structure for debugging
-if [ "$VERBOSE" = true ]; then
-    echo "=== Debug Information ==="
-    echo "Script directory: $SCRIPT_DIR"
-    echo "Root directory: $ROOT_DIR"
-    echo "Flutter SDK directory: $FLUTTER_SDK_DIR"
-    echo "Example app directory: $EXAMPLE_APP_DIR"
-    echo "iOS build script: $SCRIPT_DIR/build-ios.sh"
-    echo "Android build script: $SCRIPT_DIR/build-android.sh"
-    echo "======================="
-fi
+
 
 # Check if the Flutter plugin directory exists
 if [ ! -d "$FLUTTER_SDK_DIR" ]; then
@@ -71,6 +46,88 @@ if [ ! -d "$EXAMPLE_APP_DIR" ]; then
     exit 1
 fi
 
+# Function to copy iOS SDK into Flutter plugin
+function copy_ios_sdk_to_plugin() {
+    echo "=== Copying iOS SDK into Flutter plugin ==="
+    
+    # Create Frameworks directory in Flutter plugin
+    FLUTTER_IOS_FRAMEWORKS_DIR="$FLUTTER_SDK_DIR/ios/Frameworks"
+    mkdir -p "$FLUTTER_IOS_FRAMEWORKS_DIR"
+    
+    # Remove old framework if it exists
+    if [ -d "$FLUTTER_IOS_FRAMEWORKS_DIR/llama_mobile.xcframework" ]; then
+        echo -n "Removing old iOS framework... "
+        rm -rf "$FLUTTER_IOS_FRAMEWORKS_DIR/llama_mobile.xcframework"
+        echo "✓"
+    fi
+    
+    # Copy new framework from iOS SDK
+    echo -n "Copying iOS framework to Flutter plugin... "
+    if cp -R "$ROOT_DIR/llama_mobile-ios-SDK/Frameworks/llama_mobile.xcframework" "$FLUTTER_IOS_FRAMEWORKS_DIR/"; then
+        echo "✓"
+    else
+        echo "✗"
+        echo "Failed to copy iOS framework to Flutter plugin"
+        exit 1
+    fi
+}
+
+# Function to copy Android SDK into Flutter plugin
+function copy_android_sdk_to_plugin() {
+    echo "=== Copying Android SDK into Flutter plugin ==="
+    
+    FLUTTER_ANDROID_DIR="$FLUTTER_SDK_DIR/android"
+    ANDROID_SDK_DIR="$ROOT_DIR/llama_mobile-android-SDK"
+    
+    # Copy JNI libraries
+    echo -n "Copying Android JNI libraries... "
+    FLUTTER_JNI_LIBS_DIR="$FLUTTER_ANDROID_DIR/src/main/jniLibs"
+    ANDROID_JNI_LIBS_DIR="$ANDROID_SDK_DIR/src/main/jniLibs"
+    
+    mkdir -p "$FLUTTER_JNI_LIBS_DIR"
+    rm -rf "$FLUTTER_JNI_LIBS_DIR/*"
+    
+    if cp -R "$ANDROID_JNI_LIBS_DIR/"* "$FLUTTER_JNI_LIBS_DIR/"; then
+        echo "✓"
+    else
+        echo "✗"
+        echo "Failed to copy Android JNI libraries"
+        exit 1
+    fi
+    
+    # Copy JNI C++ files
+    echo -n "Copying Android JNI C++ files... "
+    FLUTTER_CPP_DIR="$FLUTTER_ANDROID_DIR/src/main/cpp"
+    ANDROID_CPP_DIR="$ANDROID_SDK_DIR/src/main/cpp"
+    
+    mkdir -p "$FLUTTER_CPP_DIR"
+    rm -rf "$FLUTTER_CPP_DIR/*"
+    
+    if cp -R "$ANDROID_CPP_DIR/"* "$FLUTTER_CPP_DIR/"; then
+        echo "✓"
+    else
+        echo "✗"
+        echo "Failed to copy Android JNI C++ files"
+        exit 1
+    fi
+    
+    # Copy Kotlin/Java files
+    echo -n "Copying Android Kotlin/Java files... "
+    FLUTTER_JAVA_DIR="$FLUTTER_ANDROID_DIR/src/main/java"
+    ANDROID_JAVA_DIR="$ANDROID_SDK_DIR/src/main/java"
+    
+    mkdir -p "$FLUTTER_JAVA_DIR"
+    rm -rf "$FLUTTER_JAVA_DIR/*"
+    
+    if cp -R "$ANDROID_JAVA_DIR/"* "$FLUTTER_JAVA_DIR/"; then
+        echo "✓"
+    else
+        echo "✗"
+        echo "Failed to copy Android Kotlin/Java files"
+        exit 1
+    fi
+}
+
 # Function to build the Flutter plugin
 function build_plugin() {
     echo "=== Building llama_mobile Flutter plugin ==="
@@ -79,8 +136,8 @@ function build_plugin() {
     
     # Build iOS SDK dependency first
     if [ -f "$SCRIPT_DIR/build-ios.sh" ]; then
-        echo "Building iOS SDK dependency..."
-        if "$SCRIPT_DIR/build-ios.sh" --build-and-copy; then
+        echo "Building iOS SDK dependency first"
+        if "$SCRIPT_DIR/build-ios.sh"; then
             echo "✓ iOS SDK built successfully"
         else
             echo "✗ iOS SDK build failed!"
@@ -106,6 +163,10 @@ function build_plugin() {
         echo "Please ensure the Android build script exists before building the Flutter plugin"
         exit 1
     fi
+    
+    # Copy SDKs into Flutter plugin to make it self-contained
+    copy_ios_sdk_to_plugin
+    copy_android_sdk_to_plugin
     
     # Get dependencies
     echo "Getting Flutter dependencies..."
@@ -167,25 +228,6 @@ function build_example() {
     echo "Run the example app with: flutter run"
 }
 
-# Execute based on command line options
-if $EXAMPLE_ONLY; then
-    # Only build the example app
-    build_example
-    exit 0
-fi
-
-if $BUILD_ONLY || $BUILD_AND_EXAMPLE; then
-    # Build the plugin
-    build_plugin
-fi
-
-# If build-and-example option was selected, build the example app
-if $BUILD_AND_EXAMPLE; then
-    build_example
-fi
-
-if [ $BUILD_ONLY = false ] && [ $EXAMPLE_ONLY = false ] && [ $BUILD_AND_EXAMPLE = false ]; then
-    # Default: build only
-    echo "No action specified, defaulting to --build-only"
-    build_plugin
-fi
+# Execute both plugin build and example app build
+build_plugin
+build_example

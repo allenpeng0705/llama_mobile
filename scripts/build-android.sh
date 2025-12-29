@@ -15,7 +15,6 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  -h, --help              Show this help message and exit"
-    echo "  -v, --verbose           Enable verbose output for debugging"
     echo "  --abi=ABI1,ABI2         Specify which ABIs to build (default: arm64-v8a,x86_64)"
     echo "  --ndk-version=VERSION   Use specific NDK version (default: 29.0.14206865)"
     echo ""
@@ -32,32 +31,27 @@ show_help() {
 }
 
 # Default values
-VERBOSE=false
 
 # Parse command line arguments
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -h|--help) show_help ;;
-        -v|--verbose) VERBOSE=true ;;
         --abi=*) ABIS="${1#*=}" ;;
         --ndk-version=*) NDK_VERSION="${1#*=}" ;;
         *) echo "Unknown parameter: $1" && show_help ;;
     esac
 done
 
-# Verbose logging function
-verbose_log() {
-    if [ "$VERBOSE" = true ]; then
-        echo "[VERBOSE] $1"
-    fi
+# Simple logging function
+log_message() {
+    echo "[$(date '+%H:%M:%S')] $1"
+}
+
+script_progress() {
+    log_message "[PROGRESS] $1"
 }
 
 echo "=== Building llama_mobile Android library ==="
-
-# Log initial parameters
-verbose_log "Script directory: $SCRIPT_DIR"
-verbose_log "Root directory: $ROOT_DIR"
-verbose_log "Verbose mode: $VERBOSE"
 
 # Check if necessary directories exist
 echo -n "Checking for lib directory... "
@@ -68,12 +62,13 @@ if [ ! -d "./lib" ]; then
     exit 1
 fi
 echo "✓"
-verbose_log "Found lib directory at: $(pwd)/lib"
 
 # NDK and CMake configuration
 NDK_VERSION=29.0.14206865
 ANDROID_PLATFORM=android-21
 CMAKE_BUILD_TYPE=Release
+
+
 
 # Set default ANDROID_HOME if not set
 if [ -z "$ANDROID_HOME" ]; then
@@ -134,7 +129,6 @@ if [ ! -d "$ANDROID_HOME" ]; then
 fi
 
 echo "Using ANDROID_HOME: $ANDROID_HOME"
-
 CMAKE_TOOLCHAIN_FILE=$ANDROID_HOME/ndk/$NDK_VERSION/build/cmake/android.toolchain.cmake
 
 # Check if NDK is installed
@@ -147,7 +141,6 @@ if [ ! -d "$ANDROID_HOME/ndk/$NDK_VERSION" ]; then
     exit 1
 fi
 echo "✓"
-verbose_log "Found NDK $NDK_VERSION at: $ANDROID_HOME/ndk/$NDK_VERSION"
 
 # Check if cmake is installed
 echo -n "Checking for cmake... "
@@ -161,8 +154,6 @@ if ! command -v cmake &> /dev/null; then
     exit 1
 fi
 echo "✓"
-verbose_log "Found cmake at: $(which cmake)"
-verbose_log "cmake version: $(cmake --version | head -n 1)"
 
 # Set the number of CPU cores for parallel build
 echo -n "Detecting CPU cores for parallel build... "
@@ -175,10 +166,9 @@ fi
 
 echo "✓"
 echo "Using $n_cpu cores for build"
-verbose_log "Detected $n_cpu CPU cores for parallel build"
 
 # Create the llama_mobile-android directory if it doesn't exist
-echo -n "Creating necessary directories... "
+    echo -n "Creating necessary directories... "
 for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src/main/cpp" "./llama_mobile-android/src/main/java/com/llamamobile"; do
     if ! mkdir -p "$dir"; then
         echo "✗"
@@ -186,9 +176,8 @@ for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src
         echo "Please check your permissions and try again."
         exit 1
     fi
-    verbose_log "Created directory: $dir"
+    echo "✓"
 done
-echo "✓"
 
 # Set default ABIs if not specified
 if [ -z "$ABIS" ]; then
@@ -207,7 +196,7 @@ for ABI in "${ABI_LIST[@]}"; do
     # Remove old build directory
     echo -n "Cleaning old build directory... "
     if [ -d "$BUILD_DIR" ]; then
-        verbose_log "Removing: $BUILD_DIR"
+
         if ! rm -rf "$BUILD_DIR"; then
             echo "✗"
             echo "Error: Failed to remove old build directory $BUILD_DIR!"
@@ -225,12 +214,11 @@ for ABI in "${ABI_LIST[@]}"; do
         exit 1
     fi
     echo "✓"
-    verbose_log "Build directory: $BUILD_DIR"
     
     # Add platform-specific flags
     if [ "$ABI" = "arm64-v8a" ]; then
         PLATFORM_FLAGS="-DGGML_NO_POSIX_MADVISE=ON"
-        verbose_log "Using platform flags for $ABI: $PLATFORM_FLAGS"
+
     else
         PLATFORM_FLAGS=""
     fi
@@ -246,8 +234,7 @@ for ABI in "${ABI_LIST[@]}"; do
         -DBUILD_SHARED_LIBS=ON \
         $PLATFORM_FLAGS"
     
-    verbose_log "Running CMake command:"
-    verbose_log "$CMAKE_COMMAND"
+
     
     if ! eval "$CMAKE_COMMAND"; then
         echo "✗"
@@ -261,8 +248,7 @@ for ABI in "${ABI_LIST[@]}"; do
     # Build the library
     echo -n "Building library for $ABI... "
     BUILD_COMMAND="cmake --build $BUILD_DIR --config \"$CMAKE_BUILD_TYPE\" -j \"$n_cpu\""
-    verbose_log "Running build command:"
-    verbose_log "$BUILD_COMMAND"
+
     
     if ! eval "$BUILD_COMMAND"; then
         echo "✗"
@@ -297,7 +283,6 @@ for ABI in "${ABI_LIST[@]}"; do
         exit 1
     fi
     echo "✓"
-    verbose_log "Copied $SOURCE_LIB to $DEST_LIB"
     
     # Clean up build directory
     echo -n "Cleaning up build directory... "
@@ -307,7 +292,6 @@ for ABI in "${ABI_LIST[@]}"; do
         echo "You may need to delete it manually."
     else
         echo "✓"
-        verbose_log "Removed build directory: $BUILD_DIR"
     fi
 done
 
@@ -319,7 +303,6 @@ if ! chmod +x "$SCRIPT_DIR/build-android.sh"; then
     echo "You may need to run: chmod +x $SCRIPT_DIR/build-android.sh"
 else
     echo "✓"
-    verbose_log "Script made executable: $SCRIPT_DIR/build-android.sh"
 fi
 
 # Function to create a file with error checking
@@ -329,7 +312,6 @@ function create_file() {
     local content="$2"
     
     echo -n "Creating $file_name... "
-    verbose_log "Creating file: $file_path"
     
     if ! echo "$content" > "$file_path"; then
         echo "✗"
@@ -339,7 +321,6 @@ function create_file() {
     fi
     
     echo "✓"
-    verbose_log "Successfully created: $file_path"
 }
 
 # Create CMakeLists.txt for the Android library
@@ -737,4 +718,85 @@ EOL
 
 echo "=== Android library build completed successfully! ==="
 echo "The llama_mobile Android library has been built and placed in ./llama_mobile-android/"
-echo "You can now run: ./build-android.sh to rebuild the library"
+
+# Make llama_mobile-Android-SDK self-contained
+    echo "=== Making llama_mobile-Android-SDK self-contained ==="
+    
+    # Copy native libraries to SDK
+    echo -n "Copying native libraries to SDK... "
+    if mkdir -p ./llama_mobile-Android-SDK/src/main/jniLibs && cp -r ./llama_mobile-android/src/main/jniLibs/* ./llama_mobile-Android-SDK/src/main/jniLibs/; then
+        echo "✓"
+    else
+        echo "✗"
+        echo "Error: Failed to copy native libraries to SDK!"
+        exit 1
+    fi
+    
+    # Copy JNI bindings to SDK
+    echo -n "Copying JNI bindings to SDK... "
+    if mkdir -p ./llama_mobile-Android-SDK/src/main/cpp && cp ./llama_mobile-android/src/main/cpp/* ./llama_mobile-Android-SDK/src/main/cpp/; then
+        echo "✓"
+    else
+        echo "✗"
+        echo "Error: Failed to copy JNI bindings to SDK!"
+        exit 1
+    fi
+    
+    # Copy Kotlin wrapper to SDK
+    echo -n "Copying Kotlin wrapper to SDK... "
+    if mkdir -p ./llama_mobile-Android-SDK/src/main/java/com/llamamobile && cp ./llama_mobile-android/src/main/java/com/llamamobile/LlamaMobile.kt ./llama_mobile-Android-SDK/src/main/java/com/llamamobile/; then
+        echo "✓"
+    else
+        echo "✗"
+        echo "Error: Failed to copy Kotlin wrapper to SDK!"
+        exit 1
+    fi
+    
+    # Update SDK's CMakeLists.txt to use relative paths
+    echo -n "Updating SDK CMakeLists.txt... "
+    SDK_CMAKE_CONTENT="cmake_minimum_required(VERSION 3.16)
+project(llama_mobile_android_sdk LANGUAGES CXX C)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Add definitions
+add_definitions(
+    -DNDEBUG
+    -DLM_GGML_USE_CPU
+    -DLM_GGML_USE_OPENCL=OFF
+    -DGGML_NO_POSIX_MADVISE
+)
+
+# Include directories
+include_directories(
+    \"\${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib\"
+    \"\${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/llama_cpp\"
+    \"\${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/llama_cpp/ggml-cpu\"
+)
+
+# Import the pre-built llama_mobile library
+add_library(llama_mobile SHARED IMPORTED)
+set_target_properties(llama_mobile PROPERTIES
+    IMPORTED_LOCATION \${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/\${ANDROID_ABI}/libllama_mobile.so
+)
+
+# Create a JNI wrapper
+add_library(llama_mobile_jni SHARED
+    llama_mobile_jni.cpp
+)
+
+# Link libraries
+target_link_libraries(llama_mobile_jni PRIVATE llama_mobile)
+"
+    
+    if echo "$SDK_CMAKE_CONTENT" > ./llama_mobile-Android-SDK/src/main/cpp/CMakeLists.txt; then
+        echo "✓"
+    else
+        echo "✗"
+        echo "Error: Failed to update SDK CMakeLists.txt!"
+        exit 1
+    fi
+    
+    echo "=== Android SDK is now self-contained! ==="
+    echo "You can now run: ./build-android.sh to rebuild the library and SDK"

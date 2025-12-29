@@ -1,5 +1,1 @@
 rootProject.name = 'llama_mobile_flutter_sdk'
-
-// Include the local Android SDK project
-include ':llama_mobile-android-SDK'
-project(':llama_mobile-android-SDK').projectDir = new File(rootDir, '../../llama_mobile-android-SDK')

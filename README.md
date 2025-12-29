@@ -247,6 +247,8 @@ The build script will attempt to automatically detect your Android SDK path from
 
 If automatic detection fails, set ANDROID_HOME manually:
 
+### Temporary Setting (Current Terminal Session Only)
+
 ```bash
 # On macOS/Linux
 
@@ -257,6 +259,28 @@ export ANDROID_HOME=/path/to/your/android/sdk
 export ANDROID_HOME=C:/path/to/your/android/sdk
 ./scripts/build-android.sh
 ```
+
+### Permanent Setting
+
+#### On macOS/Linux
+
+**For Bash shell:**
+1. Open `~/.bash_profile` or `~/.bashrc` in a text editor
+2. Add the line: `export ANDROID_HOME=/path/to/your/android/sdk`
+3. Save the file
+4. Run: `source ~/.bash_profile` or `source ~/.bashrc` to apply changes
+
+**For Zsh shell (default on macOS Catalina and later):**
+1. Open `~/.zshrc` in a text editor
+2. Add the line: `export ANDROID_HOME=/path/to/your/android/sdk`
+3. Save the file
+4. Run: `source ~/.zshrc` to apply changes
+
+**To verify the setting:**
+```bash
+echo $ANDROID_HOME
+```
+This should display the path to your Android SDK directory.
 
 #### Setting NDK Path
 
@@ -326,6 +350,45 @@ The build script uses NDK version 29.0.14206865 by default. If you need to use a
 
 ### Flutter Integration
 
+#### Flutter Setup Prerequisites
+
+Before using the Flutter plugin, ensure Flutter is properly installed and configured:
+
+1. **Install Flutter SDK:**
+   - Download the Flutter SDK from [https://flutter.dev/docs/get-started/install](https://flutter.dev/docs/get-started/install)
+   - Extract the SDK to a location like `/Users/yourname/flutter` (macOS/Linux) or `C:\flutter` (Windows)
+
+2. **Set up Flutter PATH:**
+   
+   **For macOS/Linux:**
+   - **Bash shell:** Add to `~/.bash_profile` or `~/.bashrc`:
+     ```bash
+   export PATH="/path/to/flutter/bin:$PATH"
+     ```
+   - **Zsh shell:** Add to `~/.zshrc`:
+     ```bash
+   export PATH="/path/to/flutter/bin:$PATH"
+     ```
+   - Run `source ~/.bashrc` or `source ~/.zshrc` to apply changes
+
+   **For Windows:**
+   - Add `C:\flutter\bin` to your system PATH environment variable
+
+3. **Verify Flutter installation:**
+   ```bash
+flutter doctor
+   ```
+   Fix any issues reported by `flutter doctor` before proceeding
+
+4. **Ensure minimum Flutter version:**
+   - This plugin requires Flutter 3.0.0 or later
+   - Check your Flutter version:
+     ```bash
+flutter --version
+     ```
+
+#### Integrating the Flutter Plugin
+
 1. Add the `llama_mobile_flutter_sdk` to your Flutter project's `pubspec.yaml`:
    ```yaml
 dependencies:
@@ -361,6 +424,602 @@ await llamaSdk.release();
 
 - **ReactNative**: JavaScript/TypeScript wrapper around native modules
 - **Capacitor**: Web-compatible plugin for cross-platform web apps
+
+## Using the SDKs in New Projects
+
+### iOS Swift App
+
+#### Step 1: Create a New iOS Project
+1. Open Xcode and select "Create a new Xcode project"
+2. Choose "iOS" → "App"
+3. Enter your project details:
+   - Product Name: `LlamaMobileDemo`
+   - Team: Select your development team
+   - Interface: `Storyboard` or `SwiftUI`
+   - Language: `Swift`
+   - Minimum Deployment: `iOS 13.0` or later
+4. Save the project to your desired location
+
+#### Step 2: Add the Self-Contained SDK
+1. In Xcode, right-click on your project in the Project Navigator and select "Add Files to LlamaMobileDemo..."
+2. Navigate to `/path/to/llama_mobile/llama_mobile-ios/llama_mobile.xcframework`
+3. Select the xcframework and ensure:
+   - "Copy items if needed" is checked
+   - Your target is selected under "Add to targets"
+4. Click "Add"
+
+#### Step 3: Configure Project Settings
+1. Select your project in the Project Navigator
+2. Go to the "Build Phases" tab
+3. Under "Link Binary With Libraries", verify `llama_mobile.xcframework` is listed
+4. Add required system frameworks:
+   - Click the "+" button
+   - Add `Metal.framework`
+   - Add `MetalKit.framework`
+   - Add `Accelerate.framework`
+
+#### Step 4: Add Required Permissions
+1. Open `Info.plist`
+2. Add the following keys:
+   - For local file access: `Privacy - File Provider Domain Usage Description`
+   - For model downloads: `Privacy - Network Usage Description`
+
+#### Step 5: Basic Usage Example
+
+```swift
+import UIKit
+import llama_mobile
+
+class ViewController: UIViewController {
+    private var modelPath: String?
+    private var modelHandle: UnsafeMutableRawPointer?
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupLlamaMobile()
+    }
+    
+    func setupLlamaMobile() {
+        // Initialize the library
+        llama_mobile_init()
+        
+        // Copy a model from bundle to documents directory
+        copyModelToDocuments()
+    }
+    
+    func copyModelToDocuments() {
+        guard let modelURL = Bundle.main.url(forResource: "your-model", withExtension: "gguf") else {
+            print("Model not found in bundle")
+            return
+        }
+        
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let destinationURL = documentsURL.appendingPathComponent("your-model.gguf")
+        
+        if !FileManager.default.fileExists(atPath: destinationURL.path) {
+            do {
+                try FileManager.default.copyItem(at: modelURL, to: destinationURL)
+                modelPath = destinationURL.path
+                loadModel()
+            } catch {
+                print("Failed to copy model: \(error)")
+            }
+        } else {
+            modelPath = destinationURL.path
+            loadModel()
+        }
+    }
+    
+    func loadModel() {
+        guard let modelPath = modelPath else { return }
+        
+        // Set model parameters
+        var params = llama_mobile_params()
+        params.n_threads = 4
+        params.n_gpu_layers = 4
+        
+        // Load the model
+        let result = llama_mobile_load_model(modelPath, &params)
+        if result != nil {
+            modelHandle = result
+            print("Model loaded successfully")
+            generateText()
+        } else {
+            print("Failed to load model")
+        }
+    }
+    
+    func generateText() {
+        guard let modelHandle = modelHandle else { return }
+        
+        // Set generation parameters
+        var genParams = llama_mobile_gen_params()
+        genParams.max_new_tokens = 100
+        genParams.temperature = 0.7
+        
+        // Generate text
+        let prompt = "Hello, how are you?"
+        var output = ""
+        
+        let callback: llama_mobile_token_callback = { token_ptr, user_data in
+            if let token_ptr = token_ptr {
+                let token = String(cString: token_ptr)
+                output += token
+                print(token, terminator: "")
+            }
+            return 0
+        }
+        
+        llama_mobile_generate(modelHandle, prompt, &genParams, callback, nil)
+        print("\nGeneration complete: \(output)")
+    }
+    
+    deinit {
+        // Cleanup
+        if let modelHandle = modelHandle {
+            llama_mobile_free_model(modelHandle)
+        }
+        llama_mobile_cleanup()
+    }
+}
+```
+
+### Android App
+
+#### Step 1: Create a New Android Project
+1. Open Android Studio
+2. Select "New Project"
+3. Choose "Empty Activity"
+4. Enter your project details:
+   - Name: `LlamaMobileDemo`
+   - Package name: `com.example.llamamobiledemo`
+   - Save location: Your desired location
+   - Language: `Kotlin`
+   - Minimum SDK: `API 21` or later
+5. Click "Finish"
+
+#### Step 2: Add the Self-Contained SDK
+1. Create a `libs` directory in your app module if it doesn't exist:
+   - Right-click on `app` → "New" → "Directory"
+   - Name it `libs`
+2. Copy the self-contained SDK files:
+   - Navigate to `/path/to/llama_mobile/llama_mobile-android-SDK/`
+   - Copy the `llama_mobile.aar` file to your app's `libs` directory
+
+#### Step 3: Configure Project Settings
+1. Open `app/build.gradle.kts` (or `app/build.gradle`)
+2. Add the following to the `dependencies` block:
+   ```gradle
+   implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
+   implementation("androidx.appcompat:appcompat:1.6.1")
+   implementation("com.google.android.material:material:1.9.0")
+   implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+   ```
+3. Ensure the `android` block includes:
+   ```gradle
+   compileOptions {
+       sourceCompatibility = JavaVersion.VERSION_1_8
+       targetCompatibility = JavaVersion.VERSION_1_8
+   }
+   kotlinOptions {
+       jvmTarget = "1.8"
+   }
+   ```
+4. Sync your project with Gradle files
+
+#### Step 4: Add Required Permissions
+1. Open `app/src/main/AndroidManifest.xml`
+2. Add the following permissions above the `<application>` tag:
+   ```xml
+   <uses-permission android:name="android.permission.INTERNET" />
+   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+   <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+   ```
+3. For Android 6.0+ (API 23+), you'll need to request runtime permissions
+
+#### Step 5: Basic Usage Example
+
+```kotlin
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.widget.Button
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.llamamobile.sdk.LlamaMobileSdk
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InputStream
+
+class MainActivity : AppCompatActivity() {
+    private lateinit var llamaSdk: LlamaMobileSdk
+    private lateinit var generateButton: Button
+    private lateinit var resultText: TextView
+    private var modelPath: String? = null
+    
+    private val REQUEST_PERMISSIONS = 1001
+    private val requiredPermissions = arrayOf(
+        Manifest.permission.READ_EXTERNAL_STORAGE,
+        Manifest.permission.WRITE_EXTERNAL_STORAGE
+    )
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        
+        generateButton = findViewById(R.id.generateButton)
+        resultText = findViewById(R.id.resultText)
+        
+        llamaSdk = LlamaMobileSdk()
+        
+        // Request permissions
+        if (checkPermissions()) {
+            setupModel()
+        } else {
+            requestPermissions()
+        }
+        
+        generateButton.setOnClickListener {
+            generateText()
+        }
+    }
+    
+    private fun checkPermissions(): Boolean {
+        return requiredPermissions.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+    
+    private fun requestPermissions() {
+        ActivityCompat.requestPermissions(this, requiredPermissions, REQUEST_PERMISSIONS)
+    }
+    
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_PERMISSIONS) {
+            if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                setupModel()
+            }
+        }
+    }
+    
+    private fun setupModel() {
+        // Copy model from assets to internal storage
+        try {
+            val inputStream: InputStream = assets.open("your-model.gguf")
+            val outputFile = File(filesDir, "your-model.gguf")
+            val outputStream = FileOutputStream(outputFile)
+            
+            val buffer = ByteArray(1024)
+            var bytesRead: Int
+            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                outputStream.write(buffer, 0, bytesRead)
+            }
+            
+            inputStream.close()
+            outputStream.close()
+            
+            modelPath = outputFile.absolutePath
+            loadModel()
+            
+        } catch (e: IOException) {
+            e.printStackTrace()
+            resultText.text = "Failed to copy model: \${e.message}"
+        }
+    }
+    
+    private fun loadModel() {
+        try {
+            if (modelPath != null) {
+                val success = llamaSdk.loadModel(modelPath!!)
+                if (success) {
+                    resultText.text = "Model loaded successfully!"
+                } else {
+                    resultText.text = "Failed to load model"
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            resultText.text = "Error loading model: \${e.message}"
+        }
+    }
+    
+    private fun generateText() {
+        try {
+            val prompt = "Hello, how are you?"
+            val result = llamaSdk.generateText(prompt, 100, 0.7f)
+            resultText.text = "Generated: \n\$result"
+        } catch (e: Exception) {
+            e.printStackTrace()
+            resultText.text = "Error generating text: \${e.message}"
+        }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        llamaSdk.release()
+    }
+}
+```
+
+### Flutter App
+
+#### Step 1: Create a New Flutter Project
+1. Open your terminal and run:
+   ```bash
+   flutter create llama_mobile_demo
+   cd llama_mobile_demo
+   ```
+2. Open the project in your preferred IDE (VS Code or Android Studio)
+
+#### Step 2: Add the Self-Contained Plugin
+1. Open `pubspec.yaml` in your Flutter project
+2. Add the plugin dependency:
+   ```yaml
+dependencies:
+  flutter:
+    sdk: flutter
+  llama_mobile_flutter_sdk:
+    path: /path/to/llama_mobile/llama_mobile-flutter-SDK
+  path_provider: ^2.1.1
+  permission_handler: ^11.3.1
+```
+3. Run `flutter pub get` to install dependencies
+
+#### Step 3: Configure Platform-Specific Settings
+
+##### iOS Configuration
+1. Open `ios/Runner/Info.plist`
+2. Add required permissions:
+   ```xml
+   <key>NSDocumentDirectoryUsageDescription</key>
+   <string>Access to documents directory for model storage</string>
+   <key>NSNetworkUsageDescription</key>
+   <string>Network access for model downloads</string>
+   ```
+
+##### Android Configuration
+1. Open `android/app/src/main/AndroidManifest.xml`
+2. Add required permissions:
+   ```xml
+   <uses-permission android:name="android.permission.INTERNET" />
+   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+   ```
+
+#### Step 4: Basic Usage Example
+
+```dart
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Llama Mobile Demo',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+      ),
+      home: const MyHomePage(title: 'Llama Mobile Flutter Demo'),
+    );
+  }
+}
+
+class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key, required this.title});
+  final String title;
+
+  @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+  final LlamaMobileFlutterSdk _llamaSdk = LlamaMobileFlutterSdk();
+  bool _isModelLoaded = false;
+  String _result = '';
+  bool _isGenerating = false;
+  String _modelPath = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _setupModel();
+  }
+
+  Future<void> _setupModel() async {
+    // Request permissions
+    if (Platform.isAndroid) {
+      await Permission.storage.request();
+      await Permission.manageExternalStorage.request();
+    }
+
+    // Copy model from assets to app directory
+    await _copyModelFromAssets();
+    
+    // Load the model
+    await _loadModel();
+  }
+
+  Future<void> _copyModelFromAssets() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final destination = File('\${directory.path}/your-model.gguf');
+
+      if (!await destination.exists()) {
+        final byteData = await rootBundle.load('assets/your-model.gguf');
+        await destination.writeAsBytes(byteData.buffer.asUint8List());
+      }
+
+      setState(() {
+        _modelPath = destination.path;
+      });
+    } catch (e) {
+      setState(() {
+        _result = 'Error copying model: \$e';
+      });
+    }
+  }
+
+  Future<void> _loadModel() async {
+    try {
+      if (_modelPath.isNotEmpty) {
+        final config = ModelConfig(
+          modelPath: _modelPath,
+          nThreads: 4,
+          nGpuLayers: 4,
+        );
+
+        final success = await _llamaSdk.loadModel(config);
+        setState(() {
+          _isModelLoaded = success;
+          _result = success ? 'Model loaded successfully!' : 'Failed to load model';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _result = 'Error loading model: \$e';
+      });
+    }
+  }
+
+  Future<void> _generateText() async {
+    if (!_isModelLoaded || _isGenerating) return;
+
+    setState(() {
+      _isGenerating = true;
+      _result = 'Generating...';
+    });
+
+    try {
+      final generationConfig = GenerationConfig(
+        prompt: 'Hello, how are you today?',
+        maxNewTokens: 100,
+        temperature: 0.7,
+        topP: 0.9,
+      );
+
+      final completion = await _llamaSdk.generateCompletion(generationConfig);
+      setState(() {
+        _result = 'Generated:\n\$completion';
+      });
+    } catch (e) {
+      setState(() {
+        _result = 'Error generating text: \$e';
+      });
+    } finally {
+      setState(() {
+        _isGenerating = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _llamaSdk.release();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: Text(widget.title),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Text(
+                'Model Status: \${_isModelLoaded ? 'Loaded' : 'Not Loaded'}',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _isModelLoaded ? _generateText : null,
+                child: _isGenerating
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Generate Text'),
+              ),
+              const SizedBox(height: 20),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Text(
+                    _result,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+### Adding Model Files
+
+For all platforms, you'll need to add your GGUF model files:
+
+#### iOS
+1. Drag your `your-model.gguf` file into Xcode
+2. Select "Copy items if needed" and add to your target
+
+#### Android
+1. Create an `assets` directory in `app/src/main/` if it doesn't exist
+2. Copy your `your-model.gguf` file into the `assets` directory
+
+#### Flutter
+1. Create an `assets` directory at the root of your Flutter project
+2. Add your `your-model.gguf` file to the `assets` directory
+3. Update `pubspec.yaml` to include the asset:
+   ```yaml
+   flutter:
+     assets:
+       - assets/your-model.gguf
+   ```
+
+### Error Handling Best Practices
+
+1. **Model Loading Errors:**
+   - Check if the model file exists and is accessible
+   - Verify model format is compatible (GGUF)
+   - Ensure sufficient device resources (memory, storage)
+
+2. **Inference Errors:**
+   - Handle timeouts for long-running generation tasks
+   - Implement progress callbacks to provide user feedback
+   - Catch exceptions related to insufficient memory
+
+3. **Permission Issues:**
+   - Always request necessary permissions before accessing files
+   - Provide clear error messages when permissions are denied
+   - Follow platform-specific permission guidelines
 
 ## Troubleshooting
 

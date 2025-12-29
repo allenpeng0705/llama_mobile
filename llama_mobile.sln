@@ -1,0 +1,41 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "lib", "lib", "{3A8DF596-E814-FECC-DD4B-D8EF8AAC1A0D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "MNN", "MNN", "{822394B2-FCD7-5E98-CB08-C683373CDE1B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "3rd_party", "3rd_party", "{D5945C5D-69FC-ACB5-BF54-BBE0EDCE4279}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "flatbuffers", "flatbuffers", "{5E013D12-B061-82FA-0479-A66B5B7B14EB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{E05130C7-866E-6853-D01B-F50C227488D8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FlatBuffers.Test", "lib\MNN\3rd_party\flatbuffers\tests\FlatBuffers.Test\FlatBuffers.Test.csproj", "{67683FE9-2C4C-0AFA-4D69-AEF3590F72D4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{67683FE9-2C4C-0AFA-4D69-AEF3590F72D4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{67683FE9-2C4C-0AFA-4D69-AEF3590F72D4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{67683FE9-2C4C-0AFA-4D69-AEF3590F72D4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{67683FE9-2C4C-0AFA-4D69-AEF3590F72D4}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{822394B2-FCD7-5E98-CB08-C683373CDE1B} = {3A8DF596-E814-FECC-DD4B-D8EF8AAC1A0D}
+		{D5945C5D-69FC-ACB5-BF54-BBE0EDCE4279} = {822394B2-FCD7-5E98-CB08-C683373CDE1B}
+		{5E013D12-B061-82FA-0479-A66B5B7B14EB} = {D5945C5D-69FC-ACB5-BF54-BBE0EDCE4279}
+		{E05130C7-866E-6853-D01B-F50C227488D8} = {5E013D12-B061-82FA-0479-A66B5B7B14EB}
+		{67683FE9-2C4C-0AFA-4D69-AEF3590F72D4} = {E05130C7-866E-6853-D01B-F50C227488D8}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B5099349-24E5-41BF-837D-A0CCAC9E7D57}
+	EndGlobalSection
+EndGlobal
