@@ -1,10 +1,10 @@
-# llama_mobile-Android
+# llama_mobile-android
 
 An Android library that provides bindings for the llama_mobile C library, allowing Android applications to interact with llama models.
 
 ## Overview
 
-The `llama_mobile-Android` library provides a Kotlin wrapper around the native llama_mobile C library, enabling Android applications to load and use llama models for text generation tasks.
+The `llama_mobile-android` library provides a Kotlin wrapper around the native llama_mobile C library, enabling Android applications to load and use llama models for text generation tasks.
 
 ## Features
 
@@ -41,7 +41,7 @@ cd llama_mobile
 ```gradle
 // settings.gradle
 include ':llama_mobile'
-project(':llama_mobile').projectDir = new File('../path/to/llama_mobile/llama_mobile-Android')
+project(':llama_mobile').projectDir = new File('../path/to/llama_mobile/llama_mobile-android')
 
 // app/build.gradle
 dependencies {
@@ -180,7 +180,7 @@ This script will:
 - Create platform-specific build directories
 - Configure CMake with Android-specific flags
 - Build the native libraries for arm64-v8a and x86_64 ABIs in parallel
-- Copy the native libraries and Kotlin wrapper to the `llama_mobile-Android` directory
+- Copy the native libraries and Kotlin wrapper to the `llama_mobile-android` directory
 
 ### Using Script Options
 

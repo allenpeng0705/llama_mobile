@@ -17,14 +17,14 @@ llama_mobile is a mobile-first AI framework that brings the power of llama.cpp t
   - Various GGUF models (normal, embedding, VLM, multimodal)
 
 - **llama_mobile-ios/**: iOS framework project folder
-- **llama_mobile-Android/**: Android library project folder
-- **llama_mobile-Android-SDK/**: Android SDK wrapper project folder
+- **llama_mobile-android/**: Android library project folder
+- **llama_mobile-android-SDK/**: Android SDK wrapper project folder
+- **llama_mobile-flutter-SDK/**: Flutter plugin project folder
 - **scripts/**: Build and utility scripts
 - **CMakeLists.txt**: Build configuration for the core library
 
 ### Planned Components
 
-- **llama_mobile_flutter/**: Flutter plugin
 - **llama_mobile_reactnative/**: ReactNative plugin
 - **llama_mobile_capacitor/**: Capacitor plugin for web-based apps
 
@@ -35,7 +35,7 @@ The project contains various build scripts:
 - **build_and_run_lib_test.sh**: Builds the core library and tests, then runs them
 - **build-ios.sh**: Builds the iOS framework based on the core library
 - **build-android.sh**: Builds the Android library and SDK
-- (Planned) **build-flutter.sh**: Builds the Flutter plugin
+- **build-flutter.sh**: Builds the Flutter plugin
 - (Planned) **build-reactnative.sh**: Builds the ReactNative plugin
 
 ## Getting Started
@@ -76,15 +76,15 @@ The project is currently in active development with the following components com
 
 - ✅ Core C++ library (based on llama.cpp)
 - ✅ iOS framework
-- ✅ Android library (llama_mobile-Android)
-- ✅ Android SDK wrapper (llama_mobile-Android-SDK)
+- ✅ Android library (llama_mobile-android)
+- ✅ Android SDK wrapper (llama_mobile-android-SDK)
 - ✅ Basic test infrastructure
-- ✅ Build scripts for core library, iOS, and Android
-- ✅ Example apps for iOS and Android
+- ✅ Build scripts for core library, iOS, Android, and Flutter
+- ✅ Example apps for iOS, Android, and Flutter
+- ✅ Flutter plugin (llama_mobile-flutter-SDK)
 
 Planned development:
 
-- ⏳ Flutter plugin
 - ⏳ ReactNative plugin
 - ⏳ Capacitor plugin
 
@@ -103,11 +103,11 @@ The framework currently supports integration with:
 
 1. **Native Applications**: 
    - iOS apps via `llama_mobile_ios` framework
-   - Android apps via `llama_mobile-Android` library and `llama_mobile-Android-SDK` wrapper
+   - Android apps via `llama_mobile-android` library and `llama_mobile-android-SDK` wrapper
 
-2. **Cross-Platform Frameworks** (Planned):
-   - Flutter via Flutter plugin
-   - ReactNative via ReactNative plugin
+2. **Cross-Platform Frameworks**:
+   - ✅ Flutter via Flutter plugin (`llama_mobile-flutter-SDK`)
+   - ⏳ ReactNative via ReactNative plugin
 
 3. **Web-Based Applications** (Planned):
    - Capacitor plugin for web apps using native iOS/Android SDKs
@@ -132,11 +132,12 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Roadmap
 
-1. Create Flutter and ReactNative plugins
-2. Develop Capacitor plugin for web apps
-3. Add comprehensive documentation and examples
-4. Optimize performance for mobile devices
-5. Expand model support and compatibility
+1. ✅ Create Flutter plugin
+2. Create ReactNative plugin
+3. Develop Capacitor plugin for web apps
+4. Add comprehensive documentation and examples
+5. Optimize performance for mobile devices
+6. Expand model support and compatibility
 
 Stay tuned for updates as we continue to develop and expand the framework!
 
@@ -210,7 +211,7 @@ To run the iOS example app:
 
 #### Flutter Plugin
 ```bash
-# Planned Flutter build script
+# Flutter build script
 ./scripts/build-flutter.sh
 ```
 
@@ -240,11 +241,11 @@ To run the iOS example app:
 
 ### Android Integration
 
-1. Add the `llama_mobile-Android` library as a module dependency in your Android Studio project
+1. Add the `llama_mobile-android` library as a module dependency in your Android Studio project
 2. Add the following to your `settings.gradle`:
    ```gradle
    include ':llama_mobile'
-   project(':llama_mobile').projectDir = new File('../path/to/llama_mobile/llama_mobile-Android')
+   project(':llama_mobile').projectDir = new File('../path/to/llama_mobile/llama_mobile-android')
    ```
 3. Add the dependency to your app's `build.gradle`:
    ```gradle
@@ -258,9 +259,41 @@ To run the iOS example app:
    ```
 5. Initialize the library and load models as needed
 
+### Flutter Integration
+
+1. Add the `llama_mobile_flutter_sdk` to your Flutter project's `pubspec.yaml`:
+   ```yaml
+dependencies:
+  llama_mobile_flutter_sdk:
+    path: /path/to/llama_mobile/llama_mobile-flutter-SDK
+```
+
+2. Import the library in your Dart code:
+   ```dart
+import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
+```
+
+3. Initialize the SDK and load a model:
+   ```dart
+final llamaSdk = LlamaMobileFlutterSdk();
+final config = ModelConfig(modelPath: 'path/to/model.gguf');
+final success = await llamaSdk.loadModel(config);
+```
+
+4. Generate completions:
+   ```dart
+final generationConfig = GenerationConfig(prompt: 'Hello,');
+final completion = await llamaSdk.generateCompletion(generationConfig);
+print(completion);
+```
+
+5. Release resources when done:
+   ```dart
+await llamaSdk.release();
+```
+
 ### Future Integrations (Planned)
 
-- **Flutter**: Dart plugin with native platform implementations
 - **ReactNative**: JavaScript/TypeScript wrapper around native modules
 - **Capacitor**: Web-compatible plugin for cross-platform web apps
 

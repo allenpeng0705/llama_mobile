@@ -18,4 +18,4 @@ rootProject.name = "androidLibExample"
 include ':app'
 include ':llama_mobile'
 
-project(':llama_mobile').projectDir = new File(rootProject.projectDir, '../../llama_mobile-Android')
+project(':llama_mobile').projectDir = new File(rootProject.projectDir, '../../llama_mobile-android')

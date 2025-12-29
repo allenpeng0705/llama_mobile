@@ -21,3 +21,4 @@ examples/.DS_Store
 /llama_mobile-ios-SDK/.build
 /llama_mobile-ios-SDK/examples/iOSSDKExample/.build
 /examples/androidLibExample/.gradle
+/examples/androidSDKExample/.gradle

@@ -1,10 +1,10 @@
-# llama_mobile-Android-SDK
+# llama_mobile-android-SDK
 
-A higher-level Android SDK that wraps the `llama_mobile-Android` library, providing a more convenient and Kotlin-friendly API for interacting with llama models.
+A higher-level Android SDK that wraps the `llama_mobile-android` library, providing a more convenient and Kotlin-friendly API for interacting with llama models.
 
 ## Overview
 
-The `llama_mobile-Android-SDK` provides a streamlined, higher-level API on top of the raw `llama_mobile-Android` library. It handles threading, error management, and provides a more intuitive interface for Android developers.
+The `llama_mobile-android-SDK` provides a streamlined, higher-level API on top of the raw `llama_mobile-android` library. It handles threading, error management, and provides a more intuitive interface for Android developers.
 
 ## Features
 
@@ -44,8 +44,8 @@ cd llama_mobile
 include ':llama_mobile'
 include ':llama_mobile_sdk'
 
-project(':llama_mobile').projectDir = new File('../path/to/llama_mobile/llama_mobile-Android')
-project(':llama_mobile_sdk').projectDir = new File('../path/to/llama_mobile/llama_mobile-Android-SDK')
+project(':llama_mobile').projectDir = new File('../path/to/llama_mobile/llama_mobile-android')
+project(':llama_mobile_sdk').projectDir = new File('../path/to/llama_mobile/llama_mobile-android-SDK')
 
 // app/build.gradle
 dependencies {
