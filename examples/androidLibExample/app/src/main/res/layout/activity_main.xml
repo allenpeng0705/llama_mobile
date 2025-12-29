@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    tools:context=".MainActivity">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="LlamaMobile Android Library Example"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_gravity="center"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Model Path Input -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="16dp">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Model Path:" />
+        <EditText
+            android:id="@+id/modelPathEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Enter model path (e.g., /sdcard/Download/llama-model.gguf)"
+            android:inputType="text" />
+    </LinearLayout>
+
+    <!-- Load Model Button -->
+    <Button
+        android:id="@+id/loadModelButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Load Model"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Prompt Input -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="16dp">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Prompt:" />
+        <EditText
+            android:id="@+id/promptEditText"
+            android:layout_width="match_parent"
+            android:layout_height="120dp"
+            android:hint="Enter your prompt here..."
+            android:inputType="textMultiLine"
+            android:gravity="top" />
+    </LinearLayout>
+
+    <!-- Generate Button -->
+    <Button
+        android:id="@+id/generateButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Generate"
+        android:layout_marginBottom="24dp"
+        android:enabled="false" />
+
+    <!-- Result Display -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Result:" />
+        <TextView
+            android:id="@+id/resultTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@android:color/darker_gray"
+            android:padding="16dp"
+            android:minHeight="150dp"
+            android:gravity="top"
+            android:text="No result yet" />
+    </LinearLayout>
+
+</LinearLayout>

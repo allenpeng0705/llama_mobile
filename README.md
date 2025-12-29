@@ -16,24 +16,25 @@ llama_mobile is a mobile-first AI framework that brings the power of llama.cpp t
   - Mobile-specific adaptations and optimizations
   - Various GGUF models (normal, embedding, VLM, multimodal)
 
-- **llama_mobile_ios/**: iOS framework project folder
+- **llama_mobile-ios/**: iOS framework project folder
+- **llama_mobile-Android/**: Android library project folder
+- **llama_mobile-Android-SDK/**: Android SDK wrapper project folder
 - **scripts/**: Build and utility scripts
 - **CMakeLists.txt**: Build configuration for the core library
 
 ### Planned Components
 
-- **llama_mobile_android/**: Android framework project
 - **llama_mobile_flutter/**: Flutter plugin
 - **llama_mobile_reactnative/**: ReactNative plugin
 - **llama_mobile_capacitor/**: Capacitor plugin for web-based apps
 
 ## Build Scripts
 
-The `scripts/` directory contains various build scripts:
+The project contains various build scripts:
 
 - **build_and_run_lib_test.sh**: Builds the core library and tests, then runs them
 - **build-ios.sh**: Builds the iOS framework based on the core library
-- (Planned) **build-android.sh**: Builds the Android framework
+- **build-android.sh**: Builds the Android library and SDK
 - (Planned) **build-flutter.sh**: Builds the Flutter plugin
 - (Planned) **build-reactnative.sh**: Builds the ReactNative plugin
 
@@ -52,7 +53,14 @@ make -j$(nproc)
 
 ```bash
 # Build iOS framework
-./scripts/build-ios.sh
+./build-ios.sh
+```
+
+### Build Android Library and SDK
+
+```bash
+# Build Android library and SDK
+./build-android.sh
 ```
 
 ### Build and Run Tests
@@ -68,16 +76,17 @@ The project is currently in active development with the following components com
 
 - ✅ Core C++ library (based on llama.cpp)
 - ✅ iOS framework
+- ✅ Android library (llama_mobile-Android)
+- ✅ Android SDK wrapper (llama_mobile-Android-SDK)
 - ✅ Basic test infrastructure
-- ✅ Build scripts for core library and iOS
+- ✅ Build scripts for core library, iOS, and Android
+- ✅ Example apps for iOS and Android
 
 Planned development:
 
-- ⏳ Android framework
 - ⏳ Flutter plugin
 - ⏳ ReactNative plugin
 - ⏳ Capacitor plugin
-- ⏳ Documentation and examples
 
 ## Supported Models
 
@@ -90,17 +99,17 @@ The framework supports various GGUF model types:
 
 ## Integration Plans
 
-Once completed, the framework will support integration with:
+The framework currently supports integration with:
 
 1. **Native Applications**: 
    - iOS apps via `llama_mobile_ios` framework
-   - Android apps via planned Android framework
+   - Android apps via `llama_mobile-Android` library and `llama_mobile-Android-SDK` wrapper
 
-2. **Cross-Platform Frameworks**:
-   - Flutter via planned Flutter plugin
-   - ReactNative via planned ReactNative plugin
+2. **Cross-Platform Frameworks** (Planned):
+   - Flutter via Flutter plugin
+   - ReactNative via ReactNative plugin
 
-3. **Web-Based Applications**:
+3. **Web-Based Applications** (Planned):
    - Capacitor plugin for web apps using native iOS/Android SDKs
 
 ## Contributing
@@ -123,12 +132,11 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Roadmap
 
-1. Complete Android framework development
-2. Create Flutter and ReactNative plugins
-3. Develop Capacitor plugin for web apps
-4. Add comprehensive documentation and examples
-5. Optimize performance for mobile devices
-6. Expand model support and compatibility
+1. Create Flutter and ReactNative plugins
+2. Develop Capacitor plugin for web apps
+3. Add comprehensive documentation and examples
+4. Optimize performance for mobile devices
+5. Expand model support and compatibility
 
 Stay tuned for updates as we continue to develop and expand the framework!
 
@@ -230,9 +238,28 @@ To run the iOS example app:
    ```
 4. Initialize the library and load models as needed
 
+### Android Integration
+
+1. Add the `llama_mobile-Android` library as a module dependency in your Android Studio project
+2. Add the following to your `settings.gradle`:
+   ```gradle
+   include ':llama_mobile'
+   project(':llama_mobile').projectDir = new File('../path/to/llama_mobile/llama_mobile-Android')
+   ```
+3. Add the dependency to your app's `build.gradle`:
+   ```gradle
+   dependencies {
+       implementation project(':llama_mobile')
+   }
+   ```
+4. Import the library in your Kotlin code:
+   ```kotlin
+   import com.llamamobile.LlamaMobile
+   ```
+5. Initialize the library and load models as needed
+
 ### Future Integrations (Planned)
 
-- **Android**: AAR library with Java/Kotlin bindings
 - **Flutter**: Dart plugin with native platform implementations
 - **ReactNative**: JavaScript/TypeScript wrapper around native modules
 - **Capacitor**: Web-compatible plugin for cross-platform web apps

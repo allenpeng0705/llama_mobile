@@ -1,0 +1,23 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "androidSDKExample"
+include ':app'
+include ':llama_mobile'
+include ':llama_mobile_sdk'
+
+project(':llama_mobile').projectDir = new File(rootProject.projectDir, '../../llama_mobile-Android')
+project(':llama_mobile_sdk').projectDir = new File(rootProject.projectDir, '../../llama_mobile-Android-SDK')

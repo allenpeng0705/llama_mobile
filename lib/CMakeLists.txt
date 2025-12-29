@@ -313,6 +313,7 @@ target_compile_definitions(llama_mobile_core_lib PUBLIC
     LLAMA_MOBILE_VERBOSE=0
     LM_GGML_VERSION="${GGML_VERSION}"
     LM_GGML_COMMIT="${GGML_BUILD_COMMIT}"
+    $<$<BOOL:${GGML_NO_POSIX_MADVISE}>:GGML_NO_POSIX_MADVISE>
 )
 
 target_compile_definitions(llama_mobile_core_static PUBLIC
@@ -320,6 +321,7 @@ target_compile_definitions(llama_mobile_core_static PUBLIC
     LLAMA_MOBILE_VERBOSE=0
     LM_GGML_VERSION="${GGML_VERSION}"
     LM_GGML_COMMIT="${GGML_BUILD_COMMIT}"
+    $<$<BOOL:${GGML_NO_POSIX_MADVISE}>:GGML_NO_POSIX_MADVISE>
 )
 
 target_compile_definitions(llama_mobile_core_shared PUBLIC
@@ -327,6 +329,7 @@ target_compile_definitions(llama_mobile_core_shared PUBLIC
     LLAMA_MOBILE_VERBOSE=0
     LM_GGML_VERSION="${GGML_VERSION}"
     LM_GGML_COMMIT="${GGML_BUILD_COMMIT}"
+    $<$<BOOL:${GGML_NO_POSIX_MADVISE}>:GGML_NO_POSIX_MADVISE>
 )
 
 if(APPLE)
@@ -391,6 +394,21 @@ if(APPLE)
         configure_file(llama_cpp/ggml-common.h ${OUTPUT_DIR}/ggml-common.h COPYONLY)
         configure_file(llama_cpp/ggml-metal-impl.h ${OUTPUT_DIR}/ggml-metal-impl.h COPYONLY)
     endif()
+endif()
+
+# Android-specific settings
+if(ANDROID)
+    find_library(LOG_LIBRARY log)
+    if(LOG_LIBRARY)
+        target_link_libraries(llama_mobile_core_lib PUBLIC ${LOG_LIBRARY})
+        target_link_libraries(llama_mobile_core_static PUBLIC ${LOG_LIBRARY})
+        target_link_libraries(llama_mobile_core_shared PUBLIC ${LOG_LIBRARY})
+    endif()
+    
+    # Always disable POSIX madvise on Android
+    target_compile_definitions(llama_mobile_core_lib PUBLIC GGML_NO_POSIX_MADVISE)
+    target_compile_definitions(llama_mobile_core_static PUBLIC GGML_NO_POSIX_MADVISE)
+    target_compile_definitions(llama_mobile_core_shared PUBLIC GGML_NO_POSIX_MADVISE)
 endif()
 
 # Copy headers to include directory

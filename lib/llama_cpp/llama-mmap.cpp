@@ -386,16 +386,26 @@ struct llama_mmap::impl {
         }
 
         if (prefetch > 0) {
+#ifndef GGML_NO_POSIX_MADVISE
+            #ifndef POSIX_MADV_WILLNEED
+                #define POSIX_MADV_WILLNEED 3
+            #endif
             if (posix_madvise(addr, std::min(file->size(), prefetch), POSIX_MADV_WILLNEED)) {
                 LLAMA_LOG_WARN("warning: posix_madvise(.., POSIX_MADV_WILLNEED) failed: %s\n",
                         strerror(errno));
             }
+#endif
         }
         if (numa) {
+#ifndef GGML_NO_POSIX_MADVISE
+            #ifndef POSIX_MADV_RANDOM
+                #define POSIX_MADV_RANDOM 1
+            #endif
             if (posix_madvise(addr, file->size(), POSIX_MADV_RANDOM)) {
                 LLAMA_LOG_WARN("warning: posix_madvise(.., POSIX_MADV_RANDOM) failed: %s\n",
                         strerror(errno));
             }
+#endif
         }
 
         mapped_fragments.emplace_back(0, file->size());

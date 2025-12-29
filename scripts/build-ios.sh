@@ -2,10 +2,75 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-if ! command -v cmake &> /dev/null; then
+# Show help message
+show_help() {
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Builds the llama_mobile iOS framework and optionally copies it to the Swift SDK."
+    echo ""
+    echo "Options:"
+    echo "  -h, --help         Show this help message and exit"
+    echo "  --build-only       Only build the framework (default behavior)"
+    echo "  --copy-only        Only copy an existing framework to the SDK"
+    echo "  --build-and-copy   Build the framework and then copy it to the SDK"
+    exit 0
+}
+
+# Default behavior: build only
+BUILD_ONLY=true
+COPY_ONLY=false
+BUILD_AND_COPY=false
+
+# Parse command line arguments
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        -h|--help) show_help ;;
+        --build-only) BUILD_ONLY=true ; COPY_ONLY=false ; BUILD_AND_COPY=false ;;
+        --copy-only) BUILD_ONLY=false ; COPY_ONLY=true ; BUILD_AND_COPY=false ;;
+        --build-and-copy) BUILD_ONLY=false ; COPY_ONLY=false ; BUILD_AND_COPY=true ;;
+        *) echo "Unknown parameter: $1" ; show_help ;;
+    esac
+    shift
+
+done
+
+if ! command -v cmake &> /dev/null && ( $BUILD_ONLY || $BUILD_AND_COPY ); then
   echo "cmake could not be found, please install it"
   exit 1
 fi
+
+# Function to copy framework to SDK
+function copy_to_sdk() {
+    echo "=== Updating llama_mobile iOS SDK with latest framework ==="
+
+    # Check if necessary directories exist
+    if [ ! -d "$ROOT_DIR/llama_mobile-ios" ]; then
+        echo "Error: llama_mobile-ios directory not found!"
+        exit 1
+    fi
+
+    if [ ! -d "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework" ]; then
+        echo "Error: llama_mobile.xcframework not found in llama_mobile-ios directory!"
+        echo "Please build the iOS framework first using: $0"
+        exit 1
+    fi
+
+    # Create Frameworks directory if it doesn't exist
+    mkdir -p "$ROOT_DIR/llama_mobile-ios-SDK/Frameworks"
+
+    # Remove old framework if it exists
+    if [ -d "$ROOT_DIR/llama_mobile-ios-SDK/Frameworks/llama_mobile.xcframework" ]; then
+        echo "Removing old framework..."
+        rm -rf "$ROOT_DIR/llama_mobile-ios-SDK/Frameworks/llama_mobile.xcframework"
+    fi
+
+    # Copy latest framework to SDK
+    echo "Copying latest framework to SDK..."
+    cp -R "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework" "$ROOT_DIR/llama_mobile-ios-SDK/Frameworks/"
+
+    echo "=== Framework update completed successfully! ==="
+    echo "The latest llama_mobile.xcframework has been copied to llama_mobile-ios-SDK/Frameworks/"
+}
 
 function cp_headers() {
   # Create main directories
@@ -166,9 +231,48 @@ rm -rf build-ios
 # build_framework "tvOS" "arm64" "appletvos" "tvos-arm64" "build-tvos"
 # rm -rf build-tvos
 
-t1=$(date +%s)
-echo "Total time: $((t1 - t0)) seconds"
+# Execute based on command line options
+if $COPY_ONLY; then
+    # Only copy the framework to SDK
+    copy_to_sdk
+    exit 0
+fi
 
-echo "Build completed successfully!"
-echo "xcframework is available at: $ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework"
-echo "The project is configured to use this xcframework directly via absolute path reference."
+if $BUILD_ONLY || $BUILD_AND_COPY; then
+    # Build the framework
+    t0=$(date +%s)
+    
+    rm -rf build-ios
+    mkdir -p build-ios
+    
+    # Build iOS frameworks
+    build_framework "iOS" "arm64;x86_64" "iphonesimulator" "ios-arm64_x86_64-simulator" "build-ios"
+    build_framework "iOS" "arm64" "iphoneos" "ios-arm64" "build-ios"
+    rm -rf build-ios
+    
+    # Skip tvOS build for now
+    # rm -rf build-tvos
+    # mkdir -p build-tvos
+    
+    # Build tvOS frameworks
+    # build_framework "tvOS" "arm64;x86_64" "appletvsimulator" "tvos-arm64_x86_64-simulator" "build-tvos"
+    # build_framework "tvOS" "arm64" "appletvos" "tvos-arm64" "build-tvos"
+    # rm -rf build-tvos
+    
+    t1=$(date +%s)
+    echo "Build completed successfully!"
+    echo "Total time: $((t1 - t0)) seconds"
+    echo "xcframework is available at: $ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework"
+    echo "The project is configured to use this xcframework directly via absolute path reference."
+fi
+
+# If build-and-copy option was selected, copy the framework to SDK
+if $BUILD_AND_COPY; then
+    copy_to_sdk
+fi
+
+if [ $BUILD_ONLY = false ] && [ $COPY_ONLY = false ] && [ $BUILD_AND_COPY = false ]; then
+    # Default: build only
+    echo "No action specified, defaulting to --build-only"
+    exit 0
+fi

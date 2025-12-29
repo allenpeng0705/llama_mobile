@@ -18,3 +18,6 @@ examples/.DS_Store
 /examples/iOSFrameworkExample/iOSFrameworkExample/models
 /examples/iOSFrameworkExample/models
 /examples/iOSFrameworkExample/build
+/llama_mobile-ios-SDK/.build
+/llama_mobile-ios-SDK/examples/iOSSDKExample/.build
+/examples/androidLibExample/.gradle
