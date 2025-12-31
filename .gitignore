@@ -22,3 +22,11 @@ examples/.DS_Store
 /llama_mobile-ios-SDK/examples/iOSSDKExample/.build
 /examples/androidLibExample/.gradle
 /examples/androidSDKExample/.gradle
+/build-ios
+/lib/test_build
+/llama_mobile-flutter-SDK/build-ios
+/llama_mobile-ios/build-ios/build
+/llama_mobile-ios/build/build
+/test_build
+/llama_mobile-ios/build-ios
+/llama_mobile-ios/build

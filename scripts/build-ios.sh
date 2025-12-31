@@ -10,17 +10,25 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  -h, --help         Show this help message and exit"
+    echo "  --enable-kleidiai  Enable KleidiAI for ARM optimization (disabled by default)"
     exit 0
 }
 
 # Parse command line arguments
+# ENABLE_KLEIDIAI="false"
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        -h|--help) show_help ;;
-        *) echo "Unknown parameter: $1" ; show_help ;;
+        -h|--help)
+            show_help 
+            ;;
+        # --enable-kleidiai)
+        #     ENABLE_KLEIDIAI="true"
+        #     shift
+        #     ;;
+        *) 
+            echo "Unknown parameter: $1" ; show_help 
+            ;;
     esac
-    shift
-
 done
 
 if ! command -v cmake &> /dev/null; then
@@ -90,7 +98,7 @@ function cp_headers() {
   fi
   
   # Copy the public API headers
-  for header in "llama_mobile_unified.h" "llama_mobile_ffi.h" "llama_mobile_api.h"; do
+  for header in "llama_mobile_unified.h" "llama_mobile_ffi.h" "llama_mobile_api.h" "llama_mobile_mnn.h"; do
     if ! cp "$ROOT_DIR/lib/$header" "$HEADER_DIR/"; then
       echo "✗ Failed to copy header: $header"
       exit 1
@@ -145,6 +153,12 @@ function build_framework() {
   # Configure CMake
   echo -n "Configuring CMake for $4... "
   
+  # Set KleidiAI option
+  # KLEIDIAI_OPTION="-DMNN_KLEIDIAI=OFF"
+  # if [ "$ENABLE_KLEIDIAI" = "true" ]; then
+  #   KLEIDIAI_OPTION="-DMNN_KLEIDIAI=ON"
+  # fi
+  
   if ! cmake "$ROOT_DIR/llama_mobile-ios" \
     -GXcode \
     -DCMAKE_SYSTEM_NAME=$1 \
@@ -152,7 +166,9 @@ function build_framework() {
     -DCMAKE_OSX_SYSROOT=$3 \
     -DCMAKE_INSTALL_PREFIX="$(pwd)/install" \
     -DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH=NO \
-    -DCMAKE_IOS_INSTALL_COMBINED=YES; then
+    -DCMAKE_IOS_INSTALL_COMBINED=YES \
+    -DMNN_USE_NEON=OFF \
+    -DMNN_USE_SSE=OFF; then
     echo "✗"
     echo "CMake configuration failed!"
     exit 1
@@ -163,7 +179,7 @@ function build_framework() {
   echo -n "Building framework for $4... "
   NUM_CORES=$(sysctl -n hw.logicalcpu)
   
-  if ! cmake --build . --config Release -j $NUM_CORES; then
+  if ! cmake --build . --config Release -j $NUM_CORES -v; then
     echo "✗"
     echo "Build failed!"
     exit 1

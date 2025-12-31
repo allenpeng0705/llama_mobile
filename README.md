@@ -13,6 +13,7 @@ llama_mobile is a mobile-first AI framework that brings the power of llama.cpp t
 - **lib/**: Main library directory containing:
   - **lib/tests/**: Tests for the C/C++ source code
   - **lib/llama_cpp/**: Core llama.cpp implementation
+  - **lib/MNN/**: MNN (Mobile Neural Network) inference engine integration
   - Mobile-specific adaptations and optimizations
   - Various GGUF models (normal, embedding, VLM, multimodal)
 
@@ -22,6 +23,23 @@ llama_mobile is a mobile-first AI framework that brings the power of llama.cpp t
 - **llama_mobile-flutter-SDK/**: Flutter plugin project folder
 - **scripts/**: Build and utility scripts
 - **CMakeLists.txt**: Build configuration for the core library
+
+### Performance Optimizations
+
+- **iOS**: 
+  - Metal GPU acceleration enabled for both llama.cpp and MNN inference engines
+  - Automatic detection of Apple Silicon (arm64) architecture
+  - Optimized shaders for tensor operations and matrix multiplications
+
+- **Android**: 
+  - ARM Neon SIMD acceleration enabled for both llama.cpp and MNN on ARM architectures (armeabi-v7a and arm64-v8a)
+  - Multi-threading support for CPU-based inference
+  - Optimized for mobile CPU architectures
+
+- **Cross-Platform**: 
+  - Both llama.cpp and MNN inference engines are supported
+  - Automatic engine selection based on platform capabilities
+  - Unified API for consistent development across platforms
 
 ### Planned Components
 
@@ -43,11 +61,22 @@ The project contains various build scripts:
 ### Build Core Library
 
 ```bash
-# Build core library
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
+# Build core library with default settings (KleidiAI disabled)
+./scripts/build_lib.sh
+
+# Build core library with KleidiAI enabled for ARM optimization
+./scripts/build_lib.sh --enable-kleidiai
+
+# Build core library with tests enabled
+./scripts/build_lib.sh --enable-tests
+
+# Build core library with both KleidiAI and tests enabled
+./scripts/build_lib.sh --enable-kleidiai --enable-tests
 ```
+
+**Build Options**:
+- `--enable-kleidiai`: Enable KleidiAI for ARM optimization
+- `--enable-tests`: Include test targets in the build (disabled by default to avoid linker errors)
 
 ### Build iOS Framework
 
@@ -59,9 +88,17 @@ make -j$(nproc)
 ### Build Android Library and SDK
 
 ```bash
-# Build Android library and SDK
+# Build Android library and SDK (KleidiAI enabled by default for ARM optimization)
 ./build-android.sh
+
+# Build for specific ABIs only
+./build-android.sh --abi=arm64-v8a
+
+# Build with specific NDK version
+./build-android.sh --ndk-version=29.0.14206865
 ```
+
+**Note**: KleidiAI is enabled by default for Android builds to provide optimal ARM performance on Android devices. This optimization enhances matrix multiplication operations using ARM Neon SIMD instructions.
 
 ### Build and Run Tests
 
@@ -163,11 +200,22 @@ Stay tuned for updates as we continue to develop and expand the framework!
 ### Core Library
 
 ```bash
-# Build core library
+# Build core library with KleidiAI enabled (default)
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
+
+# Build core library with KleidiAI disabled
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release -DMNN_KLEIDIAI=OFF
+make -j$(nproc)
 ```
+
+#### KleidiAI Build Options
+
+- `-DMNN_KLEIDIAI=ON/OFF`: Enable or disable KleidiAI for ARM optimization (default: ON)
+- KleidiAI provides ARM-optimized kernels for improved performance on ARM architectures
+- When disabled, the build falls back to regular ARM implementation
 
 ### iOS Framework
 

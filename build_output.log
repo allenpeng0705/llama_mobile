@@ -1,0 +1,8 @@
+Unknown parameter: --verbose
+Usage: ./scripts/build-ios.sh [OPTIONS]
+
+Builds the llama_mobile iOS framework and copies it to the Swift SDK.
+
+Options:
+  -h, --help         Show this help message and exit
+  --enable-kleidiai  Enable KleidiAI for ARM optimization (disabled by default)

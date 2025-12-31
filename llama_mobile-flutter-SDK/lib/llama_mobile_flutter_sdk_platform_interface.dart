@@ -7,17 +7,20 @@ class ModelConfig {
   final String modelPath;
   final int contextSize;
   final bool useMemoryCache;
+  final String inferenceEngine;
 
   ModelConfig({
     required this.modelPath,
     this.contextSize = 1024,
     this.useMemoryCache = true,
+    this.inferenceEngine = 'llama.cpp',
   });
 
   Map<String, dynamic> toJson() => {
         'modelPath': modelPath,
         'contextSize': contextSize,
         'useMemoryCache': useMemoryCache,
+        'inferenceEngine': inferenceEngine,
       };
 }
 

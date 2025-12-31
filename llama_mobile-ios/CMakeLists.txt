@@ -17,6 +17,9 @@ if(NOT GGML_BUILD_COMMIT)
     set(GGML_BUILD_COMMIT "unknown")
 endif()
 
+# Add KleidiAI option with default OFF
+#option(MNN_KLEIDIAI "Enable KleidiAI for ARM optimization" OFF)
+
 # Dependencies and compile options
 add_definitions(
     -DNDEBUG
@@ -25,20 +28,85 @@ add_definitions(
     -DLM_GGML_USE_ACCELERATE
     -DLM_GGML_USE_METAL
     -DLM_GGML_METAL_USE_BF16
-    -DLM_GGML_VERSION="${GGML_VERSION}"
-    -DLM_GGML_COMMIT="${GGML_BUILD_COMMIT}"
+    # MNN compile definitions
+    -DMNN_BUILD_SHARED_LIBS=OFF
+    # Don't use Android logcat for iOS builds
+    # -DMNN_USE_LOGCAT=false
+    -DMNN_METAL
+    -DMNN_USE_METAL
+    -DLM_MNN_SUPPORT=1
+    #-DMNN_KLEIDIAI=${MNN_KLEIDIAI}
+    # Ensure C++ types are available
+    -D__STDC_LIMIT_MACROS
+    -D__STDC_FORMAT_MACROS
+    -D__STDC_CONSTANT_MACROS
+    # Explicitly disable NEON and SSE by default for all architectures
+    -DMNN_USE_NEON=0
+    -DMNN_USE_SSE=0
 )
+
+# Architecture-specific settings
+set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64")
+
+# For fat libraries (arm64 + x86_64), we need to handle NEON carefully
+# MNN uses conditional compilation in their source files with #ifdef MNN_USE_NEON
+# We'll let the Xcode build system handle this with per-architecture flags
 
 # Set the source directory to the lib/ directory for llama_mobile files
 # and lib/llama_cpp for llama.cpp files
 set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../lib)
 set(LLAMA_CPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../lib/llama_cpp)
 
+# Collect MNN source files using GLOB
+file(GLOB MNN_CORE_SOURCES "${SOURCE_DIR}/MNN/source/core/*.cpp")
+file(GLOB MNN_CV_SOURCES "${SOURCE_DIR}/MNN/source/cv/*.cpp")
+file(GLOB MNN_MATH_SOURCES "${SOURCE_DIR}/MNN/source/math/*.cpp")
+file(GLOB MNN_UTILS_SOURCES "${SOURCE_DIR}/MNN/source/utils/*.cpp")
+file(GLOB MNN_SHAPE_SOURCES "${SOURCE_DIR}/MNN/source/shape/*.cpp")
+file(GLOB MNN_GEOMETRY_SOURCES "${SOURCE_DIR}/MNN/source/geometry/*.cpp")
+file(GLOB MNN_CPU_SOURCES "${SOURCE_DIR}/MNN/source/backend/cpu/*.cpp" "${SOURCE_DIR}/MNN/source/backend/cpu/*.c")
+file(GLOB MNN_CPU_ARM_SOURCES "${SOURCE_DIR}/MNN/source/backend/cpu/arm/*.cpp" "${SOURCE_DIR}/MNN/source/backend/cpu/arm/*.c" "${SOURCE_DIR}/MNN/source/backend/cpu/arm/*.S" "${SOURCE_DIR}/MNN/source/backend/cpu/arm/arm32/*.S" "${SOURCE_DIR}/MNN/source/backend/cpu/arm/arm64/*.S")
+
+# Include x86 and x86_x64 sources for iOS builds since we support both arm64 and x86_64 architectures
+file(GLOB MNN_CPU_X86_SOURCES "${SOURCE_DIR}/MNN/source/backend/cpu/x86/*.cpp" "${SOURCE_DIR}/MNN/source/backend/cpu/x86/*.c" "${SOURCE_DIR}/MNN/source/backend/cpu/x86/*.cc")
+
+# Only include specific x86_x64 base files, not the entire directory
+set(MNN_CPU_X86_X64_BASE_SOURCES
+    "${SOURCE_DIR}/MNN/source/backend/cpu/x86_x64/FunctionDispatcher.cpp"
+    "${SOURCE_DIR}/MNN/source/backend/cpu/x86_x64/cpu_id.cc"
+)
+
+# Collect compute sources first
+file(GLOB MNN_CPU_COMPUTE_SOURCES "${SOURCE_DIR}/MNN/source/backend/cpu/compute/*.cpp")
+
+# Only include base x86_x64 sources (no SSE)
+set(MNN_CPU_X86_X64_SOURCES
+    ${MNN_CPU_X86_X64_BASE_SOURCES}
+)
+
+
+
+file(GLOB MNN_EXPRESS_SOURCES "${SOURCE_DIR}/MNN/express/*.cpp")
+file(GLOB MNN_EXPRESS_MODULE_SOURCES "${SOURCE_DIR}/MNN/express/module/*.cpp")
+file(GLOB_RECURSE MNN_LLM_SOURCES "${SOURCE_DIR}/MNN/transformers/llm/engine/src/*.cpp")
+
+# Keep all compute files since we're not using SSE optimized versions
+
+# Exclude KleidiAI files from ARM sources (they will be added separately if enabled)
+list(FILTER MNN_CPU_ARM_SOURCES EXCLUDE REGEX "mnn_kleidiai\.(cpp|c)$|mnn_kleidiai_util\.(cpp|c)$")
+
+# Add KleidiAI source files if enabled
+# if(MNN_KLEIDIAI)
+#     message(STATUS "Including KleidiAI source files for iOS")
+#     list(APPEND MNN_CPU_ARM_SOURCES "${SOURCE_DIR}/MNN/source/backend/cpu/arm/mnn_kleidiai.cpp" "${SOURCE_DIR}/MNN/source/backend/cpu/arm/mnn_kleidiai_util.cpp")
+# endif()
+
 # Define public headers - expose all necessary API headers
 set(PUBLIC_HEADERS
     ${SOURCE_DIR}/llama_mobile_unified.h
     ${SOURCE_DIR}/llama_mobile_ffi.h
     ${SOURCE_DIR}/llama_mobile_api.h
+    ${SOURCE_DIR}/llama_mobile_mnn.h
 )
 
 # Create library target
@@ -56,6 +124,7 @@ add_library(llama_mobile SHARED
     ${SOURCE_DIR}/llama_mobile_chat.cpp
     ${SOURCE_DIR}/llama_mobile_ffi.cpp
     ${SOURCE_DIR}/llama_mobile_api.cpp
+    ${SOURCE_DIR}/llama_mobile_mnn.cpp
     ${LLAMA_CPP_DIR}/llama.cpp
     ${LLAMA_CPP_DIR}/llama-mmap.cpp
     ${LLAMA_CPP_DIR}/llama-memory.cpp
@@ -237,6 +306,67 @@ add_library(llama_mobile SHARED
     ${LLAMA_CPP_DIR}/tools/mtmd/models/qwen3vl.cpp
     ${LLAMA_CPP_DIR}/tools/mtmd/models/siglip.cpp
     ${LLAMA_CPP_DIR}/tools/mtmd/models/whisper-enc.cpp
+
+    # MNN source files - collected using file(GLOB) above
+    ${MNN_CORE_SOURCES}
+    ${MNN_CV_SOURCES}
+    ${MNN_MATH_SOURCES}
+    ${MNN_UTILS_SOURCES}
+    ${MNN_SHAPE_SOURCES}
+    ${MNN_GEOMETRY_SOURCES}
+    ${MNN_CPU_SOURCES}
+    ${MNN_CPU_X86_SOURCES}
+    ${MNN_CPU_X86_X64_SOURCES}
+    ${MNN_EXPRESS_SOURCES}
+    ${MNN_EXPRESS_MODULE_SOURCES}
+    ${MNN_CPU_COMPUTE_SOURCES}
+    ${MNN_LLM_SOURCES}
+
+    # Only include ARM sources for ARM64 architectures
+    ${MNN_CPU_ARM_SOURCES}
+
+    # MNN Metal backend sources for Apple platforms
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalBackend.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalUnary.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalRaster.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalScale.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalSoftmax.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalReduction.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalReLU6.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalPReLU.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalROIPooling.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalMatMul.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalPooling.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalLoop.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalOPRegister.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalLayerNorm.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalFuse.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalInterp.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalGridSample.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalDeconvolution.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalExecution.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalEltwise.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalKVCacheManager.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalConvolutionWinograd.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalConvolutionCommon.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalConvolutionDepthwise.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalConvolution.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalConvolution1x1.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalCast.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalBinary.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalAttention.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/MetalArgMax.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/AllShader.cpp
+    ${SOURCE_DIR}/MNN/source/backend/metal/ShaderMap.cpp
+    ${SOURCE_DIR}/MNN/source/backend/metal/MNNMetalContext.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/render/MetalRenderOpRegister.mm
+    ${SOURCE_DIR}/MNN/source/backend/metal/render/MetalRasterAndInterpolate.mm
+)
+
+# Add LM_GGML_VERSION and LM_GGML_COMMIT specifically to the target
+target_compile_definitions(llama_mobile PRIVATE
+    -DLM_GGML_VERSION="0.0.0"
+    -DLM_GGML_COMMIT="unknown"
 )
 
 # Setup include directories, use both lib/ and lib/llama_cpp directories
@@ -246,6 +376,16 @@ target_include_directories(llama_mobile
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/llama_cpp>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/llama_cpp/ggml-cpu>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/llama_cpp/tools/mtmd>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/MNN/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/MNN/source>
+
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/MNN/express>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/MNN/tools/cpp>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/MNN/schema/current>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/MNN/transformers/llm/engine/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/MNN/3rd_party>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/MNN/3rd_party/half>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/MNN/3rd_party/flatbuffers/include>
         $<INSTALL_INTERFACE:include>
 )
 
@@ -256,6 +396,22 @@ target_link_libraries(llama_mobile PRIVATE
     "-framework Metal"
     "-framework MetalKit"
 )
+
+# Set C++17 standard for all C++ files including .cc files
+target_compile_options(llama_mobile PRIVATE
+    $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>
+)
+
+# Explicitly set C++17 for .cc files
+source_group("Source Files\\cc" FILES ${MNN_CPU_X86_X64_SOURCES} ${MNN_CPU_X86_SOURCES})
+set_source_files_properties(${MNN_CPU_X86_X64_SOURCES} ${MNN_CPU_X86_SOURCES} PROPERTIES
+    COMPILE_LANGUAGE CXX
+    COMPILE_FLAGS "-std=c++17"
+)
+
+
+
+
 
 # Set properties for framework
 set_target_properties(llama_mobile PROPERTIES
@@ -271,6 +427,25 @@ set_target_properties(llama_mobile PROPERTIES
     XCODE_ATTRIBUTE_DEFINE_MODULE YES
     XCODE_ATTRIBUTE_MACH_O_TYPE mh_dylib
 )
+
+# Add Xcode-specific settings (no SSE exclusion needed anymore)
+if(APPLE AND CMAKE_GENERATOR STREQUAL "Xcode")
+    
+    # No SSE files to exclude anymore since we're using compute sources for all architectures
+    
+    # No need to exclude compute files from x86_64 builds anymore
+    set(COMPUTE_X86_64_EXCLUDE "")
+    foreach(COMPUTE_FILE ${MNN_CPU_COMPUTE_SOURCES})
+        if(COMPUTE_FILE MATCHES ".*/CommonOptFunction\.cpp$" OR 
+           COMPUTE_FILE MATCHES ".*/ImageProcessFunction\.cpp$" OR 
+           COMPUTE_FILE MATCHES ".*/Int8FunctionsOpt\.cpp$")
+            file(RELATIVE_PATH REL_FILE ${CMAKE_CURRENT_SOURCE_DIR} ${COMPUTE_FILE})
+            set(COMPUTE_X86_64_EXCLUDE "${COMPUTE_X86_64_EXCLUDE}${REL_FILE} ")
+        endif()
+    endforeach()
+    
+    # No need to exclude any files anymore - all compute sources are used for all architectures
+endif()
 
 # Custom command to ensure headers are copied to the framework
 add_custom_command(

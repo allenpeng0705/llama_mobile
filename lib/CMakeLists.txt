@@ -1,8 +1,19 @@
 cmake_minimum_required(VERSION 3.10)
-project(llama_mobile_core)
+project(llama_mobile_core LANGUAGES C CXX ASM)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Enable assembly language support
+if(MSVC)
+    enable_language(ASM_MARMASM)
+else()
+    enable_language(ASM)
+endif()
+
+# Add KleidiAI option
+option(MNN_KLEIDIAI "Enable KleidiAI for ARM optimization" OFF)
+option(MNN_KLEIDIAI_DEFAULT_ON "Use KleidiAI kernels by default" OFF)
 
 set(LLAMA_MOBILE_CORE_SOURCES
     llama_mobile_context.cpp
@@ -18,6 +29,7 @@ set(LLAMA_MOBILE_CORE_SOURCES
     llama_mobile_tts.cpp
     llama_mobile_bench.cpp
     llama_mobile_chat.cpp
+    llama_mobile_mnn.cpp
     llama_cpp/ggml.c
     llama_cpp/ggml-alloc.c
     llama_cpp/ggml-backend.cpp
@@ -207,6 +219,145 @@ set(LLAMA_MOBILE_CORE_SOURCES
     llama_cpp/models/xverse.cpp
     llama_cpp/version.cpp
 
+    # MNN source files - will be collected using file(GLOB) below
+
+)
+
+# Collect MNN source files using GLOB
+file(GLOB MNN_CORE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/core/*.cpp")
+file(GLOB MNN_CV_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/cv/*.cpp")
+file(GLOB MNN_MATH_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/math/*.cpp")
+file(GLOB MNN_UTILS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/utils/*.cpp")
+file(GLOB MNN_SHAPE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/shape/*.cpp")
+file(GLOB MNN_GEOMETRY_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/geometry/*.cpp")
+file(GLOB MNN_CPU_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/*.c")
+file(GLOB MNN_CPU_COMPUTE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/compute/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/compute/*.c")
+
+# Collect MNN CPU ARM sources, excluding KleidiAI files (they will be added separately if enabled)
+file(GLOB MNN_CPU_ARM_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/arm/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/arm/*.c" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/arm/*.S" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/arm/arm32/*.S" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/arm/arm64/*.S")
+list(FILTER MNN_CPU_ARM_SOURCES EXCLUDE REGEX "mnn_kleidiai\\.(cpp|c)$|mnn_kleidiai_util\\.(cpp|c)$")
+
+# Add KleidiAI source files if enabled
+if(MNN_KLEIDIAI)
+    message(STATUS "Including KleidiAI source files")
+    
+    # Add MNN's KleidiAI wrapper files
+    list(APPEND MNN_CPU_ARM_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/arm/mnn_kleidiai.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/arm/mnn_kleidiai_util.cpp")
+    
+    # Define preprocessor macros based on enabled features
+    if(MNN_SME2)
+        add_definitions(-DMNN_SME2=1)
+    else()
+        add_definitions(-DMNN_SME2=0)
+    endif()
+    
+    # Add the include directories for KleidiAI
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/pack)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/matmul_clamp_f32_qai8dxp_qsi4cxp)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/matmul_clamp_f16_qsi8d32p_qai4c32p)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/matmul_clamp_f32_qsi8d32p_qai4c32p)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/matmul_clamp_f32_f32p_f32p)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/matmul_clamp_f16_f16p_f16p)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/matmul_clamp_f16_bf16p_bf16p)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/matmul_clamp_f32_f32_f32p)
+    include_directories(${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/matmul_clamp_f16_f16_f16p)
+    
+    # Add KleidiAI core source files
+    # Exclude SME2 files from general pack sources unless MNN_SME2 is enabled
+    # Also filter out BF16/FP16 specific files as they require special compiler flags that may not be available
+    if(MNN_SME2)
+        file(GLOB KLEIDIAI_PACK_SOURCES_TMP "${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/pack/*.c" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/pack/*.S")
+    else()
+        # Get all .c and .S files
+        file(GLOB KLEIDIAI_PACK_SOURCES_TMP "${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/pack/*.c" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/pack/*.S")
+    endif()
+    
+    # Filter out files based on architecture and features
+    set(KLEIDIAI_PACK_SOURCES "")
+    foreach(file ${KLEIDIAI_PACK_SOURCES_TMP})
+        # Always filter out SME2 files when MNN_SME2 is not enabled
+        if(NOT MNN_SME2 AND (file MATCHES ".*_sme[^/]*\.(c|S)$" OR file MATCHES ".*_sme2_.*\.(c|S)$"))
+            continue()
+        endif()
+        
+        # Filter out BF16 specific files as they require special compiler flags
+        if(file MATCHES "bf16")
+            continue()
+        endif()
+        
+        # Filter out files requiring I8mm extension which may not be available
+        if(file MATCHES "_i8mm")
+            continue()
+        endif()
+        
+        list(APPEND KLEIDIAI_PACK_SOURCES ${file})
+    endforeach()
+    
+    list(APPEND MNN_CPU_ARM_SOURCES ${KLEIDIAI_PACK_SOURCES})
+    
+    # Add specific matmul source files
+    # Filter out SME2 files from matmul directories when MNN_SME2 is not enabled
+    # Also filter out BF16/FP16 specific files as they require special compiler flags that may not be available
+    macro(AddKleidiAIMatmulSources dir_name)
+        file(GLOB KLEIDIAI_MATMUL_SOURCES_TMP "${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/${dir_name}/*.c" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/matmul/${dir_name}/*.S")
+        set(KLEIDIAI_MATMUL_SOURCES "")
+        foreach(file ${KLEIDIAI_MATMUL_SOURCES_TMP})
+            # Skip SME2 files when MNN_SME2 is not enabled
+            if(NOT MNN_SME2 AND (file MATCHES ".*_sme[^/]*\.(c|S)$" OR file MATCHES ".*_sme2_.*\.(c|S)$"))
+                continue()
+            endif()
+            
+            # Skip BF16 specific files
+            if(file MATCHES "bf16")
+                continue()
+            endif()
+            
+            # Skip files requiring I8mm extension which may not be available
+            if(file MATCHES "_i8mm")
+                continue()
+            endif()
+            
+            list(APPEND KLEIDIAI_MATMUL_SOURCES ${file})
+        endforeach()
+        list(APPEND MNN_CPU_ARM_SOURCES ${KLEIDIAI_MATMUL_SOURCES})
+    endmacro()
+    
+    AddKleidiAIMatmulSources(matmul_clamp_f32_qai8dxp_qsi4cxp)
+    AddKleidiAIMatmulSources(matmul_clamp_f16_qsi8d32p_qai4c32p)
+    AddKleidiAIMatmulSources(matmul_clamp_f32_qsi8d32p_qai4c32p)
+    AddKleidiAIMatmulSources(matmul_clamp_f32_f32p_f32p)
+    AddKleidiAIMatmulSources(matmul_clamp_f16_f16p_f16p)
+    AddKleidiAIMatmulSources(matmul_clamp_f16_bf16p_bf16p)
+    AddKleidiAIMatmulSources(matmul_clamp_f32_f32_f32p)
+    AddKleidiAIMatmulSources(matmul_clamp_f16_f16_f16p)
+    
+    # Add SME2-specific files if enabled
+    if(MNN_SME2)
+        file(GLOB KLEIDIAI_SME2_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/ukernels/*/*_sme.c" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai/*_sme_asm.S")
+        list(APPEND MNN_CPU_ARM_SOURCES ${KLEIDIAI_SME2_SOURCES})
+    endif()
+endif()
+
+file(GLOB MNN_CPU_X86_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/x86/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/x86/*.c")
+file(GLOB MNN_EXPRESS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/MNN/express/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/MNN/express/module/*.cpp")
+file(GLOB_RECURSE MNN_LLM_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/MNN/transformers/llm/engine/src/*.cpp")
+
+# Append MNN sources to the core sources list
+list(APPEND LLAMA_MOBILE_CORE_SOURCES 
+    ${MNN_CORE_SOURCES}
+    ${MNN_CV_SOURCES}
+    ${MNN_MATH_SOURCES}
+    ${MNN_UTILS_SOURCES}
+    ${MNN_SHAPE_SOURCES}
+    ${MNN_GEOMETRY_SOURCES}
+    ${MNN_CPU_SOURCES}
+    ${MNN_CPU_COMPUTE_SOURCES}
+    ${MNN_CPU_ARM_SOURCES}
+    ${MNN_CPU_X86_SOURCES}
+    ${MNN_EXPRESS_SOURCES}
+    ${MNN_LLM_SOURCES}
 )
 
 # Add Metal sources on Apple platforms
@@ -218,6 +369,42 @@ if(APPLE)
         llama_cpp/ggml-metal-context.m
         llama_cpp/ggml-metal-common.cpp
         llama_cpp/ggml-metal-ops.cpp
+        # MNN Metal backend sources
+        MNN/source/backend/metal/MetalBackend.mm
+        MNN/source/backend/metal/MetalUnary.mm
+        MNN/source/backend/metal/MetalRaster.mm
+        MNN/source/backend/metal/MetalScale.mm
+        MNN/source/backend/metal/MetalSoftmax.mm
+        MNN/source/backend/metal/MetalReduction.mm
+        MNN/source/backend/metal/MetalReLU6.mm
+        MNN/source/backend/metal/MetalPReLU.mm
+        MNN/source/backend/metal/MetalROIPooling.mm
+        MNN/source/backend/metal/MetalMatMul.mm
+        MNN/source/backend/metal/MetalPooling.mm
+        MNN/source/backend/metal/MetalLoop.mm
+        MNN/source/backend/metal/MetalOPRegister.mm
+        MNN/source/backend/metal/MetalLayerNorm.mm
+        MNN/source/backend/metal/MetalFuse.mm
+        MNN/source/backend/metal/MetalInterp.mm
+        MNN/source/backend/metal/MetalGridSample.mm
+        MNN/source/backend/metal/MetalDeconvolution.mm
+        MNN/source/backend/metal/MetalExecution.mm
+        MNN/source/backend/metal/MetalEltwise.mm
+        MNN/source/backend/metal/MetalKVCacheManager.mm
+        MNN/source/backend/metal/MetalConvolutionWinograd.mm
+        MNN/source/backend/metal/MetalConvolutionCommon.mm
+        MNN/source/backend/metal/MetalConvolutionDepthwise.mm
+        MNN/source/backend/metal/MetalConvolution.mm
+        MNN/source/backend/metal/MetalConvolution1x1.mm
+        MNN/source/backend/metal/MetalCast.mm
+        MNN/source/backend/metal/MetalBinary.mm
+        MNN/source/backend/metal/MetalAttention.mm
+        MNN/source/backend/metal/MetalArgMax.mm
+        MNN/source/backend/metal/AllShader.cpp
+        MNN/source/backend/metal/ShaderMap.cpp
+        MNN/source/backend/metal/MNNMetalContext.mm
+        MNN/source/backend/metal/render/MetalRenderOpRegister.mm
+        MNN/source/backend/metal/render/MetalRasterAndInterpolate.mm
     )
 endif()
 
@@ -246,6 +433,18 @@ target_include_directories(llama_mobile_core_static PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/ggml-cpu>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/minja>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/tools/mtmd>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/source>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/express>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/transformers/llm/engine/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/half>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/flatbuffers/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/schema/current>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/tools/cpp>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/x86_x64>
 )
 
 target_include_directories(llama_mobile_core_shared PUBLIC
@@ -254,6 +453,18 @@ target_include_directories(llama_mobile_core_shared PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/ggml-cpu>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/minja>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/tools/mtmd>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/source>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/express>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/transformers/llm/engine/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/half>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/flatbuffers/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/x86_x64>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kleidiai-1.14.0/kai>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/schema/current>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/tools/cpp>
 )
 
 target_include_directories(llama_mobile_core_lib PUBLIC
@@ -262,42 +473,37 @@ target_include_directories(llama_mobile_core_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/ggml-cpu>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/minja>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/tools/mtmd>
-
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/source>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/express>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/transformers/llm/engine/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/half>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/flatbuffers/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party/kleidiai/kai>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/schema/current>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/tools/cpp>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/source/backend/cpu/x86_x64>
 )
 
 if(NOT MSVC)
     target_compile_options(llama_mobile_core_lib PRIVATE -Wno-cast-qual)
 endif()
 
-# Get version information from the original llama.cpp source
-execute_process(COMMAND cat "${CMAKE_CURRENT_SOURCE_DIR}/../llama/ggml/CMakeLists.txt" 
-    COMMAND grep "set(GGML_VERSION_MAJOR" 
-    COMMAND awk -F " " "{print $2}" 
-    OUTPUT_VARIABLE GGML_VERSION_MAJOR 
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+# Get version information from the local ggml.h file
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/ggml.h" GGML_H_CONTENT)
+string(REGEX MATCH "#define LM_GGML_VERSION ([0-9]+)" _ "${GGML_H_CONTENT}")
+set(LM_GGML_VERSION "${CMAKE_MATCH_1}")
 
-execute_process(COMMAND cat "${CMAKE_CURRENT_SOURCE_DIR}/../llama/ggml/CMakeLists.txt" 
-    COMMAND grep "set(GGML_VERSION_MINOR" 
-    COMMAND awk -F " " "{print $2}" 
-    OUTPUT_VARIABLE GGML_VERSION_MINOR 
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
-execute_process(COMMAND cat "${CMAKE_CURRENT_SOURCE_DIR}/../llama/ggml/CMakeLists.txt" 
-    COMMAND grep "set(GGML_VERSION_PATCH" 
-    COMMAND awk -F " " "{print $2}" 
-    OUTPUT_VARIABLE GGML_VERSION_PATCH 
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-
-set(GGML_VERSION "${GGML_VERSION_MAJOR}.${GGML_VERSION_MINOR}.${GGML_VERSION_PATCH}")
+# Set a default version since we can't read from the original CMakeLists.txt
+set(GGML_VERSION "2.2.0")
 
 # Get git commit if available
 find_package(Git)
 if(GIT_FOUND)
     execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse --short HEAD
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../llama"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.."
         OUTPUT_VARIABLE GGML_BUILD_COMMIT
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
@@ -314,6 +520,36 @@ target_compile_definitions(llama_mobile_core_lib PUBLIC
     LM_GGML_VERSION="${GGML_VERSION}"
     LM_GGML_COMMIT="${GGML_BUILD_COMMIT}"
     $<$<BOOL:${GGML_NO_POSIX_MADVISE}>:GGML_NO_POSIX_MADVISE>
+    # MNN compile definitions
+    MNN_BUILD_SHARED_LIBS=OFF
+    $<$<BOOL:${ANDROID}>:MNN_ANDROID>
+    $<$<BOOL:${ANDROID}>:MNN_USE_LOGCAT>
+    $<$<BOOL:${APPLE}>:MNN_METAL>
+    $<$<BOOL:${APPLE}>:MNN_USE_METAL>
+    # Enable NEON and KleidiAI for ARM architectures
+    $<$<C_COMPILER_ID:AppleClang>:
+        $<$<PLATFORM_ID:iOS>:
+            $<$<EQUAL:${CMAKE_OSX_ARCHITECTURES},arm64>:MNN_USE_NEON=1>
+            $<$<EQUAL:${CMAKE_OSX_ARCHITECTURES},arm64>:MNN_KLEIDIAI>
+        >
+        $<$<PLATFORM_ID:macOS>:
+            $<$<EQUAL:${CMAKE_OSX_ARCHITECTURES},arm64>:MNN_USE_NEON=1>
+            $<$<EQUAL:${CMAKE_OSX_ARCHITECTURES},arm64>:MNN_KLEIDIAI>
+        >
+    >
+    $<$<C_COMPILER_ID:Clang>:
+        $<$<PLATFORM_ID:Android>:
+            $<$<STREQUAL:${ANDROID_ABI},armeabi-v7a>:MNN_USE_NEON=1>
+            $<$<STREQUAL:${ANDROID_ABI},arm64-v8a>:MNN_USE_NEON=1>
+            $<$<STREQUAL:${ANDROID_ABI},arm64-v8a>:MNN_KLEIDIAI>
+        >
+    >
+    # Also enable for generic ARM compilers
+    $<$<C_COMPILER_ID:ARMCC,ARMClang>:
+        MNN_USE_NEON=1
+        MNN_KLEIDIAI
+    >
+    LM_MNN_SUPPORT=1
 )
 
 target_compile_definitions(llama_mobile_core_static PUBLIC
@@ -322,6 +558,32 @@ target_compile_definitions(llama_mobile_core_static PUBLIC
     LM_GGML_VERSION="${GGML_VERSION}"
     LM_GGML_COMMIT="${GGML_BUILD_COMMIT}"
     $<$<BOOL:${GGML_NO_POSIX_MADVISE}>:GGML_NO_POSIX_MADVISE>
+    # MNN compile definitions
+    MNN_BUILD_SHARED_LIBS=OFF
+    MNN_USE_LOGCAT=false
+    $<$<BOOL:${ANDROID}>:MNN_ANDROID>
+    $<$<BOOL:${APPLE}>:MNN_METAL>
+    $<$<BOOL:${APPLE}>:MNN_USE_METAL>
+    # Enable NEON for ARM architectures
+    $<$<C_COMPILER_ID:AppleClang>:
+        $<$<PLATFORM_ID:iOS>:
+            $<$<EQUAL:${CMAKE_OSX_ARCHITECTURES},arm64>:MNN_USE_NEON>
+        >
+        $<$<PLATFORM_ID:macOS>:
+            $<$<EQUAL:${CMAKE_OSX_ARCHITECTURES},arm64>:MNN_USE_NEON>
+        >
+    >
+    $<$<C_COMPILER_ID:Clang>:
+        $<$<PLATFORM_ID:Android>:
+            $<$<STREQUAL:${ANDROID_ABI},armeabi-v7a>:MNN_USE_NEON>
+            $<$<STREQUAL:${ANDROID_ABI},arm64-v8a>:MNN_USE_NEON>
+        >
+    >
+    # Also enable for generic ARM compilers
+    $<$<C_COMPILER_ID:ARMCC,ARMClang>:
+        MNN_USE_NEON
+    >
+    LM_MNN_SUPPORT=1
 )
 
 target_compile_definitions(llama_mobile_core_shared PUBLIC
@@ -330,6 +592,32 @@ target_compile_definitions(llama_mobile_core_shared PUBLIC
     LM_GGML_VERSION="${GGML_VERSION}"
     LM_GGML_COMMIT="${GGML_BUILD_COMMIT}"
     $<$<BOOL:${GGML_NO_POSIX_MADVISE}>:GGML_NO_POSIX_MADVISE>
+    # MNN compile definitions
+    MNN_BUILD_SHARED_LIBS=OFF
+    MNN_USE_LOGCAT=false
+    $<$<BOOL:${ANDROID}>:MNN_ANDROID>
+    $<$<BOOL:${APPLE}>:MNN_METAL>
+    $<$<BOOL:${APPLE}>:MNN_USE_METAL>
+    # Enable NEON for ARM architectures
+    $<$<C_COMPILER_ID:AppleClang>:
+        $<$<PLATFORM_ID:iOS>:
+            $<$<EQUAL:${CMAKE_OSX_ARCHITECTURES},arm64>:MNN_USE_NEON>
+        >
+        $<$<PLATFORM_ID:macOS>:
+            $<$<EQUAL:${CMAKE_OSX_ARCHITECTURES},arm64>:MNN_USE_NEON>
+        >
+    >
+    $<$<C_COMPILER_ID:Clang>:
+        $<$<PLATFORM_ID:Android>:
+            $<$<STREQUAL:${ANDROID_ABI},armeabi-v7a>:MNN_USE_NEON>
+            $<$<STREQUAL:${ANDROID_ABI},arm64-v8a>:MNN_USE_NEON>
+        >
+    >
+    # Also enable for generic ARM compilers
+    $<$<C_COMPILER_ID:ARMCC,ARMClang>:
+        MNN_USE_NEON
+    >
+    LM_MNN_SUPPORT=1
 )
 
 if(APPLE)
@@ -338,6 +626,9 @@ if(APPLE)
     find_library(METAL_LIBRARY Metal)
     find_library(METALKIT_LIBRARY MetalKit)
 
+    # Add framework include directories
+    set(METAL_INCLUDE_DIRS ${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES})
+    
     if(FOUNDATION_LIBRARY AND ACCELERATE_FRAMEWORK)
         target_link_libraries(llama_mobile_core_lib PUBLIC
             ${FOUNDATION_LIBRARY}
@@ -364,6 +655,17 @@ if(APPLE)
     
     # Link Metal libraries on Apple platforms
     if(METAL_LIBRARY AND METALKIT_LIBRARY)
+        # Add Metal framework includes
+        target_include_directories(llama_mobile_core_lib PUBLIC
+            ${METAL_INCLUDE_DIRS}
+        )
+        target_include_directories(llama_mobile_core_static PUBLIC
+            ${METAL_INCLUDE_DIRS}
+        )
+        target_include_directories(llama_mobile_core_shared PUBLIC
+            ${METAL_INCLUDE_DIRS}
+        )
+        
         target_link_libraries(llama_mobile_core_lib PUBLIC
             ${METAL_LIBRARY}
             ${METALKIT_LIBRARY}

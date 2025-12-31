@@ -17,6 +17,7 @@ show_help() {
     echo "  -h, --help              Show this help message and exit"
     echo "  --abi=ABI1,ABI2         Specify which ABIs to build (default: arm64-v8a,x86_64)"
     echo "  --ndk-version=VERSION   Use specific NDK version (default: 29.0.14206865)"
+    echo "  --enable-kleidiai       Enable KleidiAI for ARM optimization (disabled by default)"
     echo ""
     echo "ANDROID_HOME Configuration:"
     echo "  The script automatically detects ANDROID_HOME from common SDK paths:"
@@ -31,6 +32,7 @@ show_help() {
 }
 
 # Default values
+#ENABLE_KLEIDIAI="false"
 
 # Parse command line arguments
 while [[ "$#" -gt 0 ]]; do
@@ -38,8 +40,10 @@ while [[ "$#" -gt 0 ]]; do
         -h|--help) show_help ;;
         --abi=*) ABIS="${1#*=}" ;;
         --ndk-version=*) NDK_VERSION="${1#*=}" ;;
+        #--enable-kleidiai) ENABLE_KLEIDIAI="true" ;;
         *) echo "Unknown parameter: $1" && show_help ;;
     esac
+    shift
 done
 
 # Simple logging function
@@ -217,7 +221,7 @@ for ABI in "${ABI_LIST[@]}"; do
     
     # Add platform-specific flags
     if [ "$ABI" = "arm64-v8a" ]; then
-        PLATFORM_FLAGS="-DGGML_NO_POSIX_MADVISE=ON"
+        PLATFORM_FLAGS="-DGGML_NO_POSIX_MADVISE=ON -DCMAKE_C_FLAGS=-march=armv8.2-a+fp16+dotprod -DCMAKE_CXX_FLAGS=-march=armv8.2-a+fp16+dotprod"
 
     else
         PLATFORM_FLAGS=""
@@ -225,6 +229,13 @@ for ABI in "${ABI_LIST[@]}"; do
     
     # Configure CMake
     echo -n "Configuring CMake for $ABI... "
+    
+    # Set KleidiAI option
+    # KLEIDIAI_OPTION="-DMNN_KLEIDIAI=OFF"
+    # if [ "$ENABLE_KLEIDIAI" = "true" ]; then
+    #   KLEIDIAI_OPTION="-DMNN_KLEIDIAI=ON"
+    # fi
+    
     CMAKE_COMMAND="cmake -S ./lib -B $BUILD_DIR \
         -DCMAKE_TOOLCHAIN_FILE=\"$CMAKE_TOOLCHAIN_FILE\" \
         -DANDROID_ABI=\"$ABI\" \
@@ -232,6 +243,9 @@ for ABI in "${ABI_LIST[@]}"; do
         -DCMAKE_BUILD_TYPE=\"$CMAKE_BUILD_TYPE\" \
         -DANDROID_STL=c++_shared \
         -DBUILD_SHARED_LIBS=ON \
+        -DMNN_ANDROID=ON \
+        -DMNN_BUILD_SHARED_LIBS=OFF \
+        -DMNN_USE_LOGCAT=false \
         $PLATFORM_FLAGS"
     
 
@@ -247,12 +261,14 @@ for ABI in "${ABI_LIST[@]}"; do
     
     # Build the library
     echo -n "Building library for $ABI... "
-    BUILD_COMMAND="cmake --build $BUILD_DIR --config \"$CMAKE_BUILD_TYPE\" -j \"$n_cpu\""
-
+    BUILD_COMMAND="cmake --build $BUILD_DIR --config \"$CMAKE_BUILD_TYPE\" -j \"$n_cpu\" --verbose"
     
-    if ! eval "$BUILD_COMMAND"; then
+    # Add timeout to prevent infinite hang
+    TIMEOUT_COMMAND="timeout 300s $BUILD_COMMAND"
+    
+    if ! eval "$TIMEOUT_COMMAND"; then
         echo "✗"
-        echo "Error: Build failed for $ABI!"
+        echo "Error: Build failed or timed out for $ABI!"
         echo "Please check the error messages above and try again."
         exit 1
     fi
@@ -336,13 +352,18 @@ add_definitions(
     -DLM_GGML_USE_CPU
     -DLM_GGML_USE_OPENCL=OFF
     -DGGML_NO_POSIX_MADVISE
+    -DMNN_ANDROID=ON
+    -DMNN_BUILD_SHARED_LIBS=OFF
+    -DMNN_USE_LOGCAT=false
 )
 
 # Include directories
 include_directories(
-    \"${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib\"
-    \"${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/llama_cpp\"
-    \"${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/llama_cpp/ggml-cpu\"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/llama_cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/llama_cpp/ggml-cpu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/MNN/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/MNN/transformers/llm/engine/include"
 )
 
 # Import the pre-built llama_mobile library
@@ -766,13 +787,18 @@ add_definitions(
     -DLM_GGML_USE_CPU
     -DLM_GGML_USE_OPENCL=OFF
     -DGGML_NO_POSIX_MADVISE
+    -DMNN_ANDROID=ON
+    -DMNN_BUILD_SHARED_LIBS=OFF
+    -DMNN_USE_LOGCAT=false
 )
 
 # Include directories
 include_directories(
-    \"\${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib\"
-    \"\${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/llama_cpp\"
-    \"\${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/llama_cpp/ggml-cpu\"
+    "\${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib"
+    "\${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/llama_cpp"
+    "\${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/llama_cpp/ggml-cpu"
+    "\${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/MNN/include"
+    "\${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/MNN/transformers/llm/engine/include"
 )
 
 # Import the pre-built llama_mobile library

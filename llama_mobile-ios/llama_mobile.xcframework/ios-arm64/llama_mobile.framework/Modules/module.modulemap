@@ -1,6 +1,0 @@
-framework module llama_mobile {
-    umbrella header "llama_mobile_unified.h"
-    
-    export *
-    module * { export * }
-}
