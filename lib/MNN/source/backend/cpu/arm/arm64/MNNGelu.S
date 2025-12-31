@@ -12,6 +12,7 @@
 .text
 .align 5
 
+#if MNN_USE_NEON
 asm_function MNNGelu
 //void MNNGelu(float* dst, const float* src, size_t size, float* parameters);
 
@@ -136,4 +137,6 @@ ldp d10, d11, [sp, #32]
 ldp d12, d13, [sp, #16]
 ldp d14, d15, [sp], #64
 ret
+
+#endif // MNN_USE_NEON
 #endif

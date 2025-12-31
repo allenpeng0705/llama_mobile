@@ -3783,6 +3783,32 @@ void MNNGeluStandardCommon(float* dst, const float* src, size_t size) {
     }
 }
 
+// Scalar implementation of MNNGelu for when neither SSE nor NEON is available
+#if !(MNN_USE_SSE || MNN_USE_NEON)
+void MNNGelu(float* dst, const float* src, size_t size, float* parameters) {
+    (void)parameters; // Unused in scalar implementation
+    auto tanhf_poly = [](float value) -> float {
+        if (value > 5.0f) {
+            return 1.0f;
+        } else if (value <= -5.0f) {
+            return -1.0f;
+        } else {
+            float x2 = value * value;
+            float a  = value * (135135.0f + x2 * (17325.0f + x2 * (378.0f + x2)));
+            float b  = 135135.0f + x2 * (62370.0f + x2 * (3150.0f + x2 * 28.0f));
+            return a / b;
+        }
+    };
+    // size represents the number of 8-float quad units to process
+    size_t totalSize = size * 8;
+    for (size_t i = 0; i < totalSize; i++) {
+        float temp = 0.044715f * src[i] * src[i] * src[i];
+        temp = 0.79788458f * (temp + src[i]);
+        dst[i] = (1.0f + tanhf_poly(temp)) * src[i] * 0.5f;
+    }
+}
+#endif
+
 void MNNGeluCommon(float* dst, const float* src, size_t size) {
     int sizeQuad = static_cast<int32_t>(size / 8);
     int remain = static_cast<int32_t>(size) % 8;
@@ -3799,22 +3825,15 @@ void MNNGeluCommon(float* dst, const float* src, size_t size) {
         ::memcpy(dst + 8 * sizeQuad, outmp, remain * sizeof(float));
     }
 #else
-    auto tanhf_poly = [](float value) -> float {
-        if (value > 5.0f) {
-            return 1.0f;
-        } else if (value <= -5.0f) {
-            return -1.0f;
-        } else {
-            float x2 = value * value;
-            float a  = value * (135135.0f + x2 * (17325.0f + x2 * (378.0f + x2)));
-            float b  = 135135.0f + x2 * (62370.0f + x2 * (3150.0f + x2 * 28.0f));
-            return a / b;
-        }
-    };
-    for (int i = 0; i < size; i++) {
-        float temp = 0.044715f * src[i] * src[i] * src[i];
-        temp = 0.79788458f * (temp + src[i]);
-        dst[i] = (1.0f + tanhf_poly(temp)) * src[i] * 0.5f;
+    // Call the scalar implementation directly
+    float parameters[8] = {0.044715f, 0.79788458f, 378.f, 17325.f, 135135.f, 28.f, 3150.f, 62370.f};
+    MNNGelu(dst, src, sizeQuad, parameters);
+    if (remain > 0) {
+        float intmp[8] = {0};
+        float outmp[8] = {0};
+        ::memcpy(intmp, src + 8 * sizeQuad, remain * sizeof(float));
+        MNNGelu(outmp, intmp, 1, parameters);
+        ::memcpy(dst + 8 * sizeQuad, outmp, remain * sizeof(float));
     }
 #endif
 }

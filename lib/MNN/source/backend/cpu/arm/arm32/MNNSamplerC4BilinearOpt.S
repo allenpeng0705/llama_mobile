@@ -8,6 +8,7 @@
 
 #ifdef __arm__
 #ifndef __aarch64__
+#if MNN_USE_NEON
 
 #include "MNNAsmGlobal.h"
 
@@ -319,5 +320,6 @@ vpop {q4-q7}
 pop {r4-r8, r10, r11, pc}
 
 
+#endif
 #endif
 #endif

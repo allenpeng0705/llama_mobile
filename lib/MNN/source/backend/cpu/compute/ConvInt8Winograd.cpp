@@ -261,8 +261,33 @@ static void mergeAddBiasScaleQuantize(const std::vector<Tensor*>& inputs, Tensor
 // AVX: 8 -> 16, arm32/64: 4 -> 16, AVX512: 16 -> 16, arm82: 4 -> 4
 static void _reorderCommon(float* dst, const float* src, size_t area, size_t depth, int* areaOffset, int uFrom, int uTo) {
     if (uFrom == 1 && uTo == 4) {
+#if MNN_USE_NEON
         MNNPackC4((float*)dst, (const float*)src, area, depth, areaOffset);
         return;
+#else
+        // Fall back to manual packing when NEON is disabled
+        int z = 0;
+        size_t srcOffset = areaOffset[0], dstOffset = areaOffset[1];
+        for (; z + 3 < depth; z += 4) {
+            auto srcZ = src + z * srcOffset;
+            auto dstZ = dst + z * dstOffset;
+            for (int i = 0; i < area; ++i) {
+                dstZ[i * 4] = srcZ[i];
+                dstZ[i * 4 + 1] = srcZ[srcOffset + i];
+                dstZ[i * 4 + 2] = srcZ[srcOffset * 2 + i];
+                dstZ[i * 4 + 3] = srcZ[srcOffset * 3 + i];
+            }
+        }
+        // Handle remaining channels
+        for (; z < depth; ++z) {
+            auto dstZ = dst + (z / uTo) * dstOffset * uTo + (z % uTo);
+            auto srcZ = src + (z / uFrom) * srcOffset * uFrom + (z % uFrom);
+            for (int i = 0; i < area; ++i) {
+                dstZ[i * uTo] = srcZ[i * uFrom];
+            }
+        }
+        return;
+#endif
     }
     if (uFrom == 1 && uTo == 2) {
         MNNPackInt8C2((float*)dst, (const float*)src, area, depth, areaOffset);

@@ -28,7 +28,7 @@ typedef SSIZE_T ssize_t;
 
 
 // Ensure MNN_USE_NEON is always defined (0 or 1)
-#if !MNN_USE_NEON
+#ifndef MNN_USE_NEON
 #if (__arm__ || __aarch64__) && (defined(__ARM_NEON__) || defined(__ARM_NEON))
 #if defined(__APPLE__) && TARGET_OS_SIMULATOR
 #define MNN_USE_NEON 0

@@ -104,8 +104,10 @@ void MNNPackTranspose(float* dst, const float* src, size_t area, size_t depth, i
 void MNNPackTransposeInt16(int16_t* dst, const int16_t* src, size_t area,size_t depth, int* areaOffset);
 void MNNPackTransposeUint8(uint8_t* dst, const uint8_t* src, size_t area,size_t depth, int* areaOffset);
 
+#if MNN_USE_NEON
 void MNNCopyC4WithStride(const float* source, float* dest, size_t srcStride, size_t dstStride, size_t count);
 void MNNAddC4WithStride(const float* source, float* dest, size_t srcStride, size_t dstStride, size_t count);
+#endif
 
 void MNNUInt8ToInt16WithOffsetC4Common(int16_t* dst, const uint8_t* src, size_t zeroPoint, size_t sizeQuad,
                                        size_t dstStride, size_t srcStride);
@@ -149,7 +151,9 @@ el: number * 4
  2: e-offset
  3: l-offset
  */
+#if MNN_USE_NEON
 void MNNPackC4ForMatMul_A(float* destOrigin, float const** sourceGroup, const int32_t* info, const int32_t* el);
+#endif
 
 void MNNPackForMatMul_B(float* dest, const float* source, size_t h, size_t kernelsize, size_t ic, bool transpose);
 
@@ -178,7 +182,9 @@ void MNNPackedSparseMatMulEpx4(float* C, const float* A, const float* B, size_t 
 
 int MNNGetC4DivNumber(int hP);
 
+#if MNN_USE_NEON
 void MNNAxByClampBroadcastUnit(float* C, const float* A, const float* B, size_t width, size_t cStride, size_t aStride, size_t height, const float* parameters);
+#endif
 
 // dim: 4-element, sizeDW, sizeDH, strideSW, strideDH
 void MNNTranspose32Bit(int32_t* dstO, const int32_t* srcO, int32_t* dim); // not C4
@@ -403,8 +409,10 @@ struct CoreFunctions {
     void(*MNNC3ToFloatC3)(const unsigned char* source, float* dest, const float* mean, const float* normal, size_t count);
     void(*MNNC3ToFloatRGBA)(const unsigned char* source, float* dest, const float* mean, const float* normal, size_t count);
     void(*MNNC3ToC4)(const unsigned char* source, unsigned char* dest, size_t count);
+#if MNN_USE_NEON
     void(*MNNSamplerC4BilinearOpt)(const unsigned char* source, unsigned char* dest, float* points, size_t count, size_t xMax, size_t yMax, size_t yStride);
     void(*MNNSamplerC1BilinearOpt)(const unsigned char* source, unsigned char* dest, float* points, size_t count, size_t xMax, size_t yMax, size_t yStride);
+#endif
     void(*MNNsampleBilinearCommon)(const unsigned char* source, unsigned char* dest, MNN::CV::Point* points, size_t count,
                                 size_t iw, size_t ih, size_t yStride, size_t bpp);
     void(*MNNSamplerC4Nearest)(const unsigned char* source, unsigned char* dest, MNN::CV::Point* points, size_t sta,

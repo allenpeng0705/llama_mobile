@@ -2440,6 +2440,9 @@ void MNNCoreInt8FunctionInit() {
     /* CoreInt8Functions without sdot */
     gCoreFunc = new CoreInt8Functions;
     auto core = MNNGetCoreFunctions();
+    
+    // Initialize to scalar implementation by default
+    core->MNNSumByAxisLForMatmul_A = MNNSumByAxisLForMatmul_A;
 
     // MatMul
 #if MNN_USE_NEON

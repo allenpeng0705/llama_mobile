@@ -30,3 +30,5 @@ examples/.DS_Store
 /test_build
 /llama_mobile-ios/build-ios
 /llama_mobile-ios/build
+/build-ios-device
+/build-ios-simulator

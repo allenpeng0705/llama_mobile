@@ -8,6 +8,7 @@
 
 #ifdef __arm__
 #ifndef __aarch64__
+#if MNN_USE_NEON
 
 #include "MNNAsmGlobal.h"
 
@@ -29,5 +30,6 @@ bne L1
 End:
 pop {pc}
 
+#endif // MNN_USE_NEON
 #endif
 #endif

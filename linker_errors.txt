@@ -1,0 +1,93 @@
+Undefined symbols for architecture arm64:
+   "_MNNAddC4WithStride", referenced from: 
+       MNN::MNNCoreFunctionInit() in CommonOptFunction.o 
+   "_MNNAvgPoolInt8", referenced from: 
+       MNN::MNNCoreInt8FunctionInit() in Int8FunctionsOpt.o 
+   "_MNNAxByClampBroadcastUnit", referenced from: 
+       MNN::MNNCoreFunctionInit() in CommonOptFunction.o 
+   "_MNNBGRAToBGRC8", referenced from: 
+       MNNBGRAToBGR(unsigned char const*, unsigned char*, unsigned long) in ImageProcessFunction.o 
+   "_MNNBGRAToGRAYFast", referenced from: 
+       MNNBGRAToGRAY(unsigned char const*, unsigned char*, unsigned long) in ImageProcessFunction.o 
+   "_MNNBGRToBGR555Fast", referenced from: 
+       MNNC3ToBGR555(unsigned char const*, unsigned char*, unsigned long, bool) in ImageProcessFunction.o 
+   "_MNNBGRToBGR565Fast", referenced from: 
+       MNNC3ToBGR565(unsigned char const*, unsigned char*, unsigned long, bool) in ImageProcessFunction.o 
+   "_MNNBGRToGRAYFast", referenced from: 
+       MNNBRGToGRAY(unsigned char const*, unsigned char*, unsigned long) in ImageProcessFunction.o 
+   "_MNNBlitC1ToFloatRGBA", referenced from: 
+       MNNC1ToFloatRGBA(unsigned char const*, float*, float const*, float const*, unsigned long) in ImageProcessFunction.o 
+   "_MNNBlitC3ToFloatRGBA", referenced from: 
+       MNNC3ToFloatRGBA(unsigned char const*, float*, float const*, float const*, unsigned long) in ImageProcessFunction.o 
+   "_MNNC3ToC4Fast", referenced from: 
+       MNNC3ToC4(unsigned char const*, unsigned char*, unsigned long) in ImageProcessFunction.o 
+   "_MNNC3ToXYZFast", referenced from: 
+       MNNC3ToXYZ(unsigned char const*, unsigned char*, unsigned long, bool) in ImageProcessFunction.o 
+   "_MNNC3ToYUVFast", referenced from: 
+       MNNC3ToYUV(unsigned char const*, unsigned char*, unsigned long, bool, bool) in ImageProcessFunction.o 
+   "_MNNConvRunForLineDepthwise", referenced from: 
+       MNN::MNNCoreFunctionInit() in CommonOptFunction.o 
+   "_MNNCopyC4WithStride", referenced from: 
+       MNN::MNNCoreFunctionInit() in CommonOptFunction.o 
+   "_MNNDeconvRunForUnitDepthWise", referenced from: 
+       MNN::MNNCoreFunctionInit() in CommonOptFunction.o 
+       _MNNDeconvRunForLineDepthwise in ConvOpt.o 
+   "_MNNDepthwiseConvFastKernel", referenced from: 
+       MNN::MNNCoreFunctionInit() in CommonOptFunction.o 
+   "_MNNFloat2Int8", referenced from: 
+       MNN::IdstConvolutionInt8::onExecute(std::__1::vector<MNN::Tensor*, std::__1::allocator<MNN::Tensor*>> const&, std::__1::vector<MNN::Tensor*, std::__1::allocator<MNN::Tensor*>> const&) in IdstConvolutionInt8.o 
+       MNN::MNNCoreInt8FunctionInit() in Int8FunctionsOpt.o 
+   "_MNNGRAYToC3Fast", referenced from: 
+       MNNGRAYToC3(unsigned char const*, unsigned char*, unsigned long) in ImageProcessFunction.o 
+   "_MNNGRAYToC4Fast", referenced from: 
+       MNNGRAYToC4(unsigned char const*, unsigned char*, unsigned long) in ImageProcessFunction.o 
+   "_MNNGelu", referenced from: 
+       _MNNGeluCommon in CommonOptFunction.o 
+       _MNNGeluCommon in CommonOptFunction.o 
+   "_MNNGemmInt8AddBiasScale_16x4_Unit", referenced from: 
+       MNN::MNNCoreInt8FunctionInit() in Int8FunctionsOpt.o 
+   "_MNNGemmInt8AddBiasScale_16x4_Unit_FAST", referenced from: 
+       MNN::MNNCoreInt8FunctionInit() in Int8FunctionsOpt.o 
+   "_MNNGemmInt8AddBiasScale_ARMV82_Unit", referenced from: 
+       MNN::MNNCoreInt8FunctionInit() in Int8FunctionsOpt.o 
+   "_MNNGemmInt8AddBiasScale_ARMV86_Unit", referenced from: 
+       MNN::MNNCoreInt8FunctionInit() in Int8FunctionsOpt.o 
+   "_MNNInt8ScaleToFloat", referenced from: 
+       MNN::MNNCoreInt8FunctionInit() in Int8FunctionsOpt.o 
+   "_MNNLineDepthWiseInt8AddBiasScaleUnit", referenced from: 
+       MNN::MNNCoreInt8FunctionInit() in Int8FunctionsOpt.o 
+   "_MNNLineDepthWiseInt8AddBiasScale_ARMV82_Unit3X3", referenced from: 
+       MNN::MNNCoreInt8FunctionInit() in Int8FunctionsOpt.o 
+   "_MNNMatrixAdd", referenced from: 
+       MNN::MNNCoreFunctionInit() in CommonOptFunction.o 
+       _MNNMatrixAddCommon in ConvOpt.o 
+   "_MNNMatrixMax", referenced from: 
+       _MNNMatrixMaxCommon in ConvOpt.o 
+   "_MNNMatrixProd", referenced from: 
+       _MNNMatrixProdCommon in ConvOpt.o 
+   "_MNNMatrixSub", referenced from: 
+       MNN::MNNCoreFunctionInit() in CommonOptFunction.o 
+       _MNNMatrixSubCommon in ConvOpt.o 
+   "_MNNMaxFloat", referenced from: 
+       MNN::MaxReduce::onReduce(float const*, float*, int, int, int) const in CPUReduction.o 
+       MNN::MaxReduce::onReduce(float const*, float*, int, int, int) const in CPUReduction.o 
+       ____ZN3MNN10CPUSoftmax14_softmaxCommonEPKhPh_block_invoke_2 in CPUSoftmax.o 
+   "_MNNMaxPoolInt8", referenced from: 
+       MNN::MNNCoreInt8FunctionInit() in Int8FunctionsOpt.o 
+   "_MNNMinFloat", referenced from: 
+       MNN::MinReduce::onReduce(float const*, float*, int, int, int) const in CPUReduction.o 
+       MNN::MinReduce::onReduce(float const*, float*, int, int, int) const in CPUReduction.o 
+   "_MNNNV21ToBGRAUnit", referenced from: 
+       MNNNV21ToBGRA(unsigned char const*, unsigned char*, unsigned long) in ImageProcessFunction.o 
+   "_MNNNV21ToBGRUnit", referenced from: 
+       MNNNV21ToBGR(unsigned char const*, unsigned char*, unsigned long) in ImageProcessFunction.o 
+   "_MNNNV21ToRGBAUnit", referenced from: 
+       MNNNV21ToRGBA(unsigned char const*, unsigned char*, unsigned long) in ImageProcessFunction.o 
+   "_MNNNV21ToRGBUnit", referenced from: 
+       MNNNV21ToRGB(unsigned char const*, unsigned char*, unsigned long) in ImageProcessFunction.o 
+   "_MNNPackC4", referenced from: 
+       MNN::MNNCoreFunctionInit() in CommonOptFunction.o 
+       _MNNPackC4Origin in CommonOptFunction.o 
+       ____ZN3MNN16ConvInt8Winograd13WinoExecution9onExecuteERKNSt3__16vectorIPNS_6TensorENS2_9allocatorIS5_EEEESA__block_invoke in ConvInt8Winograd.o 
+   "_MNNPackC4ForMatMul_A", referenced from: 
+       MNN::MNNCoreFunctionInit() in CommonOptFunction.o

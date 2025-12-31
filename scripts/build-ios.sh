@@ -354,13 +354,18 @@ t0=$(date +%s)
 # Build the framework
 # Clean existing xcframework to ensure we start fresh
 rm -rf "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework"
-rm -rf build-ios
-mkdir -p build-ios
 
 # Build iOS frameworks
-build_framework "iOS" "arm64;x86_64" "iphonesimulator" "ios-arm64_x86_64-simulator" "build-ios"
-build_framework "iOS" "arm64" "iphoneos" "ios-arm64" "build-ios"
-rm -rf build-ios
+# Build simulator first
+mkdir -p build-ios-simulator
+build_framework "iOS" "arm64;x86_64" "iphonesimulator" "ios-arm64_x86_64-simulator" "build-ios-simulator"
+
+# Build for device using separate directory
+mkdir -p build-ios-device
+build_framework "iOS" "arm64" "iphoneos" "ios-arm64" "build-ios-device"
+
+# Clean up build directories
+rm -rf build-ios-simulator build-ios-device
 
 # Skip tvOS build for now
 # rm -rf build-tvos

@@ -388,6 +388,10 @@
 		<data>
 		f2HHlx0DLsB8th0NQAZKxflx06U=
 		</data>
+		<key>Headers/llama_mobile_mnn.h</key>
+		<data>
+		wNOXOnVJZyJAy1bStO0v5RRlfgY=
+		</data>
 		<key>Headers/llama_mobile_unified.h</key>
 		<data>
 		e0SL5fLoH7cMarQ20qwS8PX95Z0=
@@ -1093,6 +1097,13 @@
 			<key>hash2</key>
 			<data>
 			n1PW2wDDx2WDc76JrTCMZtf4PoPN5E4M7Waqye/k6Ps=
+			</data>
+		</dict>
+		<key>Headers/llama_mobile_mnn.h</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			bjoROdYy3F9WOmlGgi4eX2myPrJDJwLLLBZBXX4ktnU=
 			</data>
 		</dict>
 		<key>Headers/llama_mobile_unified.h</key>

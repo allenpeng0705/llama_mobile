@@ -13,6 +13,7 @@
 .text
 .align 5
 
+#if MNN_USE_NEON
 asm_function MNNGelu
 //void MNNGelu(float* dst, const float* src, size_t size, float* parameters);
 
@@ -138,9 +139,10 @@ bne GeluZLoop
 
 
 GeluEnd:
-vpop {q4-q7}
-pop {r4-r8, r10, r11, pc}
+	vpop {q4-q7}
+	pop {r4-r8, r10, r11, pc}
 
+#endif // MNN_USE_NEON
 
 #endif
 #endif
