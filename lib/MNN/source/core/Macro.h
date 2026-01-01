@@ -33,6 +33,19 @@ typedef SSIZE_T ssize_t;
 #endif
 #endif
 
+// Ensure MNN_USE_NEON is properly disabled when explicitly set to OFF or 0
+#ifdef MNN_USE_NEON
+#define MNN_USE_NEON_VALUE MNN_USE_NEON
+#undef MNN_USE_NEON
+#if !defined(MNN_USE_NEON_VALUE) || MNN_USE_NEON_VALUE == 0 || MNN_USE_NEON_VALUE == OFF
+// Keep MNN_USE_NEON undefined
+#else
+// Restore MNN_USE_NEON definition
+#define MNN_USE_NEON
+#endif
+#undef MNN_USE_NEON_VALUE
+#endif
+
 #if defined(ENABLE_ARMV82)
 #if defined(MNN_BUILD_FOR_ANDROID) || defined(__aarch64__)
 #define MNN_USE_ARMV82

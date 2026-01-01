@@ -25,6 +25,7 @@
 extern "C" {
 #ifdef __aarch64__
 #ifdef MNN_LOW_MEMORY
+#ifdef MNN_USE_NEON
 void MNNGeneralIm2col_Fp32Arm82(float* destOrigin, float const** sourceGroup, const int32_t* info, const int32_t* el, int32_t LP, int32_t pack);
 void MNNGeneralIm2col_Fp32Arm86(float* destOrigin, float const** sourceGroup, const int32_t* info, const int32_t* el, int32_t LP, int32_t pack);
 void MNNGeneralIm2col_Fp32Sme2(float* destOrigin, float const** sourceGroup, const int32_t* info, const int32_t* el, int32_t LP, int32_t pack);
@@ -34,6 +35,7 @@ void MNNDynamicQuantFP32_Pack4(const float* src, int8_t* dst, const float* scale
 void MNNDynamicQuantFP32_Pack8(const float* src, int8_t* dst, const float* scale, size_t src_depth_quad, size_t realSize, const float* bias, size_t pack);
 void MNNAbsMaxFP32_Pack4(const float* source, float* absmax, size_t src_depth_quad, size_t realSize, int pack);
 void MNNAbsMaxFP32_Pack8(const float* source, float* absmax, size_t src_depth_quad, size_t realSize, int pack);
+#endif // MNN_USE_NEON
 void MNNQuantScaleFP32(float* absmax, float* quant_scale, float* dequant_scale, size_t thread, size_t batch);
 void MNNDynamicUpdateConvBiasScale(float* newbias, float* oldbias, float* weightKernelSum, float* inputZero, size_t ocQuad);
 #endif // MNN_LOW_MEMORY
@@ -47,6 +49,11 @@ void MNNPackedMatMulRemainFP32_SME2(float* C, const float* A, const float* B, si
 
 void MNNQuantAttentionKey(int8_t* dst, const float* source, float* sumKey, float* maxKey, int32_t* params);
 void MNNQuantAttentionValue(int8_t* dst, const float* source, float* valueQuantInfo, int32_t* params);
+
+// Scalar implementations for transpose operations
+void MNNTranspose32Bit(int32_t* dstO, const int32_t* srcO, int32_t* dim);
+void MNNTranspose16Bit(int16_t* dstO, const int16_t* srcO, int32_t* dim);
+
 
 void MNNFp32ToFp8(uint8_t* dst, const float* src, size_t size);
 void MNNFp8ToFp32(float* dst, const uint8_t* src, size_t size);
@@ -178,10 +185,6 @@ int MNNGetC4DivNumber(int hP);
 
 void MNNAxByClampBroadcastUnit(float* C, const float* A, const float* B, size_t width, size_t cStride, size_t aStride, size_t height, const float* parameters);
 
-// dim: 4-element, sizeDW, sizeDH, strideSW, strideDH
-void MNNTranspose32Bit(int32_t* dstO, const int32_t* srcO, int32_t* dim); // not C4
-void MNNTranspose16Bit(int16_t* dstO, const int16_t* srcO, int32_t* dim); // not C4
-
 void MNNVectorTop1Float(float* input, float* maxValue, int32_t* maxIndex, size_t inputCountUnit);
 void MNNVectorTop1Int32(int32_t* input, int32_t* maxValue, int32_t* maxIndex, size_t inputCountUnit);
 struct MatMulParam {
@@ -212,10 +215,12 @@ struct SumByAxisParams {
     ssize_t inputBlock;
 };
 #ifdef __aarch64__
+#ifdef MNN_USE_NEON
 void MNNPermuteSumWeightInt4Arm86(uint8_t* dest, uint8_t* source, size_t outside, size_t inside, float* kernelsum);
 void MNNPermuteSumWeightInt4Arm82(uint8_t* dest, uint8_t* source, size_t outside, size_t inside, float* kernelsum);
 void MNNSumWeightInt8Arm86(float* kernelsum, int8_t* source, size_t outside, size_t reduceAxis, size_t hP, size_t lP);
 void MNNSumWeightInt8Arm82(float* kernelsum, int8_t* source, size_t outside, size_t reduceAxis, size_t hP, size_t lP);
+#endif // MNN_USE_NEON
 #ifdef MNN_SME2
 void MNNSumWeightInt8Sme2_Hp32(float* kernelsum, int8_t* source, size_t outside, size_t reduceAxis, size_t hP, size_t lP);
 void MNNSumWeightInt8Sme2_Hp128(float* kernelsum, int8_t* source, size_t outside, size_t reduceAxis, size_t hP, size_t lP);

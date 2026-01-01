@@ -152,7 +152,9 @@ function build_framework() {
     -DCMAKE_OSX_SYSROOT=$3 \
     -DCMAKE_INSTALL_PREFIX="$(pwd)/install" \
     -DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH=NO \
-    -DCMAKE_IOS_INSTALL_COMBINED=YES; then
+    -DCMAKE_IOS_INSTALL_COMBINED=YES \
+    -DMNN_METAL=ON \
+    -DMNN_USE_NEON=OFF; then
     echo "✗"
     echo "CMake configuration failed!"
     exit 1

@@ -1,0 +1,387 @@
+[0;34m=== llama_mobile Build Script ===[0m
+[1;33mCleaning old build...[0m
+[0;32m✓ Old build cleaned[0m
+[0;34mBuilding llama_mobile...[0m
+-- The C compiler identification is AppleClang 17.0.0.17000404
+-- The CXX compiler identification is AppleClang 17.0.0.17000404
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+CMake Deprecation Warning at MNN/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+-- The ASM compiler identification is AppleClang
+-- Found assembler: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/cc
+CMake Warning at MNN/CMakeLists.txt:125 (message):
+  Close MNN_SEP_BUILD for static library
+
+
+-- Use Threadpool, forbid openmp
+-- >>>>>>>>>>>>>
+-- MNN BUILD INFO:
+-- 	System: Darwin
+-- 	Processor: arm64
+-- 	Version: 3.3.1
+-- 	Metal: ON
+-- 	OpenCL: OFF
+-- 	OpenGL: OFF
+-- 	Vulkan: OFF
+-- 	ARM82: OFF
+-- 	KleidiAI: ON
+-- 	oneDNN: OFF
+-- 	TensorRT: OFF
+-- 	CoreML: OFF
+-- 	NNAPI: OFF
+-- 	QNN: OFF
+-- 	CUDA: OFF
+-- 	OpenMP: OFF
+-- 	BF16: OFF
+-- 	ThreadPool: ON
+-- 	Hidden: TRUE
+-- 	Build Path: /Users/shileipeng/Documents/mygithub/llama_mobile/lib/build/MNN
+-- 	CUDA PROFILE: OFF
+-- CMAKE_OSX_ARCHITECTURES: 
+-- CMAKE_SYSTEM_PROCESSOR: arm64
+-- ARCHS: arm64
+-- MNN_USE_NEON: OFF
+-- Detected arm64 via traditional processor detection
+-- Final IS_ARM64: TRUE, IS_ARMV7: FALSE
+-- Skipping ARM Assemblies (MNN_USE_NEON=OFF)
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+cat: /Users/shileipeng/Documents/mygithub/llama_mobile/lib/../llama/ggml/CMakeLists.txt: No such file or directory
+cat: /Users/shileipeng/Documents/mygithub/llama_mobile/lib/../llama/ggml/CMakeLists.txt: No such file or directory
+cat: /Users/shileipeng/Documents/mygithub/llama_mobile/lib/../llama/ggml/CMakeLists.txt: No such file or directory
+-- Found Git: /usr/bin/git (found version "2.50.1 (Apple Git-155)")
+-- Configuring done (0.5s)
+-- Generating done (0.2s)
+-- Build files have been written to: /Users/shileipeng/Documents/mygithub/llama_mobile/lib/build
+[  0%] Building CXX object MNN/CMakeFiles/MNNCV.dir/source/cv/ImageProcess.cpp.o
+[  1%] Building CXX object MNN/CMakeFiles/llm.dir/transformers/llm/engine/src/diskembedding.cpp.o
+[  1%] Building CXX object MNN/CMakeFiles/llm.dir/transformers/llm/engine/src/embedding.cpp.o
+[  1%] Building CXX object MNN/CMakeFiles/MNNUtils.dir/source/utils/InitNet.cpp.o
+[  1%] Building CXX object MNN/CMakeFiles/MNNCV.dir/source/cv/ImageProcessUtils.cpp.o
+[  1%] Building CXX object MNN/CMakeFiles/MNNTransform.dir/source/geometry/ConvertUtils.cpp.o
+[  1%] Building CXX object MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/AllShader.cpp.o
+[  1%] Building CXX object MNN/CMakeFiles/MNNCore.dir/source/core/AutoTime.cpp.o
+[  1%] Building CXX object MNN/CMakeFiles/MNNCPU.dir/source/backend/cpu/CPUArgMax.cpp.o
+[  1%] Building CXX object MNN/CMakeFiles/MNNMath.dir/source/math/Matrix.cpp.o
+[  1%] Building CXX object MNN/CMakeFiles/MNNCV.dir/source/cv/Matrix_CV.cpp.o
+[  1%] Building CXX object MNN/express/CMakeFiles/MNN_Express.dir/Executor.cpp.o
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoTime.cpp:17:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/MNNCore.dir/source/core/AutoTime.cpp.o] Error 1
+make[1]: *** [MNN/CMakeFiles/MNNCore.dir/all] Error 2
+make[1]: *** Waiting for unfinished jobs....
+[  1%] Building CXX object MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MNNMetalContext.mm.o
+[  1%] Building CXX object MNN/CMakeFiles/MNNUtils.dir/source/utils/JNIHelper.cpp.o
+[  1%] Building CXX object MNN/CMakeFiles/llm.dir/transformers/llm/engine/src/llm.cpp.o
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/cv/Matrix_CV.cpp:13:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/cv/SkNx.h:19:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/math/Matrix.cpp:10:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/MNNCV.dir/source/cv/Matrix_CV.cpp.o] Error 1
+make[2]: *** Waiting for unfinished jobs....
+[  2%] Building CXX object MNN/CMakeFiles/MNNTransform.dir/source/geometry/GeometryBatchMatMul.cpp.o
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/cv/ImageProcess.cpp:12:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/cpu/CPUArgMax.cpp:11:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/cpu/CPUBackend.hpp:15:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Backend.hpp:15:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Command.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/cv/ImageProcessUtils.cpp:11:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/cv/ImageProcessUtils.hpp:15:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/cpu/compute/CommonOptFunction.h:18:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/express/Executor.cpp:10:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/TensorUtils.hpp:13:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Backend.hpp:15:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Command.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/transformers/llm/engine/src/diskembedding.cpp:10:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/transformers/llm/engine/src/diskembedding.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/FileLoader.hpp:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/utils/InitNet.cpp:8:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/utils/InitNet.hpp:11:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/TensorUtils.hpp:13:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Backend.hpp:15:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Command.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/transformers/llm/engine/src/embedding.cpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/transformers/llm/engine/src/diskembedding.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/FileLoader.hpp:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/geometry/ConvertUtils.cpp:9:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/geometry/ConvertUtils.hpp:11:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/geometry/GeometryComputer.hpp:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Command.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/llm.dir/transformers/llm/engine/src/diskembedding.cpp.o] Error 1
+make[2]: *** Waiting for unfinished jobs....
+[  2%] Building CXX object MNN/CMakeFiles/MNNMath.dir/source/math/WingoradGenerater.cpp.o
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/llm.dir/transformers/llm/engine/src/embedding.cpp.o] Error 1
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MNNMetalContext.mm:9:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MNNMetalContext.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalBackend.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Backend.hpp:15:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Command.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/transformers/llm/engine/src/llm.cpp:23:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/transformers/llm/engine/src/diskembedding.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/FileLoader.hpp:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+[  3%] Building CXX object MNN/express/CMakeFiles/MNN_Express.dir/ExecutorScope.cpp.o
+1 error generated.
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/MNNCV.dir/source/cv/ImageProcess.cpp.o] Error 1
+make[2]: *** [MNN/CMakeFiles/MNNCPU.dir/source/backend/cpu/CPUArgMax.cpp.o] Error 1
+make[1]: *** [MNN/CMakeFiles/MNNCPU.dir/all] Error 2
+1 error generated.
+[  3%] Building CXX object MNN/CMakeFiles/MNNTransform.dir/source/geometry/GeometryBinary.cpp.o
+[  4%] Building CXX object MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MetalArgMax.mm.o
+make[2]: *** [MNN/CMakeFiles/MNNTransform.dir/source/geometry/ConvertUtils.cpp.o] Error 1
+make[2]: *** Waiting for unfinished jobs....
+[  4%] Building CXX object MNN/express/CMakeFiles/MNN_Express.dir/Expr.cpp.o
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalArgMax.mm:9:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/MNNCV.dir/source/cv/ImageProcessUtils.cpp.o] Error 1
+make[1]: *** [MNN/CMakeFiles/MNNCV.dir/all] Error 2
+1 error generated.
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/math/WingoradGenerater.cpp:12:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+make[2]: *** [MNN/CMakeFiles/MNNUtils.dir/source/utils/InitNet.cpp.o] Error 1
+make[1]: *** [MNN/CMakeFiles/MNNUtils.dir/all] Error 2
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/geometry/GeometryBatchMatMul.cpp:9:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/geometry/GeometryComputer.hpp:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Command.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+1 error generated.
+[  4%] Building CXX object MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MetalAttention.mm.o
+make[2]: *** [MNN/CMakeFiles/MNNMath.dir/source/math/WingoradGenerater.cpp.o] Error 1
+make[2]: *** Waiting for unfinished jobs....
+[  4%] Building CXX object MNN/express/CMakeFiles/MNN_Express.dir/MathOp.cpp.o
+[  4%] Building CXX object MNN/express/CMakeFiles/MNN_Express.dir/NeuralNetWorkOp.cpp.o
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/MNNMath.dir/source/math/Matrix.cpp.o] Error 1
+make[1]: *** [MNN/CMakeFiles/MNNMath.dir/all] Error 2
+[  4%] Building CXX object MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MetalBackend.mm.o
+1 error generated.
+make[2]: *** [MNN/express/CMakeFiles/MNN_Express.dir/Executor.cpp.o] Error 1
+make[2]: *** Waiting for unfinished jobs....
+1 error generated.
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MNNMetalContext.mm:118:16: warning: 'MTLResourceOptionCPUCacheModeWriteCombined' is deprecated: first deprecated in macOS 13.0 [-Wdeprecated-declarations]
+  118 |         return MTLRmake[2]: e*** [MNN/CMakeFiles/llm.dir/transformers/llm/engine/src/llm.cpp.o] Error 1
+sourceOptionCPUCacheModeWriteCombined;
+      |                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                MTLResourceCPUCacheModeWriteCombined
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk/System/Library/Frameworks/Metal.framework/Headers/MTLResource.h:187:5: note: 'MTLResourceOptionCPUCacheModeWriteCombined' has been explicitly marked deprecated here
+  187 |     MTLResourceOptimake[1]: *** [MNN/CMakeFiles/llm.dir/all] Error 2
+onCPUCacheModeWriteCombined API_DEPRECATED_WITH_REPLACEMENT("MTLResourceCPUCacheModeWriteCombined", macos(10.11, 13.0), ios(8.0, 16.0)) = MTLResourceCPUCacheModeWriteCombined,
+      |     ^
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MNNMetalContext.mm:123:20: warning: 'MTLResourceOptionCPUCacheModeDefault' is deprecated: first deprecated in macOS 13.0 [-Wdeprecated-declarations]
+  123 |             return MTLResourceOptionCPUCacheModeDefault;
+      |                    ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                    MTLResourceCPUCacheModeDefaultCache
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk/System/Library/Frameworks/Metal.framework/Headers/MTLResource.h:186:5: note: 'MTLResourceOptionCPUCacheModeDefault' has been explicitly marked deprecated here
+  186 |     MTLResourceOptionCPUCacheModeDefault       API_DEPRECATED_WITH_REPLACEMENT("MTLResourceCPUCacheModeDefaultCache", macos(10.11, 13.0), ios(8.0, 16.0)) = MTLResourceCPUCacheModeDefaultCache,
+      |     ^
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MNNMetalContext.mm:126:16: warning: 'MTLResourceOptionCPUCacheModeDefault' is deprecated: first deprecated in macOS 13.0 [-Wdeprecated-declarations]
+  126 |         return MTLResourceOptionCPUCacheModeDefault;
+      |                ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                MTLResourceCPUCacheModeDefaultCache
+/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.1.sdk/System/Library/Frameworks/Metal.framework/Headers/MTLResource.h:186:5: note: 'MTLResourceOptionCPUCacheModeDefault' has been explicitly marked deprecated here
+  186 |     MTLResourceOptionCPUCacheModeDefault       API_DEPRECATED_WITH_REPLACEMENT("MTLResourceCPUCacheModeDefaultCache", macos(10.11, 13.0), ios(8.0, 16.0)) = MTLResourceCPUCacheModeDefaultCache,
+      |     ^
+[  4%] Building CXX object MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MetalBinary.mm.o
+[  4%] Building CXX object MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MetalCast.mm.o
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/express/Expr.cpp:11:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/OpCommonUtils.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/TensorUtils.hpp:13:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Backend.hpp:15:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Command.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalAttention.mm:10:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/MNNTransform.dir/source/geometry/GeometryBatchMatMul.cpp.o] Error 1
+[  5%] Building CXX object MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MetalConvolution.mm.o
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalConvolution.mm:9:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalConvolution.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalConvolutionCommon.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/ConvolutionCommon.hpp:11:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+3 warnings and 1 error generated.
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalBackend.mm:9:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalBackend.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Backend.hpp:15:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Command.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+make[2]: *** [MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MNNMetalContext.mm.o] Error 1
+[  5%] Building CXX object MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MetalConvolution1x1.mm.o
+make[2]: *** Waiting for unfinished jobs....
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalConvolution1x1.mm:9:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalConvolution1x1.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalConvolutionCommon.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/ConvolutionCommon.hpp:11:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/geometry/GeometryBinary.cpp:9:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/geometry/ConvertUtils.hpp:11:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/geometry/GeometryComputer.hpp:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Command.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/express/MathOp.cpp:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/express/Utils.hpp:15:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/express/NeuralNetWorkOp.cpp:17:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/express/Utils.hpp:15:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+1 error generated.
+make[2]: *** [MNN/express/CMakeFiles/MNN_Express.dir/MathOp.cpp.o] Error 1
+1 error generated.
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/MNNTransform.dir/source/geometry/GeometryBinary.cpp.o] Error 1
+make[1]: *** [MNN/CMakeFiles/MNNTransform.dir/all] Error 2
+make[2]: *** [MNN/express/CMakeFiles/MNN_Express.dir/NeuralNetWorkOp.cpp.o] Error 1
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalBinary.mm:10:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MNNMetalContext.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalBackend.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Backend.hpp:15:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Command.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalCast.mm:10:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MNNMetalContext.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/backend/metal/MetalBackend.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Backend.hpp:15:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Command.hpp:12:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/AutoStorage.h:14:
+In file included from /Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/MNNMemoryUtils.h:13:
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/MNN/source/core/Macro.h:37:18: error: invalid token at start of a preprocessor expression
+   37 | #if MNN_USE_NEON == 0
+      |                  ^
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MetalArgMax.mm.o] Error 1
+1 error generated.
+make[2]: *** [MNN/express/CMakeFiles/MNN_Express.dir/Expr.cpp.o] Error 1
+make[1]: *** [MNN/express/CMakeFiles/MNN_Express.dir/all] Error 2
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MetalAttention.mm.o] Error 1
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MetalBinary.mm.o] Error 1
+1 error generated.
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MetalCast.mm.o] Error 1
+make[2]: *** [MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MetalBackend.mm.o] Error 1
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MetalConvolution.mm.o] Error 1
+1 error generated.
+make[2]: *** [MNN/CMakeFiles/MNNMetal.dir/source/backend/metal/MetalConvolution1x1.mm.o] Error 1
+make[1]: *** [MNN/CMakeFiles/MNNMetal.dir/all] Error 2
+make: *** [all] Error 2
+[0;31m✗ Build failed[0m

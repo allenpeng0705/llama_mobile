@@ -2430,6 +2430,7 @@ void MNNCoreInt8FunctionInit() {
     auto core = MNNGetCoreFunctions();
 
     // MatMul
+#ifdef MNN_USE_NEON
     gCoreFunc->Int8GemmKernel = MNNGemmInt8AddBiasScale_16x4_Unit;
     gCoreFunc->Int8GemmKernelFast = MNNGemmInt8AddBiasScale_16x4_Unit_FAST;
     gCoreFunc->MNNGetGemmUnit = MNNGetGemmUnit;
@@ -2442,6 +2443,7 @@ void MNNCoreInt8FunctionInit() {
     gCoreFunc->MNNPackC4Int8ForMatMul_A = _ArmBasicMNNPackC4ForMatMul_A<GEMM_INT8_DST_XUNIT, GEMM_INT8_SRC_UNIT, GEMM_INT8_UNIT>;
     // conv depthwise
     gCoreFunc->ConvDepthwiseLineInt8 = MNNLineDepthWiseInt8AddBiasScaleUnit;
+#endif
     gCoreFunc->MNNFloat2Int8 = MNNFloat2Int8;
     gCoreFunc->MNNInt8ScaleToFloat = MNNInt8ScaleToFloat;
 
@@ -2461,9 +2463,11 @@ void MNNCoreInt8FunctionInit() {
     gCoreFunc->MNNReluWithSlopeChannelInt8 = MNNReluWithSlopeChannelInt8;
 #endif
 
+#ifdef MNN_USE_NEON
 #if defined(__aarch64__)
     if (core->supportSDot) {
         // MatMul
+#ifdef MNN_USE_ARMV82
         gCoreFunc->Int8GemmKernel = MNNGemmInt8AddBiasScale_ARMV82_Unit;
         gCoreFunc->Int8GemmKernelFast = MNNGemmInt8AddBiasScale_ARMV82_Unit;
         gCoreFunc->MNNGetGemmUnit = MNNGetGemmUnitSdot;
@@ -2479,6 +2483,7 @@ void MNNCoreInt8FunctionInit() {
         core->arm82MatmulRelatedFunctions.MNNGetGemmUnit = gCoreFunc->MNNGetGemmUnit;
         core->arm82MatmulRelatedFunctions.MNNPackC4Int8ForMatMul_A = gCoreFunc->MNNPackC4Int8ForMatMul_A;
         core->arm82MatmulRelatedFunctions.MNNSumByAxisLForMatmul_A = MNNSumByAxisLForMatmul_A_ARM82;
+#endif
 #if defined(MNN_LOW_MEMORY)
     #ifdef MNN_USE_ARMV82
         gCoreFunc->DynamicQuanInput_ARM82 = DynamicQuanInput_ARM82;
@@ -2488,17 +2493,22 @@ void MNNCoreInt8FunctionInit() {
         core->arm82MatmulRelatedFunctions.MNNGemmInt8AddBiasScale_Unit_FP16 = gCoreFunc->MNNGemmInt8AddBiasScale_Unit_FP16;
         core->arm82MatmulRelatedFunctions.MNNGemmInt8AddBiasScale_w4_Unit_FP16 = gCoreFunc->MNNGemmInt8AddBiasScale_w4_Unit_FP16;
     #endif
+        #ifdef MNN_USE_ARMV82
         gCoreFunc->Int8GemmKernel_W4 = MNNGemmInt8AddBiasScale_ARMV82_w4_Unit;
         core->arm82MatmulRelatedFunctions.Int8GemmKernel_W4 = gCoreFunc->Int8GemmKernel_W4;
+        #endif
 #endif
     }
     if (core->supportI8mm) {
         // MatMul
+#ifdef MNN_USE_ARMV86
         gCoreFunc->Int8GemmKernel = MNNGemmInt8AddBiasScale_ARMV86_Unit;
         gCoreFunc->Int8GemmKernelFast = MNNGemmInt8AddBiasScale_ARMV86_Unit;
         gCoreFunc->MNNGetGemmUnit = MNNGetGemmUnitI8mm;
         core->int8MatmulRelatedFunctions.eP = GEMM_INT8_DST_XUNIT_ARM86;
+#ifdef MNN_USE_NEON
         core->MNNSumByAxisLForMatmul_A = MNNSumByAxisLForMatmul_A_ARM86;
+#endif
 
 #if defined(MNN_LOW_MEMORY)
         gCoreFunc->Int8GemmKernel_W4 = MNNGemmInt8AddBiasScale_ARMV86_w4_Unit;
@@ -2510,8 +2520,10 @@ void MNNCoreInt8FunctionInit() {
 #endif
         // Im2Col
         gCoreFunc->MNNPackC4Int8ForMatMul_A = _ArmBasicMNNPackC4ForMatMul_A<GEMM_INT8_DST_XUNIT_ARM86, GEMM_INT8_SRC_UNIT_ARM86, GEMM_INT8_UNIT_ARM86>;
+#endif
     }
 #endif // __aarch64__
+#endif // MNN_USE_NEON
     {
         core->int8MatmulRelatedFunctions.Int8GemmKernel = gCoreFunc->Int8GemmKernel;
         core->int8MatmulRelatedFunctions.Int8GemmKernelFast = gCoreFunc->Int8GemmKernelFast;

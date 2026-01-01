@@ -17,6 +17,30 @@ if(NOT GGML_BUILD_COMMIT)
     set(GGML_BUILD_COMMIT "unknown")
 endif()
 
+# MNN configuration
+set(MNN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../lib/MNN)
+set(MNN_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/MNN)
+
+# Set MNN options BEFORE adding the subdirectory
+option(MNN_METAL "Enable Metal support" ON)
+set(MNN_BUILD_SHARED_LIBS OFF CACHE BOOL "Build MNN as static library" FORCE)
+set(MNN_BUILD_LLM ON CACHE BOOL "Build MNN LLM support" FORCE)
+set(MNN_BUILD_TOOLS OFF CACHE BOOL "Build MNN tools" FORCE)
+set(MNN_BUILD_DEMO OFF CACHE BOOL "Build MNN demo" FORCE)
+set(MNN_BUILD_CONVERTER OFF CACHE BOOL "Build MNN converter" FORCE)
+set(MNN_BUILD_TRAIN OFF CACHE BOOL "Build MNN train" FORCE)
+set(MNN_BUILD_QUANTOOLS OFF CACHE BOOL "Build MNN quant tools" FORCE)
+set(MNN_EVALUATION OFF CACHE BOOL "Build MNN evaluation" FORCE)
+set(MNN_LLM_BUILD_DEMO OFF CACHE BOOL "Build LLM demo" FORCE)
+set(LLM_USE_MINJA OFF CACHE BOOL "Use minja to apply template" FORCE)
+# Disable NEON for iOS builds as requested
+set(MNN_USE_NEON OFF CACHE BOOL "Enable NEON support" FORCE)
+# Disable SSE for iOS builds as requested
+set(MNN_USE_SSE OFF CACHE BOOL "Enable SSE support" FORCE)
+
+# Add MNN as a subdirectory
+add_subdirectory(${MNN_DIR} ${MNN_BUILD_DIR})
+
 # Dependencies and compile options
 add_definitions(
     -DNDEBUG
@@ -56,6 +80,7 @@ add_library(llama_mobile SHARED
     ${SOURCE_DIR}/llama_mobile_chat.cpp
     ${SOURCE_DIR}/llama_mobile_ffi.cpp
     ${SOURCE_DIR}/llama_mobile_api.cpp
+    ${SOURCE_DIR}/llama_mobile_mnn.cpp
     ${LLAMA_CPP_DIR}/llama.cpp
     ${LLAMA_CPP_DIR}/llama-mmap.cpp
     ${LLAMA_CPP_DIR}/llama-memory.cpp
@@ -246,15 +271,21 @@ target_include_directories(llama_mobile
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/llama_cpp>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/llama_cpp/ggml-cpu>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../lib/llama_cpp/tools/mtmd>
+        $<BUILD_INTERFACE:${MNN_DIR}/include>
+        $<BUILD_INTERFACE:${MNN_DIR}/source>
+        $<BUILD_INTERFACE:${MNN_DIR}/3rd_party>
         $<INSTALL_INTERFACE:include>
 )
 
-# Link required frameworks
+# Link required frameworks and MNN libraries
 target_link_libraries(llama_mobile PRIVATE
     "-framework Accelerate"
     "-framework Foundation"
     "-framework Metal"
     "-framework MetalKit"
+    "-framework UIKit"
+    MNN
+    MNN_Express
 )
 
 # Set properties for framework

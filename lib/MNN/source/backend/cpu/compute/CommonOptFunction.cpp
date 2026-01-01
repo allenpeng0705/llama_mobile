@@ -40,6 +40,53 @@ void MNNInt8ToInt16(int16_t* dest, const int8_t* source, size_t count) {
 }
 #endif
 
+extern "C" {
+// Scalar implementations for missing functions
+void MNNTranspose32Bit(int32_t* dstO, const int32_t* srcO, int32_t* dim) {
+    int w = dim[0];
+    int h = dim[1];
+    int srcStride = dim[2];
+    int dstStride = dim[3];
+    for (int i=0; i<h; ++i) {
+        auto si = srcO + i;
+        auto di = dstO + i * dstStride;
+        for (int j=0; j<w; ++j) {
+            auto sj = si + j * srcStride;
+            auto dj = di + j;
+            *dj = *sj;
+        }
+    }
+}
+
+void MNNTranspose16Bit(int16_t* dstO, const int16_t* srcO, int32_t* dim) {
+    int w = dim[0];
+    int h = dim[1];
+    int srcStride = dim[2];
+    int dstStride = dim[3];
+    for (int i=0; i<h; ++i) {
+        auto si = srcO + i;
+        auto di = dstO + i * dstStride;
+        for (int j=0; j<w; ++j) {
+            auto sj = si + j * srcStride;
+            auto dj = di + j;
+            *dj = *sj;
+        }
+    }
+}
+
+// Fallback implementation for MNNFunctionInit when SSE/NEON backends are disabled
+// This is needed for iOS simulator builds where we disable both SSE and NEON
+#ifndef MNN_USE_SSE
+#ifndef MNN_USE_NEON
+void MNNFunctionInit() {
+    // Do nothing - use scalar implementations
+}
+#endif
+#endif
+}
+
+// Platform-specific MNNFunctionInit implementations should be handled elsewhere
+
 #ifndef __aarch64__
 #ifdef MNN_CPU_WEIGHT_DEQUANT_GEMM
 static void _MNNPackedMatMulRemain_int4(float* C, const float* A, const float* fB, size_t eSize, const size_t* parameter, const float* postParameters, const float* bias, int aStride, const float* k, const float* b) {
@@ -197,6 +244,7 @@ void MNNPackedMatMulRemain_int8(float* C, const float* A, const float* B, size_t
     _MNNPackedMatMulRemain_int8(C, A, B, eSize, parameter, postParameters, bias, aStride, k, b);
 }
 #endif // MNN_CPU_WEIGHT_DEQUANT_GEMM
+#endif // __aarch64__
 
 #ifdef MNN_LOW_MEMORY
 void MNNQuantScaleFP32(float* absmax, float* quant_scale, float* dequant_scale, size_t thread, size_t batch) {
@@ -224,8 +272,7 @@ void MNNDynamicUpdateConvBiasScale(float* newbias, float* oldbias, float* weight
     }
 }
 
-#endif // LOW_MEMORY
-#endif // not __aarch64__
+#endif // MNN_LOW_MEMORY
 
 static void MNNCountMaxMinValue(const float* source, float* minVal, float* maxVal, size_t size) {
 #ifndef MNN_USE_NEON
@@ -402,6 +449,7 @@ static void MNNCountMaxMinValue(const float* source, float* minVal, float* maxVa
 #ifdef MNN_LOW_MEMORY
 static void MNNAbsMaxFP32(const float* source, float* absmax, size_t src_depth_quad, size_t realSize, int pack) {
 #ifdef __aarch64__
+#ifdef MNN_USE_NEON
     if (pack == 4) {
         MNNAbsMaxFP32_Pack4(source, absmax, src_depth_quad, realSize, pack);
         return;
@@ -410,6 +458,7 @@ static void MNNAbsMaxFP32(const float* source, float* absmax, size_t src_depth_q
         MNNAbsMaxFP32_Pack8(source, absmax, src_depth_quad, realSize, pack);
         return;
     }
+#endif
 #endif
     // source: (ic/4, N, 4)
     auto srcStep = pack * realSize;
@@ -427,6 +476,7 @@ static void MNNAbsMaxFP32(const float* source, float* absmax, size_t src_depth_q
 
 void MNNDynamicQuantFP32(const float* src, int8_t* dst, const float* scale, size_t src_depth_quad, size_t realSize, int pack, const float* bias = nullptr) {
 #ifdef __aarch64__
+#ifdef MNN_USE_NEON
     if (pack == 4) {
         MNNDynamicQuantFP32_Pack4(src, dst, scale, src_depth_quad, realSize, nullptr, pack);
         return;
@@ -435,6 +485,7 @@ void MNNDynamicQuantFP32(const float* src, int8_t* dst, const float* scale, size
         MNNDynamicQuantFP32_Pack8(src, dst, scale, src_depth_quad, realSize, nullptr, pack);
         return;
     }
+#endif
 #endif
 #ifdef MNN_USE_SSE
     uint8_t* dstPtr = reinterpret_cast<uint8_t*>(dst);
@@ -471,6 +522,7 @@ static void MNNAsyQuantFunc(int8_t* dst, const float* src, float* qscale, float*
     int int8Min = -128;
     // qscale&qbias [blockNum, EP]
 #ifdef __aarch64__
+#ifdef MNN_USE_NEON
     if (LP == 4 || LP == 8) {
         for (int k = 0; k < kernelsize; ++k) {
             for (int i = 0; i < blockNum; ++i) {
@@ -484,6 +536,7 @@ static void MNNAsyQuantFunc(int8_t* dst, const float* src, float* qscale, float*
         }
         return;
     }
+#endif
 #endif
     for (int i = 0; i < EP; ++i) {
         for (int bk = 0; bk < blockNum; ++bk) {
@@ -546,6 +599,7 @@ static void MNNAsyQuantInfo_FP32(float* scale, float* bias, float* qscale, float
     // dequant scale/bias : [EU, blockNum, step], step=ALIMIN(step, EP), EU=UP_DIV(plane, EP)
     // quant scale/bias   : [blockNum, plane]
 #ifdef __aarch64__
+    #ifdef MNN_USE_NEON
     if ((DST_XUNIT == 12 || DST_XUNIT == 16) && innerSide == 4) { // Arm82,fp32: SRC_UNIT=4, core->pack=4
         // max,min shape: [blockNum, EP]
         for (int i = 0; i < kernelsize; ++i) {
@@ -569,8 +623,10 @@ static void MNNAsyQuantInfo_FP32(float* scale, float* bias, float* qscale, float
             return;
         }
     }
+    #endif // MNN_USE_NEON
     if (DST_XUNIT == 10) { // Arm86,fp32: SRC_UNIT=8,core->pack=4
         // max,min shape: [blockNum, EP]
+        #ifdef MNN_USE_NEON
         if (innerSide == 4) {
             for (int i = 0; i < kernelsize; ++i) {
                 MNNLocalMinMaxFP32_Pack4(dstMin, dstMax, src + i * stride0, blockNum, blockLU, plane, innerSide, i);
@@ -581,6 +637,7 @@ static void MNNAsyQuantInfo_FP32(float* scale, float* bias, float* qscale, float
                 MNNLocalMinMaxFP32_Pack8(dstMin, dstMax, src + i * stride0, blockNum, blockLU, plane, innerSide, i);
             }
         }
+        #endif
         // scale, bias
         bool success = MNNAsyLocalQuantInfo_EP10_FP32(scale, bias, qscale, qbias, dstMin, dstMax, info);
         if (!success) {
@@ -687,6 +744,7 @@ static void MNNReorderWeightInt4(uint8_t* dest, const uint8_t* source, int32_t* 
     }
 }
 #ifdef __aarch64__
+#ifdef MNN_USE_NEON
 static void MNNReorderWeightInt4Arm86(uint8_t* dest, const uint8_t* source, int32_t* shape, size_t size, float* kernelsum) {
     MNN_ASSERT(size > 4);
     auto blocknum = shape[0];
@@ -751,9 +809,10 @@ static void MNNReorderWeightInt4Arm86(uint8_t* dest, const uint8_t* source, int3
             }
         }
     }
-    MNNPermuteSumWeightInt4Arm86(dest, dest, blocknum * hu, lu, kernelsum);
 }
+#endif // MNN_USE_NEON
 
+#ifdef MNN_USE_NEON
 static void MNNReorderWeightInt4Arm82(uint8_t* dest, const uint8_t* source, int32_t* shape, size_t size, float* kernelsum) {
     MNN_ASSERT(size > 4);
     // dst shape: [hu, blocknum, kernelCount, lu, hp, lp], kernelCount=1 in this case
@@ -818,8 +877,8 @@ static void MNNReorderWeightInt4Arm82(uint8_t* dest, const uint8_t* source, int3
             }
         }
     }
-    MNNPermuteSumWeightInt4Arm82(dest, dest, blocknum * hu, lu, kernelsum);
 }
+#endif // MNN_USE_NEON
 #ifdef MNN_SME2
 static void MNNReorderWeightInt4Sme2(uint8_t* dest, const uint8_t* source, int32_t* shape, size_t size, float* kernelsum) {
     MNN_ASSERT(size > 4);
@@ -1475,7 +1534,6 @@ static void MNNAttenPackAndScaleSingleHead(float* dst, const float* srcHeadBase,
     }
 }
 
-#ifndef __aarch64__
 void MNNQuantAttentionKey(int8_t* dst, const float* source, float* sumKeyPtr, float* maxKeyPtr, int32_t* params) {
     int32_t kvNumHead = params[0];
     int32_t seqLen = params[1];
@@ -1635,8 +1693,6 @@ void MNNQuantAttentionValue(int8_t* dst, const float* source, float* valueSum, i
         }
     }
 }
-
-#endif
 
 #endif // MNN_SUPPORT_TRANSFORMER_FUSE
 
@@ -2752,43 +2808,7 @@ void MNNPackedSparseMatMulEpx4(float* C, const float* A, const float* B, size_t 
 
 #endif
 
-#ifndef MNN_USE_SSE
-#ifndef MNN_USE_NEON
-void MNNTranspose32Bit(int32_t* dstO, const int32_t* srcO, int32_t* dim) {
-    int w = dim[0];
-    int h = dim[1];
-    int srcStride = dim[2];
-    int dstStride = dim[3];
-    for (int i=0; i<h; ++i) {
-        auto si = srcO + i;
-        auto di = dstO + i * dstStride;
-        for (int j=0; j<w; ++j) {
-            auto sj = si + j * srcStride;
-            auto dj = di + j;
-            *dj = *sj;
-        }
-    }
-}
-void MNNTranspose16Bit(int16_t* dstO, const int16_t* srcO, int32_t* dim) {
-    int w = dim[0];
-    int h = dim[1];
-    int srcStride = dim[2];
-    int dstStride = dim[3];
-    for (int i=0; i<h; ++i) {
-        auto si = srcO + i;
-        auto di = dstO + i * dstStride;
-        for (int j=0; j<w; ++j) {
-            auto sj = si + j * srcStride;
-            auto dj = di + j;
-            *dj = *sj;
-        }
-    }
-}
-#endif
-void MNNFunctionInit() {
-    // Do nothing
-}
-#endif
+// Keep scalar implementations from conflicting with existing functions
 
 #ifdef MNN_USE_NEON
 #include <arm_neon.h>
@@ -4509,7 +4529,9 @@ void MNNCoreFunctionInit() {
     gCoreFunction->MNNUnpackCUnitTransposeInt16 = MNNPackTransposeInt16;
 
     gCoreFunction->MNNAxByClampBroadcastUnit = MNNAxByClampBroadcastUnit;
+#ifdef MNN_USE_NEON
     gCoreFunction->MNNConvRunForLineDepthwise = MNNConvRunForLineDepthwise;
+#endif
     gCoreFunction->MNNMatrixAdd = MNNMatrixAdd;
     gCoreFunction->MNNMatrixSub = MNNMatrixSub;
     gCoreFunction->MNNStrassenMergeCFunction = MNNStrassenMergeCFunction;
@@ -4526,13 +4548,17 @@ void MNNCoreFunctionInit() {
     gCoreFunction->MNNRoiAlignMax = MNNRoiAlignMax;
     gCoreFunction->MNNRoiAlignAvg = MNNRoiAlignAvg;
     gCoreFunction->MNNAddC4WithStride = MNNAddC4WithStride;
+#ifdef MNN_USE_NEON
     gCoreFunction->MNNCopyC4WithStride = MNNCopyC4WithStride;
+#endif
 
     gCoreFunction->chooseWinoSourceTransformPack = WinogradFunction::chooseWinoSourceTransformPack;
     gCoreFunction->chooseWinoSourceUnrollTransform = WinogradFunction::chooseSourceUnrollTransform;
     gCoreFunction->chooseWinoDestUnrollTransform = WinogradFunction::chooseWinoDestUnrollTransform;
     gCoreFunction->MNNDeconvRunForLineDepthwise = MNNDeconvRunForLineDepthwise;
+#ifdef MNN_USE_NEON
     gCoreFunction->MNNDeconvRunForUnitDepthWise = MNNDeconvRunForUnitDepthWise;
+#endif
     gCoreFunction->MNNSoftmax = MNNSoftmax;
 #ifdef MNN_USE_NEON
     gCoreFunction->MNNDepthwiseConvFastKernel = MNNDepthwiseConvFastKernel;
@@ -4587,6 +4613,7 @@ void MNNCoreFunctionInit() {
     gCoreFunction->MNNReorderWeightInt4 = MNNReorderWeightInt4;
     gCoreFunction->MNNSumWeightInt8  = MNNSumWeightInt8;
 #ifdef __aarch64__
+#ifdef MNN_USE_NEON
     if (gCoreFunction->supportSDot) {
         gCoreFunction->MNNReorderWeightInt4 = MNNReorderWeightInt4Arm82;
         gCoreFunction->MNNSumWeightInt8 = MNNSumWeightInt8Arm82;
@@ -4597,6 +4624,7 @@ void MNNCoreFunctionInit() {
         gCoreFunction->MNNReorderWeightInt4 = MNNReorderWeightInt4Arm86;
         gCoreFunction->MNNSumWeightInt8 = MNNSumWeightInt8Arm86;
     }
+#endif
 #endif
 #ifdef MNN_CPU_WEIGHT_DEQUANT_GEMM
     // Weight Dequant Gemm Kernels
@@ -4610,8 +4638,11 @@ void MNNCoreFunctionInit() {
     gCoreFunction->MNNAsyQuantInfo = MNNAsyQuantInfo_FP32;              // asymmetric quant/dequant scale&bias for [icDiv4,plane,4] -> scale&bias:[blockNum,plane]
     gCoreFunction->MNNQuantScale = MNNQuantScaleFP32;              // symmetric quant/dequant scale&bias for [icDiv4,plane,4] -> scale&bias:[plane]
     gCoreFunction->MNNGeneralIm2Col = generalIm2col;               // Im2Col based on float data -> output:[eU,kernelsize,lU,ep,lp]
+#ifdef MNN_USE_NEON
     gCoreFunction->MNNDynamicUpdateConvBiasScale = MNNDynamicUpdateConvBiasScale;
+#endif
 #ifdef __aarch64__
+#ifdef MNN_USE_NEON
     if (gCoreFunction->supportSDot) {
         gCoreFunction->MNNGeneralIm2Col = MNNGeneralIm2col_Fp32Arm82;
         gCoreFunction->arm82MatmulRelatedFunctions.MNNGeneralIm2Col = MNNGeneralIm2col_Fp32Arm82;
@@ -4619,6 +4650,7 @@ void MNNCoreFunctionInit() {
     if (gCoreFunction->supportI8mm) {
         gCoreFunction->MNNGeneralIm2Col = MNNGeneralIm2col_Fp32Arm86;
     }
+#endif // MNN_USE_NEON
 #endif
 #endif
 
@@ -4687,11 +4719,9 @@ void MNNUnpackC2(double* dst, const double* src, size_t area, size_t depth, int*
 void MNNUnpackC2Float(float* dst, const float* src, size_t area, size_t depth, int* areaOffset, int pack) {
     MNNUnpackC2Common<float>(dst, src, area, depth, areaOffset, pack);
 }
-#ifndef __aarch64__
 void MNNPackInt8C2(float* dst, const float* src, size_t area, size_t depth, int* areaOffset) {
     MNNPackC2Common<float>(dst, src, area, depth, areaOffset);
 }
-#endif
 
 void MNNUnpackInt8C2(float* dst, const float* src, size_t area, size_t depth, int* areaOffset) {
     MNNUnpackC2Common<float>(dst, src, area, depth, areaOffset);

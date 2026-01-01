@@ -14,6 +14,7 @@
 #endif
 
 extern "C" {
+#ifdef MNN_USE_NEON
 void MNNNV21ToRGBUnit(const unsigned char* source, unsigned char* dest, size_t countDiv8, const unsigned char* uv);
 void MNNNV21ToBGRUnit(const unsigned char* source, unsigned char* dest, size_t countDiv8, const unsigned char* uv);
 void MNNNV21ToRGBAUnit(const unsigned char* source, unsigned char* dest, size_t countDiv8, const unsigned char* uv);
@@ -26,6 +27,7 @@ void MNNBlitC1ToFloatRGBA(const unsigned char* source, float* dest, const float*
 void MNNBlitC3ToFloatRGBA(const unsigned char* source, float* dest, const float* mean, const float* normal, size_t count);
 void MNNRGBToBGRC8(const unsigned char* source, unsigned char* dest, size_t count);
 void MNNBGRAToBGRC8(const unsigned char* source, unsigned char* dest, size_t count);
+#ifdef MNN_USE_NEON
 void MNNGRAYToC4Fast(const unsigned char* source, unsigned char* dest, size_t count);
 void MNNGRAYToC3Fast(const unsigned char* source, unsigned char* dest, size_t count);
 void MNNC3ToC4Fast(const unsigned char* source, unsigned char* dest, size_t count);
@@ -41,6 +43,8 @@ void MNNBGRToBGR565Fast(const unsigned char* source, unsigned char* dest, size_t
 void MNNRGBToBGR565Fast(const unsigned char* source, unsigned char* dest, size_t count);
 void MNNRGBAToBGRAFast(const unsigned char* source, unsigned char* dest, size_t count);
 void MNNRGBAToBGRFast(const unsigned char* source, unsigned char* dest, size_t count);
+#endif
+#endif
 }
 
 void MNNGRAYToC4(const unsigned char* source, unsigned char* dest, size_t count) {
