@@ -6,6 +6,7 @@
 //  Copyright © 2018, Alibaba Group Holding Limited
 //
 #if defined(__ANDROID__) || defined(__aarch64__)
+#if defined(MNN_ARM82)
 
 #include "Arm82OptFunc.hpp"
 #include "Arm82Vec.hpp"
@@ -1004,4 +1005,5 @@ bool MNNAsyLocalQuantInfo_EP10_FP16(float* scale, float* bias, float* qscale, fl
 #endif // MNN_LOW_MEMORY
 #endif // __aarch64__
 
+#endif // MNN_ARM82
 #endif

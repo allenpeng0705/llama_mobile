@@ -6,6 +6,7 @@
 //  Copyright © 2018, Alibaba Group Holding Limited
 //
 #if defined(__ANDROID__) || defined(__aarch64__)
+#if defined(MNN_ARM82)
 
 #include "half.hpp"
 #include <algorithm>
@@ -186,4 +187,5 @@ void registerArm82RuntimeCreator() {
     Arm82Functions::init();
 };
 } // namespace MNN
+#endif
 #endif

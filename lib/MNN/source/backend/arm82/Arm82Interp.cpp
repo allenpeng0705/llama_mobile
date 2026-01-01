@@ -6,6 +6,7 @@
 //  Copyright © 2018, Alibaba Group Holding Limited
 //
 #if defined(__ANDROID__) || defined(__aarch64__)
+#if defined(MNN_ARM82)
 
 #include "Arm82Interp.hpp"
 #include "Arm82OptFunc.hpp"
@@ -290,4 +291,5 @@ Execution* Arm82Interp::create(const std::vector<Tensor*>& inputs, const std::ve
 }
 } // namespace MNN
 
-#endif
+#endif // MNN_ARM82
+#endif // __ANDROID__ || __aarch64__

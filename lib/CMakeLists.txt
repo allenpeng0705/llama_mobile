@@ -13,9 +13,7 @@ if(APPLE)
     set(MNN_METAL ON)
 endif()
 
-if(ANDROID AND CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64")
-    set(MNN_ARM82 ON)
-endif()
+# Android aarch64 ARM82 setting is now controlled by the -DMNN_ARM82 flag passed from build scripts
 
 # Add MNN as a subdirectory
 set(MNN_BUILD_SHARED_LIBS OFF CACHE BOOL "Build MNN as static library" FORCE)

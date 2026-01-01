@@ -1,4 +1,5 @@
 #if defined(__ANDROID__) || defined(__aarch64__)
+#if defined(MNN_ARM82)
 
 #ifndef Arm82Functions_hpp
 #define Arm82Functions_hpp
@@ -18,4 +19,5 @@ public:
 };
 
 #endif // Arm82Functions_hpp
+#endif // MNN_ARM82
 #endif

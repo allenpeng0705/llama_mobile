@@ -1,4 +1,5 @@
 #if defined(__ANDROID__) || defined(__aarch64__)
+#if defined(MNN_ARM82)
 #include <math.h>
 #include <float.h>
 #include "Arm82Functions.hpp"
@@ -2798,4 +2799,5 @@ CoreInt8Functions* Arm82Functions::getInt8() {
     return gArm82CoreInt8Functions;
 }
 };
+#endif // MNN_ARM82
 #endif

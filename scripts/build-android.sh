@@ -217,7 +217,7 @@ for ABI in "${ABI_LIST[@]}"; do
     
     # Add platform-specific flags
     if [ "$ABI" = "arm64-v8a" ]; then
-        PLATFORM_FLAGS="-DGGML_NO_POSIX_MADVISE=ON -DMNN_ARM82=ON -DMNN_USE_NEON=ON"
+        PLATFORM_FLAGS="-DGGML_NO_POSIX_MADVISE=ON -DMNN_ARM82=OFF -DMNN_USE_NEON=OFF"
 
     else
         PLATFORM_FLAGS=""

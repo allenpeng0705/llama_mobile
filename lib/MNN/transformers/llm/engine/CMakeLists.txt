@@ -65,12 +65,20 @@ IF(CMAKE_SYSTEM_NAME MATCHES "^Android" AND NOT MNN_BUILD_FOR_ANDROID_COMMAND)
 IF(NOT NATIVE_INCLUDE_OUTPUT)
   set(NATIVE_INCLUDE_OUTPUT ".")
 ENDIF()
-add_custom_command(
-  TARGET llm
-  POST_BUILD
-  COMMAND ${CMAKE_COMMAND}
-  ARGS -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/include ${NATIVE_INCLUDE_OUTPUT}
-)
+# Only add POST_BUILD command if llm is not an OBJECT library
+if(MNN_SEP_BUILD)
+  add_custom_command(
+    TARGET llm
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND}
+    ARGS -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/include ${NATIVE_INCLUDE_OUTPUT}
+  )
+else()
+  # For OBJECT library, just copy the include files directly
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/include ${NATIVE_INCLUDE_OUTPUT}
+  )
+endif()
 ELSE()
 INSTALL(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/include/ DESTINATION include FILES_MATCHING PATTERN *.hpp)
 ENDIF()

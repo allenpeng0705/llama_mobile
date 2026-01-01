@@ -6,6 +6,7 @@
 //  Copyright © 2018, Alibaba Group Holding Limited
 //
 #if defined(__ANDROID__) || defined(__aarch64__)
+#if defined(MNN_ARM82)
 
 #ifndef Arm82Backend_hpp
 #define Arm82Backend_hpp
@@ -67,4 +68,5 @@ inline int ARM82TensorStrideHelper(const Tensor* t, int dim) {
 } // namespace MNN
 
 #endif /* Arm82Backend_hpp */
+#endif // MNN_ARM82
 #endif

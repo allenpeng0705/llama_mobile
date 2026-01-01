@@ -46,7 +46,7 @@ typedef SSIZE_T ssize_t;
 #undef MNN_USE_NEON_VALUE
 #endif
 
-#if defined(ENABLE_ARMV82)
+#if defined(ENABLE_ARMV82) && defined(MNN_ARM82)
 #if defined(MNN_BUILD_FOR_ANDROID) || defined(__aarch64__)
 #define MNN_USE_ARMV82
 #endif

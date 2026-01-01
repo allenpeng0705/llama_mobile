@@ -6,6 +6,7 @@
 //  Copyright © 2018, Alibaba Group Holding Limited
 //
 #if defined(__ANDROID__) || defined(__aarch64__)
+#if defined(MNN_ARM82)
 
 #include "Arm82WinogradOptFunc.hpp"
 #include "Arm82Vec.hpp"
@@ -1435,6 +1436,7 @@ int Arm82MNNGetConvTileNumber() {
 #undef TRANSPOSE_12X8_SAVE
 #undef USE_8x8_WINOGRAD_KERNEL
 
+#endif // MNN_ARM82
 #endif
 
 
