@@ -90,7 +90,7 @@ function cp_headers() {
   fi
   
   # Copy the public API headers
-  for header in "llama_mobile_unified.h" "llama_mobile_ffi.h" "llama_mobile_api.h"; do
+  for header in "llama_mobile_ffi.h" "llama_mobile_api.h"; do
     if ! cp "$ROOT_DIR/lib/$header" "$HEADER_DIR/"; then
       echo "✗ Failed to copy header: $header"
       exit 1
@@ -233,7 +233,7 @@ function build_framework() {
   MODULE_MAP="$MODULE_DIR/module.modulemap"
   cat > "$MODULE_MAP" << EOL
 framework module llama_mobile {
-    umbrella header "llama_mobile_unified.h"
+    umbrella header "llama_mobile_api.h"
     
     export *
     module * { export * }

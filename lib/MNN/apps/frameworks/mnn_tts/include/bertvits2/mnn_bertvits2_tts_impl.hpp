@@ -10,7 +10,7 @@
 #ifndef _HEADER_MNN_TTS_SDK_mnn_tts_SDK_H_
 #define _HEADER_MNN_TTS_SDK_mnn_tts_SDK_H_
 
-#include "mnn_tts_impl_base.hpp"
+#include "../mnn_tts_impl_base.hpp"
 
 #include "chinese_bert.hpp"
 #include "chinese_g2p.hpp"

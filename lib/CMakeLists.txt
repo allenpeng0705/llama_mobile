@@ -28,6 +28,11 @@ set(MNN_USE_NEON OFF CACHE BOOL "Disable NEON support" FORCE)
 set(MNN_USE_SSE OFF CACHE BOOL "Disable SSE support" FORCE)
 add_subdirectory(MNN)
 
+# Add MNN TTS subdirectory
+set(BUILD_BERTVITS2 ON CACHE BOOL "Build BertVit2 TTS" FORCE)
+set(BUILD_PIPER OFF CACHE BOOL "Build PIPER TTS" FORCE)
+add_subdirectory(MNN/apps/frameworks/mnn_tts)
+
 set(LLAMA_MOBILE_CORE_SOURCES
     llama_mobile_context.cpp
     llama_mobile_loader.cpp
@@ -272,6 +277,8 @@ target_include_directories(llama_mobile_core_static PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/minja>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/tools/mtmd>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/apps/frameworks/mnn_tts/include>
 )
 
 target_include_directories(llama_mobile_core_shared PUBLIC
@@ -281,6 +288,8 @@ target_include_directories(llama_mobile_core_shared PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/minja>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/tools/mtmd>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/apps/frameworks/mnn_tts/include>
 )
 
 target_include_directories(llama_mobile_core_lib PUBLIC
@@ -290,7 +299,8 @@ target_include_directories(llama_mobile_core_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/minja>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/tools/mtmd>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/include>
-
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/apps/frameworks/mnn_tts/include>
 )
 
 if(NOT MSVC)
@@ -372,18 +382,21 @@ if(APPLE)
             ${ACCELERATE_FRAMEWORK}
             MNN
             MNN_Express
+            mnn_tts
         )
         target_link_libraries(llama_mobile_core_static PUBLIC
             ${FOUNDATION_LIBRARY}
             ${ACCELERATE_FRAMEWORK}
             MNN
             MNN_Express
+            mnn_tts
         )
         target_link_libraries(llama_mobile_core_shared PUBLIC
             ${FOUNDATION_LIBRARY}
             ${ACCELERATE_FRAMEWORK}
             MNN
             MNN_Express
+            mnn_tts
         )
         target_compile_definitions(llama_mobile_core_lib PUBLIC
             LM_GGML_USE_ACCELERATE
@@ -403,18 +416,21 @@ if(APPLE)
             ${METALKIT_LIBRARY}
             MNN
             MNN_Express
+            mnn_tts
         )
         target_link_libraries(llama_mobile_core_static PUBLIC
             ${METAL_LIBRARY}
             ${METALKIT_LIBRARY}
             MNN
             MNN_Express
+            mnn_tts
         )
         target_link_libraries(llama_mobile_core_shared PUBLIC
             ${METAL_LIBRARY}
             ${METALKIT_LIBRARY}
             MNN
             MNN_Express
+            mnn_tts
         )
         target_compile_definitions(llama_mobile_core_lib PUBLIC
             LM_GGML_USE_METAL
@@ -440,9 +456,9 @@ endif()
 if(ANDROID)
     find_library(LOG_LIBRARY log)
     if(LOG_LIBRARY)
-        target_link_libraries(llama_mobile_core_lib PUBLIC ${LOG_LIBRARY} MNN MNN_Express)
-        target_link_libraries(llama_mobile_core_static PUBLIC ${LOG_LIBRARY} MNN MNN_Express)
-        target_link_libraries(llama_mobile_core_shared PUBLIC ${LOG_LIBRARY} MNN MNN_Express)
+        target_link_libraries(llama_mobile_core_lib PUBLIC ${LOG_LIBRARY} MNN MNN_Express mnn_tts)
+        target_link_libraries(llama_mobile_core_static PUBLIC ${LOG_LIBRARY} MNN MNN_Express mnn_tts)
+        target_link_libraries(llama_mobile_core_shared PUBLIC ${LOG_LIBRARY} MNN MNN_Express mnn_tts)
     endif()
     
     # Always disable POSIX madvise on Android
@@ -459,7 +475,7 @@ file(MAKE_DIRECTORY ${INCLUDE_OUTPUT_PATH}/llama_cpp/minja)
 file(MAKE_DIRECTORY ${INCLUDE_OUTPUT_PATH}/llama_cpp/tools/mtmd)
 
 # Copy main header (unified only)
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_mobile_unified.h DESTINATION ${INCLUDE_OUTPUT_PATH})
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_mobile_api.h DESTINATION ${INCLUDE_OUTPUT_PATH})
 
 # Copy llama_cpp headers
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/llama.h DESTINATION ${INCLUDE_OUTPUT_PATH}/llama_cpp)

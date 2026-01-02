@@ -34,7 +34,6 @@ set(LLAMA_CPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../lib/llama_cpp)
 
 # Define public headers - expose all necessary API headers
 set(PUBLIC_HEADERS
-    ${SOURCE_DIR}/llama_mobile_unified.h
     ${SOURCE_DIR}/llama_mobile_ffi.h
     ${SOURCE_DIR}/llama_mobile_api.h
 )

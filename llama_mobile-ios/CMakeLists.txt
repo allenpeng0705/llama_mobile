@@ -41,6 +41,22 @@ set(MNN_USE_SSE OFF CACHE BOOL "Enable SSE support" FORCE)
 # Add MNN as a subdirectory
 add_subdirectory(${MNN_DIR} ${MNN_BUILD_DIR})
 
+# Add MNN TTS subdirectory with BertVITS2 enabled and build as static library
+set(BUILD_BERTVITS2 ON CACHE BOOL "Build BertVit2 TTS" FORCE)
+set(BUILD_PIPER OFF CACHE BOOL "Build PIPER TTS" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build mnn_tts as static library" FORCE)
+add_subdirectory(${MNN_DIR}/apps/frameworks/mnn_tts ${MNN_BUILD_DIR}/mnn_tts)
+
+# Ensure mnn_tts is built as a static library
+set_target_properties(mnn_tts PROPERTIES
+    FRAMEWORK OFF
+    BUILD_SHARED_LIBS OFF
+    LIBRARY_OUTPUT_TYPE STATIC
+)
+
+# Link UIKit to mnn_tts target since MNN with Metal support needs it
+target_link_libraries(mnn_tts "-framework UIKit")
+
 # Dependencies and compile options
 add_definitions(
     -DNDEBUG
@@ -60,7 +76,6 @@ set(LLAMA_CPP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../lib/llama_cpp)
 
 # Define public headers - expose all necessary API headers
 set(PUBLIC_HEADERS
-    ${SOURCE_DIR}/llama_mobile_unified.h
     ${SOURCE_DIR}/llama_mobile_ffi.h
     ${SOURCE_DIR}/llama_mobile_api.h
 )
@@ -274,6 +289,7 @@ target_include_directories(llama_mobile
         $<BUILD_INTERFACE:${MNN_DIR}/include>
         $<BUILD_INTERFACE:${MNN_DIR}/source>
         $<BUILD_INTERFACE:${MNN_DIR}/3rd_party>
+        $<BUILD_INTERFACE:${MNN_DIR}/apps/frameworks/mnn_tts/include>
         $<INSTALL_INTERFACE:include>
 )
 
@@ -286,6 +302,7 @@ target_link_libraries(llama_mobile PRIVATE
     "-framework UIKit"
     MNN
     MNN_Express
+    mnn_tts
 )
 
 # Set properties for framework

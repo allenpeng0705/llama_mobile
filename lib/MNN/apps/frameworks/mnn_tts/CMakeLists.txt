@@ -13,23 +13,16 @@ if(ANDROID)
     set(BUILD_ANDROID ON CACHE BOOL "Build for Android" FORCE)
 endif()
 
-add_library(MNN
-        SHARED
-        IMPORTED)
+# MNN target is already created by the main MNN CMakeLists.txt
 set(MNN_SOURCE_ROOT ${CMAKE_CURRENT_LIST_DIR}/../../../)
-set(MNN_INSTALL_ROOT "${MNN_SOURCE_ROOT}/project/android/build_64")
-set(LIB_PATH "${MNN_INSTALL_ROOT}/lib")
 message(STATUS "MNN_SOURCE_ROOT: ${MNN_SOURCE_ROOT}")
-message(STATUS "LIB_PATH: ${LIB_PATH}")
-
-set_target_properties(MNN PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
-        "${MNN_SOURCE_ROOT}/include;${MNN_SOURCE_ROOT}/tools/audio/include/;${MNN_SOURCE_ROOT}/transformers/llm/engine/include"
-)
-set_target_properties(MNN PROPERTIES IMPORTED_LOCATION "${LIB_PATH}/libMNN.so")
 
 include_directories(
 	${CMAKE_CURRENT_LIST_DIR}/include
 	${CMAKE_CURRENT_LIST_DIR}/../3rd_party/include
+	${MNN_SOURCE_ROOT}/include
+	${MNN_SOURCE_ROOT}/tools/audio/include
+	${MNN_SOURCE_ROOT}/transformers/llm/engine/include
 )
 
 if(BUILD_BERTVITS2)
@@ -85,11 +78,19 @@ if(BUILD_PIPER)
   add_subdirectory(third_party/piper/espeak-ng)
 endif()
 
-add_library(${PROJECT_NAME} SHARED ${PIPER_SOURCE_FILES} ${BERTVITS2_SOURCE_FILES} ${SHARED_SOURCE_FILES} ${ANDROID_SOURCE_FILES})
+if(BUILD_SHARED_LIBS)
+    add_library(${PROJECT_NAME} SHARED ${PIPER_SOURCE_FILES} ${BERTVITS2_SOURCE_FILES} ${SHARED_SOURCE_FILES} ${ANDROID_SOURCE_FILES})
+else()
+    add_library(${PROJECT_NAME} STATIC ${PIPER_SOURCE_FILES} ${BERTVITS2_SOURCE_FILES} ${SHARED_SOURCE_FILES} ${ANDROID_SOURCE_FILES})
+endif()
 
 # Add 16KB page size support for Android
 if(BUILD_ANDROID)
     target_link_options(${PROJECT_NAME} PRIVATE "-Wl,-z,max-page-size=16384")
 endif()
 
-target_link_libraries(${PROJECT_NAME} log MNN ) 
+if(BUILD_ANDROID)
+    target_link_libraries(${PROJECT_NAME} log MNN ) 
+else()
+    target_link_libraries(${PROJECT_NAME} MNN ) 
+endif()

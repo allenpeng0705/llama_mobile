@@ -22,7 +22,7 @@ After building the library, you'll find the following structure in the output fo
 ```
 output/
 ├── include/
-│   └── llama_mobile_unified.h  # Main unified header file
+│   └── llama_mobile_api.h  # Main API header file
 ├── lib/
 │   ├── libllama_mobile.a       # Static library
 │   └── libllama_mobile.so      # Shared library (platform-specific extension)
@@ -98,10 +98,10 @@ To use the library in your project, include the unified header file:
 
 ```cpp
 // C++
-#include "llama_mobile_unified.h"
+#include "llama_mobile_api.h"
 
 // C
-#include "llama_mobile_unified.h"
+#include "llama_mobile_api.h"
 ```
 
 ### Linking the Library
@@ -140,7 +140,7 @@ cl.exe /EHsc your_app.cpp /I"C:\path\to\output\include" /link /LIBPATH:"C:\path\
 ### C++ Interface
 
 ```cpp
-#include "llama_mobile_unified.h"
+#include "llama_mobile_api.h"
 
 int main() {
     // Initialize the context
@@ -179,7 +179,7 @@ int main() {
 ### C Interface
 
 ```c
-#include "llama_mobile_unified.h"
+#include "llama_mobile_api.h"
 
 int main() {
     // Initialize the context
@@ -220,7 +220,7 @@ int main() {
 ### FFI Interface
 
 ```c
-#include "llama_mobile_unified.h"
+#include "llama_mobile_api.h"
 
 int main() {
     // Initialize the context
@@ -304,7 +304,7 @@ To extend the library with new interfaces, follow these steps:
 
 ### 1. Define the Interface in the Unified Header
 
-Add new functions, structs, or enums to `llama_mobile_unified.h` in the appropriate section:
+Add new functions, structs, or enums to `llama_mobile_api.h` in the appropriate section:
 
 - **C++ Interface**: Add to the `llama_mobile` namespace
 - **C Interface**: Add to the `extern "C"` block
@@ -356,7 +356,7 @@ Ensure the new source files are included in the build system configuration.
 #### Step 1: Add to Header
 
 ```cpp
-// In llama_mobile_unified.h
+// In llama_mobile_api.h
 
 // C++ Interface
 namespace llama_mobile {

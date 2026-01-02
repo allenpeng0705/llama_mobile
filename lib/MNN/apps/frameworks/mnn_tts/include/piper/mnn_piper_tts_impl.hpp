@@ -6,11 +6,11 @@
 #include <vector>
 #include <mutex> // Include mutex header
 
-#include "mnn_tts_impl_base.hpp"
+#include "../mnn_tts_impl_base.hpp"
 #include "audio_generator.hpp"
 #include "phoneme_ids.hpp"
 #include "espeak_ng_wrapper.hpp" // Use wrapper for espeak-ng
-#include "mnn_tts_logger.hpp"
+#include "../mnn_tts_logger.hpp"
 #include "uni_algo.hpp"
 
 typedef std::chrono::milliseconds ms;

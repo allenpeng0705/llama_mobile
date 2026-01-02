@@ -2,6 +2,17 @@
 #include <random>
 #include <algorithm>
 #include <sstream>
+#include <memory>
+#include <tuple>
+
+// Include MNN LLM and Transformer headers
+#include "MNN/transformers/llm/engine/include/llm/llm.hpp"
+#include "MNN/transformers/llm/engine/src/llmconfig.hpp"
+#include "MNN/transformers/llm/engine/include/llm/reranker.hpp"
+
+// Include MNN TTS headers
+#include "MNN/apps/frameworks/mnn_tts/include/mnn_tts_sdk.hpp"
+#include "MNN/apps/frameworks/mnn_tts/include/bertvits2/mnn_bertvits2_tts_impl.hpp"
 
 #if defined(__ANDROID__)
 #include <android/log.h>
@@ -21,6 +32,18 @@ mnn_mobile_context::~mnn_mobile_context() {
         session = nullptr;
     }
     interpreter.reset();
+    llm.reset();
+    embedding_model.reset();
+    
+    // Clean up LoRA models and adapters
+    lora_models.clear();
+    adapters.clear();
+    
+    // Clean up TTS SDK
+    if (tts_sdk) {
+        delete static_cast<MNNTTSSDK*>(tts_sdk);
+        tts_sdk = nullptr;
+    }
 }
 
 void mnn_mobile_context::rewind() {
@@ -48,16 +71,16 @@ bool mnn_mobile_context::loadModel(const std::string &model_path, int n_ctx, int
         loading_progress = 0.1f;
         
         // Create MNN schedule config
-        MNN::ScheduleConfig config;
+        ::MNN::ScheduleConfig config;
         config.numThread = n_threads;
         
         // Set platform-specific options
         if (use_metal) {
             // Enable Metal backend for iOS
-            auto backendConfig = new MNN::BackendConfig;
-            backendConfig->precision = MNN::BackendConfig::Precision_Low;
-            backendConfig->power = MNN::BackendConfig::Power_High;
-            backendConfig->memory = MNN::BackendConfig::Memory_Normal;
+            auto backendConfig = new ::MNN::BackendConfig;
+            backendConfig->precision = ::MNN::BackendConfig::Precision_Low;
+            backendConfig->power = ::MNN::BackendConfig::Power_High;
+            backendConfig->memory = ::MNN::BackendConfig::Memory_Normal;
             config.backendConfig = backendConfig;
             config.type = MNN_FORWARD_METAL;
         } else if (use_neon) {
@@ -72,7 +95,7 @@ bool mnn_mobile_context::loadModel(const std::string &model_path, int n_ctx, int
         loading_progress = 0.3f;
         
         // Create interpreter
-        interpreter = std::shared_ptr<MNN::Interpreter>(MNN::Interpreter::createFromFile(model_path.c_str()));
+        interpreter = std::shared_ptr<::MNN::Interpreter>(::MNN::Interpreter::createFromFile(model_path.c_str()));
         if (interpreter == nullptr) {
             LOGE("Failed to create MNN interpreter from file: %s", model_path.c_str());
             if (use_metal && config.backendConfig) {
@@ -95,6 +118,16 @@ bool mnn_mobile_context::loadModel(const std::string &model_path, int n_ctx, int
             LOGE("Failed to create MNN session");
             interpreter.reset();
             return false;
+        }
+
+        // Load LLM model for transformer capabilities
+        try {
+            llm = std::shared_ptr<::MNN::Transformer::Llm>(::MNN::Transformer::Llm::createLLM(model_path));
+            if (llm == nullptr) {
+                LOGD("Warning: Could not create LLM transformer, some features may be limited");
+            }
+        } catch (const std::exception &e) {
+            LOGD("Warning: Exception creating LLM transformer: %s", e.what());
         }
 
         loading_progress = 1.0f;
@@ -329,6 +362,395 @@ void mnn_mobile_context::setGenerationParams(float temperature, float top_p, flo
     
     // Note: These parameters would be applied during actual token sampling in a real implementation
     // Since our current implementation uses random token generation, these parameters aren't used yet
+}
+
+// Embedding API implementation
+bool mnn_mobile_context::loadEmbeddingModel(const std::string &config_path, int n_threads) {
+    this->config_path = config_path;
+    this->n_threads = n_threads;
+
+    try {
+        loading_progress = 0.1f;
+
+        // Create MNN embedding model
+        embedding_model = std::shared_ptr<::MNN::Transformer::Embedding>(
+            ::MNN::Transformer::Embedding::createEmbedding(config_path, true)
+        );
+
+        if (embedding_model == nullptr) {
+            LOGE("Failed to create MNN embedding model from config: %s", config_path.c_str());
+            return false;
+        }
+
+        loading_progress = 1.0f;
+        LOGD("MNN embedding model loaded successfully: %s", config_path.c_str());
+        return true;
+    } catch (const std::exception &e) {
+        LOGE("Exception loading MNN embedding model: %s", e.what());
+        return false;
+    }
+}
+
+embedding_result mnn_mobile_context::generateEmbedding(const std::string &text) {
+    embedding_result result = {nullptr, 0, 0.7f};
+
+    if (!embedding_model) {
+        LOGE("Cannot generate embedding: embedding model not loaded");
+        return result;
+    }
+
+    try {
+        // Generate embedding using MNN's Embedding class
+        ::MNN::Express::VARP embedding_var = embedding_model->txt_embedding(text);
+        if (embedding_var == nullptr) {
+            LOGE("Failed to generate embedding");
+            return result;
+        }
+
+        // Get embedding data and dimension
+        auto shape = embedding_var->getInfo()->dim;
+        result.dimension = shape[1];
+        result.data = new float[result.dimension];
+
+        // Copy data from MNN tensor to result
+        auto data_ptr = embedding_var->readMap<float>();
+        std::memcpy(result.data, data_ptr, result.dimension * sizeof(float));
+
+        LOGD("Generated embedding of dimension %zu", result.dimension);
+    } catch (const std::exception &e) {
+        LOGE("Exception generating embedding: %s", e.what());
+        if (result.data) {
+            delete[] result.data;
+            result.data = nullptr;
+        }
+        result.dimension = 0;
+    }
+
+    return result;
+}
+
+float mnn_mobile_context::calculateCosineSimilarity(const embedding_result &embedding1, const embedding_result &embedding2) {
+    if (!embedding1.data || !embedding2.data || embedding1.dimension != embedding2.dimension) {
+        LOGE("Invalid embeddings for similarity calculation");
+        return 0.0f;
+    }
+
+    try {
+        // Create MNN VARP from embedding data
+        ::MNN::Express::VARP var1 = ::MNN::Express::_Const(embedding1.data, {1, static_cast<int>(embedding1.dimension)}, ::MNN::Express::NHWC, halide_type_of<float>());
+        ::MNN::Express::VARP var2 = ::MNN::Express::_Const(embedding2.data, {1, static_cast<int>(embedding2.dimension)}, ::MNN::Express::NHWC, halide_type_of<float>());
+
+        // Calculate cosine similarity using MNN's implementation
+        float similarity = embedding_model->cos_sim(var1, var2);
+        LOGD("Calculated cosine similarity: %f", similarity);
+        return similarity;
+    } catch (const std::exception &e) {
+        LOGE("Exception calculating cosine similarity: %s", e.what());
+        return 0.0f;
+    }
+}
+
+float mnn_mobile_context::calculateDistance(const embedding_result &embedding1, const embedding_result &embedding2) {
+    if (!embedding1.data || !embedding2.data || embedding1.dimension != embedding2.dimension) {
+        LOGE("Invalid embeddings for distance calculation");
+        return 0.0f;
+    }
+
+    try {
+        // Create MNN VARP from embedding data
+        ::MNN::Express::VARP var1 = ::MNN::Express::_Const(embedding1.data, {1, static_cast<int>(embedding1.dimension)}, ::MNN::Express::NHWC, halide_type_of<float>());
+        ::MNN::Express::VARP var2 = ::MNN::Express::_Const(embedding2.data, {1, static_cast<int>(embedding2.dimension)}, ::MNN::Express::NHWC, halide_type_of<float>());
+
+        // Calculate distance using MNN's implementation
+        float distance = embedding_model->dist(var1, var2);
+        LOGD("Calculated distance: %f", distance);
+        return distance;
+    } catch (const std::exception &e) {
+        LOGE("Exception calculating distance: %s", e.what());
+        return 0.0f;
+    }
+}
+
+// Multimodal API implementation
+std::string mnn_mobile_context::generateMultimodalResponse(const multimodal_prompt &prompt, int max_tokens) {
+    if (!llm) {
+        LOGE("Cannot generate multimodal response: LLM model not loaded");
+        return "";
+    }
+
+    try {
+        // Convert our multimodal_prompt to MNN's MultimodalPrompt format
+        ::MNN::Transformer::MultimodalPrompt mnn_prompt;
+        if (prompt.prompt_template) {
+            mnn_prompt.prompt_template = prompt.prompt_template;
+        }
+
+        // Convert images
+        if (prompt.images && prompt.image_count > 0) {
+            for (size_t i = 0; i < prompt.image_count; ++i) {
+                const prompt_image_part& img_part = prompt.images[i];
+                ::MNN::Transformer::PromptImagePart mnn_img_part;
+                
+                // Create MNN VARP from image data
+                mnn_img_part.image_data = ::MNN::Express::_Const(
+                    static_cast<float*>(img_part.image_data), 
+                    {img_part.channels, img_part.height, img_part.width}, 
+                    ::MNN::Express::NCHW, 
+                    halide_type_of<float>()
+                );
+                mnn_img_part.width = img_part.width;
+                mnn_img_part.height = img_part.height;
+                
+                std::string key = "image_" + std::to_string(i);
+                mnn_prompt.images[key] = mnn_img_part;
+            }
+        }
+
+        // Convert audios
+        if (prompt.audios && prompt.audio_count > 0) {
+            for (size_t i = 0; i < prompt.audio_count; ++i) {
+                const prompt_audio_part& audio_part = prompt.audios[i];
+                ::MNN::Transformer::PromptAudioPart mnn_audio_part;
+                
+                if (audio_part.file_path) {
+                    mnn_audio_part.file_path = audio_part.file_path;
+                }
+                
+                if (audio_part.waveform && audio_part.waveform_size > 0) {
+                    mnn_audio_part.waveform = ::MNN::Express::_Const(
+                        audio_part.waveform, 
+                        {static_cast<int>(audio_part.waveform_size)}, 
+                        ::MNN::Express::NCHW, 
+                        halide_type_of<float>()
+                    );
+                }
+                
+                std::string key = "audio_" + std::to_string(i);
+                mnn_prompt.audios[key] = mnn_audio_part;
+            }
+        }
+
+        // Generate response using MNN's LLM
+        std::ostringstream oss;
+        llm->response(mnn_prompt, &oss, nullptr, max_tokens);
+        
+        std::string response = oss.str();
+        return response;
+
+    } catch (const std::exception &e) {
+        LOGE("Exception generating multimodal response: %s", e.what());
+        return "";
+    }
+}
+
+std::vector<int> mnn_mobile_context::tokenizeMultimodal(const multimodal_prompt &prompt) {
+    std::vector<int> tokens;
+
+    if (!llm) {
+        LOGE("Cannot tokenize multimodal prompt: LLM model not loaded");
+        return tokens;
+    }
+
+    try {
+        // Convert our multimodal_prompt to MNN's MultimodalPrompt format
+        MNN::Transformer::MultimodalPrompt mnn_prompt;
+        if (prompt.prompt_template) {
+            mnn_prompt.prompt_template = prompt.prompt_template;
+        }
+
+        // Convert images
+        if (prompt.images && prompt.image_count > 0) {
+            for (size_t i = 0; i < prompt.image_count; ++i) {
+                const prompt_image_part& img_part = prompt.images[i];
+                MNN::Transformer::PromptImagePart mnn_img_part;
+                
+                // Create MNN VARP from image data
+                mnn_img_part.image_data = ::MNN::Express::_Const(
+                    static_cast<float*>(img_part.image_data), 
+                    {img_part.channels, img_part.height, img_part.width}, 
+                    ::MNN::Express::NCHW, 
+                    halide_type_of<float>()
+                );
+                mnn_img_part.width = img_part.width;
+                mnn_img_part.height = img_part.height;
+                
+                std::string key = "image_" + std::to_string(i);
+                mnn_prompt.images[key] = mnn_img_part;
+            }
+        }
+
+        // Convert audios
+        if (prompt.audios && prompt.audio_count > 0) {
+            for (size_t i = 0; i < prompt.audio_count; ++i) {
+                const prompt_audio_part& audio_part = prompt.audios[i];
+                MNN::Transformer::PromptAudioPart mnn_audio_part;
+                
+                if (audio_part.file_path) {
+                    mnn_audio_part.file_path = audio_part.file_path;
+                }
+                
+                if (audio_part.waveform && audio_part.waveform_size > 0) {
+                    mnn_audio_part.waveform = ::MNN::Express::_Const(
+                        audio_part.waveform, 
+                        {static_cast<int>(audio_part.waveform_size)}, 
+                        ::MNN::Express::NCHW, 
+                        halide_type_of<float>()
+                    );
+                }
+                
+                std::string key = "audio_" + std::to_string(i);
+                mnn_prompt.audios[key] = mnn_audio_part;
+            }
+        }
+
+        // Tokenize using MNN's LLM
+        tokens = llm->tokenizer_encode(mnn_prompt);
+        return tokens;
+
+    } catch (const std::exception &e) {
+        LOGE("Exception tokenizing multimodal prompt: %s", e.what());
+        return tokens;
+    }
+}
+
+// LoRA API implementation
+bool mnn_mobile_context::applyLoraAdapter(const lora_adapter_t &adapter) {
+    if (!llm) {
+        LOGE("Cannot apply LoRA adapter: LLM model not loaded");
+        return false;
+    }
+
+    try {
+        // Create LoRA model using MNN's create_lora method
+        std::shared_ptr<::MNN::Transformer::Llm> lora_model(
+            llm->create_lora(std::string(adapter.path))
+        );
+
+        if (lora_model == nullptr) {
+            LOGE("Failed to create LoRA model from path: %s", adapter.path);
+            return false;
+        }
+
+        // Store the LoRA adapter and model
+        adapters.push_back(adapter);
+        lora_models.push_back(lora_model);
+
+        LOGD("Applied LoRA adapter: %s", adapter.name);
+        return true;
+    } catch (const std::exception &e) {
+        LOGE("Exception applying LoRA adapter: %s", e.what());
+        return false;
+    }
+}
+
+bool mnn_mobile_context::applyLoraAdapters(const lora_adapter_t *adapters, size_t adapter_count) {
+    bool success = true;
+    for (size_t i = 0; i < adapter_count; ++i) {
+        if (!applyLoraAdapter(adapters[i])) {
+            success = false;
+        }
+    }
+    return success;
+}
+
+void mnn_mobile_context::removeLoraAdapters() {
+    adapters.clear();
+    lora_models.clear();
+    LOGD("All LoRA adapters removed");
+}
+
+bool mnn_mobile_context::removeLoraAdapter(const std::string &name) {
+    for (size_t i = 0; i < adapters.size(); ++i) {
+        if (std::string(adapters[i].name) == name) {
+            adapters.erase(adapters.begin() + i);
+            lora_models.erase(lora_models.begin() + i);
+            LOGD("Removed LoRA adapter: %s", name.c_str());
+            return true;
+        }
+    }
+    LOGD("LoRA adapter not found: %s", name.c_str());
+    return false;
+}
+
+// TTS API implementation
+bool mnn_mobile_context::initTTS(const std::string &config_folder, tts_type type) {
+    this->tts_config_folder = config_folder;
+    this->current_tts_type = type;
+
+    try {
+        // Create MNN TTS SDK instance
+        tts_sdk = new MNNTTSSDK(config_folder);
+
+        if (tts_sdk == nullptr) {
+            LOGE("Failed to create MNN TTS SDK from config: %s", config_folder.c_str());
+            return false;
+        }
+
+        LOGD("MNN TTS SDK initialized successfully: %s", config_folder.c_str());
+        return true;
+    } catch (const std::exception &e) {
+        LOGE("Exception initializing MNN TTS SDK: %s", e.what());
+        return false;
+    }
+}
+
+bool mnn_mobile_context::generateAudioFromText(const std::string &text, const std::string &output_file) {
+    if (!tts_sdk) {
+        LOGE("Cannot generate audio: TTS SDK not initialized");
+        return false;
+    }
+
+    try {
+        // Generate audio using MNN TTS SDK
+        MNNTTSSDK* tts = static_cast<MNNTTSSDK*>(tts_sdk);
+        auto [status, audio] = tts->Process(text);
+
+        if (status != 0) {
+            LOGE("Failed to generate audio: status %d", status);
+            return false;
+        }
+
+        // Write audio to file
+        tts->WriteAudioToFile(audio, output_file);
+        LOGD("Audio generated successfully: %s", output_file.c_str());
+        return true;
+    } catch (const std::exception &e) {
+        LOGE("Exception generating audio: %s", e.what());
+        return false;
+    }
+}
+
+bool mnn_mobile_context::generateAudioWaveform(const std::string &text, int &sample_rate, std::vector<float> &audio_data) {
+    if (!tts_sdk) {
+        LOGE("Cannot generate audio waveform: TTS SDK not initialized");
+        return false;
+    }
+
+    try {
+        // Generate audio using MNN TTS SDK
+        MNNTTSSDK* tts = static_cast<MNNTTSSDK*>(tts_sdk);
+        auto [status, audio] = tts->Process(text);
+
+        if (status != 0) {
+            LOGE("Failed to generate audio waveform: status %d", status);
+            return false;
+        }
+
+        // Convert int16_t audio to float and store in the output vector
+        audio_data.clear();
+        audio_data.reserve(audio.size());
+        for (int16_t sample : audio) {
+            audio_data.push_back(static_cast<float>(sample) / 32768.0f); // Normalize to [-1, 1]
+        }
+
+        // Set sample rate (default for BERT-VITS2 is 44100)
+        sample_rate = 44100;
+        LOGD("Audio waveform generated successfully");
+        return true;
+    } catch (const std::exception &e) {
+        LOGE("Exception generating audio waveform: %s", e.what());
+        return false;
+    }
 }
 
 } // namespace llama_mobile

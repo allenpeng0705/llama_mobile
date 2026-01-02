@@ -30,7 +30,7 @@
 
 #include "nlohmann/json.hpp"
 
-#include "mnn_tts_logger.hpp"
+#include "../mnn_tts_logger.hpp"
 
 namespace fs = std::filesystem;
 

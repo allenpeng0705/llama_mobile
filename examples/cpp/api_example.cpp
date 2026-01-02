@@ -7,7 +7,7 @@
 #include <cstring>
 #include <algorithm>
 
-#include "../../lib/llama_mobile_unified.h"
+#include "../../lib/llama_mobile_api.h"
 
 // Function to list available GGUF models in lib/models (excluding embedding folder)
 std::vector<std::string> list_available_models(const std::string& models_dir) {

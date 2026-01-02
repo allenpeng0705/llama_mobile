@@ -40,8 +40,11 @@
 #include "MNN/MNNDefine.h"
 #include "MNN/ImageProcess.hpp"
 #include "MNN/Tensor.hpp"
+#include "MNN/transformers/llm/engine/include/llm/llm.hpp"
 
 namespace llama_mobile {
+
+
 
 /**
  * @brief Types of stopping conditions for text generation.
@@ -50,6 +53,86 @@ enum stop_type
 {
     STOP_FULL,    ///< Stop when a full stop sequence is encountered
     STOP_PARTIAL, ///< Stop when a partial stop sequence match is found
+};
+
+/**
+ * @brief Types of TTS implementation to use.
+ */
+enum tts_type
+{
+    TTS_BERTVITS2, ///< BERT-VITS2 TTS implementation
+};
+
+/**
+ * @brief Types of LoRA adapter update strategies.
+ */
+enum lora_adapter_update_strategy
+{
+    ADAPTER_UPDATE_EMBEDDING,       ///< Update embedding layer
+    ADAPTER_UPDATE_ATTN,             ///< Update attention layers
+    ADAPTER_UPDATE_ATTN_OUT,         ///< Update attention output layers
+    ADAPTER_UPDATE_FFN_GATE,         ///< Update FFN gate layers
+    ADAPTER_UPDATE_FFN_UP,           ///< Update FFN up layers
+    ADAPTER_UPDATE_FFN_DOWN,         ///< Update FFN down layers
+    ADAPTER_UPDATE_ALL,              ///< Update all supported layers
+};
+
+/**
+ * @brief Configuration for a single LoRA adapter.
+ */
+struct lora_adapter_t
+{
+    const char* name;                ///< Name of the adapter
+    const char* path;                ///< Path to the adapter file
+    float r;                         ///< Rank of the adapter
+    float alpha;                     ///< Scaling factor for the adapter
+    float dropout;                   ///< Dropout rate for the adapter
+    bool freeze;                     ///< Whether to freeze the adapter weights
+    uint32_t update_strategy;        ///< Bitmask of update strategies from lora_adapter_update_strategy
+    const char* layers;              ///< Comma-separated list of layers to apply the adapter to
+};
+
+/**
+ * @brief Structure representing an image part of a multimodal prompt.
+ */
+struct prompt_image_part
+{
+    void* image_data;                ///< Raw image data
+    int width;                       ///< Image width
+    int height;                      ///< Image height
+    int channels;                    ///< Number of color channels (e.g., 3 for RGB)
+};
+
+/**
+ * @brief Structure representing an audio part of a multimodal prompt.
+ */
+struct prompt_audio_part
+{
+    const char* file_path;           ///< Path to audio file
+    float* waveform;                 ///< Raw audio waveform data
+    size_t waveform_size;            ///< Size of waveform data in samples
+};
+
+/**
+ * @brief Structure for a multimodal prompt containing text, images, and audio.
+ */
+struct multimodal_prompt
+{
+    const char* prompt_template;     ///< Template for the prompt
+    prompt_image_part* images;       ///< Array of images
+    size_t image_count;              ///< Number of images
+    prompt_audio_part* audios;       ///< Array of audio parts
+    size_t audio_count;              ///< Number of audio parts
+};
+
+/**
+ * @brief Structure representing an embedding vector.
+ */
+struct embedding_result
+{
+    float* data;                     ///< Embedding vector data
+    size_t dimension;                ///< Dimension of the embedding
+    float similarity_threshold;      ///< Similarity threshold for comparisons
 };
 
 /**
@@ -104,6 +187,8 @@ struct mnn_mobile_context {
     // Model and context pointers
     std::shared_ptr<MNN::Interpreter> interpreter = nullptr; ///< MNN interpreter
     MNN::Session* session = nullptr;                         ///< MNN session
+    std::shared_ptr<MNN::Transformer::Llm> llm = nullptr;    ///< MNN LLM transformer
+    std::shared_ptr<MNN::Transformer::Embedding> embedding_model = nullptr; ///< MNN Embedding model
     bool model_loaded = false;                               ///< Whether model is loaded
     float loading_progress = 0;                              ///< Model loading progress (0.0-1.0)
     bool is_load_interrupted = false;                        ///< Whether model loading was interrupted
@@ -132,8 +217,18 @@ struct mnn_mobile_context {
 
     // MNN-specific parameters
     std::string model_path;                ///< Path to the MNN model file
+    std::string config_path;               ///< Path to configuration file
     bool use_metal = false;                ///< Whether to use Metal for iOS
     bool use_neon = false;                 ///< Whether to use Neon for Android
+
+    // LoRA adapter state
+    std::vector<lora_adapter_t> adapters;  ///< List of applied LoRA adapters
+    std::vector<std::shared_ptr<MNN::Transformer::Llm>> lora_models; ///< LoRA model instances
+
+    // TTS state
+    void* tts_sdk = nullptr;               ///< TTS SDK instance
+    tts_type current_tts_type;             ///< Current TTS implementation type
+    std::string tts_config_folder;         ///< Path to TTS configuration folder
 
     ~mnn_mobile_context();
 
@@ -153,6 +248,15 @@ struct mnn_mobile_context {
      * @return true on success, false on failure
      */
     bool loadModel(const std::string &model_path, int n_ctx = 2048, int n_threads = 4, bool use_metal = false, bool use_neon = false);
+
+    /**
+     * @brief Load an embedding model from disk.
+     * 
+     * @param config_path Path to the embedding model configuration file
+     * @param n_threads Number of threads to use
+     * @return true on success, false on failure
+     */
+    bool loadEmbeddingModel(const std::string &config_path, int n_threads = 4);
 
     /**
      * @brief Begin a new completion generation process.
@@ -228,6 +332,111 @@ struct mnn_mobile_context {
      * @param repetition_penalty Repetition penalty (0.0-2.0)
      */
     void setGenerationParams(float temperature, float top_p, float top_k, float repetition_penalty);
+
+    // Embedding API
+    /**
+     * @brief Generate an embedding for text.
+     * 
+     * @param text Text to generate embedding for
+     * @return Embedding result containing the vector and metadata
+     */
+    embedding_result generateEmbedding(const std::string &text);
+
+    /**
+     * @brief Calculate the cosine similarity between two embeddings.
+     * 
+     * @param embedding1 First embedding
+     * @param embedding2 Second embedding
+     * @return Cosine similarity value (-1.0 to 1.0)
+     */
+    float calculateCosineSimilarity(const embedding_result &embedding1, const embedding_result &embedding2);
+
+    /**
+     * @brief Calculate the distance between two embeddings.
+     * 
+     * @param embedding1 First embedding
+     * @param embedding2 Second embedding
+     * @return Distance value
+     */
+    float calculateDistance(const embedding_result &embedding1, const embedding_result &embedding2);
+
+    // Multimodal API
+    /**
+     * @brief Generate a response to a multimodal prompt.
+     * 
+     * @param prompt Multimodal prompt with text, images, and audio
+     * @param max_tokens Maximum number of tokens to generate
+     * @return Generated response text
+     */
+    std::string generateMultimodalResponse(const multimodal_prompt &prompt, int max_tokens = 200);
+
+    /**
+     * @brief Tokenize a multimodal prompt.
+     * 
+     * @param prompt Multimodal prompt to tokenize
+     * @return Vector of token IDs
+     */
+    std::vector<int> tokenizeMultimodal(const multimodal_prompt &prompt);
+
+    // LoRA API
+    /**
+     * @brief Apply a LoRA adapter to the model.
+     * 
+     * @param adapter LoRA adapter configuration
+     * @return true on success, false on failure
+     */
+    bool applyLoraAdapter(const lora_adapter_t &adapter);
+
+    /**
+     * @brief Apply multiple LoRA adapters to the model.
+     * 
+     * @param adapters Array of LoRA adapter configurations
+     * @param adapter_count Number of adapters in the array
+     * @return true on success, false on failure
+     */
+    bool applyLoraAdapters(const lora_adapter_t *adapters, size_t adapter_count);
+
+    /**
+     * @brief Remove all applied LoRA adapters from the model.
+     */
+    void removeLoraAdapters();
+
+    /**
+     * @brief Remove a specific LoRA adapter by name.
+     * 
+     * @param name Name of the adapter to remove
+     * @return true on success, false if adapter not found
+     */
+    bool removeLoraAdapter(const std::string &name);
+
+    // TTS API
+    /**
+     * @brief Initialize the TTS system with the specified implementation.
+     * 
+     * @param config_folder Path to TTS configuration folder
+     * @param type Type of TTS implementation to use
+     * @return true on success, false on failure
+     */
+    bool initTTS(const std::string &config_folder, tts_type type = TTS_BERTVITS2);
+
+    /**
+     * @brief Generate audio from text using TTS.
+     * 
+     * @param text Text to synthesize
+     * @param output_file Path to save the generated audio file
+     * @return true on success, false on failure
+     */
+    bool generateAudioFromText(const std::string &text, const std::string &output_file);
+
+    /**
+     * @brief Generate audio waveform data from text using TTS.
+     * 
+     * @param text Text to synthesize
+     * @param sample_rate Output sample rate (will be set by the function)
+     * @param audio_data Output vector to store audio data
+     * @return true on success, false on failure
+     */
+    bool generateAudioWaveform(const std::string &text, int &sample_rate, std::vector<float> &audio_data);
 };
 
 } // namespace llama_mobile
