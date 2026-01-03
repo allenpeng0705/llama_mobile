@@ -101,7 +101,7 @@ struct llama_mobile_context {
 
     bool context_full = false;
     std::vector<llama_token> guide_tokens;
-    bool next_token_uses_guide_token = true;
+    bool next_token_uses_guide_token = false;
 
     struct llama_mobile_context_mtmd {
         mtmd_context* mtmd_ctx = nullptr;

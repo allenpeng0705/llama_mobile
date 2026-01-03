@@ -35,7 +35,7 @@ void llama_mobile_context::rewind() {
     n_remain = 0;
     n_past = 0;
     embd.clear();
-    next_token_uses_guide_token = true;
+    next_token_uses_guide_token = false;
     guide_tokens.clear();
     mtmd_bitmap_past_hashes.clear();
     audio_tokens.clear();

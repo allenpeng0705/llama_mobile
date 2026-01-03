@@ -28,14 +28,9 @@ set(LLAMA_MOBILE_CORE_SOURCES
     llama_cpp/gguf.cpp
     llama_cpp/ggml-cpu/ggml-cpu.c
     llama_cpp/ggml-cpu/ggml-cpu.cpp
-    llama_cpp/ggml-cpu/ggml-cpu-aarch64-feats.cpp
-    llama_cpp/ggml-cpu/ggml-cpu-aarch64-quants.c
-    llama_cpp/ggml-cpu/ggml-cpu-aarch64-repack.cpp
     llama_cpp/ggml-cpu/ggml-cpu-generic-repack.cpp
     llama_cpp/ggml-cpu/ggml-cpu-quants.c
     llama_cpp/ggml-cpu/ggml-cpu-traits.cpp
-    llama_cpp/ggml-cpu/amx/amx.cpp
-    llama_cpp/ggml-cpu/amx/mmq.cpp
     llama_cpp/ggml-cpu/unary-ops.cpp
     llama_cpp/ggml-cpu/binary-ops.cpp
     llama_cpp/ggml-cpu/sgemm.cpp
@@ -208,6 +203,23 @@ set(LLAMA_MOBILE_CORE_SOURCES
     llama_cpp/version.cpp
 
 )
+
+# Add ARM64-specific CPU files only when building for ARM64 architecture
+if(CMAKE_OSX_ARCHITECTURES MATCHES "arm64")
+    list(APPEND LLAMA_MOBILE_CORE_SOURCES
+        llama_cpp/ggml-cpu/ggml-cpu-aarch64-feats.cpp
+        llama_cpp/ggml-cpu/ggml-cpu-aarch64-quants.c
+        llama_cpp/ggml-cpu/ggml-cpu-aarch64-repack.cpp
+    )
+endif()
+
+# Add x86_64-specific CPU files only when building for x86_64 architecture
+if(CMAKE_OSX_ARCHITECTURES MATCHES "x86_64")
+    list(APPEND LLAMA_MOBILE_CORE_SOURCES
+        llama_cpp/ggml-cpu/amx/amx.cpp
+        llama_cpp/ggml-cpu/amx/mmq.cpp
+    )
+endif()
 
 # Add Metal sources on Apple platforms
 if(APPLE)

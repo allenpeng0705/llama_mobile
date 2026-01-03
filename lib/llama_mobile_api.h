@@ -224,7 +224,7 @@ struct llama_mobile_context {
     // Guide tokens
     bool context_full = false;             ///< Whether the context window is full
     std::vector<llama_token> guide_tokens; ///< Tokens to guide generation
-    bool next_token_uses_guide_token = true; ///< Whether to use guide tokens for next token
+    bool next_token_uses_guide_token = false; ///< Whether to use guide tokens for next token
 
     // Multimodal support
     struct llama_mobile_context_mtmd {

@@ -6,4 +6,4 @@
 //
 
 // Import the unified C header which includes all necessary definitions
-#include "llama_mobile_unified.h"
+#include "llama_mobile_api.h"

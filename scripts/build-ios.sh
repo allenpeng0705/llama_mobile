@@ -338,13 +338,18 @@ t0=$(date +%s)
 # Build the framework
 # Clean existing xcframework to ensure we start fresh
 rm -rf "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework"
-rm -rf build-ios
-mkdir -p build-ios
 
-# Build iOS frameworks
-build_framework "iOS" "arm64;x86_64" "iphonesimulator" "ios-arm64_x86_64-simulator" "build-ios"
-build_framework "iOS" "arm64" "iphoneos" "ios-arm64" "build-ios"
-rm -rf build-ios
+# Build iOS simulator framework
+rm -rf "$ROOT_DIR/build-ios-simulator"
+mkdir -p "$ROOT_DIR/build-ios-simulator"
+build_framework "iOS" "arm64;x86_64" "iphonesimulator" "ios-arm64_x86_64-simulator" "$ROOT_DIR/build-ios-simulator"
+rm -rf "$ROOT_DIR/build-ios-simulator"
+
+# Build iOS device framework
+rm -rf "$ROOT_DIR/build-ios-device"
+mkdir -p "$ROOT_DIR/build-ios-device"
+build_framework "iOS" "arm64" "iphoneos" "ios-arm64" "$ROOT_DIR/build-ios-device"
+rm -rf "$ROOT_DIR/build-ios-device"
 
 # Skip tvOS build for now
 # rm -rf build-tvos
@@ -355,11 +360,36 @@ rm -rf build-ios
 # build_framework "tvOS" "arm64" "appletvos" "tvos-arm64" "build-tvos"
 # rm -rf build-tvos
 
+# Create XCFramework using xcodebuild
+XCFRAMEWORK_DIR="$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework"
+SIMULATOR_FRAMEWORK="$XCFRAMEWORK_DIR/ios-arm64_x86_64-simulator/llama_mobile.framework"
+DEVICE_FRAMEWORK="$XCFRAMEWORK_DIR/ios-arm64/llama_mobile.framework"
+
 # Fix Info.plist encoding issues
 # Convert all Info.plist files in the xcframework to XML format (UTF-8 compatible)
 echo -n "Fixing Info.plist encoding... "
 find "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework" -name "*.plist" -exec plutil -convert xml1 {} \;
 echo "✓"
+
+# Use xcodebuild to create XCFramework
+# First, clean up the existing XCFramework structure but keep the frameworks
+echo -n "Recreating XCFramework with proper Info.plist... "
+TEMP_XCFRAMEWORK="$ROOT_DIR/llama_mobile-ios/llama_mobile_temp.xcframework"
+
+xcodebuild -create-xcframework \
+  -framework "$SIMULATOR_FRAMEWORK" \
+  -framework "$DEVICE_FRAMEWORK" \
+  -output "$TEMP_XCFRAMEWORK" 2>/dev/null
+
+# Replace the old XCFramework with the new one
+if [ -d "$TEMP_XCFRAMEWORK" ]; then
+  rm -rf "$XCFRAMEWORK_DIR"
+  mv "$TEMP_XCFRAMEWORK" "$XCFRAMEWORK_DIR"
+  echo "✓"
+else
+  echo "✗"
+  echo "Warning: Failed to recreate XCFramework with xcodebuild, keeping manually created structure"
+fi
 
 # Copy the framework to SDK
 copy_to_sdk
