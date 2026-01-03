@@ -17,9 +17,11 @@ OUTPUT_DIR="$BUILD_DIR/output"
 MODELS_DIR="$LLAMA_MOBILE_DIR/models"
 TESTS_DIR="$OUTPUT_DIR"
 
-# List available .gguf models
+# List available models
 list_models() {
     echo -e "${BLUE}Available models:${NC}"
+    
+    # List .gguf files
     MODELS=($(find "$MODELS_DIR" -type f -name "*.gguf" | sort))
     
     if [ ${#MODELS[@]} -eq 0 ]; then
@@ -87,8 +89,8 @@ run_program() {
     echo -e "${YELLOW}====================================${NC}"
     
     # Run the program with the selected model path
-    if [ "$PROGRAM" = "chat_example" ] || [ "$PROGRAM" = "test_api" ]; then
-        # Pass the model path directly to both programs now
+    if [ "$PROGRAM" = "chat_example" ] || [ "$PROGRAM" = "test_api" ] || [ "$PROGRAM" = "test_mnn" ]; then
+        # Pass the model path directly to these programs
         ./$PROGRAM "$SELECTED_MODEL"
     else
         # For other programs that might be added later

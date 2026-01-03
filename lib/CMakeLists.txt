@@ -4,35 +4,6 @@ project(llama_mobile_core)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# MNN configuration
-option(MNN_METAL "Enable Metal support" OFF)
-option(MNN_ARM82 "Enable ARMv8.2 FP16 support" OFF)
-
-# Set MNN options based on platform
-if(APPLE)
-    set(MNN_METAL ON)
-endif()
-
-# Android aarch64 ARM82 setting is now controlled by the -DMNN_ARM82 flag passed from build scripts
-
-# Add MNN as a subdirectory
-set(MNN_BUILD_SHARED_LIBS OFF CACHE BOOL "Build MNN as static library" FORCE)
-set(MNN_BUILD_TOOLS OFF CACHE BOOL "Build MNN tools" FORCE)
-set(MNN_BUILD_DEMO OFF CACHE BOOL "Build MNN demo" FORCE)
-set(MNN_BUILD_CONVERTER OFF CACHE BOOL "Build MNN converter" FORCE)
-set(MNN_BUILD_TRAIN OFF CACHE BOOL "Build MNN train" FORCE)
-set(MNN_BUILD_LLM ON CACHE BOOL "Build MNN LLM support" FORCE)
-set(MNN_BUILD_QUANTOOLS OFF CACHE BOOL "Build MNN quant tools" FORCE)
-set(MNN_EVALUATION OFF CACHE BOOL "Build MNN evaluation" FORCE)
-set(MNN_USE_NEON OFF CACHE BOOL "Disable NEON support" FORCE)
-set(MNN_USE_SSE OFF CACHE BOOL "Disable SSE support" FORCE)
-add_subdirectory(MNN)
-
-# Add MNN TTS subdirectory
-set(BUILD_BERTVITS2 ON CACHE BOOL "Build BertVit2 TTS" FORCE)
-set(BUILD_PIPER OFF CACHE BOOL "Build PIPER TTS" FORCE)
-add_subdirectory(MNN/apps/frameworks/mnn_tts)
-
 set(LLAMA_MOBILE_CORE_SOURCES
     llama_mobile_context.cpp
     llama_mobile_loader.cpp
@@ -47,7 +18,6 @@ set(LLAMA_MOBILE_CORE_SOURCES
     llama_mobile_tts.cpp
     llama_mobile_bench.cpp
     llama_mobile_chat.cpp
-    llama_mobile_mnn.cpp
     llama_cpp/ggml.c
     llama_cpp/ggml-alloc.c
     llama_cpp/ggml-backend.cpp
@@ -276,9 +246,6 @@ target_include_directories(llama_mobile_core_static PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/ggml-cpu>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/minja>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/tools/mtmd>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/apps/frameworks/mnn_tts/include>
 )
 
 target_include_directories(llama_mobile_core_shared PUBLIC
@@ -287,9 +254,6 @@ target_include_directories(llama_mobile_core_shared PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/ggml-cpu>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/minja>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/tools/mtmd>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/apps/frameworks/mnn_tts/include>
 )
 
 target_include_directories(llama_mobile_core_lib PUBLIC
@@ -298,9 +262,6 @@ target_include_directories(llama_mobile_core_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/ggml-cpu>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/minja>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/tools/mtmd>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/include>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/3rd_party>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/MNN/apps/frameworks/mnn_tts/include>
 )
 
 if(NOT MSVC)
@@ -380,23 +341,14 @@ if(APPLE)
         target_link_libraries(llama_mobile_core_lib PUBLIC
             ${FOUNDATION_LIBRARY}
             ${ACCELERATE_FRAMEWORK}
-            MNN
-            MNN_Express
-            mnn_tts
         )
         target_link_libraries(llama_mobile_core_static PUBLIC
             ${FOUNDATION_LIBRARY}
             ${ACCELERATE_FRAMEWORK}
-            MNN
-            MNN_Express
-            mnn_tts
         )
         target_link_libraries(llama_mobile_core_shared PUBLIC
             ${FOUNDATION_LIBRARY}
             ${ACCELERATE_FRAMEWORK}
-            MNN
-            MNN_Express
-            mnn_tts
         )
         target_compile_definitions(llama_mobile_core_lib PUBLIC
             LM_GGML_USE_ACCELERATE
@@ -414,23 +366,14 @@ if(APPLE)
         target_link_libraries(llama_mobile_core_lib PUBLIC
             ${METAL_LIBRARY}
             ${METALKIT_LIBRARY}
-            MNN
-            MNN_Express
-            mnn_tts
         )
         target_link_libraries(llama_mobile_core_static PUBLIC
             ${METAL_LIBRARY}
             ${METALKIT_LIBRARY}
-            MNN
-            MNN_Express
-            mnn_tts
         )
         target_link_libraries(llama_mobile_core_shared PUBLIC
             ${METAL_LIBRARY}
             ${METALKIT_LIBRARY}
-            MNN
-            MNN_Express
-            mnn_tts
         )
         target_compile_definitions(llama_mobile_core_lib PUBLIC
             LM_GGML_USE_METAL
@@ -456,9 +399,9 @@ endif()
 if(ANDROID)
     find_library(LOG_LIBRARY log)
     if(LOG_LIBRARY)
-        target_link_libraries(llama_mobile_core_lib PUBLIC ${LOG_LIBRARY} MNN MNN_Express mnn_tts)
-        target_link_libraries(llama_mobile_core_static PUBLIC ${LOG_LIBRARY} MNN MNN_Express mnn_tts)
-        target_link_libraries(llama_mobile_core_shared PUBLIC ${LOG_LIBRARY} MNN MNN_Express mnn_tts)
+        target_link_libraries(llama_mobile_core_lib PUBLIC ${LOG_LIBRARY})
+        target_link_libraries(llama_mobile_core_static PUBLIC ${LOG_LIBRARY})
+        target_link_libraries(llama_mobile_core_shared PUBLIC ${LOG_LIBRARY})
     endif()
     
     # Always disable POSIX madvise on Android

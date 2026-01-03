@@ -36,3 +36,4 @@ llama_mobile-Android/src/main/jniLibs/arm64-v8a/libllama_mobile.so
 *.so
 *.so
 *.so
+/lib/build_new

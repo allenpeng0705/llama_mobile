@@ -217,7 +217,7 @@ for ABI in "${ABI_LIST[@]}"; do
     
     # Add platform-specific flags
     if [ "$ABI" = "arm64-v8a" ]; then
-        PLATFORM_FLAGS="-DGGML_NO_POSIX_MADVISE=ON -DMNN_ARM82=OFF -DMNN_USE_NEON=OFF"
+        PLATFORM_FLAGS="-DGGML_NO_POSIX_MADVISE=ON"
 
     else
         PLATFORM_FLAGS=""
@@ -232,8 +232,6 @@ for ABI in "${ABI_LIST[@]}"; do
         -DCMAKE_BUILD_TYPE=\"$CMAKE_BUILD_TYPE\" \
         -DANDROID_STL=c++_shared \
         -DBUILD_SHARED_LIBS=ON \
-        -DMNN_BUILD_SHARED_LIBS=OFF \
-        -DMNN_BUILD_LLM=ON \
         $PLATFORM_FLAGS"
     
 

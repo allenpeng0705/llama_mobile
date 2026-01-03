@@ -5,10 +5,27 @@
 #include <string>
 #include <fstream>
 #include <cstdlib>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/stat.h>
+#endif
 
 inline bool fileExists(const std::string& filepath) {
     std::ifstream f(filepath.c_str());
     return f.good();
+}
+
+inline bool directoryExists(const std::string& dirpath) {
+    #ifdef _WIN32
+        DWORD ftyp = GetFileAttributesA(dirpath.c_str());
+        if (ftyp == INVALID_FILE_ATTRIBUTES) return false;
+        return (ftyp & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    #else
+        struct stat info;
+        if (stat(dirpath.c_str(), &info) != 0) return false;
+        return (info.st_mode & S_IFDIR) != 0;
+    #endif
 }
 
 inline bool downloadFile(const std::string& url, const std::string& filepath, const std::string& filename_desc) {

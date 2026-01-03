@@ -23,7 +23,9 @@ add_executable(llama_mobile_llm main_llm.cpp)
 add_executable(llama_mobile_tts main_tts.cpp)
 add_executable(llama_mobile_conversation_ffi main_conversation_ffi.cpp)
 add_executable(llama_mobile_api_example api_example.cpp)
-add_executable(llama_mobile_benchmark benchmark_example.cpp)
+# Skipping benchmark example due to missing header file
+# add_executable(llama_mobile_benchmark benchmark_example.cpp)
+add_executable(llama_mobile_mnn main_mnn.cpp)
 
 # Link each executable to the core library
 target_link_libraries(llama_mobile_vlm PRIVATE llama_mobile_core_lib)
@@ -33,7 +35,9 @@ target_link_libraries(llama_mobile_llm PRIVATE llama_mobile_core_lib)
 target_link_libraries(llama_mobile_tts PRIVATE llama_mobile_core_lib)
 target_link_libraries(llama_mobile_conversation_ffi PRIVATE llama_mobile_core_lib)
 target_link_libraries(llama_mobile_api_example PRIVATE llama_mobile_core_lib)
-target_link_libraries(llama_mobile_benchmark PRIVATE llama_mobile_core_lib)
+# Skipping benchmark example target link
+# target_link_libraries(llama_mobile_benchmark PRIVATE llama_mobile_core_lib)
+target_link_libraries(llama_mobile_mnn PRIVATE llama_mobile_core_lib)
 
 # Copy Metal shader files to build directory for Apple platforms
 if(APPLE)
