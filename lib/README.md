@@ -780,52 +780,7 @@ int main() {
 }
 ```
 
-## API Comparison: Standard vs. MNN
 
-The llama_mobile library provides two main API interfaces: the standard API (`llama_mobile_api.h`) and the MNN-optimized API (`llama_mobile_mnn.h`). Here's a comparison to help you choose the right one for your use case:
-
-### Standard API (llama_mobile_api.h)
-
-**Best for:**
-- Cross-platform applications that need compatibility with various backends
-- Projects requiring direct access to llama.cpp features and extensions
-- Applications that need support for multiple model formats (GGUF, etc.)
-- Projects where you want to maintain flexibility in choosing the inference engine
-
-**Key Features:**
-- Supports multiple backends and model formats
-- Full access to all llama.cpp functionality
-- Flexible GPU acceleration options
-- Comprehensive C/C++/FFI interfaces
-- Multimodal support for vision/audio
-- Conversational AI with chat templates
-
-### MNN API (llama_mobile_mnn.h)
-
-**Best for:**
-- Mobile and embedded devices with limited resources
-- Applications targeting Android and iOS platforms
-- Projects that require MNN's lightweight inference engine
-- Use cases where performance optimization for specific mobile hardware is critical
-
-**Key Features:**
-- Optimized for MNN (Mobile Neural Network) engine
-- Lower memory footprint for mobile devices
-- Hardware-accelerated inference on mobile GPUs
-- Simplified API for mobile use cases
-- MNN-specific optimizations for transformer models
-- Built-in support for MNN's model format
-
-### Choosing Between APIs
-
-| Factor | Standard API | MNN API |
-|--------|--------------|---------|
-| **Target Platform** | All platforms | Mobile/embedded |
-| **Performance** | Balanced | Mobile-optimized |
-| **Memory Usage** | Moderate | Lower |
-| **Model Formats** | Multiple (GGUF) | MNN format |
-| **Backend Support** | Multiple | MNN only |
-| **Complexity** | Comprehensive | Simplified |
 
 ## Adding More Interfaces
 

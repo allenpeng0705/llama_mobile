@@ -89,7 +89,7 @@ run_program() {
     echo -e "${YELLOW}====================================${NC}"
     
     # Run the program with the selected model path
-    if [ "$PROGRAM" = "chat_example" ] || [ "$PROGRAM" = "test_api" ] || [ "$PROGRAM" = "test_mnn" ]; then
+    if [ "$PROGRAM" = "chat_example" ] || [ "$PROGRAM" = "test_api" ]; then
         # Pass the model path directly to these programs
         ./$PROGRAM "$SELECTED_MODEL"
     else
