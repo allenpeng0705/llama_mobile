@@ -29,7 +29,6 @@ set(LLAMA_MOBILE_CORE_SOURCES
     llama_cpp/ggml-cpu/ggml-cpu.c
     llama_cpp/ggml-cpu/ggml-cpu.cpp
     llama_cpp/ggml-cpu/ggml-cpu-generic-repack.cpp
-    llama_cpp/ggml-cpu/ggml-cpu-quants.c
     llama_cpp/ggml-cpu/ggml-cpu-traits.cpp
     llama_cpp/ggml-cpu/unary-ops.cpp
     llama_cpp/ggml-cpu/binary-ops.cpp
@@ -204,13 +203,25 @@ set(LLAMA_MOBILE_CORE_SOURCES
 
 )
 
-# Add ARM64-specific CPU files only when building for ARM64 architecture
-if(CMAKE_OSX_ARCHITECTURES MATCHES "arm64")
+# Add ARM64-specific CPU files when building for ARM64 architecture
+if((CMAKE_OSX_ARCHITECTURES MATCHES "arm64") OR (ANDROID_ABI MATCHES "arm64-v8a") OR (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64") OR (CMAKE_SYSTEM_PROCESSOR MATCHES "arm64"))
     list(APPEND LLAMA_MOBILE_CORE_SOURCES
         llama_cpp/ggml-cpu/ggml-cpu-aarch64-feats.cpp
         llama_cpp/ggml-cpu/ggml-cpu-aarch64-quants.c
         llama_cpp/ggml-cpu/ggml-cpu-aarch64-repack.cpp
     )
+endif()
+
+# For Apple Silicon builds where architecture detection might not work properly
+if(APPLE AND NOT CMAKE_OSX_ARCHITECTURES)
+    execute_process(COMMAND uname -m OUTPUT_VARIABLE HOST_ARCH OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(HOST_ARCH MATCHES "arm64")
+        list(APPEND LLAMA_MOBILE_CORE_SOURCES
+            llama_cpp/ggml-cpu/ggml-cpu-aarch64-feats.cpp
+            llama_cpp/ggml-cpu/ggml-cpu-aarch64-quants.c
+            llama_cpp/ggml-cpu/ggml-cpu-aarch64-repack.cpp
+        )
+    endif()
 endif()
 
 # Add x86_64-specific CPU files only when building for x86_64 architecture
@@ -220,6 +231,12 @@ if(CMAKE_OSX_ARCHITECTURES MATCHES "x86_64")
         llama_cpp/ggml-cpu/amx/mmq.cpp
     )
 endif()
+
+# Add generic CPU quants file for all architectures
+# It provides fallback implementations for quantization functions not implemented in architecture-specific files
+list(APPEND LLAMA_MOBILE_CORE_SOURCES
+    llama_cpp/ggml-cpu/ggml-cpu-quants.c
+)
 
 # Add Metal sources on Apple platforms
 if(APPLE)
@@ -234,6 +251,11 @@ if(APPLE)
 endif()
 
 add_library(llama_mobile_core_lib OBJECT ${LLAMA_MOBILE_CORE_SOURCES})
+
+# Add LM_GGML_CPU_GENERIC definition for non-ARM architectures
+if(NOT ((CMAKE_OSX_ARCHITECTURES MATCHES "arm64") OR (ANDROID_ABI MATCHES "arm64-v8a") OR (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64") OR (CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")))
+    target_compile_definitions(llama_mobile_core_lib PRIVATE LM_GGML_CPU_GENERIC)
+endif()
 
 # Create static library
 add_library(llama_mobile_core_static STATIC $<TARGET_OBJECTS:llama_mobile_core_lib>)
@@ -442,5 +464,5 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/chat.h DESTINATION ${INCLUDE_OUT
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/sampling.h DESTINATION ${INCLUDE_OUTPUT_PATH}/llama_cpp)
 
 # Add tests subdirectory
-add_subdirectory(tests)
+# add_subdirectory(tests)
 

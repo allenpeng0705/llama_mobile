@@ -1,0 +1,5 @@
+module LlamaMobileSDK {
+    umbrella header "LlamaMobileSDK-Bridging-Header.h"
+    export *
+    link "llama_mobile"
+}

@@ -21,29 +21,26 @@ let package = Package(
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
+        .binaryTarget(
+            name: "llama_mobile",
+            path: "Frameworks/llama_mobile.xcframework"
+        ),
+        // C wrapper target to expose the C functions from the XCFramework
+        .target(
+            name: "llama_mobile_c",
+            dependencies: ["llama_mobile"],
+            path: "Sources/llama_mobile_c",
+            publicHeadersPath: "."
+        ),
         .target(
             name: "LlamaMobileSDK",
-            dependencies: ["LlamaMobileXCFramework"],
-            path: "LlamaMobileSDK",
-            cSettings: [
-                .headerSearchPath("../Frameworks/llama_mobile.xcframework/ios-arm64/llama_mobile.framework/Headers/"),
-                .headerSearchPath("../Frameworks/llama_mobile.xcframework/ios-arm64/llama_mobile.framework/Headers/llama_cpp/")
-            ],
-            swiftSettings: [
-                .define("SWIFT_PACKAGE"),
-                .unsafeFlags(["-import-objc-header", "LlamaMobileSDK/LlamaMobileSDK-Bridging-Header.h"])
-            ]),
-
-
-
-
-
-
-        .binaryTarget(
-            name: "LlamaMobileXCFramework",
-            path: "./Frameworks/llama_mobile.xcframework"),
+            dependencies: ["llama_mobile_c"],
+            path: "Sources/LlamaMobileSDK",
+            resources: [.copy("grammars")]
+        ),
         .testTarget(
             name: "LlamaMobileSDKTests",
-            dependencies: ["LlamaMobileSDK"]),
+            dependencies: ["LlamaMobileSDK"],
+            path: "Tests"),
     ]
 )

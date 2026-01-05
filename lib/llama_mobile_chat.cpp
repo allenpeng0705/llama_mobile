@@ -20,6 +20,7 @@ common_chat_params llama_mobile_context::getFormattedChatWithJinja(
     }
     common_chat_templates_inputs inputs;
     inputs.use_jinja = true;
+    inputs.add_generation_prompt = true;
     try {
         inputs.messages = common_chat_msgs_parse_oaicompat(json::parse(messages));
         auto useTools = !tools.empty();
@@ -65,6 +66,7 @@ std::string llama_mobile_context::getFormattedChat(
     }
     common_chat_templates_inputs inputs;
     inputs.use_jinja = false;
+    inputs.add_generation_prompt = true;
      try {
          inputs.messages = common_chat_msgs_parse_oaicompat(json::parse(messages));
      } catch (const json::exception& e) {

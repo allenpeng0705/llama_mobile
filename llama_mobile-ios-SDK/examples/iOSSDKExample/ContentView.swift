@@ -3,6 +3,7 @@ import LlamaMobileSDK
 
 struct ContentView: View {
     @State private var modelPath = ""
+    @State private var systemPrompt = "You are a helpful and polite AI assistant. Please provide clear and relevant responses to user queries."
     @State private var prompt = "Hello, world!"
     @State private var completionResult = ""
     @State private var isLoading = false
@@ -14,15 +15,21 @@ struct ContentView: View {
         NavigationView {
             VStack(spacing: 20) {
                 Form {
-                    Section(header: Text("Model Configuration")) {
-                        TextField("Model Path", text: $modelPath)
-                            .placeholder(when: modelPath.isEmpty) { Text("Path to your model file").foregroundColor(.gray) }
-                    }
-                    
-                    Section(header: Text("Prompt")) {
-                        TextField("Enter prompt", text: $prompt)
-                            .placeholder(when: prompt.isEmpty) { Text("Hello, world!").foregroundColor(.gray) }
-                    }
+            Section(header: Text("Model Configuration")) {
+                TextField("Model Path", text: $modelPath)
+                    .placeholder(when: modelPath.isEmpty) { Text("Path to your model file").foregroundColor(.gray) }
+            }
+            
+            Section(header: Text("System Prompt")) {
+                TextEditor(text: $systemPrompt)
+                    .frame(minHeight: 100)
+                    .placeholder(when: systemPrompt.isEmpty) { Text("Enter system prompt").foregroundColor(.gray) }
+            }
+            
+            Section(header: Text("User Prompt")) {
+                TextField("Enter prompt", text: $prompt)
+                    .placeholder(when: prompt.isEmpty) { Text("Hello, world!").foregroundColor(.gray) }
+            }
                     
                     Section {
                         Button(action: { loadModel() }) {
@@ -36,10 +43,10 @@ struct ContentView: View {
                         }
                         .disabled(isLoading)
                         
-                        Button(action: { generateCompletion() }) {
+                        Button(action: { generateResponse() }) {
                             HStack { 
                                 Spacer()
-                                Text("Generate Completion")
+                                Text("Generate Response")
                                     .foregroundColor(.blue)
                                     .fontWeight(.medium)
                                 Spacer()
@@ -85,6 +92,8 @@ struct ContentView: View {
         DispatchQueue.global(qos: .userInitiated).async {
             let params = LlamaMobile.InitParams(
                 modelPath: modelPath,
+                systemPrompt: systemPrompt,
+                chatTemplate: "",
                 nCtx: 2048,
                 nGpuLayers: 4,
                 progressCallback: { progress in
@@ -106,37 +115,24 @@ struct ContentView: View {
         }
     }
     
-    private func generateCompletion() {
+    private func generateResponse() {
         isLoading = true
         hasError = false
         
         DispatchQueue.global(qos: .userInitiated).async {
-            let params = LlamaMobile.CompletionParams(
-                prompt: prompt,
-                nPredict: 128,
-                temperature: 0.7,
-                topK: 40,
-                topP: 0.9,
-                tokenCallback: { tokenJson in
-                    // Process token here if needed
-                    print("Token: \(tokenJson)")
-                    return true // Continue generation
-                }
-            )
-            
-            guard let result = llamaMobile.completion(with: params) else {
+            guard let result = llamaMobile.generateResponse(userMessage: prompt, maxTokens: 128) else {
                 DispatchQueue.main.async {
                     isLoading = false
                     hasError = true
-                    completionResult = "Failed to generate completion."
+                    completionResult = "Failed to generate response."
                 }
                 return
             }
             
             DispatchQueue.main.async {
                 isLoading = false
-                completionResult = result.text
-                print("Generation complete. Tokens predicted: \(result.tokensPredicted)")
+                completionResult = result
+                print("Generation complete.")
             }
         }
     }

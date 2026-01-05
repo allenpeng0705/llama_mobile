@@ -48,8 +48,30 @@ build_project() {
     echo -e "${GREEN}✓ Build completed successfully${NC}"
 }
 
+# Copy grammar files to output directory
+copy_grammars() {
+    echo -e "${BLUE}Copying grammar files...${NC}"
+    GRAMMAR_SRC_DIR="$LLAMA_MOBILE_DIR/grammars"
+    GRAMMAR_DEST_DIR="$OUTPUT_DIR/grammars"
+    
+    mkdir -p "$GRAMMAR_DEST_DIR"
+    
+    if [ -d "$GRAMMAR_SRC_DIR" ]; then
+        cp "$GRAMMAR_SRC_DIR"/*.gbnf "$GRAMMAR_DEST_DIR/"
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ Grammar files copied successfully${NC}"
+        else
+            echo -e "${RED}✗ Failed to copy grammar files${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${YELLOW}ℹ Grammar source directory not found, skipping grammar files${NC}"
+    fi
+}
+
 # Main execution flow
 clean_build
 build_project
+copy_grammars
 
 echo -e "${BLUE}=== Build script completed ===${NC}"

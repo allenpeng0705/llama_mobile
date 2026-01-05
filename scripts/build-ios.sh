@@ -219,6 +219,24 @@ function build_framework() {
   fi
   echo "✓"
   
+  # Copy grammar files
+  echo -n "Copying grammar files... "
+  GRAMMAR_SRC_DIR="$ROOT_DIR/lib/grammars"
+  GRAMMAR_DEST_DIR="$FRAMEWORK_DEST/grammars"
+  
+  if ! mkdir -p "$GRAMMAR_DEST_DIR"; then
+    echo "✗"
+    echo "Failed to create grammar directory"
+    exit 1
+  fi
+  
+  if ! cp "$GRAMMAR_SRC_DIR"/*.gbnf "$GRAMMAR_DEST_DIR/"; then
+    echo "✗"
+    echo "Failed to copy grammar files"
+    exit 1
+  fi
+  echo "✓"
+  
   # Create Modules directory with module map
   echo -n "Creating module map... "
   MODULE_DIR="$FRAMEWORK_DEST/Modules"
@@ -339,11 +357,37 @@ t0=$(date +%s)
 # Clean existing xcframework to ensure we start fresh
 rm -rf "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework"
 
-# Build iOS simulator framework
-rm -rf "$ROOT_DIR/build-ios-simulator"
-mkdir -p "$ROOT_DIR/build-ios-simulator"
-build_framework "iOS" "arm64;x86_64" "iphonesimulator" "ios-arm64_x86_64-simulator" "$ROOT_DIR/build-ios-simulator"
-rm -rf "$ROOT_DIR/build-ios-simulator"
+# Build iOS simulator framework - build each architecture separately then combine
+# Build arm64 simulator
+rm -rf "$ROOT_DIR/build-ios-simulator-arm64"
+mkdir -p "$ROOT_DIR/build-ios-simulator-arm64"
+build_framework "iOS" "arm64" "iphonesimulator" "ios-arm64-simulator" "$ROOT_DIR/build-ios-simulator-arm64"
+
+# Build x86_64 simulator
+rm -rf "$ROOT_DIR/build-ios-simulator-x86_64"
+mkdir -p "$ROOT_DIR/build-ios-simulator-x86_64"
+build_framework "iOS" "x86_64" "iphonesimulator" "ios-x86_64-simulator" "$ROOT_DIR/build-ios-simulator-x86_64"
+
+# Combine the two simulator architectures into one
+SIMULATOR_ARM64_FRAMEWORK="$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/ios-arm64-simulator/llama_mobile.framework"
+SIMULATOR_X86_64_FRAMEWORK="$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/ios-x86_64-simulator/llama_mobile.framework"
+SIMULATOR_COMBINED_DIR="$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/ios-arm64_x86_64-simulator"
+SIMULATOR_COMBINED_FRAMEWORK="$SIMULATOR_COMBINED_DIR/llama_mobile.framework"
+
+# Create combined directory
+rm -rf "$SIMULATOR_COMBINED_DIR"
+mkdir -p "$SIMULATOR_COMBINED_DIR"
+cp -R "$SIMULATOR_ARM64_FRAMEWORK" "$SIMULATOR_COMBINED_FRAMEWORK"
+
+# Use lipo to combine the binary files
+LIPO="$(xcrun -find lipo)"
+"$LIPO" -create "$SIMULATOR_ARM64_FRAMEWORK/llama_mobile" "$SIMULATOR_X86_64_FRAMEWORK/llama_mobile" -output "$SIMULATOR_COMBINED_FRAMEWORK/llama_mobile"
+
+# Clean up individual architecture directories
+rm -rf "$ROOT_DIR/build-ios-simulator-arm64"
+rm -rf "$ROOT_DIR/build-ios-simulator-x86_64"
+rm -rf "$SIMULATOR_ARM64_FRAMEWORK/.."  # Remove arm64 simulator directory
+rm -rf "$SIMULATOR_X86_64_FRAMEWORK/.."  # Remove x86_64 simulator directory
 
 # Build iOS device framework
 rm -rf "$ROOT_DIR/build-ios-device"

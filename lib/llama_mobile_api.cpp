@@ -40,6 +40,7 @@ static llama_mobile_completion_params_c_t convert_completion_params(const llama_
         ffi_params.penalty_repeat = api_params->penalty_repeat;
         ffi_params.stop_sequences = api_params->stop_sequences;
         ffi_params.stop_sequence_count = api_params->stop_sequence_count;
+        ffi_params.grammar = api_params->grammar;
         ffi_params.token_callback = api_params->token_callback;
     }
     

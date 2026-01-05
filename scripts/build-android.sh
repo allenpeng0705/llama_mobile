@@ -169,7 +169,7 @@ echo "Using $n_cpu cores for build"
 
 # Create the llama_mobile-android directory if it doesn't exist
     echo -n "Creating necessary directories... "
-for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src/main/cpp" "./llama_mobile-android/src/main/java/com/llamamobile"; do
+for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src/main/cpp" "./llama_mobile-android/src/main/java/com/llamamobile" "./llama_mobile-android/src/main/assets/grammars"; do
     if ! mkdir -p "$dir"; then
         echo "✗"
         echo "Error: Failed to create directory $dir!"
@@ -178,6 +178,24 @@ for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src
     fi
     echo "✓"
 done
+
+# Copy grammar files to assets
+    echo -n "Copying grammar files to assets... "
+GRAMMAR_SRC_DIR="./lib/grammars"
+GRAMMAR_DEST_DIR="./llama_mobile-android/src/main/assets/grammars"
+
+if [ -d "$GRAMMAR_SRC_DIR" ]; then
+    if ! cp "$GRAMMAR_SRC_DIR"/*.gbnf "$GRAMMAR_DEST_DIR/"; then
+        echo "✗"
+        echo "Error: Failed to copy grammar files!"
+        exit 1
+    fi
+    echo "✓"
+else
+    echo "✗"
+    echo "Warning: Grammar source directory not found at $GRAMMAR_SRC_DIR!"
+    echo "Grammar files will not be included."
+fi
 
 # Set default ABIs if not specified
 if [ -z "$ABIS" ]; then

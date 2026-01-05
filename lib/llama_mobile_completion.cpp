@@ -215,7 +215,7 @@ completion_token_output llama_mobile_context::nextToken()
         candidates.reserve(llama_vocab_n_tokens(vocab));
 
         // Use index 0 to reliably access the most recent logits
-        llama_token new_token_id = common_sampler_sample(ctx_sampling, ctx, 0);
+        llama_token new_token_id = common_sampler_sample(ctx_sampling, ctx, 0, true);
 
         if (next_token_uses_guide_token && !guide_tokens.empty() && 
             !llama_vocab_is_control(vocab, new_token_id) && 

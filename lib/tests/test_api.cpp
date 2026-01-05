@@ -229,8 +229,42 @@ int main(int argc, char* argv[]) {
     }
     test_results.push_back(conv_after_clear_result);
     
-    // Cleanup original context before embedding tests
-    std::cout << "\n--- Cleaning up original context ---\n";
+    // Test 7: Grammar Support API
+    std::cout << "\n--- Testing Grammar Support API ---\n";
+    TestResult grammar_result = {"Grammar Support API", false, ""};
+    
+    // Get the path to the json.gbnf file
+    std::string executable_dir = get_executable_dir();
+    std::string grammar_path = executable_dir + "/../../grammars/json.gbnf";
+    std::cout << "Using grammar path: " << grammar_path << "\n";
+    
+    // Test JSON grammar
+    const char* json_prompt = "Generate a JSON object with name, age, and city fields: ";
+    
+    llama_mobile_completion_params_t json_params = {0};
+    json_params.prompt = json_prompt;
+    json_params.max_tokens = 100;
+    json_params.temperature = 0.7;
+    json_params.top_k = 40;
+    json_params.top_p = 0.95;
+    json_params.grammar = grammar_path.c_str();
+    
+    llama_mobile_completion_result_t json_result;
+    int grammar_status = llama_mobile_completion(ctx, &json_params, &json_result);
+    
+    if (grammar_status == 0 && json_result.text) {
+        std::string full_json = std::string(json_prompt) + std::string(json_result.text);
+        std::cout << "JSON output with grammar: " << full_json << "\n";
+        grammar_result.passed = true;
+        grammar_result.details = "Generated JSON output with grammar constraints";
+        llama_mobile_free_completion_result(&json_result);
+    } else {
+        std::cerr << "Grammar API failed with status: " << grammar_status << "\n";
+        grammar_result.details = "Failed with status: " + std::to_string(grammar_status);
+    }
+    test_results.push_back(grammar_result);
+    
+    // Free original context (not embedding)
     llama_mobile_free(ctx);
     std::cout << "Original context freed successfully\n";
     

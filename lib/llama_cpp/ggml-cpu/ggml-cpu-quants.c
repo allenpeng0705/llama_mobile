@@ -38,6 +38,7 @@ void quantize_row_q5_1(const float * LM_GGML_RESTRICT x, void * LM_GGML_RESTRICT
     quantize_row_q5_1_ref(x, y, k);
 }
 
+#if !defined(__aarch64__)
 void quantize_row_q8_0_generic(const float * LM_GGML_RESTRICT x, void * LM_GGML_RESTRICT y, int64_t k) {
     quantize_row_q8_0_ref(x, y, k);
 }
@@ -45,6 +46,7 @@ void quantize_row_q8_0_generic(const float * LM_GGML_RESTRICT x, void * LM_GGML_
 void quantize_row_q8_1_generic(const float * LM_GGML_RESTRICT x, void * LM_GGML_RESTRICT y, int64_t k) {
     quantize_row_q8_1_ref(x, y, k);
 }
+#endif
 
 void quantize_row_mxfp4(const float * LM_GGML_RESTRICT x, void * LM_GGML_RESTRICT y, int64_t k) {
     quantize_row_mxfp4_ref(x, y, k);
@@ -106,12 +108,14 @@ void quantize_row_tq2_0(const float * LM_GGML_RESTRICT x, void * LM_GGML_RESTRIC
 
 //===================================== Q8_K ==============================================
 
+#if !defined(__aarch64__)
 void quantize_row_q8_K_generic(const float * LM_GGML_RESTRICT x, void * LM_GGML_RESTRICT y, int64_t k) {
     quantize_row_q8_K_ref(x, y, k);
 }
+#endif
 
 //===================================== Dot products =================================
-
+#if !defined(__aarch64__)
 void lm_ggml_vec_dot_q4_0_q8_0_generic(int n, float * LM_GGML_RESTRICT s, size_t bs, const void * LM_GGML_RESTRICT vx, size_t bx, const void * LM_GGML_RESTRICT vy, size_t by, int nrc) {
     const int qk = QK8_0;
     const int nb = n / qk;
@@ -1179,6 +1183,7 @@ void lm_ggml_vec_dot_iq4_xs_q8_K_generic(int n, float * LM_GGML_RESTRICT s, size
     }
     *s = sumf;
 }
+#endif
 
 // ============================ 4-bit non-linear quants
 

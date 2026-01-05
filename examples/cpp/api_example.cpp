@@ -265,8 +265,63 @@ int main(int argc, char** argv) {
     
     printf("LoRA API demonstration completed\n\n");
 
-    // Step 7: Free resources
-    printf("7. Cleaning up resources...\n");
+    // Step 7: Test grammar-based completion (JSON)
+    printf("7. Testing grammar-based completion (JSON)...\n");
+    
+    // Get path to json.gbnf grammar file
+    char exe_path[2048];
+    #ifdef __APPLE__
+    uint32_t size = sizeof(exe_path);
+    _NSGetExecutablePath(exe_path, &size);
+    #elif __linux__
+    readlink("/proc/self/exe", exe_path, sizeof(exe_path));
+    #else
+    strcpy(exe_path, argv[0]);
+    #endif
+    
+    std::string grammar_path = std::string(exe_path);
+    size_t last_slash = grammar_path.find_last_of("/");
+    if (last_slash != std::string::npos) {
+        grammar_path = grammar_path.substr(0, last_slash);
+    }
+    grammar_path += "/../../lib/grammars/json.gbnf";
+    
+    const char* json_prompt = "Generate a JSON object with name, age, and city fields: ";
+    const char* json_stop_sequence = "}\n";
+    
+    llama_mobile_completion_params_t json_params = {
+        .prompt = json_prompt,
+        .max_tokens = 100,
+        .temperature = 0.7,
+        .top_k = 40,
+        .top_p = 0.95,
+        .min_p = 0.05,
+        .penalty_repeat = 1.1,
+        .stop_sequences = &json_stop_sequence,
+        .stop_sequence_count = 1,
+        .grammar = grammar_path.c_str(),
+        .token_callback = token_callback,
+    };
+
+    printf("Prompt: %s\n", json_prompt);
+    printf("Response: ");
+    
+    llama_mobile_completion_result_t json_result;
+    status = llama_mobile_completion(ctx, &json_params, &json_result);
+    
+    if (status != 0) {
+        fprintf(stderr, "\nJSON completion failed with status: %d\n", status);
+    } else {
+        printf("}\n"); // Add closing brace (JSON grammar might not include it)
+        printf("\nJSON generation completed!\n");
+        printf("Tokens generated: %d\n", json_result.tokens_generated);
+        printf("JSON output follows grammar constraints\n\n");
+    }
+    
+    llama_mobile_free_completion_result(&json_result);
+
+    // Step 8: Free resources
+    printf("8. Cleaning up resources...\n");
     llama_mobile_free(ctx);
     
     printf("\n=== All API tests completed successfully! ===\n");

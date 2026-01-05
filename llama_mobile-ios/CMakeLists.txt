@@ -42,8 +42,8 @@ set(PUBLIC_HEADERS
     ${SOURCE_DIR}/llama_mobile_api.h
 )
 
-# Create library target
-add_library(llama_mobile SHARED
+# Define all source files for the library
+set(LLAMA_MOBILE_SOURCES
     ${SOURCE_DIR}/llama_mobile_context.cpp
     ${SOURCE_DIR}/llama_mobile_loader.cpp
     ${SOURCE_DIR}/llama_mobile_completion.cpp
@@ -211,9 +211,6 @@ add_library(llama_mobile SHARED
     ${LLAMA_CPP_DIR}/ggml-cpu/sgemm.cpp
     ${LLAMA_CPP_DIR}/ggml-cpu/vec.cpp
     ${LLAMA_CPP_DIR}/ggml-cpu/ops.cpp
-    ${LLAMA_CPP_DIR}/ggml-cpu/ggml-cpu-aarch64-feats.cpp
-    ${LLAMA_CPP_DIR}/ggml-cpu/ggml-cpu-aarch64-quants.c
-    ${LLAMA_CPP_DIR}/ggml-cpu/ggml-cpu-aarch64-repack.cpp
     ${LLAMA_CPP_DIR}/ggml-cpu/ggml-cpu-generic-repack.cpp
     ${LLAMA_CPP_DIR}/ggml-metal.m
     ${LLAMA_CPP_DIR}/ggml-metal-context.m
@@ -239,6 +236,21 @@ add_library(llama_mobile SHARED
     ${LLAMA_CPP_DIR}/tools/mtmd/models/siglip.cpp
     ${LLAMA_CPP_DIR}/tools/mtmd/models/whisper-enc.cpp
 )
+
+# Add ARM64-specific CPU files when building for ARM64 architecture
+if((CMAKE_OSX_ARCHITECTURES MATCHES "arm64") OR (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64") OR (CMAKE_SYSTEM_PROCESSOR MATCHES "arm64"))
+    list(APPEND LLAMA_MOBILE_SOURCES
+        ${LLAMA_CPP_DIR}/ggml-cpu/ggml-cpu-aarch64-feats.cpp
+        ${LLAMA_CPP_DIR}/ggml-cpu/ggml-cpu-aarch64-quants.c
+        ${LLAMA_CPP_DIR}/ggml-cpu/ggml-cpu-aarch64-repack.cpp
+    )
+else()
+    # For non-ARM architectures, use generic CPU implementation
+    add_definitions(-DLM_GGML_CPU_GENERIC)
+endif()
+
+# Create library target
+add_library(llama_mobile SHARED ${LLAMA_MOBILE_SOURCES})
 
 # Setup include directories, use both lib/ and lib/llama_cpp directories
 target_include_directories(llama_mobile

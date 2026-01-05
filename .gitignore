@@ -37,3 +37,10 @@ llama_mobile-Android/src/main/jniLibs/arm64-v8a/libllama_mobile.so
 *.so
 *.so
 /lib/build_new
+/build-ios-device
+/examples/iOSSDKExample/.build
+/examples/iOSSDKExample/build
+/build-android-arm64-v8a
+/build-android-x86_64
+/examples/iOSSDKExample/models
+/build-ios-simulator-arm64

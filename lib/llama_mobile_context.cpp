@@ -86,9 +86,25 @@ conversation_result llama_mobile_context::continueConversation(const std::string
     if (is_first_message) {
         // First message in conversation - use standard chat formatting
         json messages = json::array();
+        
+        // Add system prompt if available
+        if (!params.system_prompt.empty()) {
+            messages.push_back({
+                {"role", "system"},
+                {"content", params.system_prompt}
+            });
+        }
+        
+        // Add user message
         messages.push_back({
             {"role", "user"},
             {"content", user_message}
+        });
+        
+        // Add empty assistant message to trigger assistant role start token in template
+        messages.push_back({
+            {"role", "assistant"},
+            {"content", ""}
         });
         
         std::string formatted_prompt;

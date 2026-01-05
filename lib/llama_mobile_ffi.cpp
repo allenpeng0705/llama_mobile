@@ -77,6 +77,10 @@ llama_mobile_context_handle_t llama_mobile_init_context_c(const llama_mobile_ini
             cpp_params.chat_template = params->chat_template;
             std::cout << "[FFI] Chat template: " << params->chat_template << std::endl;
         }
+        if (params->system_prompt) {
+            cpp_params.system_prompt = params->system_prompt;
+            std::cout << "[FFI] System prompt: " << params->system_prompt << std::endl;
+        }
         cpp_params.n_ctx = params->n_ctx;
         cpp_params.n_batch = params->n_batch;
         cpp_params.n_ubatch = params->n_ubatch;

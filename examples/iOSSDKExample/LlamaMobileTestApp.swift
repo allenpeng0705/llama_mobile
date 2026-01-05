@@ -57,6 +57,12 @@ struct ContentView: View {
                             }
                         }
                         .disabled(!isInitialized)
+                        Button("Generate Chat Response") {
+                            Task {
+                                await generateChatResponse()
+                            }
+                        }
+                        .disabled(!isInitialized)
                     }
                     
                     Section("Result") {
@@ -128,6 +134,20 @@ struct ContentView: View {
             result = completionResult.text
         } else {
             result = "Failed to generate completion"
+        }
+    }
+    
+    private func generateChatResponse() async {
+        guard !prompt.isEmpty else {
+            result = "Please enter a prompt"
+            return
+        }
+        
+        // Use generateResponse instead of completion for proper chat formatting
+        if let response = llamaMobile.generateResponse(userMessage: prompt, maxTokens: 128) {
+            result = response
+        } else {
+            result = "Failed to generate chat response"
         }
     }
     
