@@ -406,17 +406,13 @@
 		</data>
 		<key>Info.plist</key>
 		<data>
-		xoRZddg151IfZTts/7vH+IoufMQ=
+		WO6mrasV1iZuqkZUFW8Tn2Oe1SA=
 		</data>
 		<key>Modules/module.modulemap</key>
 		<data>
 		vuxu0ml3K0FC4kIufUQuJsIXcjU=
 		</data>
 		<key>ggml-llama-sim.metallib</key>
-		<data>
-		oyF3F+Q1E2zwu3/U9cTR67VF92s=
-		</data>
-		<key>ggml-llama.metallib</key>
 		<data>
 		oyF3F+Q1E2zwu3/U9cTR67VF92s=
 		</data>
@@ -1163,13 +1159,6 @@
 			</data>
 		</dict>
 		<key>ggml-llama-sim.metallib</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			J9rzm1titUyYM3pmQ87TjWXSdkpC7JP0tRAI1dQZOqI=
-			</data>
-		</dict>
-		<key>ggml-llama.metallib</key>
 		<dict>
 			<key>hash2</key>
 			<data>

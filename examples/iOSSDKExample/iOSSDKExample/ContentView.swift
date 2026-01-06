@@ -19,6 +19,9 @@ class AppState: ObservableObject {
     @Published var enableMultimodal = false
     @Published var enableTTS = false
     
+    // Chat configuration
+    @Published var systemPrompt = "You are a local AI assistant. Please respond to user queries in a polite, helpful, and clear manner. Focus on providing accurate information and maintaining a friendly tone."
+    
     let llamaMobile = LlamaMobile()
 }
 
@@ -244,14 +247,15 @@ struct ChatView: View {
                     
                     // Parse the JSON response from LLM
                     do {
-                        // Clean up response by removing ending tag only, keep think content
-                        var cleanedText = result.text
-                        
-                        // Remove <|im_end|> tag
-                        cleanedText = cleanedText.replacingOccurrences(of: "<|im_end|>", with: "")
-                        
-                        // Trim whitespace
-                        let jsonString = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        // Clean up response by removing ending tags only, keep think content
+                    var cleanedText = result.text
+                    
+                    // Remove ending tags
+                    cleanedText = cleanedText.replacingOccurrences(of: "<|im_end|>", with: "")
+                    cleanedText = cleanedText.replacingOccurrences(of: "<|endoftext|>", with: "")
+                    
+                    // Trim whitespace
+                    let jsonString = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
                         print("[DEBUG] Cleaned JSON string: \(jsonString)")
                         
                         guard let data = jsonString.data(using: .utf8) else {
@@ -310,6 +314,7 @@ struct ChatView: View {
                         // Fallback to cleaned text if parsing fails (keep think content)
                         var cleanedText = result.text
                         cleanedText = cleanedText.replacingOccurrences(of: "<|im_end|>", with: "")
+                        cleanedText = cleanedText.replacingOccurrences(of: "<|endoftext|>", with: "")
                         cleanedText = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
                         print("[DEBUG] Error fallback - cleaned text: \(cleanedText)")
                         
@@ -354,10 +359,16 @@ struct ChatView: View {
     
     // Extract assistant content from malformed JSON using regex
     private func extractAssistantContent(from text: String) -> String? {
-        // Pattern to find assistant role and its content
-        let pattern = #""role"\s*:\s*"assistant"[^}]*"content"\s*:\s*"([^"]+)"#
+        // Try multiple patterns to extract meaningful content
         
-        if let range = text.range(of: pattern, options: .regularExpression) {
+        // Pattern 1: Find assistant role with content field
+        let assistantPattern = #""role"\s*:\s*"assistant"[^}]*"content"\s*:\s*"([^"]+)"#
+        
+        // Pattern 2: Find any role with content or input field (handles incorrect user role from LLM)
+        let anyContentPattern = #"["](content|input)["]\s*:\s*["]([^"]+)["]#
+        
+        // First try to find assistant content
+        if let range = text.range(of: assistantPattern, options: .regularExpression) {
             let match = String(text[range])
             
             // Extract content from the matched string
@@ -373,6 +384,23 @@ struct ChatView: View {
             }
         }
         
+        // If assistant content not found, try to find any content or input field
+        if let range = text.range(of: anyContentPattern, options: .regularExpression) {
+            let match = String(text[range])
+            
+            // Extract value from the matched string
+            let valuePattern = #"\s*:\s*"([^"]+)"#
+            if let valueRange = match.range(of: valuePattern, options: .regularExpression) {
+                let valueMatch = String(match[valueRange])
+                
+                // Remove : " prefix and trailing "
+                if let startIndex = valueMatch.range(of: ": \"")?.upperBound,
+                   let endIndex = valueMatch.range(of: "\"", options: [], range: startIndex..<valueMatch.endIndex)?.lowerBound {
+                    return String(valueMatch[startIndex..<endIndex])
+                }
+            }
+        }
+        
         return nil
     }
     
@@ -383,7 +411,7 @@ struct ChatView: View {
         // Add system message
         messagesArray.append(OpenAIMessage(
             role: "system",
-            content: "You are a helpful and polite AI assistant. Please provide clear and relevant responses to user queries."
+            content: appState.systemPrompt
         ))
         
         // Add only the last 10 conversation rounds
@@ -412,7 +440,7 @@ struct ChatView: View {
         }
         
         // Fallback to minimal JSON format if encoding fails
-        let fallbackPrompt = "[{\"role\":\"system\",\"content\":\"You are a helpful AI assistant\"}]"
+        let fallbackPrompt = "[{\"role\":\"system\",\"content\":\"\(appState.systemPrompt.replacingOccurrences(of: \"\"", with: "\\\""))\"}]"
         print("[DEBUG] Using fallback prompt: \(fallbackPrompt)")
         return fallbackPrompt
     }
@@ -546,6 +574,19 @@ struct SettingsView: View {
                     Toggle("Enable TTS", isOn: $appState.enableTTS)
                 }
                 
+                Section(header: Text("Chat Configuration")) {
+                    TextEditor(text: $appState.systemPrompt)
+                        .frame(height: 120)
+                        .padding(8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                        .disabled(appState.isModelLoaded)
+                    
+                    Text("Note: System prompt changes require reloading the model")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                
                 if appState.isModelLoaded {
                     Section(header: Text("Model Status")) {
                         HStack {
@@ -596,6 +637,7 @@ struct SettingsView: View {
         
         let initParams = LlamaMobile.InitParams(
             modelPath: appState.modelPath,
+            systemPrompt: appState.systemPrompt,
             nCtx: Int32(nCtx),
             nGpuLayers: Int32(nGpuLayers),
             nThreads: Int32(nThreads),
