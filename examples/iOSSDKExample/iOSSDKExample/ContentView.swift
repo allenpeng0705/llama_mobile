@@ -362,10 +362,10 @@ struct ChatView: View {
         // Try multiple patterns to extract meaningful content
         
         // Pattern 1: Find assistant role with content field
-        let assistantPattern = #""role"\s*:\s*"assistant"[^}]*"content"\s*:\s*"([^"]+)"#
+        let assistantPattern = #"role"\s*:\s*"assistant"[^}]*"content"\s*:\s*"([^"]+)"#
         
         // Pattern 2: Find any role with content or input field (handles incorrect user role from LLM)
-        let anyContentPattern = #"["](content|input)["]\s*:\s*["]([^"]+)["]#
+        let anyContentPattern = #"(content|input)"\s*:\s*"([^"]+)"#
         
         // First try to find assistant content
         if let range = text.range(of: assistantPattern, options: .regularExpression) {
@@ -440,7 +440,8 @@ struct ChatView: View {
         }
         
         // Fallback to minimal JSON format if encoding fails
-        let fallbackPrompt = "[{\"role\":\"system\",\"content\":\"\(appState.systemPrompt.replacingOccurrences(of: \"\"", with: "\\\""))\"}]"
+        let escapedContent = appState.systemPrompt.replacingOccurrences(of: "\"", with: "\\\"")
+        let fallbackPrompt = "[{\"role\":\"system\",\"content\":\"\(escapedContent)\"}]"
         print("[DEBUG] Using fallback prompt: \(fallbackPrompt)")
         return fallbackPrompt
     }

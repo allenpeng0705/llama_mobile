@@ -273,17 +273,17 @@ EOL
     echo "codesign --force --deep --sign 'Apple Development' '$FRAMEWORK_DEST'"
   fi
 
-  echo -n "Cleaning up build directory... "
-  if ! rm -rf ./*; then
-    echo "✗"
-    echo "Failed to clean up build directory"
-  else
-    echo "✓"
-  fi
-  
   if ! cd ..; then
     echo "✗ Failed to change back to parent directory"
     exit 1
+  fi
+  
+  echo -n "Cleaning up build directory... "
+  if ! rm -rf "$5"; then
+    echo "✗"
+    echo "Failed to clean up build directory: $5"
+  else
+    echo "✓"
   fi
 }
 
@@ -386,8 +386,10 @@ LIPO="$(xcrun -find lipo)"
 # Clean up individual architecture directories
 rm -rf "$ROOT_DIR/build-ios-simulator-arm64"
 rm -rf "$ROOT_DIR/build-ios-simulator-x86_64"
-rm -rf "$SIMULATOR_ARM64_FRAMEWORK/.."  # Remove arm64 simulator directory
-rm -rf "$SIMULATOR_X86_64_FRAMEWORK/.."  # Remove x86_64 simulator directory
+
+# Remove individual simulator framework directories
+rm -rf "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/ios-arm64-simulator"
+rm -rf "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/ios-x86_64-simulator"
 
 # Build iOS device framework
 rm -rf "$ROOT_DIR/build-ios-device"
@@ -415,6 +417,14 @@ echo -n "Fixing Info.plist encoding... "
 find "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework" -name "*.plist" -exec plutil -convert xml1 {} \;
 echo "✓"
 
+# Remove UIRequiredDeviceCapabilities from simulator Info.plist files to fix build issues
+echo -n "Fixing simulator UIRequiredDeviceCapabilities... "
+SIMULATOR_INFO_PLISTS=$(find "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework" -path "*simulator*" -name "Info.plist")
+for plist in $SIMULATOR_INFO_PLISTS; do
+  /usr/libexec/PlistBuddy -c "Delete :UIRequiredDeviceCapabilities" "$plist" 2>/dev/null || true
+done
+echo "✓"
+
 # Use xcodebuild to create XCFramework
 # First, clean up the existing XCFramework structure but keep the frameworks
 echo -n "Recreating XCFramework with proper Info.plist... "
@@ -423,7 +433,7 @@ TEMP_XCFRAMEWORK="$ROOT_DIR/llama_mobile-ios/llama_mobile_temp.xcframework"
 xcodebuild -create-xcframework \
   -framework "$SIMULATOR_FRAMEWORK" \
   -framework "$DEVICE_FRAMEWORK" \
-  -output "$TEMP_XCFRAMEWORK" 2>/dev/null
+  -output "$TEMP_XCFRAMEWORK"
 
 # Replace the old XCFramework with the new one
 if [ -d "$TEMP_XCFRAMEWORK" ]; then
