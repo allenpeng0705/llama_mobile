@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(llama_mobile_core)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(LLAMA_MOBILE_CORE_SOURCES
@@ -264,6 +264,20 @@ set_target_properties(llama_mobile_core_static PROPERTIES OUTPUT_NAME "llama_mob
 # Create shared library
 add_library(llama_mobile_core_shared SHARED $<TARGET_OBJECTS:llama_mobile_core_lib>)
 set_target_properties(llama_mobile_core_shared PROPERTIES OUTPUT_NAME "llama_mobile_core")
+
+# Define LLAMA_MOBILE_FFI_BUILDING_DLL on Windows to avoid dllimport errors in static builds
+if(WIN32)
+    target_compile_definitions(llama_mobile_core_static PRIVATE LLAMA_MOBILE_FFI_BUILDING_DLL)
+    target_compile_definitions(llama_mobile_core_lib PRIVATE LLAMA_MOBILE_FFI_BUILDING_DLL)
+    target_compile_definitions(llama_mobile_core_static PRIVATE _USE_MATH_DEFINES)
+    target_compile_definitions(llama_mobile_core_lib PRIVATE _USE_MATH_DEFINES)
+    # Ensure __cplusplus is set correctly for C++20 on MSVC
+    if(MSVC)
+        target_compile_options(llama_mobile_core_static PRIVATE /Zc:__cplusplus)
+        target_compile_options(llama_mobile_core_lib PRIVATE /Zc:__cplusplus)
+        target_compile_options(llama_mobile_core_shared PRIVATE /Zc:__cplusplus)
+    endif()
+endif()
 
 # Configure common output directory
 set(OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/output")

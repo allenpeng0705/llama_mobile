@@ -345,7 +345,7 @@ function create_file() {
 CMAKE_CONTENT="cmake_minimum_required(VERSION 3.16)
 project(llama_mobile_android LANGUAGES CXX C)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Add definitions
@@ -775,7 +775,7 @@ echo "The llama_mobile Android library has been built and placed in ./llama_mobi
     SDK_CMAKE_CONTENT="cmake_minimum_required(VERSION 3.16)
 project(llama_mobile_android_sdk LANGUAGES CXX C)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Add definitions
