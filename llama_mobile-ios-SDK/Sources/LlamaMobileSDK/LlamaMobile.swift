@@ -101,16 +101,16 @@ public class LlamaMobile {
         }
         
         guard let url = bundle.url(forResource: name.rawValue, withExtension: "gbnf", subdirectory: "grammars") else {
-            print("[DEBUG] Could not find grammar file")
+            print("[DEBUG] Could not find \(name.rawValue).gbnf grammar file")
             return nil
         }
         
         do {
             let content = try String(contentsOf: url)
-            print("[DEBUG] Successfully loaded grammar content")
+            print("[DEBUG] Successfully loaded \(name.rawValue).gbnf grammar content")
             return content
         } catch {
-            print("[DEBUG] Error loading grammar: \(error)")
+            print("[DEBUG] Error loading grammar \(name.rawValue).gbnf: \(error)")
             return nil
         }
     }

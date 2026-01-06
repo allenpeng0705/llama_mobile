@@ -1514,6 +1514,14 @@ static bool token_callback(const char* token) {
         
         // Generate text in background thread
         dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{        
+            // Load grammar from framework bundle
+            NSString *grammarPath = [[NSBundle bundleWithIdentifier:@"com.llama-mobile.llama-mobile"] pathForResource:@"json" ofType:@"gbnf" inDirectory:@"grammars"];
+            NSString *grammarContent = nil;
+            if (grammarPath) {
+                grammarContent = [NSString stringWithContentsOfFile:grammarPath encoding:NSUTF8StringEncoding error:nil];
+                NSLog(@"DEBUG: Successfully loaded grammar from: %@", grammarPath);
+            }
+                
             if ([mode isEqualToString:@"completion"]) {
                 // Set the static reference for the callback
                 tokenCallbackViewController = self;
@@ -1522,11 +1530,13 @@ static bool token_callback(const char* token) {
                 llama_mobile_completion_params_c_t completion_params = {
                     .prompt = [prompt UTF8String],
                     .n_predict = 300,          // Increased for more detailed responses
-                    .temperature = 0.7,        // Optimal balance between creativity and coherence
+                    .temperature = 0.7,        // Consistent temperature with streaming
                     .top_k = 50,
                     .top_p = 0.9,
                     .n_threads = 4,
-                    .seed = -1
+                    .seed = -1,
+                    .token_callback = token_callback,
+                    .grammar = grammarContent ? [grammarContent UTF8String] : NULL
                 };
                 
                 NSLog(@"DEBUG: Calling llama_mobile_completion_c with streaming");
@@ -1571,7 +1581,8 @@ static bool token_callback(const char* token) {
                     .n_predict = 300,          // Increased for more detailed responses
                     .temperature = 0.7,        // Consistent temperature with streaming
                     .n_threads = 4,
-                    .seed = -1
+                    .seed = -1,
+                    .grammar = grammarContent ? [grammarContent UTF8String] : NULL
                 };
                 
                 llama_mobile_completion_result_c_t result;

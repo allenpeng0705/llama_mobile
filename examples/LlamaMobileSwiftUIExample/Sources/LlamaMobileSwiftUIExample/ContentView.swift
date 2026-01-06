@@ -26,6 +26,7 @@ struct ContentView: View {
     @State private var vocoderPath: String = ""
     @State private var isTTSEnabled: Bool = false
     @State private var isTTSSpeaking: Bool = false
+    @State private var grammarContent: String? = nil
     
     @State private var llamaContext: llama_mobile_context_handle_t? = nil
     private let audioEngine = AVAudioEngine()
@@ -144,6 +145,60 @@ struct ContentView: View {
         }
     }
     
+    private func loadGrammar() {
+        // Try to find the llama_mobile framework bundle
+        var bundle: Bundle?
+        
+        // First try to find bundle by identifier
+        bundle = Bundle(identifier: "com.llamamobile")
+        
+        // If not found, search app frameworks
+        if bundle == nil {
+            let appBundle = Bundle.main
+            if let appBundlePath = appBundle.resourcePath {
+                let appFrameworksPath = appBundlePath + "/Frameworks"
+                let fileManager = FileManager.default
+                if let frameworkPaths = try? fileManager.contentsOfDirectory(atPath: appFrameworksPath) {
+                    for frameworkPath in frameworkPaths {
+                        if frameworkPath.contains("llama_mobile") {
+                            let fullFrameworkPath = appFrameworksPath + "/" + frameworkPath
+                            if let frameworkBundle = Bundle(path: fullFrameworkPath) {
+                                bundle = frameworkBundle
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Try to load from framework bundle first
+        if let bundle = bundle, let url = bundle.url(forResource: "json", withExtension: "gbnf", subdirectory: "grammars") {
+            do {
+                grammarContent = try String(contentsOf: url)
+                print("[DEBUG] Successfully loaded json.gbnf grammar from framework bundle")
+                return
+            } catch {
+                print("[DEBUG] Error loading grammar from framework bundle: \(error)")
+            }
+        }
+        
+        // Fallback to project's lib/grammars directory for development
+        let projectGrammarPath = "/Users/shileipeng/Documents/mygithub/llama_mobile/lib/grammars/json.gbnf"
+        if FileManager.default.fileExists(atPath: projectGrammarPath) {
+            do {
+                grammarContent = try String(contentsOf: URL(fileURLWithPath: projectGrammarPath))
+                print("[DEBUG] Successfully loaded json.gbnf grammar from project directory")
+                return
+            } catch {
+                print("[DEBUG] Error loading grammar from project directory: \(error)")
+            }
+        }
+        
+        print("[DEBUG] Could not find json.gbnf in any location")
+        grammarContent = nil
+    }
+    
     private func initializeModel() {
         Task {
             await MainActor.run {
@@ -181,6 +236,9 @@ struct ContentView: View {
             initParams.progress_callback = nil
             
             llamaContext = llama_mobile_init_context_c(&initParams)
+            
+            // Load grammar after model initialization
+            loadGrammar()
             
             await MainActor.run {
                 isInitialized = llamaContext != nil
@@ -235,11 +293,22 @@ struct ContentView: View {
             completionParams.n_probs = 0
             completionParams.stop_sequences = nil
             completionParams.stop_sequence_count = 0
-            completionParams.grammar = nil
             
-            // Generate completion
+            // Generate completion with grammar if available
             var completionResult = llama_mobile_completion_result_c_t()
-            let completionStatus = llama_mobile_completion_c(context, &completionParams, &completionResult)
+            let completionStatus: Int32
+            
+            if let grammarContent = grammarContent {
+                completionStatus = grammarContent.withCString { grammarPtr -> Int32 in
+                    completionParams.grammar = grammarPtr
+                    print("[DEBUG] Using grammar for completion")
+                    return llama_mobile_completion_c(context, &completionParams, &completionResult)
+                }
+            } else {
+                completionParams.grammar = nil
+                print("[DEBUG] No grammar available, proceeding without grammar")
+                completionStatus = llama_mobile_completion_c(context, &completionParams, &completionResult)
+            }
             
             if completionStatus != 0 {
                 DispatchQueue.main.async {
@@ -351,7 +420,6 @@ struct ContentView: View {
             completionParams.n_probs = 0
             completionParams.stop_sequences = nil
             completionParams.stop_sequence_count = 0
-            completionParams.grammar = nil
             
             // Create media paths array with C string pointers
             let mediaPathsPtr = UnsafeMutablePointer<UnsafePointer<CChar>?>.allocate(capacity: 1)
@@ -360,15 +428,33 @@ struct ContentView: View {
                 mediaPathsPtr[0] = cString
             }
             
-            // Generate multimodal completion
+            // Generate multimodal completion with grammar if available
             var completionResult = llama_mobile_completion_result_c_t()
-            let completionStatus = llama_mobile_multimodal_completion_c(
-                context,
-                &completionParams,
-                mediaPathsPtr,
-                1,
-                &completionResult
-            )
+            let completionStatus: Int32
+            
+            if let grammarContent = grammarContent {
+                completionStatus = grammarContent.withCString { grammarPtr -> Int32 in
+                    completionParams.grammar = grammarPtr
+                    print("[DEBUG] Using grammar for multimodal completion")
+                    return llama_mobile_multimodal_completion_c(
+                        context,
+                        &completionParams,
+                        mediaPathsPtr,
+                        1,
+                        &completionResult
+                    )
+                }
+            } else {
+                completionParams.grammar = nil
+                print("[DEBUG] No grammar available, proceeding without grammar for multimodal completion")
+                completionStatus = llama_mobile_multimodal_completion_c(
+                    context,
+                    &completionParams,
+                    mediaPathsPtr,
+                    1,
+                    &completionResult
+                )
+            }
             
             if completionStatus != 0 {
                 DispatchQueue.main.async {

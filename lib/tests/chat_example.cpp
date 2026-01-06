@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <cstdlib>
 #include <unistd.h>
+#include <fstream>
 #if defined(__APPLE__)
 #include <mach-o/dyld.h>
 #endif
@@ -185,16 +186,36 @@ int main(int argc, char* argv[]) {
             std::cout << "\nAssistant: ";
             std::cout.flush();
             
-            // Use completion with streaming
+            // Load JSON grammar
+            std::string grammar_path = get_executable_dir() + "/../../grammars/json.gbnf";
+            std::ifstream grammar_file(grammar_path);
+            std::string grammar_content;
+            if (grammar_file.is_open()) {
+                grammar_content = std::string((std::istreambuf_iterator<char>(grammar_file)),
+                                           std::istreambuf_iterator<char>());
+                grammar_file.close();
+                std::cout << "\n[DEBUG] Loaded grammar from: " << grammar_path << std::endl;
+            } else {
+                std::cerr << "\n[WARNING] Could not load grammar file: " << grammar_path << std::endl;
+            }
+            
+            // Set up completion parameters with grammar support
+            llama_mobile_completion_params_t params = {
+                .prompt = conversation_history.c_str(),
+                .max_tokens = 200,
+                .temperature = 0.8,
+                .top_k = 40,
+                .top_p = 0.95,
+                .min_p = 0.05,
+                .penalty_repeat = 1.1,
+                .stop_sequences = nullptr,
+                .stop_sequence_count = 0,
+                .grammar = grammar_content.empty() ? nullptr : grammar_content.c_str(),
+                .token_callback = token_callback
+            };
+            
             llama_mobile_completion_result_t result;
-            int status = llama_mobile_completion_simple(
-                ctx,
-                conversation_history.c_str(),
-                200,  // max_tokens
-                0.8,  // temperature
-                token_callback,  // streaming callback
-                &result
-            );
+            int status = llama_mobile_completion(ctx, &params, &result);
             
             std::cout << std::endl;  // Add newline after streaming completes
             
