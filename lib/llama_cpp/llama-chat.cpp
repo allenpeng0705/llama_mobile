@@ -6,11 +6,8 @@
 #include <sstream>
 #include <algorithm>
 
-#if __cplusplus >= 202000L
-    #define LU8(x) (const char*)(u8##x)
-#else
-    #define LU8(x) u8##x
-#endif
+// Always convert u8 strings to const char* to ensure compatibility across all platforms and C++ standards
+#define LU8(x) (const char*)(u8##x)
 
 // trim whitespace from the beginning and end of a string
 static std::string trim(const std::string & str) {
