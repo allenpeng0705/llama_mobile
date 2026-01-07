@@ -204,6 +204,141 @@ MIT License
 - The SDK runs on a single background thread. For multiple concurrent operations, create separate SDK instances.
 - Consider reducing `maxTokens` for faster generation.
 
+## Testing
+
+### Test Structure
+
+The Android SDK includes two types of tests:
+
+#### Unit Tests
+
+Unit tests verify core functionality in isolation:
+
+```
+src/test/
+├── java/com/llamamobile/sdk/      # Unit test classes
+└── resources/
+    ├── models/                    # Place model files here for unit tests
+    └── grammars/                  # Place grammar files here for unit tests
+```
+
+#### Instrumented Tests
+
+Instrumented tests verify functionality on actual Android devices or emulators:
+
+```
+src/androidTest/
+├── java/com/llamamobile/sdk/      # Instrumented test classes
+└── resources/
+    ├── models/                    # Place model files here for instrumented tests
+    └── grammars/                  # Place grammar files here for instrumented tests
+```
+
+### Test Resources
+
+#### Models
+
+1. Download a GGUF format model (e.g., `mistral-7b-v0.1.Q4_K_M.gguf`)
+2. Copy the model file to both test resource folders:
+
+```bash
+# For unit tests
+cp model.gguf src/test/resources/models/
+
+# For instrumented tests
+cp model.gguf src/androidTest/resources/models/
+```
+
+#### Grammars
+
+Grammar files are used for constrained generation tests:
+
+```bash
+# Copy grammar files from the Core library
+cp -r ../lib/grammars/* src/test/resources/grammars/
+cp -r ../lib/grammars/* src/androidTest/resources/grammars/
+```
+
+### Running Tests
+
+#### Running Unit Tests
+
+Use Gradle to run unit tests:
+
+```bash
+./gradlew test
+```
+
+#### Running Instrumented Tests
+
+Use Gradle to run instrumented tests on connected devices/emulators:
+
+```bash
+./gradlew connectedAndroidTest
+```
+
+#### Running Specific Tests
+
+```bash
+# Run specific unit tests
+./gradlew test --tests "com.llamamobile.sdk.LlamaMobileSdkUnitTests"
+
+# Run specific instrumented tests
+./gradlew connectedAndroidTest --tests "com.llamamobile.sdk.LlamaMobileSdkInstrumentedTests"
+```
+
+### Test Coverage
+
+The Android SDK tests cover:
+
+- SDK initialization and model loading
+- Text generation and completion
+- Error handling
+- Threading and callback functionality
+- Grammar-constrained generation
+
+### Example Test Class
+
+```kotlin
+// src/test/java/com/llamamobile/sdk/LlamaMobileSdkUnitTests.kt
+package com.llamamobile.sdk
+
+import org.junit.Test
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+
+class LlamaMobileSdkUnitTests {
+    
+    @Test
+    fun testModelConfigCreation() {
+        val modelConfig = LlamaMobileSdk.ModelConfig(
+            modelPath = "/path/to/model.gguf",
+            contextSize = 2048,
+            useMemoryCache = true
+        )
+        
+        assertNotNull(modelConfig)
+        assertEquals("/path/to/model.gguf", modelConfig.modelPath)
+        assertEquals(2048, modelConfig.contextSize)
+        assertEquals(true, modelConfig.useMemoryCache)
+    }
+    
+    @Test
+    fun testGenerationConfigCreation() {
+        val generationConfig = LlamaMobileSdk.GenerationConfig(
+            prompt = "Hello, world!",
+            temperature = 0.7f,
+            maxTokens = 50
+        )
+        
+        assertNotNull(generationConfig)
+        assertEquals("Hello, world!", generationConfig.prompt)
+        assertEquals(0.7f, generationConfig.temperature, 0.01f)
+        assertEquals(50, generationConfig.maxTokens)
+    }
+}
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

@@ -65,10 +65,44 @@ make -j$(nproc)
 
 ### Build and Run Tests
 
+#### Core Library Tests
+
+The Core C++ library includes a comprehensive test suite (`lib/tests/test_api.cpp`) that covers:
+
+- **Model Initialization**: Loading and initializing models with different parameters
+- **Text Completion**: Basic and advanced text generation
+- **Tokenization**: Converting between text and model tokens
+- **Embedding Generation**: Generating numerical representations of text
+- **Conversation Management**: Creating and managing conversation contexts
+- **Grammar-Constrained Generation**: Generating text that adheres to specific grammar rules (e.g., JSON output)
+
+To build and run the Core library tests:
+
 ```bash
 # Build and run tests
 ./scripts/build_and_run_lib_test.sh
 ```
+
+Alternatively, you can build and run the tests manually:
+
+```bash
+# Build the test binary
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make test_api
+
+# Run the tests
+./test_api
+```
+
+#### SDK Tests
+
+Each SDK has its own test suite. Please refer to the respective SDK README files for detailed information:
+
+- **iOS SDK**: `llama_mobile-ios-SDK/README.md`
+- **Android Kotlin SDK**: `llama_mobile-android-SDK/README.md`
+- **Android Java SDK**: `llama_mobile-android-java-SDK/README.md`
+- **Flutter SDK**: (Planned)
 
 ## Current Status
 
