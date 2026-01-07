@@ -7,7 +7,20 @@ set "ROOT_DIR=%SCRIPT_DIR%.."
 set "FLUTTER_SDK_DIR=%ROOT_DIR%\llama_mobile-flutter-SDK"
 set "EXAMPLE_APP_DIR=%ROOT_DIR%\examples\flutterSDKExample"
 
-REM Show help message
+REM Parse command line arguments
+if "%~1"=="-h" goto :show_help
+if "%~1"=="--help" goto :show_help
+if /i "%~1"=="help" goto :show_help
+if not "%~1"=="" (
+    echo Unknown parameter: %~1
+    echo Use --help for usage information
+    exit /b 1
+)
+
+REM Proceed to main build process after successful argument parsing
+goto :start_build
+
+REM Show help message - defined after the main build logic to prevent unintended execution
 :show_help
     echo Usage: %~nx0 [OPTIONS]
     echo.
@@ -17,18 +30,7 @@ REM Show help message
     echo   -h, --help             Show this help message and exit
     exit /b 0
 
-REM Parse command line arguments
-if "%~1"=="" (
-    goto :start_build
-)
-if "%~1"=="-h" goto :show_help
-if "%~1"=="--help" goto :show_help
-if /i "%~1"=="help" goto :show_help
-REM Unknown parameter handling
-echo Unknown parameter: %~1
-echo Use --help for usage information
-exit /b 1
-
+REM Main build process starts here
 :start_build
 REM Check if flutter is installed
 where flutter >nul 2>nul
