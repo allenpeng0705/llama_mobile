@@ -4,7 +4,7 @@
 #include <cstring>
 
 // Include the llama_mobile headers
-#include "llama_mobile_unified.h"
+#include "llama_mobile_api.h"
 
 #ifdef __cplusplus
 extern "C" {
