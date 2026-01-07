@@ -169,7 +169,9 @@ echo "Using $n_cpu cores for build"
 
 # Create the necessary directories for all SDKs
     echo -n "Creating necessary directories... "
-for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src/main/cpp" "./llama_mobile-android/src/main/java/com/llamamobile" "./llama_mobile-android/src/main/assets/grammars" "./llama_mobile-android-java-SDK/src/main/jniLibs" "./llama_mobile-android-java-SDK/src/main/cpp" "./llama_mobile-android-java-SDK/src/main/java/com/llamamobile" "./llama_mobile-android-java-SDK/src/main/assets/grammars" "./llama_mobile-android-SDK/src/main/assets/grammars"; do
+
+for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src/main/cpp" "./llama_mobile-android/src/main/java/com/llamamobile" "./llama_mobile-android/src/main/assets/grammars" "./llama_mobile-Android-SDK/src/main/jniLibs" "./llama_mobile-Android-SDK/src/main/cpp" "./llama_mobile-Android-SDK/src/main/java/com/llamamobile" "./llama_mobile-Android-SDK/src/main/assets/grammars" "./llama_mobile-android-java-SDK/src/main/jniLibs" "./llama_mobile-android-java-SDK/src/main/cpp" "./llama_mobile-android-java-SDK/src/main/java/com/llamamobile" "./llama_mobile-android-java-SDK/src/main/assets/grammars"; do
+
     if ! mkdir -p "$dir"; then
         echo "✗"
         echo "Error: Failed to create directory $dir!"
@@ -287,7 +289,7 @@ for ABI in "${ABI_LIST[@]}"; do
     # Copy the library to both SDKs
     echo -n "Copying $ABI library... "
     SOURCE_LIB="$BUILD_DIR/output/lib/libllama_mobile_core.so"
-    DEST_DIRS=("./llama_mobile-android/src/main/jniLibs/$ABI" "./llama_mobile-android-java-SDK/src/main/jniLibs/$ABI")
+    DEST_DIRS=("./llama_mobile-android/src/main/jniLibs/$ABI" "./llama_mobile-Android-SDK/src/main/jniLibs/$ABI")
     
     if [ ! -f "$SOURCE_LIB" ]; then
         echo "✗"
@@ -397,7 +399,6 @@ target_link_libraries(llama_mobile_jni PRIVATE llama_mobile)
 "
 
 create_file "./llama_mobile-android/src/main/cpp/CMakeLists.txt" "$CMAKE_CONTENT"
-create_file "./llama_mobile-android-java-SDK/src/main/cpp/CMakeLists.txt" "$CMAKE_CONTENT"
 
 # Create JNI wrapper implementation
 cat > ./llama_mobile-android/src/main/cpp/llama_mobile_jni.cpp << EOL
@@ -592,8 +593,18 @@ JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_releaseContext(
 EOL
 
 # Create AndroidManifest.xml
-cat > ./llama_mobile-android/src/main/AndroidManifest.xml << EOL
-<?xml version="1.0" encoding="utf-8"?>
+cat > ./llama_mobile-android/src/main/AndroidManifest.xml << EOL<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.llamamobile">
+
+    <uses-sdk
+        android:minSdkVersion="21"
+        android:targetSdkVersion="34" />
+</manifest>
+EOL
+
+# Create AndroidManifest.xml for SDK
+cat > ./llama_mobile-Android-SDK/src/main/AndroidManifest.xml << EOL<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.llamamobile">
 
@@ -735,8 +746,7 @@ dependencies {
 EOL
 
 # Create settings.gradle
-cat > ./llama_mobile-android/settings.gradle << EOL
-pluginManagement {
+cat > ./llama_mobile-android/settings.gradle << EOLpluginManagement {
     repositories {
         google()
         mavenCentral()
@@ -751,6 +761,72 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "llama_mobile"
+EOL
+
+# Create build.gradle for SDK
+cat > ./llama_mobile-Android-SDK/build.gradle << EOLplugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.llamamobile'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 21
+        targetSdk 34
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles "consumer-rules.pro"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}
+EOL
+
+# Create settings.gradle for SDK
+cat > ./llama_mobile-Android-SDK/settings.gradle << EOLpluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "llama_mobile_sdk"
 EOL
 
 echo "=== Android library build completed successfully! ==="
