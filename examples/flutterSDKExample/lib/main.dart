@@ -14,10 +14,22 @@ class MyApp extends StatelessWidget {
       title: 'Llama Mobile Flutter SDK Example',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
       ),
       home: const LlamaMobileExample(),
     );
   }
+}
+
+// Message model for chat interface
+class Message {
+  final String role;
+  final String text;
+
+  Message(this.role, this.text);
+
+  static const String ROLE_USER = "user";
+  static const String ROLE_ASSISTANT = "assistant";
 }
 
 class LlamaMobileExample extends StatefulWidget {
@@ -32,7 +44,6 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
   bool _isInitialized = false;
   bool _isGenerating = false;
   String _status = 'Ready';
-  String _completion = '';
   
   // Model parameters
   final _modelPathController = TextEditingController(text: '/path/to/your/model.gguf');
@@ -41,19 +52,22 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
   int _nThreads = 4;
   
   // Generation parameters
-  final _promptController = TextEditingController(text: 'Hello, how are you?');
-  int _maxTokens = 100;
-  double _temperature = 0.8;
+  final _promptController = TextEditingController();
+  int _maxTokens = 1024;
+  double _temperature = 0.7;
   int _topK = 40;
   double _topP = 0.95;
   GrammarName? _selectedGrammar;
   
   final List<GrammarName> _grammars = GrammarName.values;
+  final List<Message> _messages = [];
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void dispose() {
     _modelPathController.dispose();
     _promptController.dispose();
+    _scrollController.dispose();
     _release();
     super.dispose();
   }
@@ -91,14 +105,27 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
     }
   }
 
-  Future<void> _generate() async {
-    if (!_isInitialized || _isGenerating) return;
+  Future<void> _sendMessage() async {
+    final prompt = _promptController.text.trim();
+    if (prompt.isEmpty || _isGenerating) return;
     
+    if (!_isInitialized) {
+      _showModelNotLoadedSnackBar();
+      return;
+    }
+    
+    // Clear input field
+    _promptController.clear();
+    
+    // Add user message to chat
     setState(() {
+      _messages.add(Message(Message.ROLE_USER, prompt));
       _isGenerating = true;
-      _status = 'Generating...';
-      _completion = '';
+      _status = 'Generating response...';
     });
+    
+    // Scroll to bottom
+    _scrollToBottom();
     
     try {
       // Get grammar content if selected
@@ -108,7 +135,7 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
       }
       
       final params = CompletionParams(
-        prompt: _promptController.text,
+        prompt: prompt,
         maxTokens: _maxTokens,
         temperature: _temperature,
         topK: _topK,
@@ -129,20 +156,37 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
         grammar: grammarContent,
       );
       
+      // Add assistant message placeholder
+      setState(() {
+        _messages.add(Message(Message.ROLE_ASSISTANT, ''));
+      });
+      
+      // Scroll to bottom again to show assistant message placeholder
+      _scrollToBottom();
+      
+      // Generate response
       final result = await _llamaSdk.generate(params);
       
       setState(() {
-        _completion = result;
+        // Update the last message with the generated result
+        _messages[_messages.length - 1] = Message(Message.ROLE_ASSISTANT, result);
         _status = 'Generated successfully';
       });
     } catch (e) {
       setState(() {
         _status = 'Error generating: $e';
+        // Remove the empty assistant message if there was an error
+        if (_messages.isNotEmpty && _messages.last.role == Message.ROLE_ASSISTANT && _messages.last.text.isEmpty) {
+          _messages.removeLast();
+        }
       });
     } finally {
       setState(() {
         _isGenerating = false;
       });
+      
+      // Scroll to bottom to show the final message
+      _scrollToBottom();
     }
   }
 
@@ -159,7 +203,7 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
       setState(() {
         _isInitialized = false;
         _status = 'Resources released successfully';
-        _completion = '';
+        _messages.clear();
       });
     } catch (e) {
       setState(() {
@@ -168,39 +212,239 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
     }
   }
 
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  void _showModelNotLoadedSnackBar() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Please load a model first'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(Message message) {
+    final isUser = message.role == Message.ROLE_USER;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isUser ? Theme.of(context).colorScheme.primary : Colors.grey[200],
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(16),
+                  topRight: const Radius.circular(16),
+                  bottomLeft: isUser ? const Radius.circular(16) : const Radius.circular(0),
+                  bottomRight: isUser ? const Radius.circular(0) : const Radius.circular(16),
+                ),
+              ),
+              child: Text(
+                message.text,
+                style: TextStyle(
+                  color: isUser ? Colors.white : Colors.black,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModelNotLoadedUI() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.brain_circle_outlined,
+              size: 100,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Model Not Loaded',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Please configure and load a model to start chatting',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: 200,
+              child: ElevatedButton(
+                onPressed: _initialize,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: const Text('Load Model'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatUI() {
+    return Column(
+      children: [
+        // Chat messages
+        Expanded(
+          child: ListView.builder(
+            controller: _scrollController,
+            itemCount: _messages.length,
+            itemBuilder: (context, index) {
+              return _buildMessageBubble(_messages[index]);
+            },
+          ),
+        ),
+        
+        // Status indicator
+        if (_isGenerating) 
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                const CircularProgressIndicator(size: 16),
+                const SizedBox(width: 8),
+                Text(_status),
+              ],
+            ),
+          ),
+        
+        // Input area
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Grammar selection (optional)
+              if (_grammars.isNotEmpty) 
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      const Text('Grammar:'),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: DropdownButtonFormField<GrammarName>(
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                          value: _selectedGrammar,
+                          hint: const Text('Select grammar'),
+                          items: _grammars.map((grammar) {
+                            return DropdownMenuItem<GrammarName>(
+                              value: grammar,
+                              child: Text(grammar.toString().split('.').last),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedGrammar = value;
+                            });
+                          },
+                          enabled: !_isGenerating,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              
+              // Message input and send button
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _promptController,
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        hintText: 'Type your message...',
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      maxLines: null,
+                      minLines: 1,
+                      enabled: !_isGenerating,
+                      onSubmitted: (value) => _sendMessage(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _isGenerating ? null : _sendMessage,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    ),
+                    child: const Icon(Icons.send),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: const Text('Llama Mobile Flutter SDK Example'),
+        actions: [
+          IconButton(
+            onPressed: () {
+              // Show model configuration dialog
+              showDialog(
+                context: context,
+                builder: (context) => _buildModelConfigDialog(),
+              );
+            },
+            icon: const Icon(Icons.settings),
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+      body: _isInitialized ? _buildChatUI() : _buildModelNotLoadedUI(),
+    );
+  }
+
+  Widget _buildModelConfigDialog() {
+    return AlertDialog(
+      title: const Text('Model Configuration'),
+      content: SingleChildScrollView(
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Status indicator
-            Text(
-              _status,
-              style: TextStyle(
-                color: _isInitialized ? Colors.green : Colors.blue,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Model Configuration Section
-            const Text(
-              'Model Configuration',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-            const SizedBox(height: 16),
-            
             // Model path input
             TextField(
               controller: _modelPathController,
@@ -214,6 +458,8 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
             const SizedBox(height: 16),
             
             // Model parameters grid
+            const Text('Model Parameters'),
+            const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -226,6 +472,7 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           hintText: '2048',
+                          isDense: true,
                         ),
                         keyboardType: TextInputType.number,
                         onChanged: (value) {
@@ -237,7 +484,7 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -247,6 +494,7 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           hintText: '0',
+                          isDense: true,
                         ),
                         keyboardType: TextInputType.number,
                         onChanged: (value) {
@@ -258,7 +506,7 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -268,6 +516,7 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           hintText: '4',
+                          isDense: true,
                         ),
                         keyboardType: TextInputType.number,
                         onChanged: (value) {
@@ -281,58 +530,11 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-            
-            // Action buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                ElevatedButton(
-                  onPressed: _isInitialized ? null : _initialize,
-                  child: const Text('Initialize'),
-                ),
-                ElevatedButton(
-                  onPressed: _isInitialized && !_isGenerating ? _generate : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                  ),
-                  child: _isGenerating ? const CircularProgressIndicator() : const Text('Generate'),
-                ),
-                ElevatedButton(
-                  onPressed: _isInitialized ? _release : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                  ),
-                  child: const Text('Release'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-
-            // Generation Parameters Section
-            const Text(
-              'Generation Parameters',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
             const SizedBox(height: 16),
             
-            // Prompt input
-            TextField(
-              controller: _promptController,
-              decoration: const InputDecoration(
-                labelText: 'Prompt',
-                border: OutlineInputBorder(),
-                hintText: 'Enter your prompt here',
-              ),
-              maxLines: 3,
-              enabled: _isInitialized && !_isGenerating,
-            ),
-            const SizedBox(height: 16),
-            
-            // Generation parameters grid
+            // Generation parameters
+            const Text('Generation Parameters'),
+            const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -344,19 +546,19 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                       TextField(
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
-                          hintText: '100',
+                          hintText: '1024',
+                          isDense: true,
                         ),
                         keyboardType: TextInputType.number,
                         onChanged: (value) {
-                          _maxTokens = int.tryParse(value) ?? 100;
+                          _maxTokens = int.tryParse(value) ?? 1024;
                         },
                         controller: TextEditingController(text: _maxTokens.toString()),
-                        enabled: _isInitialized && !_isGenerating,
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -365,19 +567,24 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                       TextField(
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
-                          hintText: '0.8',
+                          hintText: '0.7',
+                          isDense: true,
                         ),
                         keyboardType: TextInputType.number,
                         onChanged: (value) {
-                          _temperature = double.tryParse(value) ?? 0.8;
+                          _temperature = double.tryParse(value) ?? 0.7;
                         },
                         controller: TextEditingController(text: _temperature.toString()),
-                        enabled: _isInitialized && !_isGenerating,
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 16),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -387,18 +594,18 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           hintText: '40',
+                          isDense: true,
                         ),
                         keyboardType: TextInputType.number,
                         onChanged: (value) {
                           _topK = int.tryParse(value) ?? 40;
                         },
                         controller: TextEditingController(text: _topK.toString()),
-                        enabled: _isInitialized && !_isGenerating,
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -408,70 +615,46 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                           hintText: '0.95',
+                          isDense: true,
                         ),
                         keyboardType: TextInputType.number,
                         onChanged: (value) {
                           _topP = double.tryParse(value) ?? 0.95;
                         },
                         controller: TextEditingController(text: _topP.toString()),
-                        enabled: _isInitialized && !_isGenerating,
                       ),
                     ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            
-            // Grammar selection
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Grammar (optional)'),
-                DropdownButtonFormField<GrammarName>(
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    hintText: 'Select a grammar',
-                  ),
-                  value: _selectedGrammar,
-                  items: _grammars.map((grammar) {
-                    return DropdownMenuItem<GrammarName>(
-                      value: grammar,
-                      child: Text(grammar.toString().split('.').last),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedGrammar = value;
-                    });
-                  },
-                  enabled: _isInitialized && !_isGenerating,
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // Completion output
-            const Text(
-              'Completion:',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(12.0),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(8.0),
-              ),
-              constraints: const BoxConstraints(minHeight: 200),
-              child: Text(_completion.isEmpty ? 'No completion generated yet' : _completion),
-            ),
           ],
         ),
       ),
+      actions: [
+        if (_isInitialized)
+          TextButton(
+            onPressed: _release,
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Release Model'),
+          ),
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+          },
+          child: const Text('Close'),
+        ),
+        if (!_isInitialized)
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _initialize();
+            },
+            child: const Text('Load Model'),
+          ),
+      ],
     );
   }
 }
