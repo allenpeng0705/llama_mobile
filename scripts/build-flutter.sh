@@ -2,7 +2,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 FLUTTER_SDK_DIR="$ROOT_DIR/llama_mobile-flutter-SDK"
-EXAMPLE_APP_DIR="$ROOT_DIR/examples/flutter_sdk_example"
+EXAMPLE_APP_DIR="$ROOT_DIR/examples/flutterSDKExample"
 
 # Show help message
 show_help() {
@@ -124,6 +124,20 @@ function copy_android_sdk_to_plugin() {
     else
         echo "✗"
         echo "Failed to copy Android Kotlin/Java files"
+        exit 1
+    fi
+    
+    # Copy assets/grammars folder
+    echo -n "Copying Android assets/grammars folder... "
+    FLUTTER_ASSETS_DIR="$FLUTTER_ANDROID_DIR/src/main/assets"
+    ANDROID_ASSETS_DIR="$ANDROID_SDK_DIR/src/main/assets"
+    
+    mkdir -p "$FLUTTER_ASSETS_DIR/grammars"
+    if cp -R "$ANDROID_ASSETS_DIR/grammars/"* "$FLUTTER_ASSETS_DIR/grammars/"; then
+        echo "✓"
+    else
+        echo "✗"
+        echo "Failed to copy Android assets/grammars folder"
         exit 1
     fi
 }

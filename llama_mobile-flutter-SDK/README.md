@@ -38,59 +38,107 @@ flutter pub get
 
 ### Data Models
 
-#### ModelConfig
+#### InitParams
 
-Configuration for loading a model:
+Configuration for initializing a model:
 
 ```dart
-class ModelConfig {
+class InitParams {
   final String modelPath;        // Path to the GGUF model file
-  final int contextSize;         // Context size for the model (default: 1024)
-  final bool useMemoryCache;     // Whether to use memory cache (default: true)
+  final int nCtx;               // Context size for the model (default: 2048)
+  final int nGpuLayers;         // Number of GPU layers to use (default: 0)
+  final int nThreads;           // Number of CPU threads to use (default: 4)
+  final int nBatch;             // Batch size for model processing (default: 512)
+  final int nUbatch;            // Micro-batch size for model processing (default: 512)
+  final bool useMmap;           // Whether to use memory-mapped files (default: true)
+  final bool useMlock;          // Whether to lock memory (default: false)
+  final bool embedding;         // Whether to generate embeddings (default: false)
 }
 ```
 
-#### GenerationConfig
+#### CompletionParams
 
 Configuration for generating text completions:
 
 ```dart
-class GenerationConfig {
+class CompletionParams {
   final String prompt;           // Prompt text for generation
-  final double temperature;      // Sampling temperature (default: 0.8)
   final int maxTokens;           // Maximum tokens to generate (default: 100)
+  final double temperature;      // Sampling temperature (default: 0.8)
+  final int topK;                // Top-K sampling parameter (default: 40)
+  final double topP;             // Top-P sampling parameter (default: 0.95)
+  final double minP;             // Min-P sampling parameter (default: 0.05)
+  final double typicalP;         // Typical-P sampling parameter (default: 1.0)
+  final int seed;                // Random seed (default: -1 for random)
+  final int nThreads;            // Number of CPU threads to use (default: 4)
+  final int penaltyLastN;        // Penalty window size (default: 64)
+  final double penaltyRepeat;    // Repetition penalty (default: 1.1)
+  final double penaltyFreq;      // Frequency penalty (default: 0.0)
+  final double penaltyPresent;   // Presence penalty (default: 0.0)
+  final int mirostat;            // Mirostat sampling mode (0: disabled, 1: v1, 2: v2)
+  final double mirostatTau;      // Mirostat target entropy (default: 5.0)
+  final double mirostatEta;      // Mirostat learning rate (default: 0.1)
+  final bool ignoreEos;          // Whether to ignore end-of-sequence tokens (default: false)
+  final List<String> stopSequences; // List of stop sequences (default: empty)
+  final String? grammar;         // Grammar string for constrained generation (optional)
+}
+```
+
+#### GrammarName
+
+Enum for built-in grammar types:
+
+```dart
+enum GrammarName {
+  json,        // JSON grammar
+  arithmetic,  // Arithmetic expressions
+  list,        // List format
 }
 ```
 
 ### Methods
 
-#### loadModel
+#### initialize
 
-Loads a model from the specified path with the given configuration:
+Initializes a model from the specified path with the given configuration:
 
 ```dart
-Future<bool> loadModel(ModelConfig config)
+Future<bool> initialize(InitParams params)
 ```
 
 **Parameters:**
-- `config`: Model configuration object
+- `params`: Initialization configuration object
 
 **Returns:**
-- `true` if the model was loaded successfully, `false` otherwise
+- `true` if the model was initialized successfully, `false` otherwise
 
-#### generateCompletion
+#### generate
 
 Generates text completion based on the given prompt and configuration:
 
 ```dart
-Future<String> generateCompletion(GenerationConfig config)
+Future<String> generate(CompletionParams params)
 ```
 
 **Parameters:**
-- `config`: Generation configuration object
+- `params`: Completion configuration object
 
 **Returns:**
 - Generated text completion as a string
+
+#### getGrammarContent
+
+Retrieves the content of a built-in grammar:
+
+```dart
+Future<String?> getGrammarContent(GrammarName grammarName)
+```
+
+**Parameters:**
+- `grammarName`: Name of the built-in grammar
+
+**Returns:**
+- Grammar content as a string if found, null otherwise
 
 #### release
 
