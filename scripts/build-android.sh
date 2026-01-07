@@ -167,30 +167,38 @@ fi
 echo "✓"
 echo "Using $n_cpu cores for build"
 
-# Create the llama_mobile-android directory if it doesn't exist
+# Create the necessary directories for both SDKs
     echo -n "Creating necessary directories... "
-for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src/main/cpp" "./llama_mobile-android/src/main/java/com/llamamobile" "./llama_mobile-android/src/main/assets/grammars"; do
+for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src/main/cpp" "./llama_mobile-android/src/main/java/com/llamamobile" "./llama_mobile-android/src/main/assets/grammars" "./llama_mobile-android-java-SDK/src/main/jniLibs" "./llama_mobile-android-java-SDK/src/main/cpp" "./llama_mobile-android-java-SDK/src/main/java/com/llamamobile" "./llama_mobile-android-java-SDK/src/main/assets/grammars"; do
     if ! mkdir -p "$dir"; then
         echo "✗"
         echo "Error: Failed to create directory $dir!"
         echo "Please check your permissions and try again."
         exit 1
     fi
-    echo "✓"
 done
+echo "✓"
 
-# Copy grammar files to assets
+# Copy grammar files to assets for both SDKs
     echo -n "Copying grammar files to assets... "
 GRAMMAR_SRC_DIR="./lib/grammars"
-GRAMMAR_DEST_DIR="./llama_mobile-android/src/main/assets/grammars"
+GRAMMAR_DEST_DIRS=("./llama_mobile-android/src/main/assets/grammars" "./llama_mobile-android-java-SDK/src/main/assets/grammars")
 
 if [ -d "$GRAMMAR_SRC_DIR" ]; then
-    if ! cp "$GRAMMAR_SRC_DIR"/*.gbnf "$GRAMMAR_DEST_DIR/"; then
-        echo "✗"
-        echo "Error: Failed to copy grammar files!"
+    all_copied=true
+    for dest_dir in "${GRAMMAR_DEST_DIRS[@]}"; do
+        if ! cp "$GRAMMAR_SRC_DIR"/*.gbnf "$dest_dir/"; then
+            echo "✗"
+            echo "Error: Failed to copy grammar files to $dest_dir!"
+            all_copied=false
+            break
+        fi
+    done
+    if [ "$all_copied" = true ]; then
+        echo "✓"
+    else
         exit 1
     fi
-    echo "✓"
 else
     echo "✗"
     echo "Warning: Grammar source directory not found at $GRAMMAR_SRC_DIR!"
@@ -276,11 +284,10 @@ for ABI in "${ABI_LIST[@]}"; do
     fi
     echo "✓"
     
-    # Copy the library
+    # Copy the library to both SDKs
     echo -n "Copying $ABI library... "
     SOURCE_LIB="$BUILD_DIR/output/lib/libllama_mobile_core.so"
-    DEST_DIR="./llama_mobile-android/src/main/jniLibs/$ABI"
-    DEST_LIB="$DEST_DIR/libllama_mobile.so"
+    DEST_DIRS=("./llama_mobile-android/src/main/jniLibs/$ABI" "./llama_mobile-android-java-SDK/src/main/jniLibs/$ABI")
     
     if [ ! -f "$SOURCE_LIB" ]; then
         echo "✗"
@@ -289,18 +296,29 @@ for ABI in "${ABI_LIST[@]}"; do
         exit 1
     fi
     
-    if ! mkdir -p "$DEST_DIR"; then
-        echo "✗"
-        echo "Error: Failed to create destination directory $DEST_DIR!"
-        exit 1
-    fi
+    all_copied=true
+    for dest_dir in "${DEST_DIRS[@]}"; do
+        if ! mkdir -p "$dest_dir"; then
+            echo "✗"
+            echo "Error: Failed to create destination directory $dest_dir!"
+            all_copied=false
+            break
+        fi
+        
+        dest_lib="$dest_dir/libllama_mobile.so"
+        if ! cp "$SOURCE_LIB" "$dest_lib"; then
+            echo "✗"
+            echo "Error: Failed to copy library from $SOURCE_LIB to $dest_lib!"
+            all_copied=false
+            break
+        fi
+    done
     
-    if ! cp "$SOURCE_LIB" "$DEST_LIB"; then
-        echo "✗"
-        echo "Error: Failed to copy library from $SOURCE_LIB to $DEST_LIB!"
+    if [ "$all_copied" = true ]; then
+        echo "✓"
+    else
         exit 1
     fi
-    echo "✓"
     
     # Clean up build directory
     echo -n "Cleaning up build directory... "
@@ -379,6 +397,7 @@ target_link_libraries(llama_mobile_jni PRIVATE llama_mobile)
 "
 
 create_file "./llama_mobile-android/src/main/cpp/CMakeLists.txt" "$CMAKE_CONTENT"
+create_file "./llama_mobile-android-java-SDK/src/main/cpp/CMakeLists.txt" "$CMAKE_CONTENT"
 
 # Create JNI wrapper implementation
 cat > ./llama_mobile-android/src/main/cpp/llama_mobile_jni.cpp << EOL
