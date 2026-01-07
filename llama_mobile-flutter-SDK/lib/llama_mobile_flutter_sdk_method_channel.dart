@@ -22,9 +22,29 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<bool> initialize(InitParams params) async {
+    final success = await methodChannel.invokeMethod<bool>('initialize', params.toJson());
+    return success ?? false;
+  }
+
+  @override
   Future<String> generateCompletion(GenerationConfig config) async {
     final result = await methodChannel.invokeMethod<String>('generateCompletion', config.toJson());
     return result ?? '';
+  }
+
+  @override
+  Future<String> generate(CompletionParams params) async {
+    final result = await methodChannel.invokeMethod<String>('generate', params.toJson());
+    return result ?? '';
+  }
+
+  @override
+  Future<String?> getGrammarContent(GrammarName grammarName) async {
+    final content = await methodChannel.invokeMethod<String>('getGrammarContent', {
+      'grammarName': grammarName.name,
+    });
+    return content;
   }
 
   @override

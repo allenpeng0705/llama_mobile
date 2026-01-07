@@ -167,9 +167,11 @@ fi
 echo "✓"
 echo "Using $n_cpu cores for build"
 
-# Create the necessary directories for both SDKs
+# Create the necessary directories for all SDKs
     echo -n "Creating necessary directories... "
-for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src/main/cpp" "./llama_mobile-android/src/main/java/com/llamamobile" "./llama_mobile-android/src/main/assets/grammars" "./llama_mobile-Android-SDK/src/main/jniLibs" "./llama_mobile-Android-SDK/src/main/cpp" "./llama_mobile-Android-SDK/src/main/java/com/llamamobile" "./llama_mobile-Android-SDK/src/main/assets/grammars"; do
+
+for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src/main/cpp" "./llama_mobile-android/src/main/java/com/llamamobile" "./llama_mobile-android/src/main/assets/grammars" "./llama_mobile-Android-SDK/src/main/jniLibs" "./llama_mobile-Android-SDK/src/main/cpp" "./llama_mobile-Android-SDK/src/main/java/com/llamamobile" "./llama_mobile-Android-SDK/src/main/assets/grammars" "./llama_mobile-android-java-SDK/src/main/jniLibs" "./llama_mobile-android-java-SDK/src/main/cpp" "./llama_mobile-android-java-SDK/src/main/java/com/llamamobile" "./llama_mobile-android-java-SDK/src/main/assets/grammars"; do
+
     if ! mkdir -p "$dir"; then
         echo "✗"
         echo "Error: Failed to create directory $dir!"
@@ -179,10 +181,10 @@ for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src
 done
 echo "✓"
 
-# Copy grammar files to assets for both SDKs
+# Copy grammar files to assets for all SDKs
     echo -n "Copying grammar files to assets... "
 GRAMMAR_SRC_DIR="./lib/grammars"
-GRAMMAR_DEST_DIRS=("./llama_mobile-android/src/main/assets/grammars" "./llama_mobile-Android-SDK/src/main/assets/grammars")
+GRAMMAR_DEST_DIRS=("./llama_mobile-android/src/main/assets/grammars" "./llama_mobile-android-java-SDK/src/main/assets/grammars" "./llama_mobile-android-SDK/src/main/assets/grammars")
 
 if [ -d "$GRAMMAR_SRC_DIR" ]; then
     all_copied=true

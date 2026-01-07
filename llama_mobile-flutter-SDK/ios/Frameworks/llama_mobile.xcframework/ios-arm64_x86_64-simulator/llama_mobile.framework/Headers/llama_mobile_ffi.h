@@ -40,6 +40,7 @@ typedef struct llama_mobile_context_opaque* llama_mobile_context_handle_t;
 typedef struct llama_mobile_init_params_c {
     const char* model_path;
     const char* chat_template; 
+    const char* system_prompt;
 
     int32_t n_ctx;
     int32_t n_batch;

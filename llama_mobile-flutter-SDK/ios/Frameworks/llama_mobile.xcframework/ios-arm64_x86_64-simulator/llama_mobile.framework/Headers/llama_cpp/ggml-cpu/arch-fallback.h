@@ -3,7 +3,7 @@
 // Rename `_generic` functions if no native implementation is available.
 // This effectively selects the generic implementation.
 
-#if defined(LM_GGML_CPU_GENERIC)
+#if defined(LM_GGML_CPU_GENERIC) && !defined(__aarch64__) && !defined(__arm__) && !defined(_M_ARM) && !defined(_M_ARM64)
 // quants.c
 #define quantize_row_q8_0_generic quantize_row_q8_0
 #define quantize_row_q8_1_generic quantize_row_q8_1
@@ -56,6 +56,32 @@
 #define lm_ggml_gemm_q8_0_4x4_q8_0_generic lm_ggml_gemm_q8_0_4x4_q8_0
 #define lm_ggml_gemm_q8_0_4x8_q8_0_generic lm_ggml_gemm_q8_0_4x8_q8_0
 #elif defined(__aarch64__) || defined(__arm__) || defined(_M_ARM) || defined(_M_ARM64)
+// quants.c
+#define quantize_row_q8_0_generic quantize_row_q8_0
+#define quantize_row_q8_1_generic quantize_row_q8_1
+#define quantize_row_q8_K_generic quantize_row_q8_K
+#define lm_ggml_vec_dot_q4_0_q8_0_generic lm_ggml_vec_dot_q4_0_q8_0
+#define lm_ggml_vec_dot_q4_1_q8_1_generic lm_ggml_vec_dot_q4_1_q8_1
+#define lm_ggml_vec_dot_q5_0_q8_0_generic lm_ggml_vec_dot_q5_0_q8_0
+#define lm_ggml_vec_dot_q5_1_q8_1_generic lm_ggml_vec_dot_q5_1_q8_1
+#define lm_ggml_vec_dot_q8_0_q8_0_generic lm_ggml_vec_dot_q8_0_q8_0
+#define lm_ggml_vec_dot_mxfp4_q8_0_generic lm_ggml_vec_dot_mxfp4_q8_0
+#define lm_ggml_vec_dot_tq1_0_q8_K_generic lm_ggml_vec_dot_tq1_0_q8_K
+#define lm_ggml_vec_dot_tq2_0_q8_K_generic lm_ggml_vec_dot_tq2_0_q8_K
+#define lm_ggml_vec_dot_q2_K_q8_K_generic lm_ggml_vec_dot_q2_K_q8_K
+#define lm_ggml_vec_dot_q3_K_q8_K_generic lm_ggml_vec_dot_q3_K_q8_K
+#define lm_ggml_vec_dot_q4_K_q8_K_generic lm_ggml_vec_dot_q4_K_q8_K
+#define lm_ggml_vec_dot_q5_K_q8_K_generic lm_ggml_vec_dot_q5_K_q8_K
+#define lm_ggml_vec_dot_q6_K_q8_K_generic lm_ggml_vec_dot_q6_K_q8_K
+#define lm_ggml_vec_dot_iq2_xxs_q8_K_generic lm_ggml_vec_dot_iq2_xxs_q8_K
+#define lm_ggml_vec_dot_iq2_xs_q8_K_generic lm_ggml_vec_dot_iq2_xs_q8_K
+#define lm_ggml_vec_dot_iq2_s_q8_K_generic lm_ggml_vec_dot_iq2_s_q8_K
+#define lm_ggml_vec_dot_iq3_xxs_q8_K_generic lm_ggml_vec_dot_iq3_xxs_q8_K
+#define lm_ggml_vec_dot_iq3_s_q8_K_generic lm_ggml_vec_dot_iq3_s_q8_K
+#define lm_ggml_vec_dot_iq1_s_q8_K_generic lm_ggml_vec_dot_iq1_s_q8_K
+#define lm_ggml_vec_dot_iq1_m_q8_K_generic lm_ggml_vec_dot_iq1_m_q8_K
+#define lm_ggml_vec_dot_iq4_nl_q8_0_generic lm_ggml_vec_dot_iq4_nl_q8_0
+#define lm_ggml_vec_dot_iq4_xs_q8_K_generic lm_ggml_vec_dot_iq4_xs_q8_K
 // repack.cpp
 #define lm_ggml_quantize_mat_q8_0_4x4_generic lm_ggml_quantize_mat_q8_0_4x4
 #define lm_ggml_quantize_mat_q8_0_4x8_generic lm_ggml_quantize_mat_q8_0_4x8
@@ -82,6 +108,29 @@
 #define lm_ggml_gemm_q8_0_4x4_q8_0_generic lm_ggml_gemm_q8_0_4x4_q8_0
 #define lm_ggml_gemm_q8_0_4x8_q8_0_generic lm_ggml_gemm_q8_0_4x8_q8_0
 #elif defined(__x86_64__) || defined(__i386__) || defined(_M_IX86) || defined(_M_X64)
+// quants.c
+#define lm_ggml_vec_dot_q4_0_q8_0_generic lm_ggml_vec_dot_q4_0_q8_0
+#define lm_ggml_vec_dot_q4_1_q8_1_generic lm_ggml_vec_dot_q4_1_q8_1
+#define lm_ggml_vec_dot_q5_0_q8_0_generic lm_ggml_vec_dot_q5_0_q8_0
+#define lm_ggml_vec_dot_q5_1_q8_1_generic lm_ggml_vec_dot_q5_1_q8_1
+#define lm_ggml_vec_dot_q8_0_q8_0_generic lm_ggml_vec_dot_q8_0_q8_0
+#define lm_ggml_vec_dot_mxfp4_q8_0_generic lm_ggml_vec_dot_mxfp4_q8_0
+#define lm_ggml_vec_dot_tq1_0_q8_K_generic lm_ggml_vec_dot_tq1_0_q8_K
+#define lm_ggml_vec_dot_tq2_0_q8_K_generic lm_ggml_vec_dot_tq2_0_q8_K
+#define lm_ggml_vec_dot_q2_K_q8_K_generic lm_ggml_vec_dot_q2_K_q8_K
+#define lm_ggml_vec_dot_q3_K_q8_K_generic lm_ggml_vec_dot_q3_K_q8_K
+#define lm_ggml_vec_dot_q4_K_q8_K_generic lm_ggml_vec_dot_q4_K_q8_K
+#define lm_ggml_vec_dot_q5_K_q8_K_generic lm_ggml_vec_dot_q5_K_q8_K
+#define lm_ggml_vec_dot_q6_K_q8_K_generic lm_ggml_vec_dot_q6_K_q8_K
+#define lm_ggml_vec_dot_iq2_xxs_q8_K_generic lm_ggml_vec_dot_iq2_xxs_q8_K
+#define lm_ggml_vec_dot_iq2_xs_q8_K_generic lm_ggml_vec_dot_iq2_xs_q8_K
+#define lm_ggml_vec_dot_iq2_s_q8_K_generic lm_ggml_vec_dot_iq2_s_q8_K
+#define lm_ggml_vec_dot_iq3_xxs_q8_K_generic lm_ggml_vec_dot_iq3_xxs_q8_K
+#define lm_ggml_vec_dot_iq3_s_q8_K_generic lm_ggml_vec_dot_iq3_s_q8_K
+#define lm_ggml_vec_dot_iq1_s_q8_K_generic lm_ggml_vec_dot_iq1_s_q8_K
+#define lm_ggml_vec_dot_iq1_m_q8_K_generic lm_ggml_vec_dot_iq1_m_q8_K
+#define lm_ggml_vec_dot_iq4_nl_q8_0_generic lm_ggml_vec_dot_iq4_nl_q8_0
+#define lm_ggml_vec_dot_iq4_xs_q8_K_generic lm_ggml_vec_dot_iq4_xs_q8_K
 // repack.cpp
 #define lm_ggml_quantize_mat_q8_0_4x4_generic lm_ggml_quantize_mat_q8_0_4x4
 #define lm_ggml_quantize_mat_q8_K_4x4_generic lm_ggml_quantize_mat_q8_K_4x4

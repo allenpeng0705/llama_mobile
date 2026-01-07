@@ -372,6 +372,63 @@ swift build
 
 Please refer to the main `llama_mobile` repository for contribution guidelines.
 
+## Testing
+
+### Running Tests
+
+The SDK includes a comprehensive test suite that verifies all core functionality.
+
+#### Using Xcode
+
+1. Open the SDK project in Xcode
+2. Select the `LlamaMobileSDKTests` target
+3. Click the "Test" button or use ⌘+U
+
+#### Using Command Line
+
+```bash
+cd llama_mobile-ios-SDK
+sudo xcodebuild test -scheme LlamaMobileSDK -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest'
+```
+
+### Test Resources
+
+The tests require model files and grammar files to run. You need to add these resources manually:
+
+#### Models
+
+1. Download a GGUF format model (e.g., `mistral-7b-v0.1.Q4_K_M.gguf`)
+2. Copy the model file to:
+   ```
+   llama_mobile-ios-SDK/Tests/LlamaMobileSDKTests/Resources/models/
+   ```
+
+#### Grammars
+
+1. Copy grammar files from the main library:
+   ```bash
+   cp -r /path/to/llama_mobile/lib/grammars/* llama_mobile-ios-SDK/Tests/LlamaMobileSDKTests/Resources/grammars/
+   ```
+
+### Test Structure
+
+```
+Tests/
+└── LlamaMobileSDKTests/
+    ├── Resources/
+    │   ├── models/       # Place model files here
+    │   └── grammars/     # Place grammar files here
+    ├── TestCoreFunctionality.swift   # Core API tests
+    ├── TestGrammar.swift             # Grammar support tests
+    └── TestImport.swift              # Module import tests
+```
+
+### Test Types
+
+- **Core Functionality Tests**: Verify model loading, completion generation, and basic API functionality
+- **Grammar Tests**: Validate constrained generation using grammar files (JSON, arithmetic, etc.)
+- **Import Tests**: Ensure proper module imports and initialization
+
 ## License
 
 Same license as the main `llama_mobile` library.

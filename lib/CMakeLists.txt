@@ -478,5 +478,5 @@ file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/chat.h DESTINATION ${INCLUDE_OUT
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/sampling.h DESTINATION ${INCLUDE_OUTPUT_PATH}/llama_cpp)
 
 # Add tests subdirectory
-# add_subdirectory(tests)
+add_subdirectory(tests)
 

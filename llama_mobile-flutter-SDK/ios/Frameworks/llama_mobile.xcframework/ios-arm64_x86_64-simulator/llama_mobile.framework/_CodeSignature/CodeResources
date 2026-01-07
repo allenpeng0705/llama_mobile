@@ -78,7 +78,7 @@
 		</data>
 		<key>Headers/llama_cpp/ggml-cpu/arch-fallback.h</key>
 		<data>
-		BnaeF9e4G1S7tZR8V0iKt7FydMI=
+		iOxVhIHyw1o5B03QOTIPfoG6KhU=
 		</data>
 		<key>Headers/llama_cpp/ggml-cpu/binary-ops.h</key>
 		<data>
@@ -382,15 +382,11 @@
 		</data>
 		<key>Headers/llama_mobile_api.h</key>
 		<data>
-		D6JVMgslFM/70YCog1x0yDAMJnk=
+		YBq3irkEx+QodxftNLZuEYmNCUQ=
 		</data>
 		<key>Headers/llama_mobile_ffi.h</key>
 		<data>
-		f2HHlx0DLsB8th0NQAZKxflx06U=
-		</data>
-		<key>Headers/llama_mobile_unified.h</key>
-		<data>
-		e0SL5fLoH7cMarQ20qwS8PX95Z0=
+		kiFAyZQ3i42C8rRIxVwnB1S8Nig=
 		</data>
 		<key>Headers/minja/chat-template.hpp</key>
 		<data>
@@ -414,11 +410,43 @@
 		</data>
 		<key>Modules/module.modulemap</key>
 		<data>
-		mEcsMD1qYZWP74QmUV61vdhtXyY=
+		vuxu0ml3K0FC4kIufUQuJsIXcjU=
 		</data>
 		<key>ggml-llama-sim.metallib</key>
 		<data>
 		oyF3F+Q1E2zwu3/U9cTR67VF92s=
+		</data>
+		<key>grammars/arithmetic.gbnf</key>
+		<data>
+		RyiKvLViPd6UnocEbYFbLaoOkHI=
+		</data>
+		<key>grammars/c.gbnf</key>
+		<data>
+		lsfys3F1usAPcs/nu4FEWaMAM2U=
+		</data>
+		<key>grammars/chess.gbnf</key>
+		<data>
+		vwOlzkn3YuuAnXK1NAVjcuyHz98=
+		</data>
+		<key>grammars/english.gbnf</key>
+		<data>
+		IiyxpErSYbbWMrUZGUi1+SoQalQ=
+		</data>
+		<key>grammars/japanese.gbnf</key>
+		<data>
+		XkuHacgle8rgaFtmMz0HBbdrkqU=
+		</data>
+		<key>grammars/json.gbnf</key>
+		<data>
+		emaYIefODIDJA3Vho9fgMWUMVvE=
+		</data>
+		<key>grammars/json_arr.gbnf</key>
+		<data>
+		wHfHB5rWQfTHYkiEJsfHXiQuF/o=
+		</data>
+		<key>grammars/list.gbnf</key>
+		<data>
+		pIVQoHa8t+fzvoXmr3mvPlox0AQ=
 		</data>
 	</dict>
 	<key>files2</key>
@@ -553,7 +581,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			pHJpODcQdn3skXBXuYbAHTeeobTyH4mQ/tk+Wv/9OM8=
+			/pOG/4llkteneIydcbP0UALK+uJPhkTlHrngkGeSYs4=
 			</data>
 		</dict>
 		<key>Headers/llama_cpp/ggml-cpu/binary-ops.h</key>
@@ -1085,21 +1113,14 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			DpI2qoFqZcCgTn8VtlDm+b6vABnj/Z+4hjx4ZQ3Ok2k=
+			bXIP5ij+62SskNrlGxPfMWOhEQiBF3KHolX8Nv5vSik=
 			</data>
 		</dict>
 		<key>Headers/llama_mobile_ffi.h</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			n1PW2wDDx2WDc76JrTCMZtf4PoPN5E4M7Waqye/k6Ps=
-			</data>
-		</dict>
-		<key>Headers/llama_mobile_unified.h</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			UIRMhrdMj58N1zFCBqqyqbydw/YZW5/8E0vKfhSvHSY=
+			56Q49yl1gP299Aqu+CFROdmexW9gsvjRPVt9ar0d/b0=
 			</data>
 		</dict>
 		<key>Headers/minja/chat-template.hpp</key>
@@ -1134,7 +1155,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			hu4w/TUO7QC767XLPTLGQ+uXDjyJRSfGku9qc0La0Iw=
+			Kr2xQgq2ySt1OqOgYGgHOkcat32WXFCupEY+iVzGFiM=
 			</data>
 		</dict>
 		<key>ggml-llama-sim.metallib</key>
@@ -1142,6 +1163,62 @@
 			<key>hash2</key>
 			<data>
 			J9rzm1titUyYM3pmQ87TjWXSdkpC7JP0tRAI1dQZOqI=
+			</data>
+		</dict>
+		<key>grammars/arithmetic.gbnf</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			3ZHh73uwF445gDbG9SUcaUt5xDyy0iN4T03PMCCZR3Y=
+			</data>
+		</dict>
+		<key>grammars/c.gbnf</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			VWzb3pO4MskoOJbWiDf9MCXncmd7NtwY8GaxlPuZaYw=
+			</data>
+		</dict>
+		<key>grammars/chess.gbnf</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			3hpla7TPD9o5kfDT8bzeM4wNgqYPfg6Mq7K6DHMALl8=
+			</data>
+		</dict>
+		<key>grammars/english.gbnf</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			lqJI9WPFeAr2IbY9WcZOjUgjyzubPn9Ifrj4s9EbDc8=
+			</data>
+		</dict>
+		<key>grammars/japanese.gbnf</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			afwXcYDysV0IXYEapB42C7hcli1CTXwX3JNsBMpmjgA=
+			</data>
+		</dict>
+		<key>grammars/json.gbnf</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			Gj40aYkpV4YQKa3NJK0MiGt3ipQt1KGMwUYjitVkdN0=
+			</data>
+		</dict>
+		<key>grammars/json_arr.gbnf</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			+BdJbV7giqp9rE/e5Zy+z8+ZNnCItj5LHALW9jLDkgY=
+			</data>
+		</dict>
+		<key>grammars/list.gbnf</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			fosUJ4T5kVEWUOXw6C0YoSNVjwnp0ZoFbRBximmGoVA=
 			</data>
 		</dict>
 	</dict>

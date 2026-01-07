@@ -7,14 +7,29 @@ class LlamaMobileFlutterSdk {
     return LlamaMobileFlutterSdkPlatform.instance.getPlatformVersion();
   }
 
-  /// Loads a model with the specified configuration.
+  /// Legacy method for backward compatibility
   Future<bool> loadModel(ModelConfig config) {
     return LlamaMobileFlutterSdkPlatform.instance.loadModel(config);
   }
 
-  /// Generates text completion based on the given prompt and configuration.
+  /// Initialize the model with the specified parameters
+  Future<bool> initialize(InitParams params) {
+    return LlamaMobileFlutterSdkPlatform.instance.initialize(params);
+  }
+
+  /// Legacy method for backward compatibility
   Future<String> generateCompletion(GenerationConfig config) {
     return LlamaMobileFlutterSdkPlatform.instance.generateCompletion(config);
+  }
+
+  /// Generate text completion with the specified parameters
+  Future<String> generate(CompletionParams params) {
+    return LlamaMobileFlutterSdkPlatform.instance.generate(params);
+  }
+
+  /// Get the content of a built-in grammar
+  Future<String?> getGrammarContent(GrammarName grammarName) {
+    return LlamaMobileFlutterSdkPlatform.instance.getGrammarContent(grammarName);
   }
 
   /// Releases the loaded model and frees resources.

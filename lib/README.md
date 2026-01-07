@@ -600,12 +600,97 @@ llama_mobile_float_array_t llama_mobile_embedding(
 
 #### LoRA Adapters
 
-```cpp
 // LoRA adapter configuration
 typedef struct {
     const char* path;                // Path to LoRA adapter
     float scale;                     // LoRA scale factor
 } llama_mobile_lora_adapter_t;
+
+## Testing
+
+### Building and Running Tests
+
+The Core library includes a comprehensive test suite to verify all API functionality.
+
+#### Building the Tests
+
+```bash
+cd /path/to/llama_mobile/lib
+mkdir -p build
+touch build/.gitkeep
+cd build
+cmake ..
+make test_api
+```
+
+#### Running the Tests
+
+```bash
+./test_api [/path/to/model.gguf]
+```
+
+If you don't provide a model path, the test will automatically look for models in the `lib/tests/models/` directory.
+
+### Test Resources
+
+#### Models
+
+1. Download a GGUF format model (e.g., `mistral-7b-v0.1.Q4_K_M.gguf`)
+2. Copy the model file to:
+   ```
+   lib/tests/models/
+   ```
+
+#### Grammars
+
+Grammar files are used for constrained generation tests:
+
+```bash
+cp -r lib/grammars/* lib/tests/grammars/
+```
+
+### Test Structure
+
+```
+tests/
+├── test_api.cpp           # Comprehensive API test suite
+├── chat_example.cpp       # Chat functionality example/test
+├── direct_test.cpp        # Direct API usage test
+├── models/                # Place model files here
+└── grammars/              # Place grammar files here
+```
+
+### Test Coverage
+
+The `test_api.cpp` test suite covers:
+
+- Model loading and initialization
+- Text completion generation
+- Tokenization and detokenization
+- Embedding generation
+- Grammar-constrained generation (JSON, arithmetic, etc.)
+- Multimodal support
+- LoRA adapter functionality
+- Vocoder/TTS support
+
+### Test Results
+
+The tests produce detailed output showing:
+- Test status (PASS/FAIL)
+- Execution time
+- Memory usage
+- Token statistics
+
+### Example Test Output
+
+```
+✓ Model initialized successfully
+✓ Generated completion with 25 tokens in 321ms
+✓ Grammar-constrained JSON generation passed
+✓ Tokenization and detokenization verified
+✓ Embedding generation successful
+All tests passed!
+```
 
 // Apply LoRA adapters
 int llama_mobile_apply_lora_adapters(

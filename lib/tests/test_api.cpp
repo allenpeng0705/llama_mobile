@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
     llama_mobile_init_params_t params = {0};
     params.model_path = model_path.c_str();
     params.n_ctx = 2048;
-    params.n_gpu_layers = 20;  // Re-enable GPU with 20 layers offloaded to Metal
+    params.n_gpu_layers = 0;  // Disable GPU acceleration to avoid Metal backend issues
     params.n_threads = 4;
     params.progress_callback = progress_callback;
     params.embedding = false;  // Disable global embedding mode
