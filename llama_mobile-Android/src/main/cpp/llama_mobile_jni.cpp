@@ -183,6 +183,185 @@ JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_releaseContext(
     }
 }
 
+// Initialize vocoder
+JNIEXPORT jint JNICALL Java_com_llamamobile_LlamaMobile_initVocoder(
+    JNIEnv *env, jobject thiz, jlong contextHandle, jstring vocoderModelPathStr) {
+    
+    if (contextHandle == 0 || vocoderModelPathStr == nullptr) {
+        return -1;
+    }
+    
+    const char* vocoderModelPath = getStringUTFChars(env, vocoderModelPathStr);
+    if (vocoderModelPath == nullptr) {
+        return -1;
+    }
+    
+    int result = llama_mobile_init_vocoder_c(
+        reinterpret_cast<llama_mobile_context_handle_t>(contextHandle), 
+        vocoderModelPath);
+    
+    releaseStringUTFChars(env, vocoderModelPathStr, vocoderModelPath);
+    
+    return result;
+}
+
+// Check if vocoder is enabled
+JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_isVocoderEnabled(
+    JNIEnv *env, jobject thiz, jlong contextHandle) {
+    
+    if (contextHandle == 0) {
+        return JNI_FALSE;
+    }
+    
+    bool result = llama_mobile_is_vocoder_enabled_c(
+        reinterpret_cast<llama_mobile_context_handle_t>(contextHandle));
+    
+    return static_cast<jboolean>(result);
+}
+
+// Get TTS type
+JNIEXPORT jint JNICALL Java_com_llamamobile_LlamaMobile_getTtsType(
+    JNIEnv *env, jobject thiz, jlong contextHandle) {
+    
+    if (contextHandle == 0) {
+        return -1;
+    }
+    
+    int32_t result = llama_mobile_get_tts_type_c(
+        reinterpret_cast<llama_mobile_context_handle_t>(contextHandle));
+    
+    return static_cast<jint>(result);
+}
+
+// Get formatted audio completion
+JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_getFormattedAudioCompletion(
+    JNIEnv *env, jobject thiz, jlong contextHandle, jstring speakerJsonStr, jstring textToSpeakStr) {
+    
+    if (contextHandle == 0 || speakerJsonStr == nullptr || textToSpeakStr == nullptr) {
+        return nullptr;
+    }
+    
+    const char* speakerJson = getStringUTFChars(env, speakerJsonStr);
+    const char* textToSpeak = getStringUTFChars(env, textToSpeakStr);
+    
+    if (speakerJson == nullptr || textToSpeak == nullptr) {
+        if (speakerJson != nullptr) {
+            releaseStringUTFChars(env, speakerJsonStr, speakerJson);
+        }
+        if (textToSpeak != nullptr) {
+            releaseStringUTFChars(env, textToSpeakStr, textToSpeak);
+        }
+        return nullptr;
+    }
+    
+    char* result = llama_mobile_get_formatted_audio_completion_c(
+        reinterpret_cast<llama_mobile_context_handle_t>(contextHandle), 
+        speakerJson, 
+        textToSpeak);
+    
+    releaseStringUTFChars(env, speakerJsonStr, speakerJson);
+    releaseStringUTFChars(env, textToSpeakStr, textToSpeak);
+    
+    if (result == nullptr) {
+        return nullptr;
+    }
+    
+    jstring jResult = env->NewStringUTF(result);
+    llama_mobile_free_result_string_c(result);
+    
+    return jResult;
+}
+
+// Get audio guide tokens
+JNIEXPORT jintArray JNICALL Java_com_llamamobile_LlamaMobile_getAudioGuideTokens(
+    JNIEnv *env, jobject thiz, jlong contextHandle, jstring textToSpeakStr) {
+    
+    if (contextHandle == 0 || textToSpeakStr == nullptr) {
+        return nullptr;
+    }
+    
+    const char* textToSpeak = getStringUTFChars(env, textToSpeakStr);
+    if (textToSpeak == nullptr) {
+        return nullptr;
+    }
+    
+    llama_mobile_token_array_c_t result = llama_mobile_get_audio_guide_tokens_c(
+        reinterpret_cast<llama_mobile_context_handle_t>(contextHandle), 
+        textToSpeak);
+    
+    releaseStringUTFChars(env, textToSpeakStr, textToSpeak);
+    
+    if (result.tokens == nullptr || result.count <= 0) {
+        return nullptr;
+    }
+    
+    jintArray jResult = env->NewIntArray(result.count);
+    if (jResult == nullptr) {
+        llama_mobile_free_token_array_c(&result);
+        return nullptr;
+    }
+    
+    env->SetIntArrayRegion(jResult, 0, result.count, reinterpret_cast<const jint*>(result.tokens));
+    llama_mobile_free_token_array_c(&result);
+    
+    return jResult;
+}
+
+// Decode audio tokens
+JNIEXPORT jfloatArray JNICALL Java_com_llamamobile_LlamaMobile_decodeAudioTokens(
+    JNIEnv *env, jobject thiz, jlong contextHandle, jintArray tokensArray) {
+    
+    if (contextHandle == 0 || tokensArray == nullptr) {
+        return nullptr;
+    }
+    
+    jsize tokensLength = env->GetArrayLength(tokensArray);
+    if (tokensLength <= 0) {
+        return nullptr;
+    }
+    
+    // Get the tokens from the Java array
+    jint* tokens = env->GetIntArrayElements(tokensArray, nullptr);
+    if (tokens == nullptr) {
+        return nullptr;
+    }
+    
+    // Call the C API
+    llama_mobile_float_array_c_t result = llama_mobile_decode_audio_tokens_c(
+        reinterpret_cast<llama_mobile_context_handle_t>(contextHandle), 
+        reinterpret_cast<const int32_t*>(tokens), 
+        static_cast<int32_t>(tokensLength));
+    
+    // Release the Java array
+    env->ReleaseIntArrayElements(tokensArray, tokens, JNI_ABORT);
+    
+    if (result.data == nullptr || result.count <= 0) {
+        return nullptr;
+    }
+    
+    // Create a new Java float array
+    jfloatArray jResult = env->NewFloatArray(result.count);
+    if (jResult == nullptr) {
+        llama_mobile_free_float_array_c(&result);
+        return nullptr;
+    }
+    
+    // Copy the data to the Java array
+    env->SetFloatArrayRegion(jResult, 0, result.count, reinterpret_cast<const jfloat*>(result.data));
+    llama_mobile_free_float_array_c(&result);
+    
+    return jResult;
+}
+
+// Release vocoder
+JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_releaseVocoder(
+    JNIEnv *env, jobject thiz, jlong contextHandle) {
+    
+    if (contextHandle != 0) {
+        llama_mobile_release_vocoder_c(reinterpret_cast<llama_mobile_context_handle_t>(contextHandle));
+    }
+}
+
 #ifdef __cplusplus
 }
 #endif
