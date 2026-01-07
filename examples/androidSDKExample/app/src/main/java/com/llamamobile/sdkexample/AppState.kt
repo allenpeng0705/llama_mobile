@@ -2,6 +2,7 @@ package com.llamamobile.sdkexample
 
 import android.content.Context
 import android.content.res.AssetManager
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -14,6 +15,7 @@ class AppState {
     companion object {
         private const val TAG = "AppState"
         private const val MODELS_ASSET_DIR = "models"
+        private const val EXTERNAL_MODELS_DIR = "LlamaMobile/models"
         private const val GRAMMARS_ASSET_DIR = "grammars"
         private const val JSON_GRAMMAR_FILE = "json.gbnf"
     }
@@ -54,9 +56,10 @@ class AppState {
         jsonGrammar = loadGrammarFromAssets(context, JSON_GRAMMAR_FILE)
     }
 
-    private fun extractModelsFromAssets(context: Context) {
+    fun extractModelsFromAssets(context: Context) {
         val assetManager = context.assets
         val localModelsDir = File(context.filesDir, MODELS_ASSET_DIR)
+        val models = mutableListOf<Pair<String, String>>()
 
         // Create local models directory if it doesn't exist
         if (!localModelsDir.exists()) {
@@ -64,14 +67,14 @@ class AppState {
         }
 
         try {
-            // List files in assets/models directory
+            // 1. Extract models from assets/models directory
             val assetFiles = assetManager.list(MODELS_ASSET_DIR)
             
             if (assetFiles != null && assetFiles.isNotEmpty()) {
                 val ggufFiles = assetFiles.filter { it.endsWith(".gguf") }
                 
                 // Extract each GGUF file to local storage
-                availableModels = ggufFiles.map { fileName ->
+                val assetModels = ggufFiles.map { fileName ->
                     val localFile = File(localModelsDir, fileName)
                     
                     // Extract file if it doesn't exist locally
@@ -81,14 +84,46 @@ class AppState {
                     
                     Pair(fileName, localFile.absolutePath)
                 }
-
-                // Set default model path if any models are found
-                if (availableModels.isNotEmpty()) {
-                    modelPath = availableModels.first().second
-                }
+                models.addAll(assetModels)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error extracting models from assets: ${e.message}")
+        }
+
+        try {
+            // 2. Scan external storage for models
+            val externalDir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), EXTERNAL_MODELS_DIR)
+            if (externalDir.exists() && externalDir.isDirectory) {
+                val ggufFiles = externalDir.listFiles()?.filter { it.isFile && it.name.endsWith(".gguf") } ?: emptyList()
+                
+                val externalModels = ggufFiles.map { file ->
+                    Pair(file.name, file.absolutePath)
+                }
+                models.addAll(externalModels)
+            } else {
+                // Create external models directory if it doesn't exist
+                externalDir.mkdirs()
+                Log.i(TAG, "Created external models directory: ${externalDir.absolutePath}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error scanning external storage for models: ${e.message}")
+        }
+
+        // Remove duplicates by file name (keep the first occurrence)
+        val seenFileNames = mutableSetOf<String>()
+        availableModels = models.filter { pair ->
+            val isNew = !seenFileNames.contains(pair.first)
+            if (isNew) seenFileNames.add(pair.first)
+            isNew
+        }
+
+        // Set default model path if any models are found
+        if (availableModels.isNotEmpty()) {
+            // Check if current model path is still valid
+            val currentModelValid = availableModels.any { it.second == modelPath }
+            if (!currentModelValid) {
+                modelPath = availableModels.first().second
+            }
         }
     }
 

@@ -25,6 +25,14 @@ class SettingsFragment : Fragment() {
         return binding.root
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Refresh model list when fragment resumes
+        (activity as MainActivity).appState.extractModelsFromAssets(requireContext())
+        setupModelSpinner()
+        updateUI()
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
