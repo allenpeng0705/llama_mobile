@@ -31,6 +31,61 @@ A lightweight, high-performance framework for running AI models on mobile device
 
 llama_mobile is a mobile-first AI framework that brings the power of llama.cpp to various mobile platforms and development frameworks. The project focuses on providing native SDKs and plugins for seamless integration of large language models (LLMs) into mobile and web applications.
 
+## Plugins and SDKs
+
+llama_mobile provides dedicated SDKs and plugins for various development platforms to simplify integration of AI models into your applications. Below is a comprehensive list of all available SDKs and plugins:
+
+### Core Libraries
+
+- **llama_mobile-ios/**: Native iOS framework for integrating AI models into iOS applications. Supports both Swift and Objective-C with Metal acceleration for optimal performance.
+  - **README**: [llama_mobile-ios/README.md](llama_mobile-ios/README.md)
+  - **Build Script**: `scripts/build-ios.sh`
+
+- **llama_mobile-android/**: Native Android library for integrating AI models into Android applications. Provides JNI bindings and Neon SIMD support for performance optimization.
+  - **README**: [llama_mobile-android/README.md](llama_mobile-android/README.md)
+  - **Build Script**: `scripts/build-android.sh`
+
+### SDK Wrappers
+
+- **llama_mobile-ios-SDK/**: High-level iOS SDK wrapper that simplifies model loading, text generation, and embedding operations for Swift applications.
+  - **README**: [llama_mobile-ios-SDK/README.md](llama_mobile-ios-SDK/README.md)
+
+- **llama_mobile-android-SDK/**: High-level Android SDK wrapper for Kotlin and Java applications. Provides a clean API for AI model operations with proper error handling.
+  - **README**: [llama_mobile-android-SDK/README.md](llama_mobile-android-SDK/README.md)
+
+### Cross-Platform Plugins
+
+- **llama_mobile-flutter-SDK/**: Flutter plugin that provides a Dart API for integrating AI models into cross-platform Flutter applications. Supports both iOS and Android targets.
+  - **README**: [llama_mobile-flutter-SDK/README.md](llama_mobile-flutter-SDK/README.md)
+  - **Build Script**: `scripts/build-flutter.sh`
+
+- **llama_mobile-react-native-SDK/**: React Native plugin that provides JavaScript/TypeScript bindings for native AI model operations. Allows AI integration in React Native applications.
+  - **README**: [llama_mobile-react-native-SDK/README.md](llama_mobile-react-native-SDK/README.md)
+
+- **llama_mobile-capacitor/**: (Planned) Capacitor plugin for integrating AI models into web-based applications. Enables AI capabilities in cross-platform web apps.
+  - **Status**: ⏳ In development
+
+### Example Applications
+
+Each SDK and plugin comes with example applications that demonstrate basic usage:
+
+#### iOS Examples
+- **iOS Framework Example**: `examples/iOSFrameworkExample/` - Demonstrates usage of the native iOS framework
+- **iOS SDK Example**: `examples/iOSSDKExample/` - Shows how to use the high-level iOS SDK wrapper
+- **SwiftUI Example**: `examples/LlamaMobileSwiftUIExample/` - Modern SwiftUI application example
+
+#### Android Examples
+- **Android Library Example**: `examples/androidLibExample/` - Basic usage of the native Android library
+- **Android SDK Example**: `examples/androidSDKExample/` - High-level Android SDK wrapper usage
+- **Android Java SDK Example**: `examples/androidJavaSDKExample/` - Java-specific SDK usage example
+- **Android Example**: `examples/AndroidExample/` - Comprehensive Android application example
+
+#### Cross-Platform Examples
+- **Flutter SDK Example**: `examples/flutterSDKExample/` - Flutter plugin integration example
+
+#### Core Examples
+- **C++ Example**: `examples/cpp/` - Direct usage of the core C++ library
+
 ## Architecture
 
 ### Core Components
