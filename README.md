@@ -63,7 +63,7 @@ llama_mobile provides dedicated SDKs and plugins for various development platfor
   - **README**: [llama_mobile-react-native-SDK/README.md](llama_mobile-react-native-SDK/README.md)
 
 - **llama_mobile-capacitor/**: (Planned) Capacitor plugin for integrating AI models into web-based applications. Enables AI capabilities in cross-platform web apps.
-  - **Status**: ⏳ In development
+   - **README**: [llama_mobile-capacitor-plugin/CONTRIBUTING.md](llama_mobile-capacitor-plugin/CONTRIBUTING.md)
 
 ### Example Applications
 
