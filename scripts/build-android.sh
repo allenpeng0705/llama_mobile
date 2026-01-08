@@ -170,7 +170,7 @@ echo "Using $n_cpu cores for build"
 # Create the necessary directories for all SDKs
     echo -n "Creating necessary directories... "
 
-for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src/main/cpp" "./llama_mobile-android/src/main/java/com/llamamobile" "./llama_mobile-android/src/main/assets/grammars" "./llama_mobile-Android-SDK/src/main/jniLibs" "./llama_mobile-Android-SDK/src/main/cpp" "./llama_mobile-Android-SDK/src/main/java/com/llamamobile" "./llama_mobile-Android-SDK/src/main/assets/grammars" "./llama_mobile-android-java-SDK/src/main/jniLibs" "./llama_mobile-android-java-SDK/src/main/cpp" "./llama_mobile-android-java-SDK/src/main/java/com/llamamobile" "./llama_mobile-android-java-SDK/src/main/assets/grammars"; do
+for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src/main/cpp" "./llama_mobile-android/src/main/java/com/llamamobile" "./llama_mobile-android/src/main/assets/grammars" "./llama_mobile-Android-SDK/src/main/jniLibs" "./llama_mobile-Android-SDK/src/main/cpp" "./llama_mobile-Android-SDK/src/main/java/com/llamamobile" "./llama_mobile-Android-SDK/src/main/assets/grammars" "./llama_mobile-android-java-SDK/src/main/jniLibs" "./llama_mobile-android-java-SDK/src/main/cpp" "./llama_mobile-android-java-SDK/src/main/java/com/llamamobile" "./llama_mobile-android-java-SDK/src/main/assets/grammars" "./llama_mobile-react-native-SDK/android/src/main/jniLibs" "./llama_mobile-react-native-SDK/android/src/main/cpp" "./llama_mobile-react-native-SDK/android/src/main/java/com/llamamobile" "./llama_mobile-react-native-SDK/android/src/main/assets/grammars"; do
 
     if ! mkdir -p "$dir"; then
         echo "✗"
@@ -184,7 +184,7 @@ echo "✓"
 # Copy grammar files to assets for all SDKs
     echo -n "Copying grammar files to assets... "
 GRAMMAR_SRC_DIR="./lib/grammars"
-GRAMMAR_DEST_DIRS=("./llama_mobile-android/src/main/assets/grammars" "./llama_mobile-android-java-SDK/src/main/assets/grammars" "./llama_mobile-android-SDK/src/main/assets/grammars")
+GRAMMAR_DEST_DIRS=("./llama_mobile-android/src/main/assets/grammars" "./llama_mobile-android-java-SDK/src/main/assets/grammars" "./llama_mobile-android-SDK/src/main/assets/grammars" "./llama_mobile-react-native-SDK/android/src/main/assets/grammars")
 
 if [ -d "$GRAMMAR_SRC_DIR" ]; then
     all_copied=true
@@ -286,10 +286,10 @@ for ABI in "${ABI_LIST[@]}"; do
     fi
     echo "✓"
     
-    # Copy the library to both SDKs
+    # Copy the library to all SDKs
     echo -n "Copying $ABI library... "
     SOURCE_LIB="$BUILD_DIR/output/lib/libllama_mobile_core.so"
-    DEST_DIRS=("./llama_mobile-android/src/main/jniLibs/$ABI" "./llama_mobile-Android-SDK/src/main/jniLibs/$ABI")
+    DEST_DIRS=("./llama_mobile-android/src/main/jniLibs/$ABI" "./llama_mobile-Android-SDK/src/main/jniLibs/$ABI" "./llama_mobile-react-native-SDK/android/src/main/jniLibs/$ABI")
     
     if [ ! -f "$SOURCE_LIB" ]; then
         echo "✗"
@@ -604,8 +604,7 @@ cat > ./llama_mobile-android/src/main/AndroidManifest.xml << EOL<?xml version="1
 EOL
 
 # Create AndroidManifest.xml for SDK
-cat > ./llama_mobile-Android-SDK/src/main/AndroidManifest.xml << EOL
-<?xml version="1.0" encoding="utf-8"?>
+cat > ./llama_mobile-Android-SDK/src/main/AndroidManifest.xml << EOL<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.llamamobile">
 

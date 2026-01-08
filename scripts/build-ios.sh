@@ -28,9 +28,9 @@ if ! command -v cmake &> /dev/null; then
   exit 1
 fi
 
-# Function to copy framework to SDK
+# Function to copy framework to SDKs
 function copy_to_sdk() {
-    echo "=== Updating llama_mobile iOS SDK with latest framework ==="
+    echo "=== Updating llama_mobile iOS SDKs with latest framework ==="
 
     # Check if necessary directories exist
     if [ ! -d "$ROOT_DIR/llama_mobile-ios" ]; then
@@ -44,40 +44,48 @@ function copy_to_sdk() {
         exit 1
     fi
 
-    # Create Frameworks directory if it doesn't exist
-    echo -n "Creating Frameworks directory... "
-    if mkdir -p "$ROOT_DIR/llama_mobile-ios-SDK/Frameworks"; then
-        echo "✓"
-    else
-        echo "✗"
-        echo "Failed to create directory: $ROOT_DIR/llama_mobile-ios-SDK/Frameworks"
-        exit 1
-    fi
+    # Define SDK destinations
+    SDK_DESTINATIONS=(
+        "$ROOT_DIR/llama_mobile-ios-SDK/Frameworks"
+        "$ROOT_DIR/llama_mobile-react-native-SDK/ios/Frameworks"
+    )
 
-    # Remove old framework if it exists
-    if [ -d "$ROOT_DIR/llama_mobile-ios-SDK/Frameworks/llama_mobile.xcframework" ]; then
-        echo -n "Removing old framework... "
-        if rm -rf "$ROOT_DIR/llama_mobile-ios-SDK/Frameworks/llama_mobile.xcframework"; then
+    for DEST_DIR in "${SDK_DESTINATIONS[@]}"; do
+        # Create Frameworks directory if it doesn't exist
+        echo -n "Creating Frameworks directory in $(basename $(dirname "$DEST_DIR"))... "
+        if mkdir -p "$DEST_DIR"; then
             echo "✓"
         else
             echo "✗"
-            echo "Failed to remove old framework"
+            echo "Failed to create directory: $DEST_DIR"
             exit 1
         fi
-    fi
 
-    # Copy latest framework to SDK
-    echo -n "Copying latest framework to SDK... "
-    if cp -R "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework" "$ROOT_DIR/llama_mobile-ios-SDK/Frameworks/"; then
-        echo "✓"
-    else
-        echo "✗"
-        echo "Failed to copy framework to SDK"
-        exit 1
-    fi
+        # Remove old framework if it exists
+        if [ -d "$DEST_DIR/llama_mobile.xcframework" ]; then
+            echo -n "Removing old framework from $(basename $(dirname "$DEST_DIR"))... "
+            if rm -rf "$DEST_DIR/llama_mobile.xcframework"; then
+                echo "✓"
+            else
+                echo "✗"
+                echo "Failed to remove old framework"
+                exit 1
+            fi
+        fi
+
+        # Copy latest framework to SDK
+        echo -n "Copying latest framework to $(basename $(dirname "$DEST_DIR"))... "
+        if cp -R "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework" "$DEST_DIR/"; then
+            echo "✓"
+        else
+            echo "✗"
+            echo "Failed to copy framework to $DEST_DIR"
+            exit 1
+        fi
+    done
 
     echo "✓ Framework update completed successfully!"
-    echo "The latest llama_mobile.xcframework has been copied to llama_mobile-ios-SDK/Frameworks/"
+    echo "The latest llama_mobile.xcframework has been copied to all iOS SDKs."
 }
 
 function cp_headers() {

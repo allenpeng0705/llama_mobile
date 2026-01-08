@@ -1,0 +1,40 @@
+{
+  "name": "llama_mobile-react-native-sdk",
+  "version": "1.0.0",
+  "description": "React Native SDK for Llama Mobile",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint ."
+  },
+  "keywords": [
+    "react-native",
+    "llama",
+    "mobile",
+    "ai",
+    "sdk"
+  ],
+  "author": "Llama Mobile Team",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "react-native": "^0.71.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.45.0",
+    "eslint-plugin-react": "^7.33.0",
+    "eslint-plugin-react-native": "^4.0.0",
+    "jest": "^29.6.0",
+    "react-native-jest-preset": "^4.0.3",
+    "babel-jest": "^29.6.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/llamamobile/llama_mobile-react-native-SDK.git"
+  },
+  "bugs": {
+    "url": "https://github.com/llamamobile/llama_mobile-react-native-SDK/issues"
+  },
+  "homepage": "https://github.com/llamamobile/llama_mobile-react-native-SDK#readme"
+}
