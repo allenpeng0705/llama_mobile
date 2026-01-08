@@ -5,15 +5,20 @@
 set -e
 
 # Directories
-ROOT_DIR="$(pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 IOS_FRAMEWORK_DIR="${ROOT_DIR}/llama_mobile-ios"
 SDK_FRAMEWORKS_DIR="${ROOT_DIR}/llama_mobile-ios-SDK/Frameworks"
 XCFRAMEWORK_NAME="llama_mobile.xcframework"
 
-# Check if we're in the right directory
-echo "Checking current directory..."
-if [[ ! -d "${IOS_FRAMEWORK_DIR}" ]] || [[ ! -d "${ROOT_DIR}/llama_mobile-ios-SDK" ]]; then
-    echo "Error: Please run this script from the root directory of the llama_mobile repository"
+# Check if required directories exist
+echo "Checking required directories..."
+if [[ ! -d "${IOS_FRAMEWORK_DIR}" ]]; then
+    echo "Error: iOS framework directory not found at ${IOS_FRAMEWORK_DIR}"
+    exit 1
+fi
+if [[ ! -d "${ROOT_DIR}/llama_mobile-ios-SDK" ]]; then
+    echo "Error: iOS SDK directory not found at ${ROOT_DIR}/llama_mobile-ios-SDK"
     exit 1
 fi
 
@@ -41,7 +46,7 @@ cp -r "${IOS_FRAMEWORK_DIR}/${XCFRAMEWORK_NAME}" "${SDK_FRAMEWORKS_DIR}/"
 
 # Make the script executable
 echo "Making script executable..."
-chmod +x "${ROOT_DIR}/build-ios-SDK.sh"
+chmod +x "${SCRIPT_DIR}/build-ios-SDK.sh"
 
 # Verify the copy was successful
 echo "Verifying copy..."
