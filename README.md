@@ -182,7 +182,9 @@ Each SDK has its own test suite. Please refer to the respective SDK README files
 - **iOS SDK**: `llama_mobile-ios-SDK/README.md`
 - **Android Kotlin SDK**: `llama_mobile-android-SDK/README.md`
 - **Android Java SDK**: `llama_mobile-android-java-SDK/README.md`
-- **Flutter SDK**: (Planned)
+- **Flutter SDK**: `llama_mobile-flutter-SDK/README.md`
+- **ReactNative SDK**: `llama_mobile-react-native-SDK/README.md`
+- **Capacitor Plugin**: `llama_mobile-capacitor-plugin/CONTRIBUTING.md`
 
 ## Current Status
 
@@ -213,7 +215,7 @@ The framework supports various GGUF model types:
 
 ## Integration Plans
 
-The framework currently supports integration with:
+The framework currently supports integration with
 
 1. **Native Applications**: 
    - iOS apps via `llama_mobile_ios` framework
@@ -221,10 +223,10 @@ The framework currently supports integration with:
 
 2. **Cross-Platform Frameworks**:
    - ✅ Flutter via Flutter plugin (`llama_mobile-flutter-SDK`)
-   - ⏳ ReactNative via ReactNative plugin
+   - ⏳ ReactNative via ReactNative SDK
 
-3. **Web-Based Applications** (Planned):
-   - Capacitor plugin for web apps using native iOS/Android SDKs
+3. **Web-Based Applications**:
+   - Capacitor plugin for web apps using (`llama_mobile-capacitor-plugin`)
 
 ## Contributing
 
