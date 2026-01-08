@@ -1,5 +1,30 @@
 # llama_mobile
 
+```
+    _______________________
+   /                       \
+  /   ████████  ████████   \
+ |    ██      ██      ██    |
+ |    ██  LLAMA MOBILE ██    |
+ |    ██      ██      ██    |
+ |    ████████  ████████    |
+ |                           |
+ |  ╔════════════════════╗   |
+ |  ║    AI ON THE GO    ║   |
+ |  ║                     ║   |
+ |  ║  • iOS & Android    ║   |
+ |  ║  • Flutter          ║   |
+ |  ║  • React Native     ║   |
+ |  ║  • Capacitor        ║   |
+ |  ╚════════════════════╝   |
+ |                           |
+ |       🧠 📱 🚀          |
+  \_________________________/
+        /\
+       /  \
+      /____\
+```
+
 A lightweight, high-performance framework for running AI models on mobile devices, based on llama.cpp and designed for cross-platform compatibility across iOS, Android, Flutter, ReactNative, and web-based applications via Capacitor.
 
 ## Project Overview
