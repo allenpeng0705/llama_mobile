@@ -19,6 +19,15 @@ class MockLlamaMobileFlutterSdkPlatform
 
   @override
   Future<void> release() => Future.value();
+
+  @override
+  Future<bool> initialize(InitParams params) => Future.value(true);
+
+  @override
+  Future<String> generate(CompletionParams params) => Future.value('Mock completion');
+
+  @override
+  Future<String?> getGrammarContent(GrammarName grammarName) => Future.value('Mock grammar content');
 }
 
 void main() {

@@ -593,7 +593,8 @@ JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_releaseContext(
 EOL
 
 # Create AndroidManifest.xml
-cat > ./llama_mobile-android/src/main/AndroidManifest.xml << EOL<?xml version="1.0" encoding="utf-8"?>
+cat > ./llama_mobile-android/src/main/AndroidManifest.xml << EOL
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.llamamobile">
 
@@ -604,7 +605,8 @@ cat > ./llama_mobile-android/src/main/AndroidManifest.xml << EOL<?xml version="1
 EOL
 
 # Create AndroidManifest.xml for SDK
-cat > ./llama_mobile-Android-SDK/src/main/AndroidManifest.xml << EOL<?xml version="1.0" encoding="utf-8"?>
+cat > ./llama_mobile-android-SDK/src/main/AndroidManifest.xml << EOL
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.llamamobile">
 
@@ -746,7 +748,8 @@ dependencies {
 EOL
 
 # Create settings.gradle
-cat > ./llama_mobile-android/settings.gradle << EOLpluginManagement {
+cat > ./llama_mobile-android/settings.gradle << EOL
+pluginManagement {
     repositories {
         google()
         mavenCentral()
@@ -764,7 +767,8 @@ rootProject.name = "llama_mobile"
 EOL
 
 # Create build.gradle for SDK
-cat > ./llama_mobile-Android-SDK/build.gradle << EOLplugins {
+cat > ./llama_mobile-Android-SDK/build.gradle << EOL
+plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
 }
@@ -812,7 +816,8 @@ dependencies {
 EOL
 
 # Create settings.gradle for SDK
-cat > ./llama_mobile-Android-SDK/settings.gradle << EOLpluginManagement {
+cat > ./llama_mobile-Android-SDK/settings.gradle << EOL
+pluginManagement {
     repositories {
         google()
         mavenCentral()
