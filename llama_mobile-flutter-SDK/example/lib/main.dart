@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
-import 'package:flutter/services.dart';
 import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
 
 void main() {
@@ -220,7 +219,7 @@ class _MyAppState extends State<MyApp> {
                           labelText: 'Grammar (Optional)',
                           border: OutlineInputBorder(),
                         ),
-                        value: _selectedGrammar,
+                        initialValue: _selectedGrammar,
                         items: [
                           const DropdownMenuItem(
                             value: null,

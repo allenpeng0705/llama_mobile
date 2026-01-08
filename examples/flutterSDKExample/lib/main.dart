@@ -28,8 +28,8 @@ class Message {
 
   Message(this.role, this.text);
 
-  static const String ROLE_USER = "user";
-  static const String ROLE_ASSISTANT = "assistant";
+  static const String roleUser = "user";
+  static const String roleAssistant = "assistant";
 }
 
 class LlamaMobileExample extends StatefulWidget {
@@ -44,13 +44,15 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
   bool _isInitialized = false;
   bool _isGenerating = false;
   String _status = 'Ready';
-  
+
   // Model parameters
-  final _modelPathController = TextEditingController(text: '/path/to/your/model.gguf');
+  final _modelPathController = TextEditingController(
+    text: '/path/to/your/model.gguf',
+  );
   int _nCtx = 2048;
   int _nGpuLayers = 0;
   int _nThreads = 4;
-  
+
   // Generation parameters
   final _promptController = TextEditingController();
   int _maxTokens = 1024;
@@ -58,7 +60,7 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
   int _topK = 40;
   double _topP = 0.95;
   GrammarName? _selectedGrammar;
-  
+
   final List<GrammarName> _grammars = GrammarName.values;
   final List<Message> _messages = [];
   final ScrollController _scrollController = ScrollController();
@@ -74,11 +76,11 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
 
   Future<void> _initialize() async {
     if (_isInitialized) return;
-    
+
     setState(() {
       _status = 'Initializing...';
     });
-    
+
     try {
       final params = InitParams(
         modelPath: _modelPathController.text,
@@ -91,9 +93,9 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
         useMlock: false,
         embedding: false,
       );
-      
+
       final success = await _llamaSdk.initialize(params);
-      
+
       setState(() {
         _isInitialized = success;
         _status = success ? 'Initialized successfully' : 'Failed to initialize';
@@ -108,32 +110,32 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
   Future<void> _sendMessage() async {
     final prompt = _promptController.text.trim();
     if (prompt.isEmpty || _isGenerating) return;
-    
+
     if (!_isInitialized) {
       _showModelNotLoadedSnackBar();
       return;
     }
-    
+
     // Clear input field
     _promptController.clear();
-    
+
     // Add user message to chat
     setState(() {
-      _messages.add(Message(Message.ROLE_USER, prompt));
+      _messages.add(Message(Message.roleUser, prompt));
       _isGenerating = true;
       _status = 'Generating response...';
     });
-    
+
     // Scroll to bottom
     _scrollToBottom();
-    
+
     try {
       // Get grammar content if selected
       String? grammarContent;
       if (_selectedGrammar != null) {
         grammarContent = await _llamaSdk.getGrammarContent(_selectedGrammar!);
       }
-      
+
       final params = CompletionParams(
         prompt: prompt,
         maxTokens: _maxTokens,
@@ -155,28 +157,33 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
         stopSequences: [],
         grammar: grammarContent,
       );
-      
+
       // Add assistant message placeholder
       setState(() {
-        _messages.add(Message(Message.ROLE_ASSISTANT, ''));
+        _messages.add(Message(Message.roleAssistant, ''));
       });
-      
+
       // Scroll to bottom again to show assistant message placeholder
       _scrollToBottom();
-      
+
       // Generate response
       final result = await _llamaSdk.generate(params);
-      
+
       setState(() {
         // Update the last message with the generated result
-        _messages[_messages.length - 1] = Message(Message.ROLE_ASSISTANT, result);
+        _messages[_messages.length - 1] = Message(
+          Message.roleAssistant,
+          result,
+        );
         _status = 'Generated successfully';
       });
     } catch (e) {
       setState(() {
         _status = 'Error generating: $e';
         // Remove the empty assistant message if there was an error
-        if (_messages.isNotEmpty && _messages.last.role == Message.ROLE_ASSISTANT && _messages.last.text.isEmpty) {
+        if (_messages.isNotEmpty &&
+            _messages.last.role == Message.roleAssistant &&
+            _messages.last.text.isEmpty) {
           _messages.removeLast();
         }
       });
@@ -184,7 +191,7 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
       setState(() {
         _isGenerating = false;
       });
-      
+
       // Scroll to bottom to show the final message
       _scrollToBottom();
     }
@@ -192,14 +199,14 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
 
   Future<void> _release() async {
     if (!_isInitialized) return;
-    
+
     setState(() {
       _status = 'Releasing resources...';
     });
-    
+
     try {
       await _llamaSdk.release();
-      
+
       setState(() {
         _isInitialized = false;
         _status = 'Resources released successfully';
@@ -234,30 +241,36 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
   }
 
   Widget _buildMessageBubble(Message message) {
-    final isUser = message.role == Message.ROLE_USER;
+    final isUser = message.role == Message.roleUser;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Flexible(
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isUser ? Theme.of(context).colorScheme.primary : Colors.grey[200],
+                color: isUser
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.grey[200],
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(16),
                   topRight: const Radius.circular(16),
-                  bottomLeft: isUser ? const Radius.circular(16) : const Radius.circular(0),
-                  bottomRight: isUser ? const Radius.circular(0) : const Radius.circular(16),
+                  bottomLeft: isUser
+                      ? const Radius.circular(16)
+                      : const Radius.circular(0),
+                  bottomRight: isUser
+                      ? const Radius.circular(0)
+                      : const Radius.circular(16),
                 ),
               ),
               child: Text(
                 message.text,
-                style: TextStyle(
-                  color: isUser ? Colors.white : Colors.black,
-                ),
+                style: TextStyle(color: isUser ? Colors.white : Colors.black),
               ),
             ),
           ),
@@ -275,26 +288,20 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Icon(
-              Icons.brain_circle_outlined,
+              Icons.info_outline,
               size: 100,
               color: Theme.of(context).colorScheme.primary,
             ),
             const SizedBox(height: 24),
             const Text(
               'Model Not Loaded',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             const Text(
               'Please configure and load a model to start chatting',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 16, color: Colors.grey),
             ),
             const SizedBox(height: 32),
             SizedBox(
@@ -326,20 +333,24 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
             },
           ),
         ),
-        
+
         // Status indicator
-        if (_isGenerating) 
+        if (_isGenerating)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
-                const CircularProgressIndicator(size: 16),
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: const CircularProgressIndicator(),
+                ),
                 const SizedBox(width: 8),
                 Text(_status),
               ],
             ),
           ),
-        
+
         // Input area
         Padding(
           padding: const EdgeInsets.all(16),
@@ -347,7 +358,7 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Grammar selection (optional)
-              if (_grammars.isNotEmpty) 
+              if (_grammars.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
@@ -360,7 +371,7 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                             border: OutlineInputBorder(),
                             isDense: true,
                           ),
-                          value: _selectedGrammar,
+                          initialValue: _selectedGrammar,
                           hint: const Text('Select grammar'),
                           items: _grammars.map((grammar) {
                             return DropdownMenuItem<GrammarName>(
@@ -368,18 +379,19 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                               child: Text(grammar.toString().split('.').last),
                             );
                           }).toList(),
-                          onChanged: (value) {
-                            setState(() {
-                              _selectedGrammar = value;
-                            });
-                          },
-                          enabled: !_isGenerating,
+                          onChanged: _isGenerating
+                              ? null
+                              : (value) {
+                                  setState(() {
+                                    _selectedGrammar = value;
+                                  });
+                                },
                         ),
                       ),
                     ],
                   ),
                 ),
-              
+
               // Message input and send button
               Row(
                 children: [
@@ -389,7 +401,10 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         hintText: 'Type your message...',
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
                       maxLines: null,
                       minLines: 1,
@@ -401,7 +416,10 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                   ElevatedButton(
                     onPressed: _isGenerating ? null : _sendMessage,
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
                     ),
                     child: const Icon(Icons.send),
                   ),
@@ -456,7 +474,7 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
               readOnly: _isInitialized,
             ),
             const SizedBox(height: 16),
-            
+
             // Model parameters grid
             const Text('Model Parameters'),
             const SizedBox(height: 8),
@@ -478,7 +496,9 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                         onChanged: (value) {
                           _nCtx = int.tryParse(value) ?? 2048;
                         },
-                        controller: TextEditingController(text: _nCtx.toString()),
+                        controller: TextEditingController(
+                          text: _nCtx.toString(),
+                        ),
                         readOnly: _isInitialized,
                       ),
                     ],
@@ -500,7 +520,9 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                         onChanged: (value) {
                           _nGpuLayers = int.tryParse(value) ?? 0;
                         },
-                        controller: TextEditingController(text: _nGpuLayers.toString()),
+                        controller: TextEditingController(
+                          text: _nGpuLayers.toString(),
+                        ),
                         readOnly: _isInitialized,
                       ),
                     ],
@@ -522,7 +544,9 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                         onChanged: (value) {
                           _nThreads = int.tryParse(value) ?? 4;
                         },
-                        controller: TextEditingController(text: _nThreads.toString()),
+                        controller: TextEditingController(
+                          text: _nThreads.toString(),
+                        ),
                         readOnly: _isInitialized,
                       ),
                     ],
@@ -531,7 +555,7 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Generation parameters
             const Text('Generation Parameters'),
             const SizedBox(height: 8),
@@ -553,7 +577,9 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                         onChanged: (value) {
                           _maxTokens = int.tryParse(value) ?? 1024;
                         },
-                        controller: TextEditingController(text: _maxTokens.toString()),
+                        controller: TextEditingController(
+                          text: _maxTokens.toString(),
+                        ),
                       ),
                     ],
                   ),
@@ -574,7 +600,9 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                         onChanged: (value) {
                           _temperature = double.tryParse(value) ?? 0.7;
                         },
-                        controller: TextEditingController(text: _temperature.toString()),
+                        controller: TextEditingController(
+                          text: _temperature.toString(),
+                        ),
                       ),
                     ],
                   ),
@@ -600,7 +628,9 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                         onChanged: (value) {
                           _topK = int.tryParse(value) ?? 40;
                         },
-                        controller: TextEditingController(text: _topK.toString()),
+                        controller: TextEditingController(
+                          text: _topK.toString(),
+                        ),
                       ),
                     ],
                   ),
@@ -621,7 +651,9 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
                         onChanged: (value) {
                           _topP = double.tryParse(value) ?? 0.95;
                         },
-                        controller: TextEditingController(text: _topP.toString()),
+                        controller: TextEditingController(
+                          text: _topP.toString(),
+                        ),
                       ),
                     ],
                   ),
@@ -635,9 +667,7 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
         if (_isInitialized)
           TextButton(
             onPressed: _release,
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.red,
-            ),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Release Model'),
           ),
         TextButton(

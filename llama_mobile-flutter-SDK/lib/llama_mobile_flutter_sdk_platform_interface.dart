@@ -13,7 +13,7 @@ enum GrammarName {
   english,
   japanese,
   json,
-  json_arr,
+  jsonArr,
   list,
 }
 

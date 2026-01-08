@@ -1,5 +1,6 @@
-
 import 'llama_mobile_flutter_sdk_platform_interface.dart';
+
+export 'llama_mobile_flutter_sdk_platform_interface.dart' show GrammarName, InitParams, CompletionParams;
 
 class LlamaMobileFlutterSdk {
   /// Returns the platform version.
@@ -29,7 +30,9 @@ class LlamaMobileFlutterSdk {
 
   /// Get the content of a built-in grammar
   Future<String?> getGrammarContent(GrammarName grammarName) {
-    return LlamaMobileFlutterSdkPlatform.instance.getGrammarContent(grammarName);
+    return LlamaMobileFlutterSdkPlatform.instance.getGrammarContent(
+      grammarName,
+    );
   }
 
   /// Releases the loaded model and frees resources.
