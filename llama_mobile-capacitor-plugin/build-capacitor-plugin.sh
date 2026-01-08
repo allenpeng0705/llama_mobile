@@ -39,16 +39,16 @@ function update_ios_sdk() {
     echo "=== Updating iOS SDK from external source ==="
     
     # Check if external iOS SDK build script exists
-    if [ -f "$ROOT_DIR/scripts/build-ios-SDK.sh" ];
+    if [ -f "$ROOT_DIR/llama_mobile-ios-SDK/build-ios-SDK.sh" ]; then
         echo "Building external iOS SDK..."
-        if "$ROOT_DIR/scripts/build-ios-SDK.sh"; then
+        if "$ROOT_DIR/llama_mobile-ios-SDK/build-ios-SDK.sh"; then
             echo "✓ External iOS SDK built successfully"
         else
             echo "✗ External iOS SDK build failed!"
             exit 1
         fi
     else
-        echo "✗ Error: iOS build script not found at $ROOT_DIR/scripts/build-ios-SDK.sh"
+        echo "✗ Error: iOS build script not found at $ROOT_DIR/llama_mobile-ios-SDK/build-ios-SDK.sh"
         echo "Please ensure the iOS build script exists before updating SDK components"
         exit 1
     fi
