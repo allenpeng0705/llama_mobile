@@ -1,0 +1,87 @@
+plugins {
+    id("com.android.application")
+    id("com.facebook.react")
+}
+
+android {
+    namespace("com.llamamobileexample")
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId("com.llamamobileexample")
+        minSdk = 24
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0"
+
+        ndk {
+            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
+        }
+
+        buildConfigField("boolean", "IS_NEW_ARCHITECTURE_ENABLED", "false")
+
+        externalNativeBuild {
+            cmake {
+                arguments += "-DFB_SONARKIT_ENABLE=1"
+                cppFlags.addAll(listOf("-fexceptions", "-frtti", "-std=c++17"))
+            }
+        }
+    }
+
+    signingConfigs {
+        debug {
+            storeFile(file('debug.keystore'))
+            storePassword('android')
+            keyAlias('androiddebugkey')
+            keyPassword('android')
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig = signingConfigs.debug
+        }
+        release {
+            // Caution! In production, you need to generate your own keystore file.
+            // see https://reactnative.dev/docs/signed-apk-android.
+            signingConfig = signingConfigs.debug
+            minifyEnabled(false)
+            proguardFiles(getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro')
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path(file('src/main/jni/CMakeLists.txt'))
+            version "3.22.1"
+        }
+    }
+
+    // Mixing versions can lead to runtime crashes. If you are using a different version of the Android support library,
+    // make sure it's compatible with the version used by React Native.
+    configurations.all {
+        resolutionStrategy {
+            force 'androidx.appcompat:appcompat:1.6.1'
+            force 'androidx.core:core:1.12.0'
+        }
+    }
+}
+
+dependencies {
+    // The version of react-native is set by the React Native Gradle Plugin
+    implementation 'com.facebook.react:react-android'
+
+    debugImplementation 'com.facebook.react:hermes-android'
+
+    if (findProperty('reactNativeDebugArchitectures')) {
+        debugImplementation 'com.facebook.react:react-native-artifacts:+'
+    }
+}
+
+// Run this once to be able to run the application with BUCK
+// puts all compile dependencies into folder libs for BUCK to use
+configurations.implementation.copyRecursive {
+    into(file('libs'))
+}
+
+apply from: file("../../node_modules/react-native-gradle-plugin/src/main/kotlin/com/facebook/react/react-native-gradle-plugin.kt")
