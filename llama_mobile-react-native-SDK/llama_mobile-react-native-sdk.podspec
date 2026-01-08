@@ -19,11 +19,9 @@ Pod::Spec.new do |s|
   
   s.dependency 'React-Core'
   
-  # Include the core C API source files
-  s.source_files = "ios/Classes/**/*", "../lib/*.cpp", "../lib/*.h", "../lib/llama_cpp/**/*.cpp", "../lib/llama_cpp/**/*.h", "../lib/llama_cpp/**/*.c"
-  
-  # Exclude unnecessary files
-  s.exclude_files = "../lib/tests/**/*", "../lib/grammars/**/*"
+  # Reference the embedded llama_mobile framework
+  s.source_files = "ios/Classes/**/*"
+  s.vendored_frameworks = 'ios/Frameworks/llama_mobile.xcframework'
   
   # Add necessary frameworks for iOS
   s.frameworks = 'Foundation', 'Metal', 'MetalKit', 'Accelerate', 'AVFoundation', 'CoreGraphics', 'CoreImage', 'CoreML', 'CoreVideo'
