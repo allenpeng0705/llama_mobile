@@ -1,0 +1,15 @@
+{
+  "appId": "com.llamamobile.example",
+  "appName": "LlamaMobileExample",
+  "webDir": "public",
+  "server": {
+    "hostname": "localhost",
+    "androidScheme": "https"
+  },
+  "ios": {
+    "minVersion": "15.0"
+  },
+  "android": {
+    "minVersion": "24"
+  }
+}

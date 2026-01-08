@@ -1,0 +1,31 @@
+{
+  "name": "capacitor-plugin-example",
+  "version": "1.0.0",
+  "description": "Example app for llama_mobile Capacitor Plugin",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx http-server public -p 8080 -c-1",
+    "build": "echo 'No build step needed for static HTML app'",
+    "cap:add:ios": "npx cap add ios",
+    "cap:add:android": "npx cap add android",
+    "cap:sync": "npx cap sync",
+    "cap:open:ios": "npx cap open ios",
+    "cap:open:android": "npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
+    "llama_mobile-capacitor-plugin": "file:../../llama_mobile-capacitor-plugin"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "keywords": [
+    "capacitor",
+    "llama",
+    "mobile",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT"
+}

@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Llama Mobile Capacitor Plugin Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+        .subtitle {
+            font-size: 16px;
+            color: #666;
+        }
+        .section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        .status {
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        .success {
+            color: #28a745;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .textarea {
+            height: 100px;
+            resize: vertical;
+            font-family: Arial, sans-serif;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            flex: 1;
+            min-width: 120px;
+        }
+        .primary-button {
+            background-color: #007bff;
+            color: white;
+        }
+        .primary-button:hover {
+            background-color: #0056b3;
+        }
+        .danger-button {
+            background-color: #dc3545;
+            color: white;
+        }
+        .danger-button:hover {
+            background-color: #c82333;
+        }
+        .disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #007bff;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .response {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #eee;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">Llama Mobile Capacitor Plugin Example</h1>
+            <p class="subtitle">Version: <span id="version">Loading...</span></p>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">SDK Status</h2>
+            <div class="status">
+                Initialized: <span id="initialized-status" class="error">❌</span>
+            </div>
+            <div class="status">
+                Model Loaded: <span id="model-loaded-status" class="error">❌</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Model Configuration</h2>
+            <input type="text" id="model-path" class="input" placeholder="Model Path" value="/path/to/your/model.gguf">
+            <div class="button-group">
+                <button id="load-model" class="button primary-button">Load Model</button>
+                <button id="unload-model" class="button danger-button" disabled>Unload Model</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2 class="section-title">Text Generation</h2>
+            <textarea id="prompt" class="input textarea" placeholder="Enter your prompt here...">Hello, how are you?</textarea>
+            <div class="button-group">
+                <button id="generate-text" class="button primary-button" disabled>Generate Text</button>
+                <button id="generate-stream" class="button primary-button" disabled>Generate Stream</button>
+                <button id="stop-generation" class="button danger-button" disabled>Stop</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <span>Generating...</span>
+        </div>
+
+        <div id="response-container" class="section" style="display: none;">
+            <h2 class="section-title">Response</h2>
+            <div id="response" class="response"></div>
+        </div>
+
+        <div class="footer">
+            <p>Note: Replace the model path with the actual path to your GGUF model file.</p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { Plugins } from '@capacitor/core';
+        const { LlamaMobileCapacitorPlugin } = Plugins;
+
+        // DOM elements
+        const versionElement = document.getElementById('version');
+        const initializedStatusElement = document.getElementById('initialized-status');
+        const modelLoadedStatusElement = document.getElementById('model-loaded-status');
+        const modelPathInput = document.getElementById('model-path');
+        const loadModelButton = document.getElementById('load-model');
+        const unloadModelButton = document.getElementById('unload-model');
+        const promptInput = document.getElementById('prompt');
+        const generateTextButton = document.getElementById('generate-text');
+        const generateStreamButton = document.getElementById('generate-stream');
+        const stopGenerationButton = document.getElementById('stop-generation');
+        const loadingElement = document.getElementById('loading');
+        const responseContainerElement = document.getElementById('response-container');
+        const responseElement = document.getElementById('response');
+
+        // Initialize the SDK on page load
+        async function initializeSDK() {
+            try {
+                await LlamaMobileCapacitorPlugin.initialize();
+                initializedStatusElement.className = 'success';
+                initializedStatusElement.textContent = '✅';
+                
+                // Get version
+                const { version } = await LlamaMobileCapacitorPlugin.getVersion();
+                versionElement.textContent = version;
+            } catch (error) {
+                console.error('Failed to initialize SDK:', error);
+                initializedStatusElement.textContent = `❌ Error: ${error.message}`;
+            }
+        }
+
+        // Load model
+        async function loadModel() {
+            const modelPath = modelPathInput.value.trim();
+            if (!modelPath) {
+                alert('Please enter a model path');
+                return;
+            }
+
+            try {
+                loadingElement.style.display = 'flex';
+                await LlamaMobileCapacitorPlugin.loadModel({
+                    path: modelPath,
+                    options: {
+                        n_threads: 4,
+                        n_gpu_layers: 1,
+                        n_ctx: 2048
+                    }
+                });
+                modelLoadedStatusElement.className = 'success';
+                modelLoadedStatusElement.textContent = '✅';
+                
+                // Update button states
+                loadModelButton.disabled = true;
+                unloadModelButton.disabled = false;
+                generateTextButton.disabled = false;
+                generateStreamButton.disabled = false;
+            } catch (error) {
+                console.error('Failed to load model:', error);
+                alert(`Failed to load model: ${error.message}`);
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        }
+
+        // Unload model
+        async function unloadModel() {
+            try {
+                await LlamaMobileCapacitorPlugin.unloadModel();
+                modelLoadedStatusElement.className = 'error';
+                modelLoadedStatusElement.textContent = '❌';
+                
+                // Update button states
+                loadModelButton.disabled = false;
+                unloadModelButton.disabled = true;
+                generateTextButton.disabled = true;
+                generateStreamButton.disabled = true;
+                stopGenerationButton.disabled = true;
+            } catch (error) {
+                console.error('Failed to unload model:', error);
+                alert(`Failed to unload model: ${error.message}`);
+            }
+        }
+
+        // Generate text without streaming
+        async function generateText() {
+            const prompt = promptInput.value.trim();
+            if (!prompt) {
+                alert('Please enter a prompt');
+                return;
+            }
+
+            try {
+                loadingElement.style.display = 'flex';
+                generateTextButton.disabled = true;
+                generateStreamButton.disabled = true;
+                stopGenerationButton.disabled = true;
+                
+                const { text } = await LlamaMobileCapacitorPlugin.generateText({
+                    prompt: prompt,
+                    options: {
+                        temperature: 0.7,
+                        top_p: 0.9,
+                        max_tokens: 100
+                    }
+                });
+                
+                displayResponse(text);
+            } catch (error) {
+                console.error('Failed to generate text:', error);
+                alert(`Failed to generate text: ${error.message}`);
+            } finally {
+                loadingElement.style.display = 'none';
+                generateTextButton.disabled = false;
+                generateStreamButton.disabled = false;
+            }
+        }
+
+        // Generate text with streaming
+        async function generateTextStream() {
+            const prompt = promptInput.value.trim();
+            if (!prompt) {
+                alert('Please enter a prompt');
+                return;
+            }
+
+            try {
+                loadingElement.style.display = 'flex';
+                generateTextButton.disabled = true;
+                generateStreamButton.disabled = true;
+                stopGenerationButton.disabled = false;
+                
+                // Clear previous response
+                clearResponse();
+                
+                // Start streaming
+                await LlamaMobileCapacitorPlugin.generateTextStream({
+                    prompt: prompt,
+                    options: {
+                        temperature: 0.7,
+                        max_tokens: 100
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to start stream:', error);
+                alert(`Failed to start stream: ${error.message}`);
+                loadingElement.style.display = 'none';
+                generateTextButton.disabled = false;
+                generateStreamButton.disabled = false;
+                stopGenerationButton.disabled = true;
+            }
+        }
+
+        // Stop generation
+        async function stopGeneration() {
+            try {
+                await LlamaMobileCapacitorPlugin.stopGeneration();
+            } catch (error) {
+                console.error('Failed to stop generation:', error);
+                alert(`Failed to stop generation: ${error.message}`);
+            } finally {
+                loadingElement.style.display = 'none';
+                generateTextButton.disabled = false;
+                generateStreamButton.disabled = false;
+                stopGenerationButton.disabled = true;
+            }
+        }
+
+        // Display response
+        function displayResponse(text) {
+            responseElement.textContent = text;
+            responseContainerElement.style.display = 'block';
+        }
+
+        // Clear response
+        function clearResponse() {
+            responseElement.textContent = '';
+            responseContainerElement.style.display = 'none';
+        }
+
+        // Register event listeners
+        document.addEventListener('DOMContentLoaded', initializeSDK);
+        loadModelButton.addEventListener('click', loadModel);
+        unloadModelButton.addEventListener('click', unloadModel);
+        generateTextButton.addEventListener('click', generateText);
+        generateStreamButton.addEventListener('click', generateTextStream);
+        stopGenerationButton.addEventListener('click', stopGeneration);
+
+        // Listen for stream events
+        document.addEventListener('llamamobile:textStream', (event) => {
+            const token = event.detail.token;
+            if (!responseContainerElement.style.display) {
+                responseContainerElement.style.display = 'block';
+            }
+            responseElement.textContent += token;
+        });
+
+        document.addEventListener('llamamobile:textStreamComplete', () => {
+            loadingElement.style.display = 'none';
+            generateTextButton.disabled = false;
+            generateStreamButton.disabled = false;
+            stopGenerationButton.disabled = true;
+        });
+
+        document.addEventListener('llamamobile:textStreamError', (event) => {
+            const error = event.detail.error;
+            console.error('Stream error:', error);
+            alert(`Stream error: ${error}`);
+            loadingElement.style.display = 'none';
+            generateTextButton.disabled = false;
+            generateStreamButton.disabled = false;
+            stopGenerationButton.disabled = true;
+        });
+    </script>
+</body>
+</html>
