@@ -225,8 +225,8 @@ make test_api
    - ✅ 通过Flutter插件（`llama_mobile-flutter-SDK`）实现Flutter应用
    - ⏳ 通过ReactNative插件实现ReactNative应用
 
-3. **基于Web的应用程序**（计划中）：
-   - 用于使用原生iOS/Android SDK的Web应用程序的Capacitor插件
+3. **基于Web的应用程序**：
+   - Capacitor插件用于Web应用程序（`llama_mobile-capacitor-plugin`）
 
 ## 贡献
 
@@ -267,7 +267,7 @@ make test_api
 
 #### iOS构建要求
 - 安装了Xcode的macOS
-- 移动应用的iOS 13.0+部署目标
+- iOS 13.0+部署目标用于移动应用
 
 #### Android构建要求
 - 安装了Android Studio
@@ -671,7 +671,7 @@ class ViewController: UIViewController {
             print("模型加载成功")
             generateText()
         } else {
-            print("加载模型失败")
+            print("模型加载失败")
         }
     }
     
@@ -716,4 +716,470 @@ class ViewController: UIViewController {
 1. 打开Android Studio
 2. 选择"New Project"
 3. 选择"Empty Activity"
-4. 输入您的项目详细信息：
+4. 输入项目详细信息：
+   - Name: `LlamaMobileDemo`
+   - Package name: `com.example.llamamobiledemo`
+   - Save location: 您想要的位置
+   - Language: `Kotlin`
+   - Minimum SDK: `API 21` 或更高版本
+5. 点击"Finish"
+
+#### 步骤2：添加自包含SDK
+1. 如果应用模块中不存在`libs`目录，则创建一个：
+   - 右键点击`app` → "New" → "Directory"
+   - 命名为`libs`
+2. 复制自包含SDK文件：
+   - 导航到`/path/to/llama_mobile/llama_mobile-android-SDK/`
+   - 将`llama_mobile.aar`文件复制到应用的`libs`目录
+
+#### 步骤3：配置项目设置
+1. 打开`app/build.gradle.kts`（或`app/build.gradle`）
+2. 在`dependencies`块中添加以下内容：
+   ```gradle
+   implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
+   implementation("androidx.appcompat:appcompat:1.6.1")
+   implementation("com.google.android.material:material:1.9.0")
+   implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+   ```
+3. 确保`android`块包含：
+   ```gradle
+   compileOptions {
+       sourceCompatibility = JavaVersion.VERSION_1_8
+       targetCompatibility = JavaVersion.VERSION_1_8
+   }
+   kotlinOptions {
+       jvmTarget = "1.8"
+   }
+   ```
+4. 同步Gradle文件
+
+#### 步骤4：添加所需权限
+1. 打开`app/src/main/AndroidManifest.xml`
+2. 在`<application>`标签上方添加以下权限：
+   ```xml
+   <uses-permission android:name="android.permission.INTERNET" />
+   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+   <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+   ```
+3. 对于Android 6.0+（API 23+），您需要请求运行时权限
+
+#### 步骤5：基本使用示例
+
+```kotlin
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.widget.Button
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import com.llamamobile.sdk.LlamaMobileSdk
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.io.InputStream
+
+class MainActivity : AppCompatActivity() {
+    private lateinit var llamaSdk: LlamaMobileSdk
+    private lateinit var generateButton: Button
+    private lateinit var resultText: TextView
+    private var modelPath: String? = null
+    
+    private val REQUEST_PERMISSIONS = 1001
+    private val requiredPermissions = arrayOf(
+        Manifest.permission.READ_EXTERNAL_STORAGE,
+        Manifest.permission.WRITE_EXTERNAL_STORAGE
+    )
+    
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        
+        generateButton = findViewById(R.id.generateButton)
+        resultText = findViewById(R.id.resultText)
+        
+        llamaSdk = LlamaMobileSdk()
+        
+        // 请求权限
+        if (checkPermissions()) {
+            setupModel()
+        } else {
+            requestPermissions()
+        }
+        
+        generateButton.setOnClickListener {
+            generateText()
+        }
+    }
+    
+    private fun checkPermissions(): Boolean {
+        return requiredPermissions.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+    }
+    
+    private fun requestPermissions() {
+        ActivityCompat.requestPermissions(this, requiredPermissions, REQUEST_PERMISSIONS)
+    }
+    
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_PERMISSIONS) {
+            if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                setupModel()
+            }
+        }
+    }
+    
+    private fun setupModel() {
+        // 将模型从assets复制到内部存储
+        try {
+            val inputStream: InputStream = assets.open("your-model.gguf")
+            val outputFile = File(filesDir, "your-model.gguf")
+            val outputStream = FileOutputStream(outputFile)
+            
+            val buffer = ByteArray(1024)
+            var bytesRead: Int
+            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                outputStream.write(buffer, 0, bytesRead)
+            }
+            
+            inputStream.close()
+            outputStream.close()
+            
+            modelPath = outputFile.absolutePath
+            loadModel()
+            
+        } catch (e: IOException) {
+            e.printStackTrace()
+            resultText.text = "复制模型失败: \${e.message}"
+        }
+    }
+    
+    private fun loadModel() {
+        try {
+            if (modelPath != null) {
+                val success = llamaSdk.loadModel(modelPath!!)
+                if (success) {
+                    resultText.text = "模型加载成功!"
+                } else {
+                    resultText.text = "模型加载失败"
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            resultText.text = "加载模型错误: \${e.message}"
+        }
+    }
+    
+    private fun generateText() {
+        try {
+            val prompt = "Hello, how are you?"
+            val result = llamaSdk.generateText(prompt, 100, 0.7f)
+            resultText.text = "生成结果: \n\$result"
+        } catch (e: Exception) {
+            e.printStackTrace()
+            resultText.text = "生成文本错误: \${e.message}"
+        }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        llamaSdk.release()
+    }
+}
+```
+
+### Flutter应用
+
+#### 步骤1：创建新的Flutter项目
+1. 打开终端并运行：
+   ```bash
+   flutter create llama_mobile_demo
+   cd llama_mobile_demo
+   ```
+2. 在您喜欢的IDE中打开项目（VS Code或Android Studio）
+
+#### 步骤2：添加自包含插件
+1. 在Flutter项目中打开`pubspec.yaml`
+2. 添加插件依赖：
+   ```yaml
+dependencies:
+  flutter:
+    sdk: flutter
+  llama_mobile_flutter_sdk:
+    path: /path/to/llama_mobile/llama_mobile-flutter-SDK
+  path_provider: ^2.1.1
+  permission_handler: ^11.3.1
+```
+3. 运行`flutter pub get`安装依赖
+
+#### 步骤3：配置平台特定设置
+
+##### iOS配置
+1. 打开`ios/Runner/Info.plist`
+2. 添加所需权限：
+   ```xml
+   <key>NSDocumentDirectoryUsageDescription</key>
+   <string>访问文档目录用于模型存储</string>
+   <key>NSNetworkUsageDescription</key>
+   <string>网络访问用于模型下载</string>
+   ```
+
+##### Android配置
+1. 打开`android/app/src/main/AndroidManifest.xml`
+2. 添加所需权限：
+   ```xml
+   <uses-permission android:name="android.permission.INTERNET" />
+   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+   ```
+
+#### 步骤4：基本使用示例
+
+```dart
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Llama Mobile Demo',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+      ),
+      home: const MyHomePage(title: 'Llama Mobile Flutter Demo'),
+    );
+  }
+}
+
+class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key, required this.title});
+  final String title;
+
+  @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+  final LlamaMobileFlutterSdk _llamaSdk = LlamaMobileFlutterSdk();
+  bool _isModelLoaded = false;
+  String _result = '';
+  bool _isGenerating = false;
+  String _modelPath = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _setupModel();
+  }
+
+  Future<void> _setupModel() async {
+    // 请求权限
+    if (Platform.isAndroid) {
+      await Permission.storage.request();
+      await Permission.manageExternalStorage.request();
+    }
+
+    // 将模型从assets复制到应用目录
+    await _copyModelFromAssets();
+    
+    // 加载模型
+    await _loadModel();
+  }
+
+  Future<void> _copyModelFromAssets() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final destination = File('\${directory.path}/your-model.gguf');
+
+      if (!await destination.exists()) {
+        final byteData = await rootBundle.load('assets/your-model.gguf');
+        await destination.writeAsBytes(byteData.buffer.asUint8List());
+      }
+
+      setState(() {
+        _modelPath = destination.path;
+      });
+    } catch (e) {
+      setState(() {
+        _result = '复制模型错误: \$e';
+      });
+    }
+  }
+
+  Future<void> _loadModel() async {
+    try {
+      if (_modelPath.isNotEmpty) {
+        final config = ModelConfig(
+          modelPath: _modelPath,
+          nThreads: 4,
+          nGpuLayers: 4,
+        );
+
+        final success = await _llamaSdk.loadModel(config);
+        setState(() {
+          _isModelLoaded = success;
+          _result = success ? '模型加载成功!' : '模型加载失败';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _result = '加载模型错误: \$e';
+      });
+    }
+  }
+
+  Future<void> _generateText() async {
+    if (!_isModelLoaded || _isGenerating) return;
+
+    setState(() {
+      _isGenerating = true;
+      _result = '正在生成...';
+    });
+
+    try {
+      final generationConfig = GenerationConfig(
+        prompt: 'Hello, how are you today?',
+        maxNewTokens: 100,
+        temperature: 0.7,
+        topP: 0.9,
+      );
+
+      final completion = await _llamaSdk.generateCompletion(generationConfig);
+      setState(() {
+        _result = '生成结果:\n\$completion';
+      });
+    } catch (e) {
+      setState(() {
+        _result = '生成文本错误: \$e';
+      });
+    } finally {
+      setState(() {
+        _isGenerating = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _llamaSdk.release();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        title: Text(widget.title),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Text(
+                '模型状态: \${_isModelLoaded ? '已加载' : '未加载'}',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _isModelLoaded ? _generateText : null,
+                child: _isGenerating
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('生成文本'),
+              ),
+              const SizedBox(height: 20),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Text(
+                    _result,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+### 添加模型文件
+
+对于所有平台，您需要添加GGUF模型文件：
+
+#### iOS
+1. 将`your-model.gguf`文件拖放到Xcode中
+2. 选择"Copy items if needed"并添加到您的目标
+
+#### Android
+1. 如果`app/src/main/`中不存在`assets`目录，则创建一个
+2. 将`your-model.gguf`文件复制到`assets`目录
+
+#### Flutter
+1. 在Flutter项目的根目录创建一个`assets`目录
+2. 将`your-model.gguf`文件添加到`assets`目录
+3. 更新`pubspec.yaml`以包含该资源：
+   ```yaml
+   flutter:
+     assets:
+       - assets/your-model.gguf
+   ```
+
+### 错误处理最佳实践
+
+1. **模型加载错误：**
+   - 检查模型文件是否存在且可访问
+   - 验证模型格式是否兼容（GGUF）
+   - 确保设备有足够的资源（内存、存储）
+
+2. **推理错误：**
+   - 为长时间运行的生成任务设置超时
+   - 实现进度回调以提供用户反馈
+   - 捕获与内存不足相关的异常
+
+3. **权限问题：**
+   - 在访问文件之前始终请求必要的权限
+   - 当权限被拒绝时提供清晰的错误信息
+   - 遵循平台特定的权限指南
+
+## 故障排除
+
+### Metal库部署目标错误
+
+如果您遇到以下错误：
+```
+This library is using a deployment target (0x00020008) that is not supported on this OS
+```
+
+这表明Metal库部署目标不兼容。构建脚本通过以下方式确保兼容性：
+- 使用`ios-metal2.3`语言版本（兼容iOS 13.0+）
+- 为设备和模拟器构建设置明确的部署目标
+
+### 构建脚本问题
+
+确保安装了所有依赖项，并且您是从项目根目录运行脚本。
