@@ -4,7 +4,7 @@ This folder contains independent C++ examples for using the llama_mobile library
 
 ## Available Models
 
-The models are located in the `lib/models` directory:
+The models are located in the top-level `models` directory:
 - `Qwen3-0.6B-Q5_K_M.gguf` - A small 0.6B parameter model suitable for testing
 - `Qwen3-4B-Q5_K_M.gguf` - A larger 4B parameter model with better performance
 
@@ -21,7 +21,7 @@ This will compile all the examples and generate executable files in the `build` 
 
 ## Running the Examples
 
-Each example accepts a model path as a command line argument. You can use the models from `lib/models` by providing the correct path.
+Each example accepts a model path as a command line argument. You can use the models from the top-level `models` directory by providing the correct path.
 
 ### 1. Simple API Example
 
@@ -29,7 +29,7 @@ This example demonstrates the basic usage of the llama_mobile API:
 
 ```bash
 cd examples/cpp/build
-./llama_mobile_api_example ../../../../lib/models/Qwen3-0.6B-Q5_K_M.gguf
+./llama_mobile_api_example ../../../../models/Qwen3-1.7B-Q4_K_M.gguf
 ```
 
 ### 2. Conversation FFI Example
@@ -41,7 +41,7 @@ cd examples/cpp/build
 ./llama_mobile_conversation_ffi
 ```
 
-By default, this example uses the `Qwen3-0.6B-Q5_K_M.gguf` model from `lib/models`. You can specify a different model:
+By default, this example uses the `Qwen3-1.7B-Q4_K_M.gguf` model from the top-level `models` directory. You can specify a different model:
 
 ```bash
 cd examples/cpp/build
@@ -54,7 +54,7 @@ This example demonstrates the core LLM functionality:
 
 ```bash
 cd examples/cpp/build
-./llama_mobile_llm ../../../../lib/models/Qwen3-0.6B-Q5_K_M.gguf
+./llama_mobile_llm ../../../../models/Qwen3-1.7B-Q4_K_M.gguf
 ```
 
 ### 4. Embedding Example
@@ -63,7 +63,7 @@ This example shows how to generate embeddings:
 
 ```bash
 cd examples/cpp/build
-./llama_mobile_embed ../../../../lib/models/Qwen3-0.6B-Q5_K_M.gguf
+./llama_mobile_embed ../../../../models/embedding/Qwen3-Embedding-0.6B-Q8_0.gguf
 ```
 
 ### 5. VLM Example
@@ -72,7 +72,7 @@ This example demonstrates Vision Language Model capabilities:
 
 ```bash
 cd examples/cpp/build
-./llama_mobile_vlm ../../../../lib/models/Qwen3-0.6B-Q5_K_M.gguf
+./llama_mobile_vlm ../../../../models/SmolVLM-256M-Instruct-Q8_0.gguf
 ```
 
 ### 6. VLM FFI Example
@@ -81,7 +81,7 @@ This example shows how to use the VLM API through FFI:
 
 ```bash
 cd examples/cpp/build
-./llama_mobile_vlm_ffi ../../../../lib/models/Qwen3-0.6B-Q5_K_M.gguf
+./llama_mobile_vlm_ffi ../../../../models/SmolVLM-256M-Instruct-Q8_0.gguf
 ```
 
 ### 7. TTS Example
@@ -90,7 +90,7 @@ This example demonstrates Text-to-Speech functionality:
 
 ```bash
 cd examples/cpp/build
-./llama_mobile_tts ../../../../lib/models/Qwen3-0.6B-Q5_K_M.gguf
+./llama_mobile_tts ../../../../models/OuteTTS-0.2-500M-Q6_K.gguf
 ```
 
 ## Example Descriptions

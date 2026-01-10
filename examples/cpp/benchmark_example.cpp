@@ -11,7 +11,7 @@
 
 #include "../../lib/llama_mobile_api.h"
 
-// Function to list available GGUF models in lib/models (excluding embedding folder)
+// Function to list available GGUF models in top-level models directory (excluding embedding folder)
 std::vector<std::string> list_available_models(const std::string& models_dir) {
     std::vector<std::string> models;
     DIR* dir;
@@ -200,10 +200,10 @@ void display_results(const std::vector<BenchmarkResults>& results) {
 
 int main(int argc, char** argv) {
     std::string model_path;
-    const std::string models_dir = "../../lib/models";
+    const std::string models_dir = "../../models";
     
     if (argc < 2) {
-        // List available models in lib/models (excluding embedding folder)
+        // List available models in top-level models directory (excluding embedding folder)
         printf("=== Available Models ===\n");
         std::vector<std::string> models = list_available_models(models_dir);
         

@@ -285,4 +285,115 @@ public class LlamaMobileUnitTests {
         assertNotNull(initParams);
         assertNotNull(completionParams);
     }
+    
+    @Test
+    public void testLoraAdapterConstructors() {
+        // Test default constructor
+        LlamaMobile.LoraAdapter adapter1 = new LlamaMobile.LoraAdapter("/path/to/lora.gguf");
+        assertEquals("/path/to/lora.gguf", adapter1.getPath());
+        assertEquals(1.0f, adapter1.getScale(), 0.01f);
+        
+        // Test constructor with custom scale
+        LlamaMobile.LoraAdapter adapter2 = new LlamaMobile.LoraAdapter("/path/to/lora.gguf", 0.5f);
+        assertEquals(0.5f, adapter2.getScale(), 0.01f);
+    }
+    
+    @Test
+    public void testConversationResultConstructor() {
+        // Test ConversationResult constructor
+        LlamaMobile.ConversationResult result = new LlamaMobile.ConversationResult(
+            "Hello, how can I help?",
+            100, 500, 10
+        );
+        
+        assertEquals("Hello, how can I help?", result.getText());
+        assertEquals(100L, result.getTimeToFirstToken());
+        assertEquals(500L, result.getTotalTime());
+        assertEquals(10, result.getTokensGenerated());
+    }
+    
+    @Test
+    public void testDownloadParamsConstructors() {
+        // Test all DownloadParams constructors
+        LlamaMobile.DownloadParams params1 = new LlamaMobile.DownloadParams(
+            "https://example.com/model", "/tmp/model.gguf"
+        );
+        assertEquals("https://example.com/model", params1.getUrl());
+        assertEquals("/tmp/model.gguf", params1.getLocalPath());
+        assertNull(params1.getPassword());
+        assertNull(params1.getHeaders());
+        
+        LlamaMobile.DownloadParams params2 = new LlamaMobile.DownloadParams(
+            "https://example.com/model", "/tmp/model.gguf", "password123"
+        );
+        assertEquals("password123", params2.getPassword());
+    }
+    
+    @Test
+    public void testErrorTypeEnum() {
+        // Test that all ErrorType enum values exist
+        LlamaMobile.ErrorType[] errorTypes = LlamaMobile.ErrorType.values();
+        assertEquals(11, errorTypes.length); // Should match the number of enum values
+        
+        // Verify specific error types
+        boolean hasContextNotInitialized = false;
+        boolean hasVocoderNotInitialized = false;
+        boolean hasMultimodalNotInitialized = false;
+        
+        for (LlamaMobile.ErrorType type : errorTypes) {
+            switch (type) {
+                case CONTEXT_NOT_INITIALIZED:
+                    hasContextNotInitialized = true;
+                    break;
+                case VOCODER_NOT_INITIALIZED:
+                    hasVocoderNotInitialized = true;
+                    break;
+                case MULTIMODAL_NOT_INITIALIZED:
+                    hasMultimodalNotInitialized = true;
+                    break;
+            }
+        }
+        
+        assertTrue(hasContextNotInitialized);
+        assertTrue(hasVocoderNotInitialized);
+        assertTrue(hasMultimodalNotInitialized);
+    }
+    
+    @Test
+    public void testTTSTypeEnum() {
+        // Test TTSModelType enum and fromInt conversion
+        LlamaMobile.TTSModelType[] ttsTypes = LlamaMobile.TTSModelType.values();
+        assertEquals(3, ttsTypes.length);
+        
+        // Test fromInt conversion
+        assertEquals(LlamaMobile.TTSModelType.UNKNOWN, LlamaMobile.TTSModelType.fromInt(0));
+        assertEquals(LlamaMobile.TTSModelType.OUT_ETTS_V02, LlamaMobile.TTSModelType.fromInt(1));
+        assertEquals(LlamaMobile.TTSModelType.OUT_ETTS_V03, LlamaMobile.TTSModelType.fromInt(2));
+        assertEquals(LlamaMobile.TTSModelType.UNKNOWN, LlamaMobile.TTSModelType.fromInt(100)); // Invalid value
+    }
+    
+    @Test
+    public void testProgressCallbackInterface() {
+        // Test ProgressCallback interface implementation
+        final float[] progressValues = {0.0f, 0.5f, 1.0f};
+        final int[] callCount = {0};
+        
+        LlamaMobile.ProgressCallback callback = new LlamaMobile.ProgressCallback() {
+            @Override
+            public void onProgress(float progress) {
+                progressValues[callCount[0]] = progress;
+                callCount[0]++;
+            }
+        };
+        
+        // Test callback functionality
+        callback.onProgress(0.0f);
+        callback.onProgress(0.5f);
+        callback.onProgress(1.0f);
+        
+        assertEquals(3, callCount[0]);
+        assertEquals(0.0f, progressValues[0], 0.01f);
+        assertEquals(0.5f, progressValues[1], 0.01f);
+        assertEquals(1.0f, progressValues[2], 0.01f);
+    }
 }

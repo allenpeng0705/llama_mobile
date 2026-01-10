@@ -35,23 +35,19 @@ llama_mobile是一个移动优先的AI框架，它将llama.cpp的强大功能带
 
 llama_mobile为各种开发平台提供专门的SDK和插件，以简化AI模型到应用程序的集成。以下是所有可用SDK和插件的综合列表：
 
-### 核心库
+### 核心SDK
 
-- **llama_mobile-ios/**：用于将AI模型集成到iOS应用程序的原生iOS框架。支持Swift和Objective-C，并通过Metal加速实现最佳性能。
-  - **README**：[llama_mobile-ios/README.md](llama_mobile-ios/README.md)
+- **llama_mobile-ios-SDK/**：用于将AI模型集成到iOS应用程序的原生iOS SDK。支持Swift和Objective-C，并通过Metal加速实现最佳性能。
+  - **README**：[llama_mobile-ios-SDK/README.md](llama_mobile-ios-SDK/README.md)
   - **构建脚本**：`scripts/build-ios.sh`
 
-- **llama_mobile-android/**：用于将AI模型集成到Android应用程序的原生Android库。提供JNI绑定和Neon SIMD支持，以实现性能优化。
-  - **README**：[llama_mobile-android/README.md](llama_mobile-android/README.md)
+- **llama_mobile-android-SDK/**：用于将AI模型集成到Android应用程序的原生Android SDK。提供JNI绑定和Neon SIMD支持，以实现性能优化。
+  - **README**：[llama_mobile-android-SDK/README.md](llama_mobile-android-SDK/README.md)
   - **构建脚本**：`scripts/build-android.sh`
 
-### SDK封装
-
-- **llama_mobile-ios-SDK/**：高级iOS SDK封装，简化了Swift应用程序中的模型加载、文本生成和嵌入操作。
-  - **README**：[llama_mobile-ios-SDK/README.md](llama_mobile-ios-SDK/README.md)
-
-- **llama_mobile-android-SDK/**：适用于Kotlin和Java应用程序的高级Android SDK封装。为AI模型操作提供了清晰的API和适当的错误处理。
-  - **README**：[llama_mobile-android-SDK/README.md](llama_mobile-android-SDK/README.md)
+- **llama_mobile-android-java-SDK/**：基于Java的Android SDK，为与llama模型交互提供了方便的Java友好API。
+  - **README**：[llama_mobile-android-java-SDK/README.md](llama_mobile-android-java-SDK/README.md)
+  - **构建脚本**：`scripts/build-android.sh`
 
 ### 跨平台插件
 
@@ -96,9 +92,9 @@ llama_mobile为各种开发平台提供专门的SDK和插件，以简化AI模型
   - 移动特定的适配和优化
   - 各种GGUF模型（常规、嵌入、VLM、多模态）
 
-- **llama_mobile-ios/**：iOS框架项目文件夹
-- **llama_mobile-android/**：Android库项目文件夹
-- **llama_mobile-android-SDK/**：Android SDK封装项目文件夹
+- **llama_mobile-ios-SDK/**：iOS SDK项目文件夹
+- **llama_mobile-android-SDK/**：Android SDK项目文件夹
+- **llama_mobile-android-java-SDK/**：Java-based Android SDK项目文件夹
 - **llama_mobile-flutter-SDK/**：Flutter插件项目文件夹
 - **scripts/**：构建和实用脚本
 - **CMakeLists.txt**：核心库的构建配置
@@ -113,7 +109,7 @@ llama_mobile为各种开发平台提供专门的SDK和插件，以简化AI模型
 项目包含各种构建脚本：
 
 - **build_and_run_lib_test.sh**：构建核心库和测试，然后运行它们
-- **build-ios.sh**：基于核心库构建iOS框架
+- **build-ios.sh**：基于核心库构建iOS SDK
 - **build-android.sh**：构建Android库和SDK
 - **build-flutter.sh**：构建Flutter插件
 - （计划中）**build-reactnative.sh**：构建ReactNative插件
@@ -191,9 +187,9 @@ make test_api
 该项目目前处于积极开发阶段，已完成以下组件：
 
 - ✅ 核心C++库（基于llama.cpp）
-- ✅ iOS框架
-- ✅ Android库（llama_mobile-android）
-- ✅ Android SDK封装（llama_mobile-android-SDK）
+- ✅ iOS SDK（llama_mobile-ios-SDK）
+- ✅ Android SDK（llama_mobile-android-SDK）
+- ✅ Android Java SDK（llama_mobile-android-java-SDK）
 - ✅ 基本测试基础设施
 - ✅ 核心库、iOS、Android和Flutter的构建脚本
 - ✅ iOS、Android和Flutter的示例应用
@@ -218,8 +214,8 @@ make test_api
 该框架目前支持与以下平台集成：
 
 1. **原生应用程序**：
-   - 通过`llama_mobile_ios`框架实现iOS应用
-   - 通过`llama_mobile-android`库和`llama_mobile-android-SDK`封装实现Android应用
+   - 通过`llama_mobile-ios-SDK` SDK实现iOS应用
+   - 通过`llama_mobile-android-SDK`和`llama_mobile-android-java-SDK`实现Android应用
 
 2. **跨平台框架**：
    - ✅ 通过Flutter插件（`llama_mobile-flutter-SDK`）实现Flutter应用
@@ -476,11 +472,11 @@ Neon支持由框架自动启用和使用。构建过程包括所有支持操作�
 
 ### Android集成
 
-1. 将`llama_mobile-android`库作为模块依赖项添加到您的Android Studio项目
+1. 将`llama_mobile-android-SDK`库作为模块依赖项添加到您的Android Studio项目
 2. 在`settings.gradle`中添加以下内容：
    ```gradle
    include ':llama_mobile'
-   project(':llama_mobile').projectDir = new File('../path/to/llama_mobile/llama_mobile-android')
+   project(':llama_mobile').projectDir = new File('../path/to/llama_mobile/llama_mobile-android-SDK')
    ```
 3. 在应用的`build.gradle`中添加依赖项：
    ```gradle
@@ -588,7 +584,7 @@ await llamaSdk.release();
 
 #### 步骤2：添加自包含SDK
 1. 在Xcode中，在Project Navigator中右键单击您的项目，选择"Add Files to LlamaMobileDemo..."
-2. 导航到`/path/to/llama_mobile/llama_mobile-ios/llama_mobile.xcframework`
+2. 导航到`/path/to/llama_mobile/llama_mobile-ios-SDK/llama_mobile.xcframework`
 3. 选择xcframework并确保：
    - "Copy items if needed"已勾选
    - 您的目标在"Add to targets"下已选择

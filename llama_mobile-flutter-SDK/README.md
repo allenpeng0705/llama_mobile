@@ -4,11 +4,21 @@ A cross-platform Flutter SDK for Llama Mobile that integrates the native iOS and
 
 ## Features
 
-- **Unified API**: Single Dart interface for both iOS and Android platforms
-- **Model Management**: Easy model loading and resource release
-- **Text Generation**: Generate text completions with configurable parameters
+- **Unified API**: Single Dart interface for both iOS and Android platforms, mirroring native SDKs
+- **Model Management**: Easy model initialization and resource release
+- **Text Generation**: Generate text completions with detailed configuration options
+- **Streaming Support**: Real-time token streaming during text generation
+- **Conversation Management**: Create and manage multi-turn conversations with history
+- **Embeddings**: Generate vector embeddings for text
+- **Tokenization**: Convert text to tokens and vice versa
+- **LoRA Adapters**: Apply Low-Rank Adaptation adapters to models
+- **Text-to-Speech**: Convert text to speech using TTS models
+- **Multimodal Support**: Initialize multimodal capabilities
+- **Model Download**: Download models from URLs with progress tracking
 - **Cross-Platform**: Works seamlessly on both iOS and Android devices
 - **Performance Optimized**: Leverages native platform capabilities for optimal performance
+- **Comprehensive Documentation**: Complete API documentation for all features
+- **Tested**: Comprehensive test suite covering all APIs
 
 ## Installation
 
@@ -35,6 +45,43 @@ flutter pub get
 ```
 
 ## API Documentation
+
+### Enums
+
+#### TTSModelType
+
+Enum for text-to-speech model types:
+
+```dart
+enum TTSModelType {
+  outETTSv02,  // Outlines eTTS v0.2 model
+}
+```
+
+#### StopType
+
+Enum for stop generation types:
+
+```dart
+enum StopType {
+  eos,       // End-of-sequence token
+  word,      // User-specified stop word
+  limit,     // Maximum token limit reached
+  user,      // User interrupted generation
+}
+```
+
+#### GrammarName
+
+Enum for built-in grammar types:
+
+```dart
+enum GrammarName {
+  json,        // JSON grammar
+  arithmetic,  // Arithmetic expressions
+  list,        // List format
+}
+```
 
 ### Data Models
 
@@ -84,15 +131,67 @@ class CompletionParams {
 }
 ```
 
-#### GrammarName
+#### CompletionResult
 
-Enum for built-in grammar types:
+Result of a text completion generation:
 
 ```dart
-enum GrammarName {
-  json,        // JSON grammar
-  arithmetic,  // Arithmetic expressions
-  list,        // List format
+class CompletionResult {
+  final String text;             // Generated text completion
+  final int tokensGenerated;     // Number of tokens generated
+  final int tokensEvaluated;     // Number of tokens evaluated
+  final bool truncated;          // Whether the generation was truncated
+  final bool stoppedEos;         // Whether generation stopped at EOS token
+  final bool stoppedWord;        // Whether generation stopped at a stop word
+  final bool stoppedLimit;       // Whether generation stopped at token limit
+}
+```
+
+#### LoraAdapter
+
+Configuration for LoRA adapters:
+
+```dart
+class LoraAdapter {
+  final String path;             // Path to the LoRA adapter file
+  final double scale;            // LoRA scaling factor (default: 1.0)
+}
+```
+
+#### TTSParams
+
+Configuration for text-to-speech generation:
+
+```dart
+class TTSParams {
+  final String text;             // Text to convert to speech
+  final String voice;            // Voice identifier
+  final int seed;                // Random seed (default: -1 for random)
+  final double speed;            // Speech speed (default: 1.0)
+  final double lengthScale;      // Length scale (default: 1.0)
+}
+```
+
+#### ConversationParams
+
+Configuration for creating conversations:
+
+```dart
+class ConversationParams {
+  final String systemPrompt;     // System prompt for the conversation
+  final String chatTemplate;     // Chat template to use
+}
+```
+
+#### DownloadParams
+
+Configuration for downloading models:
+
+```dart
+class DownloadParams {
+  final String url;              // Download URL
+  final String destinationPath;  // Destination path for the downloaded file
+  final int expectedSizeMb;      // Expected file size in MB
 }
 ```
 
@@ -126,6 +225,235 @@ Future<String> generate(CompletionParams params)
 **Returns:**
 - Generated text completion as a string
 
+#### generateResponse
+
+Generates detailed text completion with additional metadata:
+
+```dart
+Future<CompletionResult> generateResponse(CompletionParams params)
+```
+
+**Parameters:**
+- `params`: Completion configuration object
+
+**Returns:**
+- `CompletionResult` object with generated text and metadata
+
+#### streamCompletion
+
+Streams tokens during text generation:
+
+```dart
+Future<String> streamCompletion(CompletionParams params, Function(String) onToken)
+```
+
+**Parameters:**
+- `params`: Completion configuration object
+- `onToken`: Callback function invoked for each generated token
+
+**Returns:**
+- Complete generated text as a string
+
+#### stopCompletion
+
+Stops ongoing text generation:
+
+```dart
+Future<void> stopCompletion()
+```
+
+#### tokenize
+
+Tokenizes text into model tokens:
+
+```dart
+Future<List<int>> tokenize(String text)
+```
+
+**Parameters:**
+- `text`: Text to tokenize
+
+**Returns:**
+- List of token IDs
+
+#### detokenize
+
+Converts tokens back to text:
+
+```dart
+Future<String> detokenize(List<int> tokens)
+```
+
+**Parameters:**
+- `tokens`: List of token IDs
+
+**Returns:**
+- Detokenized text
+
+#### generateEmbeddings
+
+Generates embeddings for the last generated text:
+
+```dart
+Future<List<double>> generateEmbeddings()
+```
+
+**Returns:**
+- List of embedding values
+
+#### generateEmbeddingsForPrompt
+
+Generates embeddings for the given prompt:
+
+```dart
+Future<List<double>> generateEmbeddingsForPrompt(String prompt)
+```
+
+**Parameters:**
+- `prompt`: Prompt text to generate embeddings for
+
+**Returns:**
+- List of embedding values
+
+#### initMultimodal
+
+Initializes multimodal capabilities:
+
+```dart
+Future<bool> initMultimodal()
+```
+
+**Returns:**
+- `true` if multimodal was initialized successfully, `false` otherwise
+
+#### initTTS
+
+Initializes text-to-speech capabilities:
+
+```dart
+Future<bool> initTTS(String ttsPath, TTSModelType modelType)
+```
+
+**Parameters:**
+- `ttsPath`: Path to the TTS model file
+- `modelType`: TTS model type
+
+**Returns:**
+- `true` if TTS was initialized successfully, `false` otherwise
+
+#### generateAudio
+
+Generates audio from text:
+
+```dart
+Future<String> generateAudio(TTSParams params)
+```
+
+**Parameters:**
+- `params`: TTS configuration object
+
+**Returns:**
+- Path to the generated audio file
+
+#### applyLoraAdapters
+
+Applies LoRA adapters to the model:
+
+```dart
+Future<bool> applyLoraAdapters(List<LoraAdapter> adapters)
+```
+
+**Parameters:**
+- `adapters`: List of LoRA adapter configurations
+
+**Returns:**
+- `true` if adapters were applied successfully, `false` otherwise
+
+#### createConversation
+
+Creates a new conversation:
+
+```dart
+Future<String> createConversation(ConversationParams params)
+```
+
+**Parameters:**
+- `params`: Conversation configuration object
+
+**Returns:**
+- Unique conversation ID
+
+#### generateConversationResponse
+
+Generates a response for a specific conversation:
+
+```dart
+Future<String> generateConversationResponse(String conversationId, CompletionParams params)
+```
+
+**Parameters:**
+- `conversationId`: Unique conversation ID
+- `params`: Completion configuration object
+
+**Returns:**
+- Generated conversation response
+
+#### streamConversationResponse
+
+Streams tokens during conversation response generation:
+
+```dart
+Future<String> streamConversationResponse(String conversationId, CompletionParams params, Function(String) onToken)
+```
+
+**Parameters:**
+- `conversationId`: Unique conversation ID
+- `params`: Completion configuration object
+- `onToken`: Callback function invoked for each generated token
+
+**Returns:**
+- Complete generated conversation response
+
+#### getConversationHistory
+
+Retrieves the history of a specific conversation:
+
+```dart
+Future<List<Map<String, dynamic>>> getConversationHistory(String conversationId)
+```
+
+**Parameters:**
+- `conversationId`: Unique conversation ID
+
+**Returns:**
+- List of message maps with 'role' and 'content' keys
+
+#### clearConversation
+
+Clears the history of a specific conversation:
+
+```dart
+Future<void> clearConversation(String conversationId)
+```
+
+**Parameters:**
+- `conversationId`: Unique conversation ID
+
+#### downloadModel
+
+Downloads a model from a URL:
+
+```dart
+Future<bool> downloadModel(DownloadParams params, Function(double) onProgress)
+```
+
+**Parameters:**
+- `params`: Download configuration object
+- `onProgress`: Progress callback function (0.0 to 1.0)
+
+**Returns:**
+- `true` if download completed successfully, `false` otherwise
+
 #### getGrammarContent
 
 Retrieves the content of a built-in grammar:
@@ -139,6 +467,17 @@ Future<String?> getGrammarContent(GrammarName grammarName)
 
 **Returns:**
 - Grammar content as a string if found, null otherwise
+
+#### getVersion
+
+Retrieves the SDK version:
+
+```dart
+Future<String> getVersion()
+```
+
+**Returns:**
+- SDK version string
 
 #### release
 
@@ -161,39 +500,135 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   final _llamaSdk = LlamaMobileFlutterSdk();
-  bool _isModelLoaded = false;
+  bool _isModelInitialized = false;
+  String _generatedText = '';
+  String _streamedText = '';
+  bool _isGenerating = false;
 
-  Future<void> _loadModel() async {
+  Future<void> _initializeModel() async {
     try {
-      final config = ModelConfig(
+      final params = InitParams(
         modelPath: '/path/to/your/model.gguf',
-        contextSize: 2048,
-        useMemoryCache: true,
+        nCtx: 2048,
+        nGpuLayers: 10,
+        nThreads: 4,
+        useMmap: true,
       );
       
-      final success = await _llamaSdk.loadModel(config);
+      final success = await _llamaSdk.initialize(params);
       setState(() {
-        _isModelLoaded = success;
+        _isModelInitialized = success;
       });
     } catch (e) {
-      print('Error loading model: $e');
+      print('Error initializing model: $e');
     }
   }
 
-  Future<void> _generateText() async {
-    if (!_isModelLoaded) return;
+  Future<void> _generateResponse() async {
+    if (!_isModelInitialized || _isGenerating) return;
+    
+    setState(() {
+      _isGenerating = true;
+      _generatedText = 'Generating...';
+    });
     
     try {
-      final config = GenerationConfig(
+      final params = CompletionParams(
         prompt: 'Hello, how are you?',
         temperature: 0.7,
         maxTokens: 150,
+        topP: 0.95,
       );
       
-      final result = await _llamaSdk.generateCompletion(config);
-      print('Generated completion: $result');
+      final result = await _llamaSdk.generateResponse(params);
+      setState(() {
+        _generatedText = result.text;
+        print('Generated tokens: ${result.tokensGenerated}');
+        print('Evaluation tokens: ${result.tokensEvaluated}');
+      });
     } catch (e) {
-      print('Error generating text: $e');
+      print('Error generating response: $e');
+      setState(() {
+        _generatedText = 'Error: $e';
+      });
+    } finally {
+      setState(() {
+        _isGenerating = false;
+      });
+    }
+  }
+
+  Future<void> _streamResponse() async {
+    if (!_isModelInitialized || _isGenerating) return;
+    
+    setState(() {
+      _isGenerating = true;
+      _streamedText = 'Streaming...';
+    });
+    
+    try {
+      final params = CompletionParams(
+        prompt: 'Explain quantum computing in simple terms.',
+        temperature: 0.6,
+        maxTokens: 200,
+      );
+      
+      // Clear the streaming text first
+      setState(() {
+        _streamedText = '';
+      });
+      
+      await _llamaSdk.streamCompletion(params, (token) {
+        setState(() {
+          _streamedText += token;
+        });
+      });
+    } catch (e) {
+      print('Error streaming response: $e');
+      setState(() {
+        _streamedText = 'Error: $e';
+      });
+    } finally {
+      setState(() {
+        _isGenerating = false;
+      });
+    }
+  }
+
+  Future<void> _createAndUseConversation() async {
+    if (!_isModelInitialized) return;
+    
+    try {
+      // Create a conversation
+      final conversationId = await _llamaSdk.createConversation(
+        ConversationParams(
+          systemPrompt: 'You are a helpful assistant.',
+          chatTemplate: 'default',
+        ),
+      );
+      
+      // Generate a response
+      final params = CompletionParams(
+        prompt: 'What is Flutter?',
+        temperature: 0.7,
+        maxTokens: 100,
+      );
+      
+      final response = await _llamaSdk.generateConversationResponse(
+        conversationId,
+        params,
+      );
+      
+      print('Conversation response: $response');
+      
+      // Get conversation history
+      final history = await _llamaSdk.getConversationHistory(conversationId);
+      print('Conversation history: $history');
+      
+      // Clear conversation
+      await _llamaSdk.clearConversation(conversationId);
+    } catch (e) {
+      print('Error using conversation: $e');
     }
   }
 
@@ -205,20 +640,110 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    // Your UI implementation here
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(title: Text('Llama Mobile Flutter SDK Example')),
+        body: SingleChildScrollView(
+          padding: EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              ElevatedButton(
+                onPressed: _isModelInitialized ? null : _initializeModel,
+                child: Text('Initialize Model'),
+              ),
+              SizedBox(height: 20),
+              Text('Model Status: $_isModelInitialized'),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _isModelInitialized && !_isGenerating ? _generateResponse : null,
+                child: Text('Generate Response'),
+              ),
+              SizedBox(height: 10),
+              Text(_generatedText),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _isModelInitialized && !_isGenerating ? _streamResponse : null,
+                child: Text('Stream Response'),
+              ),
+              SizedBox(height: 10),
+              Text(_streamedText),
+              SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _isModelInitialized ? _createAndUseConversation : null,
+                child: Text('Use Conversation'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 ```
+
+## Running Tests
+
+The Llama Mobile Flutter SDK includes a comprehensive test suite to verify all API functionality. To run the tests:
+
+```bash
+cd /path/to/llama_mobile-flutter-SDK
+flutter test
+```
+
+### Test Coverage
+
+The test suite covers:
+- Model initialization and release
+- Text completion generation (both regular and detailed)
+- Token streaming during generation
+- Generation cancellation
+- Tokenization and detokenization
+- Embeddings generation
+- LoRA adapter application
+- Text-to-speech functionality
+- Conversation management
+- Model downloading
+- SDK version retrieval
+
+All tests use a mock platform implementation to simulate native behavior, ensuring reliable testing without physical devices.
 
 ## Platform-Specific Configuration
 
 ### iOS
 
-The iOS implementation requires the `llama_mobile-ios-SDK` to be available. This is configured automatically through the CocoaPods dependency in the plugin's `podspec` file.
+The iOS implementation uses the `llama_mobile-ios-SDK`, which is automatically copied into the Flutter plugin during the build process by the `build-flutter.sh` script. The plugin's `podspec` file is configured to reference this SDK, ensuring it's properly linked during iOS app builds.
 
 ### Android
 
-The Android implementation requires the `llama_mobile-android-SDK` to be available. This is configured automatically through the Gradle dependencies in the plugin's `build.gradle` file.
+The Android implementation uses the `llama_mobile-android-SDK`, which is automatically copied into the Flutter plugin during the build process by the `build-flutter.sh` or `build-flutter.bat` scripts. This includes the JNI libraries, native C++ files, Kotlin/Java classes, and assets/grammars folder, ensuring all dependencies are properly included in Android app builds.
+
+## Build Scripts
+
+The Flutter SDK provides build scripts to ensure it's properly configured and independent:
+
+### macOS/Linux
+
+```bash
+# From the repository root
+bash scripts/build-flutter.sh
+```
+
+### Windows
+
+```batch
+# From the repository root
+scripts\build-flutter.bat
+```
+
+These scripts:
+- Build the iOS and Android SDK dependencies
+- Copy the necessary SDK files into the Flutter plugin
+- Resolve Flutter dependencies
+- Analyze the plugin code
+- Optionally build the example app
+
+By running these scripts, you ensure the Flutter SDK has all the necessary dependencies and is ready for use.
 
 ## Troubleshooting
 

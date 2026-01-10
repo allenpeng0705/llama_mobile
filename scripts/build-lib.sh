@@ -15,6 +15,63 @@ LLAMA_MOBILE_DIR="$PROJECT_ROOT/lib"
 BUILD_DIR="$LLAMA_MOBILE_DIR/build"
 OUTPUT_DIR="$BUILD_DIR/output"
 
+# Validate build environment
+validate_environment() {
+    echo -e "${BLUE}Validating build environment...${NC}"
+    
+    # Check Xcode installation
+    if ! command -v xcodebuild &> /dev/null; then
+        echo -e "${RED}✗ Xcode not found! Please install Xcode.${NC}"
+        exit 1
+    fi
+    
+    # Check compiler
+    if ! command -v clang &> /dev/null; then
+        echo -e "${RED}✗ Clang compiler not found!${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✓ Xcode found: $(xcodebuild -version | head -n 1)${NC}"
+    echo -e "${GREEN}✓ Compiler: $(clang --version | head -n 1)${NC}"
+    
+    # Get current SDK path automatically
+    SDK_PATH=$(xcrun --show-sdk-path)
+    if [ -z "$SDK_PATH" ]; then
+        echo -e "${RED}✗ Could not determine SDK path!${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}✓ SDK Path: $SDK_PATH${NC}"
+    
+    # Test C++ header availability
+    echo -e "${BLUE}Testing C++ header availability...${NC}"
+    cat > test_cpp_headers.cpp << 'EOF'
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <memory>
+
+int main() {
+    return 0;
+}
+EOF
+    
+    if clang++ -std=c++17 -isysroot "$SDK_PATH" test_cpp_headers.cpp -o test_cpp_headers; then
+        echo -e "${GREEN}✓ C++ headers found successfully${NC}"
+        rm -f test_cpp_headers.cpp test_cpp_headers
+    else
+        echo -e "${RED}✗ Failed to find C++ headers!${NC}"
+        echo -e "${YELLOW}ℹ Make sure Xcode Command Line Tools are installed.${NC}"
+        echo -e "${YELLOW}ℹ Try running: xcode-select --install${NC}"
+        rm -f test_cpp_headers.cpp
+        exit 1
+    fi
+}
+
+# Export SDK_PATH for use in build function
+export SDK_PATH
+
 # Clean old build
 clean_build() {
     echo -e "${YELLOW}Cleaning old build...${NC}"
@@ -32,8 +89,8 @@ build_project() {
     mkdir -p "$BUILD_DIR"
     cd "$BUILD_DIR"
     
-    # Run CMake
-    cmake ..
+    # Run CMake with explicit SDK path
+    CMAKE_OSX_SYSROOT="$SDK_PATH" cmake ..
     if [ $? -ne 0 ]; then
         echo -e "${RED}✗ CMake configuration failed${NC}"
         exit 1
@@ -70,6 +127,7 @@ copy_grammars() {
 }
 
 # Main execution flow
+validate_environment
 clean_build
 build_project
 copy_grammars

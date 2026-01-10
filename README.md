@@ -35,23 +35,19 @@ llama_mobile is a mobile-first AI framework that brings the power of llama.cpp t
 
 llama_mobile provides dedicated SDKs and plugins for various development platforms to simplify integration of AI models into your applications. Below is a comprehensive list of all available SDKs and plugins:
 
-### Core Libraries
+### Core SDKs
 
-- **llama_mobile-ios/**: Native iOS framework for integrating AI models into iOS applications. Supports both Swift and Objective-C with Metal acceleration for optimal performance.
-  - **README**: [llama_mobile-ios/README.md](llama_mobile-ios/README.md)
+- **llama_mobile-ios-SDK/**: Native iOS SDK for integrating AI models into iOS applications. Supports both Swift and Objective-C with Metal acceleration for optimal performance.
+  - **README**: [llama_mobile-ios-SDK/README.md](llama_mobile-ios-SDK/README.md)
   - **Build Script**: `scripts/build-ios.sh`
 
-- **llama_mobile-android/**: Native Android library for integrating AI models into Android applications. Provides JNI bindings and Neon SIMD support for performance optimization.
-  - **README**: [llama_mobile-android/README.md](llama_mobile-android/README.md)
+- **llama_mobile-android-SDK/**: Native Android SDK for integrating AI models into Android applications. Provides JNI bindings and Neon SIMD support for performance optimization.
+  - **README**: [llama_mobile-android-SDK/README.md](llama_mobile-android-SDK/README.md)
   - **Build Script**: `scripts/build-android.sh`
 
-### SDK Wrappers
-
-- **llama_mobile-ios-SDK/**: High-level iOS SDK wrapper that simplifies model loading, text generation, and embedding operations for Swift applications.
-  - **README**: [llama_mobile-ios-SDK/README.md](llama_mobile-ios-SDK/README.md)
-
-- **llama_mobile-android-SDK/**: High-level Android SDK wrapper for Kotlin and Java applications. Provides a clean API for AI model operations with proper error handling.
-  - **README**: [llama_mobile-android-SDK/README.md](llama_mobile-android-SDK/README.md)
+- **llama_mobile-android-java-SDK/**: Java-based Android SDK that provides a convenient and Java-friendly API for interacting with llama models.
+  - **README**: [llama_mobile-android-java-SDK/README.md](llama_mobile-android-java-SDK/README.md)
+  - **Build Script**: `scripts/build-android.sh`
 
 ### Cross-Platform Plugins
 
@@ -70,15 +66,12 @@ llama_mobile provides dedicated SDKs and plugins for various development platfor
 Each SDK and plugin comes with example applications that demonstrate basic usage:
 
 #### iOS Examples
-- **iOS Framework Example**: `examples/iOSFrameworkExample/` - Demonstrates usage of the native iOS framework
-- **iOS SDK Example**: `examples/iOSSDKExample/` - Shows how to use the high-level iOS SDK wrapper
+- **iOS SDK Example**: `examples/iOSSDKExample/` - Shows how to use the iOS SDK
 - **SwiftUI Example**: `examples/LlamaMobileSwiftUIExample/` - Modern SwiftUI application example
 
 #### Android Examples
-- **Android Library Example**: `examples/androidLibExample/` - Basic usage of the native Android library
-- **Android SDK Example**: `examples/androidSDKExample/` - High-level Android SDK wrapper usage
+- **Android SDK Example**: `examples/androidSDKExample/` - Android SDK usage example
 - **Android Java SDK Example**: `examples/androidJavaSDKExample/` - Java-specific SDK usage example
-- **Android Example**: `examples/AndroidExample/` - Comprehensive Android application example
 
 #### Cross-Platform Examples
 - **Flutter SDK Example**: `examples/flutterSDKExample/` - Flutter plugin integration example
@@ -96,9 +89,9 @@ Each SDK and plugin comes with example applications that demonstrate basic usage
   - Mobile-specific adaptations and optimizations
   - Various GGUF models (normal, embedding, VLM, multimodal)
 
-- **llama_mobile-ios/**: iOS framework project folder
-- **llama_mobile-android/**: Android library project folder
-- **llama_mobile-android-SDK/**: Android SDK wrapper project folder
+- **llama_mobile-ios-SDK/**: iOS SDK project folder
+- **llama_mobile-android-SDK/**: Android SDK project folder
+- **llama_mobile-android-java-SDK/**: Java-based Android SDK project folder
 - **llama_mobile-flutter-SDK/**: Flutter plugin project folder
 - **scripts/**: Build and utility scripts
 - **CMakeLists.txt**: Build configuration for the core library
@@ -218,8 +211,8 @@ The framework supports various GGUF model types:
 The framework currently supports integration with
 
 1. **Native Applications**: 
-   - iOS apps via `llama_mobile_ios` framework
-   - Android apps via `llama_mobile-android` library and `llama_mobile-android-SDK` wrapper
+   - iOS apps via `llama_mobile-ios-SDK` SDK
+   - Android apps via `llama_mobile-android-SDK` SDK and `llama_mobile-android-java-SDK` SDK
 
 2. **Cross-Platform Frameworks**:
    - ✅ Flutter via Flutter plugin (`llama_mobile-flutter-SDK`)
@@ -285,18 +278,18 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j$(nproc)
 ```
 
-### iOS Framework
+####### iOS SDK
 
-The iOS framework requires precompiled Metal libraries for optimal performance. The build process handles this automatically.
+The iOS SDK requires precompiled Metal libraries for optimal performance. The build process handles this automatically.
 
 ```bash
-# Build iOS framework with precompiled Metal libraries
+# Build iOS SDK with precompiled Metal libraries
 ./scripts/build-ios.sh
 ```
 
 #### Metal Library Compilation Details
 
-The iOS framework relies on precompiled Metal shader libraries (`ggml-llama.metallib` for devices and `ggml-llama-sim.metallib` for simulators). These are automatically generated during the build process with:
+The iOS SDK relies on precompiled Metal shader libraries (`ggml-llama.metallib` for devices and `ggml-llama-sim.metallib` for simulators). These are automatically generated during the build process with:
 
 - **Metal Language Version**: `ios-metal2.3` (compatible with iOS 13.0+)
 - **Deployment Target**: iOS 14.0 (compatible with the core library requirements)
@@ -466,33 +459,34 @@ Neon support is automatically enabled and used by the framework. The build proce
 
 ### iOS Integration
 
-1. Add `llama_mobile.xcframework` to your Xcode project
+1. Add `llama_mobile.xcframework` from the `llama_mobile-ios-SDK` directory to your Xcode project
 2. Link against required system frameworks (Metal, MetalKit)
-3. Import the framework in your code:
+3. Import the SDK in your code:
    ```swift
    import llama_mobile
+   import LlamaMobile
    ```
-4. Initialize the library and load models as needed
+4. Initialize the SDK and load models as needed
 
 ### Android Integration
 
-1. Add the `llama_mobile-android` library as a module dependency in your Android Studio project
+1. Add the `llama_mobile-android-SDK` library as a module dependency in your Android Studio project
 2. Add the following to your `settings.gradle`:
    ```gradle
-   include ':llama_mobile'
-   project(':llama_mobile').projectDir = new File('../path/to/llama_mobile/llama_mobile-android')
+   include ':llama_mobile-android-SDK'
+   project(':llama_mobile-android-SDK').projectDir = new File('../path/to/llama_mobile/llama_mobile-android-SDK')
    ```
 3. Add the dependency to your app's `build.gradle`:
    ```gradle
    dependencies {
-       implementation project(':llama_mobile')
+       implementation project(':llama_mobile-android-SDK')
    }
    ```
-4. Import the library in your Kotlin code:
+4. Import the SDK in your Kotlin code:
    ```kotlin
    import com.llamamobile.LlamaMobile
    ```
-5. Initialize the library and load models as needed
+5. Initialize the SDK and load models as needed
 
 ### Flutter Integration
 
@@ -573,7 +567,7 @@ await llamaSdk.release();
 
 ## Using the SDKs in New Projects
 
-### iOS Swift App
+### iOS Swift SDK App
 
 #### Step 1: Create a New iOS Project
 1. Open Xcode and select "Create a new Xcode project"
@@ -588,7 +582,7 @@ await llamaSdk.release();
 
 #### Step 2: Add the Self-Contained SDK
 1. In Xcode, right-click on your project in the Project Navigator and select "Add Files to LlamaMobileDemo..."
-2. Navigate to `/path/to/llama_mobile/llama_mobile-ios/llama_mobile.xcframework`
+2. Navigate to `/path/to/llama_mobile/llama_mobile-ios-SDK/llama_mobile.xcframework`
 3. Select the xcframework and ensure:
    - "Copy items if needed" is checked
    - Your target is selected under "Add to targets"
@@ -710,7 +704,7 @@ class ViewController: UIViewController {
 }
 ```
 
-### Android App
+### Android SDK App
 
 #### Step 1: Create a New Android Project
 1. Open Android Studio
@@ -725,12 +719,10 @@ class ViewController: UIViewController {
 5. Click "Finish"
 
 #### Step 2: Add the Self-Contained SDK
-1. Create a `libs` directory in your app module if it doesn't exist:
-   - Right-click on `app` → "New" → "Directory"
-   - Name it `libs`
-2. Copy the self-contained SDK files:
+1. Add the SDK as a module dependency in your Android Studio project
+   - Select "File" → "New" → "Import Module"
    - Navigate to `/path/to/llama_mobile/llama_mobile-android-SDK/`
-   - Copy the `llama_mobile.aar` file to your app's `libs` directory
+   - Click "Finish"
 
 #### Step 3: Configure Project Settings
 1. Open `app/build.gradle.kts` (or `app/build.gradle`)

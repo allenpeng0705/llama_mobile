@@ -13,3 +13,6 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "llama_mobile_java_sdk"
+// Include the Kotlin SDK project as a dependency
+include ':llama_mobile-android'
+project(':llama_mobile-android').projectDir = new File('../llama_mobile-android')

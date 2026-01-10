@@ -9,7 +9,7 @@
 
 #include "../../lib/llama_mobile_api.h"
 
-// Function to list available GGUF models in lib/models (excluding embedding folder)
+// Function to list available GGUF models in top-level models directory (excluding embedding folder)
 std::vector<std::string> list_available_models(const std::string& models_dir) {
     std::vector<std::string> models;
     DIR* dir;
@@ -61,10 +61,10 @@ void print_embeddings(const llama_mobile_float_array_t& embeddings) {
 
 int main(int argc, char** argv) {
     std::string model_path;
-    const std::string models_dir = "../../lib/models";
+    const std::string models_dir = "../../models";
     
     if (argc < 2) {
-        // List available models in lib/models (excluding embedding folder)
+        // List available models in top-level models directory (excluding embedding folder)
         printf("=== Available Models ===\n");
         std::vector<std::string> models = list_available_models(models_dir);
         
@@ -215,7 +215,7 @@ int main(int argc, char** argv) {
     printf("Assistant: ");
     
     llama_mobile_conversation_result_t conv_result;
-    status = llama_mobile_generate_response(ctx, "What is the capital of France?", 100, &conv_result);
+    status = llama_mobile_generate_response(ctx, "What is the capital of France?", 100, nullptr, &conv_result);
     if (status == 0) {
         printf("%s\n", conv_result.text);
         printf("Time to first token: %lld ms\n", conv_result.time_to_first_token);
@@ -230,7 +230,7 @@ int main(int argc, char** argv) {
     printf("User: What language is spoken there?\n");
     printf("Assistant: ");
     
-    status = llama_mobile_generate_response(ctx, "What language is spoken there?", 100, &conv_result);
+    status = llama_mobile_generate_response(ctx, "What language is spoken there?", 100, nullptr, &conv_result);
     if (status == 0) {
         printf("%s\n", conv_result.text);
         printf("Time to first token: %lld ms\n", conv_result.time_to_first_token);
@@ -320,13 +320,90 @@ int main(int argc, char** argv) {
     
     llama_mobile_free_completion_result(&json_result);
 
-    // Step 8: Free resources
-    printf("8. Cleaning up resources...\n");
+    // Step 8: Test TTS API (Text-to-Speech)
+    printf("8. Testing TTS API (Text-to-Speech)...\n");
+    
+    // Note: Full TTS functionality requires specific TTS models
+    // These examples show how to use the API functions
+    
+    // Check TTS type (will be 0 if model doesn't support TTS)
+    int tts_type = llama_mobile_get_tts_type(ctx);
+    printf("  TTS Type: %d\n", tts_type);
+    
+    // Check if vocoder is enabled (initially disabled)
+    bool vocoder_enabled = llama_mobile_is_vocoder_enabled(ctx);
+    printf("  Vocoder Enabled: %s\n", vocoder_enabled ? "true" : "false");
+    
+    // Example: How to initialize a vocoder with a model path
+    printf("  Note: Vocoder initialization requires a valid vocoder model path\n");
+    printf("  Example: llama_mobile_init_vocoder(ctx, \"path/to/vocoder.gguf\");\n");
+    
+    // Example: How to get audio guide tokens and decode audio
+    printf("  Example TTS workflow:\n");
+    printf("    1. Initialize vocoder\n");
+    printf("    2. Generate text completion with audio tokens\n");
+    printf("    3. Extract audio tokens from completion\n");
+    printf("    4. Decode audio tokens: llama_mobile_decode_audio_tokens(ctx, tokens, count)\n");
+    printf("    5. Release vocoder: llama_mobile_release_vocoder(ctx)\n");
+    
+    printf("TTS API demonstration completed\n\n");
+    
+    // Step 9: Test Download API
+    printf("9. Testing Download API...\n");
+    
+    // Progress callback function for downloads
+    auto download_progress = [](float progress, const char* status, int64_t downloaded_bytes, int64_t total_bytes) {
+        printf("  Download progress: %.1f%% - %s\n", progress * 100.0f, status ? status : "");
+        if (total_bytes > 0) {
+            printf("  Downloaded: %.2f MB / %.2f MB\n", 
+                   downloaded_bytes / (1024.0f * 1024.0f), 
+                   total_bytes / (1024.0f * 1024.0f));
+        }
+    };
+    
+    // Example: How to download a model
+    printf("  Example: How to download a model from Hugging Face\n");
+    
+    // Download parameters
+    llama_mobile_download_params_t download_params = {0};
+    download_params.repo_id = "jartine/TinyLlama-1.1B-Chat-v0.4-GGUF";
+    download_params.filename = "tinyllama-1.1b-chat-v0.4.Q2_K.gguf";
+    download_params.destination_path = ".";
+    download_params.bearer_token = nullptr;
+    download_params.offline = false;
+    download_params.progress_callback = download_progress;
+    
+    printf("  Example: llama_mobile_download_model(&download_params);\n");
+    printf("  Note: Actual download is commented out to avoid unintended downloads\n");
+    
+    // Uncomment this to perform an actual download:
+    /*
+    llama_mobile_download_result_t download_result = llama_mobile_download_model(&download_params);
+    if (download_result.success) {
+        printf("  Download successful!\n");
+        printf("  Local path: %s\n", download_result.local_path);
+        printf("  File size: %lld bytes\n", download_result.file_size);
+    } else {
+        printf("  Download failed!\n");
+        printf("  Error: %s\n", download_result.error_message);
+    }
+    llama_mobile_free_download_result(&download_result);
+    */
+    
+    // Example: How to download a single Hugging Face file
+    printf("  Example: How to download a single Hugging Face file\n");
+    printf("  Example: llama_mobile_download_hf_file(\"repo_id\", \"filename\", \"dest_path\", nullptr, false, download_progress);\n");
+    
+    printf("Download API demonstration completed\n\n");
+    
+    // Step 10: Free resources
+    printf("10. Cleaning up resources...\n");
     llama_mobile_free(ctx);
     
     printf("\n=== All API tests completed successfully! ===\n");
     printf("Tested interfaces: initialization, tokenization, detokenization,\n");
-    printf("embeddings, completion, conversation management, and LoRA support.\n");
+    printf("embeddings, completion, conversation management, LoRA support,\n");
+    printf("TTS (Text-to-Speech), and Download functionality.\n");
     
     return 0;
 }

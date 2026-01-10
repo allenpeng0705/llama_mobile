@@ -45,14 +45,14 @@ No additional configuration is required for Android (React Native 0.60+ should h
 ### Import the SDK
 
 ```javascript
-import LlamaMobile from 'llama_mobile-react-native-SDK';
+import llamaMobile, { TTSModelType, StopType } from 'llama_mobile-react-native-SDK';
 ```
 
 ### Initialize the SDK
 
 ```javascript
 // Initialize with default settings
-await LlamaMobile.initialize();
+await llamaMobile.initialize();
 ```
 
 ### Load a Model
@@ -64,11 +64,13 @@ const modelPath = '/path/to/your/model.gguf';
 const params = {
   n_threads: 4,
   n_gpu_layers: 1,
-  n_ctx: 2048
+  n_ctx: 2048,
+  use_mmap: true,
+  use_mlock: false
 };
 
 try {
-  await LlamaMobile.loadModel(modelPath, params);
+  await llamaMobile.loadModel(modelPath, params);
   console.log('Model loaded successfully');
 } catch (error) {
   console.error('Error loading model:', error);
@@ -82,69 +84,224 @@ const prompt = 'Once upon a time';
 const generateParams = {
   temperature: 0.7,
   top_p: 0.9,
-  max_tokens: 100
+  min_p: 0.05,
+  max_tokens: 100,
+  penalty_repeat: 1.1,
+  stopSequences: ['\n\n', 'User:']
 };
 
 try {
-  const result = await LlamaMobile.generateText(prompt, generateParams);
+  const result = await llamaMobile.generateText(prompt, generateParams);
   console.log('Generated text:', result.text);
+  console.log('Tokens generated:', result.tokensGenerated);
+  console.log('Tokens evaluated:', result.tokensEvaluated);
 } catch (error) {
   console.error('Error generating text:', error);
 }
 ```
 
-### Generate Text Stream
+### Stream Text
 
 ```javascript
 const prompt = 'Tell me a story';
 const generateParams = {
   temperature: 0.7,
-  max_tokens: 500
+  max_tokens: 500,
+  stopSequences: ['\n\n']
 };
 
+// Set up event listeners
+const removeTokenListener = llamaMobile.onToken((token) => {
+  console.log('Received token:', token);
+});
+
+const removeCompletionListener = llamaMobile.onCompletion((result) => {
+  console.log('Completion finished:', result);
+  removeTokenListener();
+  removeCompletionListener();
+  removeErrorListener();
+});
+
+const removeErrorListener = llamaMobile.onError((error) => {
+  console.error('Stream error:', error);
+  removeTokenListener();
+  removeCompletionListener();
+  removeErrorListener();
+});
+
 try {
-  await LlamaMobile.generateTextStream(
-    prompt, 
-    generateParams,
-    (token) => {
-      // Handle each generated token
-      console.log('Token:', token);
-    },
-    (error) => {
-      // Handle any errors
-      console.error('Stream error:', error);
-    },
-    () => {
-      // Stream completed
-      console.log('Stream completed');
-    }
-  );
+  await llamaMobile.streamText(prompt, generateParams);
+  console.log('Streaming started');
 } catch (error) {
   console.error('Error starting stream:', error);
+  removeTokenListener();
+  removeCompletionListener();
+  removeErrorListener();
 }
+```
+
+### Tokenization
+
+```javascript
+// Tokenize text
+const text = 'Hello, world!';
+try {
+  const tokens = await llamaMobile.tokenize(text);
+  console.log('Tokens:', tokens);
+} catch (error) {
+  console.error('Error tokenizing text:', error);
+}
+
+// Detokenize tokens
+const tokens = [1, 2, 3, 4, 5];
+try {
+  const text = await llamaMobile.detokenize(tokens);
+  console.log('Detokenized text:', text);
+} catch (error) {
+  console.error('Error detokenizing tokens:', error);
+}
+```
+
+### Generate Embeddings
+
+```javascript
+const text = 'Hello, world!';
+try {
+  const embeddings = await llamaMobile.generateEmbeddings(text);
+  console.log('Embeddings:', embeddings);
+  console.log('Embedding length:', embeddings.length);
+} catch (error) {
+  console.error('Error generating embeddings:', error);
+}
+```
+
+### LoRA Adapters
+
+```javascript
+// Apply LoRA adapters
+const adapters = [
+  { path: '/path/to/lora1.gguf', scale: 0.5 },
+  { path: '/path/to/lora2.gguf', scale: 0.8 }
+];
+
+try {
+  await llamaMobile.applyLoraAdapters(adapters);
+  console.log('LoRA adapters applied successfully');
+} catch (error) {
+  console.error('Error applying LoRA adapters:', error);
+}
+
+// Remove all LoRA adapters
+try {
+  await llamaMobile.removeLoraAdapters();
+  console.log('LoRA adapters removed successfully');
+} catch (error) {
+  console.error('Error removing LoRA adapters:', error);
+}
+```
+
+### Multimodal
+
+```javascript
+// Initialize multimodal
+const mmprojPath = '/path/to/mmproj.gguf';
+try {
+  await llamaMobile.initMultimodal(mmprojPath, true); // Use GPU
+  console.log('Multimodal initialized successfully');
+} catch (error) {
+  console.error('Error initializing multimodal:', error);
+}
+
+// Check if multimodal is enabled
+try {
+  const isEnabled = await llamaMobile.isMultimodalEnabled();
+  console.log('Multimodal enabled:', isEnabled);
+} catch (error) {
+  console.error('Error checking multimodal status:', error);
+}
+
+// Release multimodal resources
+try {
+  await llamaMobile.releaseMultimodal();
+  console.log('Multimodal resources released');
+} catch (error) {
+  console.error('Error releasing multimodal resources:', error);
+}
+```
+
+### Conversation Management
+
+```javascript
+// Generate a conversation response
+const userMessage = 'Hello, how are you?';
+try {
+  const result = await llamaMobile.generateConversationResponse(userMessage, 100);
+  console.log('Assistant response:', result.text);
+  console.log('Time to first token:', result.timeToFirstToken);
+} catch (error) {
+  console.error('Error generating conversation response:', error);
+}
+
+// Clear conversation history
+try {
+  await llamaMobile.clearConversation();
+  console.log('Conversation history cleared');
+} catch (error) {
+  console.error('Error clearing conversation:', error);
+}
+```
+
+### Stop Generation
+
+```javascript
+// Stop any ongoing generation
+llamaMobile.stopGeneration();
 ```
 
 ### Unload Model
 
 ```javascript
 try {
-  await LlamaMobile.unloadModel();
+  await llamaMobile.unloadModel();
   console.log('Model unloaded successfully');
 } catch (error) {
   console.error('Error unloading model:', error);
 }
 ```
 
-## API Reference
-
-### Constants
-
-#### `VERSION`
-
-The current version of the SDK.
+### Remove Event Listeners
 
 ```javascript
-console.log('SDK Version:', LlamaMobile.VERSION);
+// Remove all event listeners at once
+llamaMobile.removeAllListeners();
+```
+
+## API Reference
+
+### Enums
+
+#### `TTSModelType`
+
+Enum for specifying TTS (Text-to-Speech) model types.
+
+```javascript
+enum TTSModelType {
+  LLAMA_MOBILE_TTS_VITS = 0,
+  LLAMA_MOBILE_TTS_MMS = 1
+}
+```
+
+#### `StopType`
+
+Enum for specifying why generation stopped.
+
+```javascript
+enum StopType {
+  LLAMA_MOBILE_STOP_TYPE_NONE = 0,
+  LLAMA_MOBILE_STOP_TYPE_EOS = 1,
+  LLAMA_MOBILE_STOP_TYPE_WORD = 2,
+  LLAMA_MOBILE_STOP_TYPE_LIMIT = 3
+}
 ```
 
 ### Methods
@@ -166,6 +323,9 @@ Loads a model from the specified path with the given parameters.
     - `n_gpu_layers`: `number` (optional) - Number of layers to offload to GPU (default: 0)
     - `n_ctx`: `number` (optional) - Context window size (default: 2048)
     - `n_batch`: `number` (optional) - Batch size (default: 512)
+    - `use_mmap`: `boolean` (optional) - Use memory-mapped I/O (default: true)
+    - `use_mlock`: `boolean` (optional) - Lock model in memory (default: false)
+    - `embedding`: `boolean` (optional) - Enable embedding extraction (default: false)
 
 - Returns: `Promise<void>`
 
@@ -176,37 +336,171 @@ Generates text from the loaded model.
 - **Parameters:**
   - `prompt`: `string` - Input prompt for text generation
   - `params`: `object` - Generation parameters
-    - `temperature`: `number` (optional) - Sampling temperature (default: 0.8)
-    - `top_p`: `number` (optional) - Top-p sampling parameter (default: 0.95)
+    - `temperature`: `number` (optional) - Sampling temperature (default: 0.7)
+    - `top_k`: `number` (optional) - Top-k sampling parameter (default: 40)
+    - `top_p`: `number` (optional) - Top-p sampling parameter (default: 0.9)
+    - `min_p`: `number` (optional) - Min-p sampling parameter (default: 0.05)
     - `max_tokens`: `number` (optional) - Maximum number of tokens to generate (default: 100)
+    - `penalty_repeat`: `number` (optional) - Repeat penalty (default: 1.1)
+    - `stopSequences`: `string[]` (optional) - Array of stop sequences (default: [])
+    - `grammar`: `string` (optional) - Context-free grammar for constrained generation
 
 - Returns: `Promise<object>` - Generated text result
   - `text`: `string` - Generated text
+  - `tokensGenerated`: `number` - Number of tokens generated
+  - `tokensEvaluated`: `number` - Number of tokens evaluated
+  - `truncated`: `boolean` - Whether the generation was truncated
+  - `stoppedEos`: `boolean` - Whether generation stopped at EOS token
+  - `stoppedWord`: `boolean` - Whether generation stopped at a stop word
+  - `stoppedLimit`: `boolean` - Whether generation stopped at max tokens
 
-#### `generateTextStream(prompt, params, onToken, onError, onComplete)`
+#### `streamText(prompt, params)`
 
-Generates text in real-time stream from the loaded model.
+Streams text generation from the loaded model using event emitters.
 
 - **Parameters:**
   - `prompt`: `string` - Input prompt for text generation
   - `params`: `object` - Generation parameters (same as `generateText`)
-  - `onToken`: `function` - Callback for each generated token
-  - `onError`: `function` - Callback for errors
-  - `onComplete`: `function` - Callback when generation is complete
 
 - Returns: `Promise<void>`
+
+- **Events:**
+  - `onToken(token)`: Emitted for each generated token
+  - `onCompletion(result)`: Emitted when generation completes
+  - `onError(error)`: Emitted if an error occurs during generation
 
 #### `stopGeneration()`
 
 Stops any ongoing text generation.
 
-- Returns: `Promise<void>`
+- Returns: `void`
 
 #### `unloadModel()`
 
 Unloads the currently loaded model and frees resources.
 
 - Returns: `Promise<void>`
+
+#### `tokenize(text)`
+
+Tokenizes the given text into model tokens.
+
+- **Parameters:**
+  - `text`: `string` - Text to tokenize
+
+- Returns: `Promise<number[]>` - Array of token IDs
+
+#### `detokenize(tokens)`
+
+Detokenizes the given token IDs back into text.
+
+- **Parameters:**
+  - `tokens`: `number[]` - Array of token IDs to detokenize
+
+- Returns: `Promise<string>` - Detokenized text
+
+#### `generateEmbeddings(text)`
+
+Generates embeddings for the given text.
+
+- **Parameters:**
+  - `text`: `string` - Text to generate embeddings for
+
+- Returns: `Promise<number[]>` - Array of embedding values
+
+#### `applyLoraAdapters(adapters)`
+
+Applies LoRA adapters to the loaded model.
+
+- **Parameters:**
+  - `adapters`: `object[]` - Array of LoRA adapter configurations
+    - `path`: `string` - Path to the LoRA adapter file
+    - `scale`: `number` - LoRA adapter scale (default: 1.0)
+
+- Returns: `Promise<string>` - Success message
+
+#### `removeLoraAdapters()`
+
+Removes all applied LoRA adapters from the model.
+
+- Returns: `Promise<string>` - Success message
+
+#### `initMultimodal(mmprojPath, useGpu)`
+
+Initializes multimodal functionality for the loaded model.
+
+- **Parameters:**
+  - `mmprojPath`: `string` - Path to the multimodal projection file
+  - `useGpu`: `boolean` - Whether to use GPU acceleration
+
+- Returns: `Promise<string>` - Success message
+
+#### `isMultimodalEnabled()`
+
+Checks if multimodal functionality is enabled.
+
+- Returns: `Promise<boolean>` - Whether multimodal is enabled
+
+#### `releaseMultimodal()`
+
+Releases multimodal resources.
+
+- Returns: `Promise<string>` - Success message
+
+#### `generateConversationResponse(userMessage, maxTokens)`
+
+Generates a response to a user message in a conversation context.
+
+- **Parameters:**
+  - `userMessage`: `string` - User's message
+  - `maxTokens`: `number` - Maximum number of tokens to generate
+
+- Returns: `Promise<object>` - Conversation result
+  - `text`: `string` - Generated response
+  - `timeToFirstToken`: `number` - Time to generate first token (ms)
+  - `totalTime`: `number` - Total generation time (ms)
+  - `tokensGenerated`: `number` - Number of tokens generated
+
+#### `clearConversation()`
+
+Clears the conversation history.
+
+- Returns: `Promise<string>` - Success message
+
+### Event Listeners
+
+#### `onToken(callback)`
+
+Registers a callback for token events during streaming.
+
+- **Parameters:**
+  - `callback`: `function(token)` - Callback function that receives each token
+
+- Returns: `function` - Function to remove the listener
+
+#### `onCompletion(callback)`
+
+Registers a callback for completion events.
+
+- **Parameters:**
+  - `callback`: `function(result)` - Callback function that receives the completion result
+
+- Returns: `function` - Function to remove the listener
+
+#### `onError(callback)`
+
+Registers a callback for error events.
+
+- **Parameters:**
+  - `callback`: `function(error)` - Callback function that receives the error
+
+- Returns: `function` - Function to remove the listener
+
+#### `removeAllListeners()`
+
+Removes all registered event listeners.
+
+- Returns: `void`
 
 ## Testing
 

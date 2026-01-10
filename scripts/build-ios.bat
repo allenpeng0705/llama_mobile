@@ -53,13 +53,13 @@ REM Function to copy framework to SDKs
     echo.
 
     REM Check if necessary directories exist
-    if not exist "%ROOT_DIR%\llama_mobile-ios" (
-        echo ✗ Error: llama_mobile-ios directory not found!
+    if not exist "%ROOT_DIR%\llama_mobile-ios-SDK" (
+        echo ✗ Error: llama_mobile-ios-SDK directory not found!
         exit /b 1
     )
 
-    if not exist "%ROOT_DIR%\llama_mobile-ios\llama_mobile.xcframework" (
-        echo ✗ Error: llama_mobile.xcframework not found in llama_mobile-ios directory!
+    if not exist "%ROOT_DIR%\llama_mobile-ios-SDK\llama_mobile.xcframework" (
+        echo ✗ Error: llama_mobile.xcframework not found in llama_mobile-ios-SDK directory!
         echo Please build the iOS framework first on macOS using: build-ios.sh
         exit /b 1
     )
@@ -93,7 +93,7 @@ REM Function to copy framework to SDKs
 
         REM Copy latest framework to SDK
         echo Copying latest framework to !SDK_NAME!...
-        xcopy /e /i /y "%ROOT_DIR%\llama_mobile-ios\llama_mobile.xcframework" "!DEST_DIR!\llama_mobile.xcframework" >nul 2>&1 || (
+        xcopy /e /i /y "%ROOT_DIR%\llama_mobile-ios-SDK\llama_mobile.xcframework" "!DEST_DIR!\llama_mobile.xcframework" >nul 2>&1 || (
             echo ✗ Failed to copy framework to !DEST_DIR!
             exit /b 1
         )

@@ -4,43 +4,42 @@
 import PackageDescription
 
 let package = Package(
-    name: "LlamaMobileSDK",
+    name: "LlamaMobile",
     platforms: [
         .iOS(.v15)
     ],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
-            name: "LlamaMobileSDK",
-            targets: ["LlamaMobileSDK"]),
+            name: "LlamaMobile",
+            targets: ["LlamaMobile"]),
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.
-        // .package(url: /* package url */, from: "1.0.0"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .binaryTarget(
             name: "llama_mobile",
-            path: "Frameworks/llama_mobile.xcframework"
+            path: "llama_mobile.xcframework"
         ),
-        // C wrapper target to expose the C functions from the XCFramework
+        // Main Swift wrapper target
         .target(
-            name: "llama_mobile_c",
+            name: "LlamaMobile",
             dependencies: ["llama_mobile"],
-            path: "Sources/llama_mobile_c",
-            publicHeadersPath: "."
+            path: "Sources/LlamaMobile",
+            resources: [.copy("grammars")],
+            linkerSettings: [
+                .linkedFramework("Foundation"),
+                .linkedLibrary("c++"),
+            ]
         ),
-        .target(
-            name: "LlamaMobileSDK",
-            dependencies: ["llama_mobile_c"],
-            path: "Sources/LlamaMobileSDK",
-            resources: [.copy("grammars")]
-        ),
+        // Test target for the Swift wrapper
         .testTarget(
-            name: "LlamaMobileSDKTests",
-            dependencies: ["LlamaMobileSDK"],
-            path: "Tests"),
+            name: "LlamaMobileTests",
+            dependencies: ["LlamaMobile"],
+            path: "Tests/LlamaMobileTests"
+        )
     ]
 )

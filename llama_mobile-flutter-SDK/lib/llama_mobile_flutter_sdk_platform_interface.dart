@@ -17,6 +17,12 @@ enum GrammarName {
   list,
 }
 
+/// Text-to-Speech model types
+enum TTSModelType { unknown, outETTSv02, outETTSv03 }
+
+/// Stop conditions for text generation
+enum StopType { full, partial }
+
 /// Data class for model initialization parameters
 class InitParams {
   /// Path to the GGUF model file
@@ -248,6 +254,104 @@ class GenerationConfig {
   };
 }
 
+/// Result of a text completion generation
+class CompletionResult {
+  final String text;
+  final int tokensGenerated;
+  final int tokensEvaluated;
+  final bool truncated;
+  final bool stoppedEos;
+  final bool stoppedWord;
+  final bool stoppedLimit;
+
+  CompletionResult({
+    required this.text,
+    required this.tokensGenerated,
+    required this.tokensEvaluated,
+    required this.truncated,
+    required this.stoppedEos,
+    required this.stoppedWord,
+    required this.stoppedLimit,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'text': text,
+    'tokensGenerated': tokensGenerated,
+    'tokensEvaluated': tokensEvaluated,
+    'truncated': truncated,
+    'stoppedEos': stoppedEos,
+    'stoppedWord': stoppedWord,
+    'stoppedLimit': stoppedLimit,
+  };
+}
+
+/// LoRA adapter configuration
+class LoraAdapter {
+  final String path;
+  final double scale;
+
+  LoraAdapter({required this.path, required this.scale});
+
+  Map<String, dynamic> toJson() => {'path': path, 'scale': scale};
+}
+
+/// Text-to-Speech parameters
+class TTSParams {
+  final String text;
+  final String voice;
+  final double speed;
+  final double pitch;
+
+  TTSParams({
+    required this.text,
+    required this.voice,
+    this.speed = 1.0,
+    this.pitch = 1.0,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'text': text,
+    'voice': voice,
+    'speed': speed,
+    'pitch': pitch,
+  };
+}
+
+/// Conversation parameters
+class ConversationParams {
+  final String systemPrompt;
+  final String chatTemplate;
+
+  ConversationParams({required this.systemPrompt, required this.chatTemplate});
+
+  Map<String, dynamic> toJson() => {
+    'systemPrompt': systemPrompt,
+    'chatTemplate': chatTemplate,
+  };
+}
+
+/// Download parameters
+class DownloadParams {
+  final String url;
+  final String destinationPath;
+  final double expectedSizeMb;
+  final bool unzip;
+
+  DownloadParams({
+    required this.url,
+    required this.destinationPath,
+    required this.expectedSizeMb,
+    this.unzip = true,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'url': url,
+    'destinationPath': destinationPath,
+    'expectedSizeMb': expectedSizeMb,
+    'unzip': unzip,
+  };
+}
+
 abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
   /// Constructs a LlamaMobileFlutterSdkPlatform.
   LlamaMobileFlutterSdkPlatform() : super(token: _token);
@@ -302,5 +406,118 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
   /// Release the loaded model and free resources
   Future<void> release() {
     throw UnimplementedError('release() has not been implemented.');
+  }
+
+  /// Generate text completion and return detailed result
+  Future<CompletionResult> generateResponse(CompletionParams params) {
+    throw UnimplementedError('generateResponse() has not been implemented.');
+  }
+
+  /// Stream text completion with token callbacks
+  Future<String> streamCompletion(
+    CompletionParams params,
+    Function(String) onToken,
+  ) {
+    throw UnimplementedError('streamCompletion() has not been implemented.');
+  }
+
+  /// Stop an ongoing completion generation
+  Future<void> stopCompletion() {
+    throw UnimplementedError('stopCompletion() has not been implemented.');
+  }
+
+  /// Tokenize text into token IDs
+  Future<List<int>> tokenize(String text) {
+    throw UnimplementedError('tokenize() has not been implemented.');
+  }
+
+  /// Detokenize token IDs into text
+  Future<String> detokenize(List<int> tokens) {
+    throw UnimplementedError('detokenize() has not been implemented.');
+  }
+
+  /// Generate embeddings for the current context
+  Future<List<double>> generateEmbeddings() {
+    throw UnimplementedError('generateEmbeddings() has not been implemented.');
+  }
+
+  /// Generate embeddings for a specific prompt
+  Future<List<double>> generateEmbeddingsForPrompt(String prompt) {
+    throw UnimplementedError(
+      'generateEmbeddingsForPrompt() has not been implemented.',
+    );
+  }
+
+  /// Initialize multimodal support
+  Future<bool> initMultimodal() {
+    throw UnimplementedError('initMultimodal() has not been implemented.');
+  }
+
+  /// Initialize text-to-speech
+  Future<bool> initTTS(String ttsPath, TTSModelType modelType) {
+    throw UnimplementedError('initTTS() has not been implemented.');
+  }
+
+  /// Generate audio from text
+  Future<String> generateAudio(TTSParams params) {
+    throw UnimplementedError('generateAudio() has not been implemented.');
+  }
+
+  /// Apply LoRA adapters
+  Future<bool> applyLoraAdapters(List<LoraAdapter> adapters) {
+    throw UnimplementedError('applyLoraAdapters() has not been implemented.');
+  }
+
+  /// Create a new conversation
+  Future<String> createConversation(ConversationParams params) {
+    throw UnimplementedError('createConversation() has not been implemented.');
+  }
+
+  /// Generate a conversation response
+  Future<String> generateConversationResponse(
+    String conversationId,
+    CompletionParams params,
+  ) {
+    throw UnimplementedError(
+      'generateConversationResponse() has not been implemented.',
+    );
+  }
+
+  /// Stream a conversation response
+  Future<String> streamConversationResponse(
+    String conversationId,
+    CompletionParams params,
+    Function(String) onToken,
+  ) {
+    throw UnimplementedError(
+      'streamConversationResponse() has not been implemented.',
+    );
+  }
+
+  /// Get conversation history
+  Future<List<Map<String, dynamic>>> getConversationHistory(
+    String conversationId,
+  ) {
+    throw UnimplementedError(
+      'getConversationHistory() has not been implemented.',
+    );
+  }
+
+  /// Clear conversation history
+  Future<void> clearConversation(String conversationId) {
+    throw UnimplementedError('clearConversation() has not been implemented.');
+  }
+
+  /// Download a model from URL
+  Future<bool> downloadModel(
+    DownloadParams params,
+    Function(double) onProgress,
+  ) {
+    throw UnimplementedError('downloadModel() has not been implemented.');
+  }
+
+  /// Get the SDK version
+  Future<String> getVersion() {
+    throw UnimplementedError('getVersion() has not been implemented.');
   }
 }

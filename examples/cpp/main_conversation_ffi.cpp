@@ -10,7 +10,7 @@
 #include "utils.h"
 #include "../../lib/llama_mobile_ffi.h"
 
-// Function to list available GGUF models in lib/models (excluding embedding folder)
+// Function to list available GGUF models in top-level models directory (excluding embedding folder)
 std::vector<std::string> list_available_models(const std::string& models_dir) {
     std::vector<std::string> models;
     DIR* dir;
@@ -120,7 +120,7 @@ bool simple_response_demo(llama_mobile_context_handle_t handle) {
 int main(int argc, char **argv) {
     const std::string model_url = "https://huggingface.co/QuantFactory/SmolLM-360M-Instruct-GGUF/resolve/main/SmolLM-360M-Instruct.Q6_K.gguf";
     const std::string model_filename = "SmolLM-360M-Instruct.Q6_K.gguf";
-    const std::string models_dir = "../../../lib/models";
+    const std::string models_dir = "../../../models";
     std::string final_model_path;
     bool is_demo_mode = false;
     std::string demo_mode;
@@ -149,14 +149,14 @@ int main(int argc, char **argv) {
         // User-provided model path
         final_model_path = argv[1];
     } else {
-        // List available models from both lib/models and current directory
+        // List available models from both top-level models directory and current directory
         std::cout << "\n=== Available Models ===\n";
         
-        // Get models from lib/models
+        // Get models from top-level models directory
         std::vector<std::string> models = list_available_models(models_dir);
         std::vector<std::string> model_paths;
         
-        // Add models from lib/models
+        // Add models from top-level models directory
         for (const auto& model : models) {
             model_paths.push_back(models_dir + "/" + model);
         }

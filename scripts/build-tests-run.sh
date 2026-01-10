@@ -14,7 +14,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LLAMA_MOBILE_DIR="$PROJECT_ROOT/lib"
 BUILD_DIR="$LLAMA_MOBILE_DIR/build"
 OUTPUT_DIR="$BUILD_DIR/output"
-MODELS_DIR="$LLAMA_MOBILE_DIR/models"
+MODELS_DIR="$PROJECT_ROOT/models"
 TESTS_DIR="$OUTPUT_DIR"
 
 # List available models

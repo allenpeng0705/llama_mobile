@@ -167,38 +167,37 @@ fi
 echo "✓"
 echo "Using $n_cpu cores for build"
 
-# Create the necessary directories for all SDKs
+# Create the necessary directories for the Android library
     echo -n "Creating necessary directories... "
 
-for dir in "./llama_mobile-android/src/main/jniLibs" "./llama_mobile-android/src/main/cpp" "./llama_mobile-android/src/main/java/com/llamamobile" "./llama_mobile-android/src/main/assets/grammars" "./llama_mobile-Android-SDK/src/main/jniLibs" "./llama_mobile-Android-SDK/src/main/cpp" "./llama_mobile-Android-SDK/src/main/java/com/llamamobile" "./llama_mobile-Android-SDK/src/main/assets/grammars" "./llama_mobile-android-java-SDK/src/main/jniLibs" "./llama_mobile-android-java-SDK/src/main/cpp" "./llama_mobile-android-java-SDK/src/main/java/com/llamamobile" "./llama_mobile-android-java-SDK/src/main/assets/grammars" "./llama_mobile-react-native-SDK/android/src/main/jniLibs" "./llama_mobile-react-native-SDK/android/src/main/cpp" "./llama_mobile-react-native-SDK/android/src/main/java/com/llamamobile" "./llama_mobile-react-native-SDK/android/src/main/assets/grammars"; do
-
-    if ! mkdir -p "$dir"; then
-        echo "✗"
-        echo "Error: Failed to create directory $dir!"
-        echo "Please check your permissions and try again."
-        exit 1
-    fi
+# Create directories for both Kotlin and Java SDKs
+for sdk in "llama_mobile-android-SDK" "llama_mobile-android-java-SDK"; do
+    for dir in "./$sdk/src/main/jniLibs" "./$sdk/src/main/cpp" "./$sdk/src/main/assets/grammars"; do
+        if ! mkdir -p "$dir"; then
+            echo "✗"
+            echo "Error: Failed to create directory $dir!"
+            echo "Please check your permissions and try again."
+            exit 1
+        fi
+    done
 done
 echo "✓"
 
-# Copy grammar files to assets for all SDKs
+# Copy grammar files to assets for both SDKs
     echo -n "Copying grammar files to assets... "
 GRAMMAR_SRC_DIR="./lib/grammars"
-GRAMMAR_DEST_DIRS=("./llama_mobile-android/src/main/assets/grammars" "./llama_mobile-android-java-SDK/src/main/assets/grammars" "./llama_mobile-android-SDK/src/main/assets/grammars" "./llama_mobile-react-native-SDK/android/src/main/assets/grammars")
+
+# Copy to Kotlin SDK
+GRAMMAR_DEST_DIR_KOTLIN="./llama_mobile-android-SDK/src/main/assets/grammars"
+# Copy to Java SDK
+GRAMMAR_DEST_DIR_JAVA="./llama_mobile-android-java-SDK/src/main/assets/grammars"
 
 if [ -d "$GRAMMAR_SRC_DIR" ]; then
-    all_copied=true
-    for dest_dir in "${GRAMMAR_DEST_DIRS[@]}"; do
-        if ! cp "$GRAMMAR_SRC_DIR"/*.gbnf "$dest_dir/"; then
-            echo "✗"
-            echo "Error: Failed to copy grammar files to $dest_dir!"
-            all_copied=false
-            break
-        fi
-    done
-    if [ "$all_copied" = true ]; then
+    if cp "$GRAMMAR_SRC_DIR"/*.gbnf "$GRAMMAR_DEST_DIR_KOTLIN/" && cp "$GRAMMAR_SRC_DIR"/*.gbnf "$GRAMMAR_DEST_DIR_JAVA/"; then
         echo "✓"
     else
+        echo "✗"
+        echo "Error: Failed to copy grammar files!"
         exit 1
     fi
 else
@@ -286,10 +285,9 @@ for ABI in "${ABI_LIST[@]}"; do
     fi
     echo "✓"
     
-    # Copy the library to all SDKs
+    # Copy the library to both Android SDKs
     echo -n "Copying $ABI library... "
     SOURCE_LIB="$BUILD_DIR/output/lib/libllama_mobile_core.so"
-    DEST_DIRS=("./llama_mobile-android/src/main/jniLibs/$ABI" "./llama_mobile-Android-SDK/src/main/jniLibs/$ABI" "./llama_mobile-react-native-SDK/android/src/main/jniLibs/$ABI")
     
     if [ ! -f "$SOURCE_LIB" ]; then
         echo "✗"
@@ -298,29 +296,39 @@ for ABI in "${ABI_LIST[@]}"; do
         exit 1
     fi
     
-    all_copied=true
-    for dest_dir in "${DEST_DIRS[@]}"; do
-        if ! mkdir -p "$dest_dir"; then
-            echo "✗"
-            echo "Error: Failed to create destination directory $dest_dir!"
-            all_copied=false
-            break
-        fi
-        
-        dest_lib="$dest_dir/libllama_mobile.so"
-        if ! cp "$SOURCE_LIB" "$dest_lib"; then
-            echo "✗"
-            echo "Error: Failed to copy library from $SOURCE_LIB to $dest_lib!"
-            all_copied=false
-            break
-        fi
-    done
+    # Copy to Kotlin SDK
+    KOTLIN_DEST_DIR="./llama_mobile-android-SDK/src/main/jniLibs/$ABI"
+    KOTLIN_DEST_LIB="$KOTLIN_DEST_DIR/libllama_mobile.so"
     
-    if [ "$all_copied" = true ]; then
-        echo "✓"
-    else
+    if ! mkdir -p "$KOTLIN_DEST_DIR"; then
+        echo "✗"
+        echo "Error: Failed to create destination directory $KOTLIN_DEST_DIR!"
         exit 1
     fi
+    
+    if ! cp "$SOURCE_LIB" "$KOTLIN_DEST_LIB"; then
+        echo "✗"
+        echo "Error: Failed to copy library from $SOURCE_LIB to $KOTLIN_DEST_LIB!"
+        exit 1
+    fi
+    
+    # Copy to Java SDK
+    JAVA_DEST_DIR="./llama_mobile-android-java-SDK/src/main/jniLibs/$ABI"
+    JAVA_DEST_LIB="$JAVA_DEST_DIR/libllama_mobile.so"
+    
+    if ! mkdir -p "$JAVA_DEST_DIR"; then
+        echo "✗"
+        echo "Error: Failed to create destination directory $JAVA_DEST_DIR!"
+        exit 1
+    fi
+    
+    if ! cp "$SOURCE_LIB" "$JAVA_DEST_LIB"; then
+        echo "✗"
+        echo "Error: Failed to copy library from $SOURCE_LIB to $JAVA_DEST_LIB!"
+        exit 1
+    fi
+    
+    echo "✓"
     
     # Clean up build directory
     echo -n "Cleaning up build directory... "
@@ -398,10 +406,10 @@ add_library(llama_mobile_jni SHARED
 target_link_libraries(llama_mobile_jni PRIVATE llama_mobile)
 "
 
-create_file "./llama_mobile-android/src/main/cpp/CMakeLists.txt" "$CMAKE_CONTENT"
+create_file "./llama_mobile-android-SDK/src/main/cpp/CMakeLists.txt" "$CMAKE_CONTENT"
 
 # Create JNI wrapper implementation
-cat > ./llama_mobile-android/src/main/cpp/llama_mobile_jni.cpp << EOL
+cat > ./llama_mobile-android-SDK/src/main/cpp/llama_mobile_jni.cpp << EOL
 // JNI wrapper for llama_mobile Android library
 #include <jni.h>
 #include <string>
@@ -593,18 +601,6 @@ JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_releaseContext(
 EOL
 
 # Create AndroidManifest.xml
-cat > ./llama_mobile-android/src/main/AndroidManifest.xml << EOL
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.llamamobile">
-
-    <uses-sdk
-        android:minSdkVersion="21"
-        android:targetSdkVersion="34" />
-</manifest>
-EOL
-
-# Create AndroidManifest.xml for SDK
 cat > ./llama_mobile-android-SDK/src/main/AndroidManifest.xml << EOL
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -616,90 +612,92 @@ cat > ./llama_mobile-android-SDK/src/main/AndroidManifest.xml << EOL
 </manifest>
 EOL
 
-# Create Kotlin wrapper class
-cat > ./llama_mobile-android/src/main/java/com/llamamobile/LlamaMobile.kt << EOL
-package com.llamamobile
 
-/**
- * LlamaMobile Android Library
- * 
- * This class provides a Kotlin wrapper around the llama_mobile C library, 
- * allowing Android applications to interact with llama models.
- */
-object LlamaMobile {
-    
-    /**
-     * Cache type enum
-     */
-    enum class CacheType {
-        NONE,
-        MEMORY
-    }
-    
-    /**
-     * Initialization parameters for creating a llama context
-     * 
-     * @property modelPath Path to the llama model file
-     * @property nCtx Size of the context window (default: 512)
-     * @property chatTemplate Chat template to use (optional)
-     * @property cacheType Cache type to use (default: MEMORY)
-     */
-    data class InitParams(
-        val modelPath: String,
-        val nCtx: Int = 512,
-        val chatTemplate: String? = null,
-        val cacheType: CacheType = CacheType.MEMORY
-    )
-    
-    /**
-     * Completion parameters for generating text
-     * 
-     * @property prompt Input prompt for text generation
-     * @property temperature Temperature for sampling (default: 0.8)
-     * @property maxTokens Maximum number of tokens to generate (default: 100)
-     */
-    data class CompletionParams(
-        val prompt: String,
-        val temperature: Float = 0.8f,
-        val maxTokens: Int = 100
-    )
-    
-    /**
-     * Loads the native libraries
-     */
-    init {
-        System.loadLibrary("llama_mobile")
-        System.loadLibrary("llama_mobile_jni")
-    }
-    
-    /**
-     * Initializes a new llama context
-     * 
-     * @param params Initialization parameters
-     * @return Context handle, or 0 if initialization failed
-     */
-    external fun initContext(params: InitParams): Long
-    
-    /**
-     * Generates text completion
-     * 
-     * @param contextHandle Context handle obtained from initContext
-     * @param params Completion parameters
-     * @return Generated text, or null if generation failed
-     */
-    external fun generateCompletion(contextHandle: Long, params: CompletionParams): String?
-    
-    /**
-     * Releases a llama context
-     * 
-     * @param contextHandle Context handle obtained from initContext
-     */
-    external fun releaseContext(contextHandle: Long)
-}
-EOL
+
+# Create Kotlin wrapper class - commented out since we've already manually updated it
+# cat > ./llama_mobile-android-SDK/src/main/java/com/llamamobile/LlamaMobile.kt << EOL
+# package com.llamamobile
+#
+# /**
+#  * LlamaMobile Android Library
+#  * 
+#  * This class provides a Kotlin wrapper around the llama_mobile C library, 
+#  * allowing Android applications to interact with llama models.
+#  */
+# object LlamaMobile {
+#     
+#     /**
+#      * Cache type enum
+#      */
+#     enum class CacheType {
+#         NONE,
+#         MEMORY
+#     }
+#     
+#     /**
+#      * Initialization parameters for creating a llama context
+#      * 
+#      * @property modelPath Path to the llama model file
+#      * @property nCtx Size of the context window (default: 512)
+#      * @property chatTemplate Chat template to use (optional)
+#      * @property cacheType Cache type to use (default: MEMORY)
+#      */
+#     data class InitParams(
+#         val modelPath: String,
+#         val nCtx: Int = 512,
+#         val chatTemplate: String? = null,
+#         val cacheType: CacheType = CacheType.MEMORY
+#     )
+#     
+#     /**
+#      * Completion parameters for generating text
+#      * 
+#      * @property prompt Input prompt for text generation
+#      * @property temperature Temperature for sampling (default: 0.8)
+#      * @property maxTokens Maximum number of tokens to generate (default: 100)
+#      */
+#     data class CompletionParams(
+#         val prompt: String,
+#         val temperature: Float = 0.8f,
+#         val maxTokens: Int = 100
+#     )
+#     
+#     /**
+#      * Loads the native libraries
+#      */
+#     init {
+#         System.loadLibrary("llama_mobile")
+#         System.loadLibrary("llama_mobile_jni")
+#     }
+#     
+#     /**
+#      * Initializes a new llama context
+#      * 
+#      * @param params Initialization parameters
+#      * @return Context handle, or 0 if initialization failed
+#      */
+#     external fun initContext(params: InitParams): Long
+#     
+#     /**
+#      * Generates text completion
+#      * 
+#      * @param contextHandle Context handle obtained from initContext
+#      * @param params Completion parameters
+#      * @return Generated text, or null if generation failed
+#      */
+#     external fun generateCompletion(contextHandle: Long, params: CompletionParams): String?
+#     
+#     /**
+#      * Releases a llama context
+#      * 
+#      * @param contextHandle Context handle obtained from initContext
+#      */
+#     external fun releaseContext(contextHandle: Long)
+# }
+# EOL
 
 # Create build.gradle for the library
-cat > ./llama_mobile-android/build.gradle << EOL
+cat > ./llama_mobile-android-SDK/build.gradle << EOL
 plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
@@ -748,7 +746,7 @@ dependencies {
 EOL
 
 # Create settings.gradle
-cat > ./llama_mobile-android/settings.gradle << EOL
+cat > ./llama_mobile-android-SDK/settings.gradle << EOL
 pluginManagement {
     repositories {
         google()
@@ -766,155 +764,15 @@ dependencyResolutionManagement {
 rootProject.name = "llama_mobile"
 EOL
 
-# Create build.gradle for SDK
-cat > ./llama_mobile-Android-SDK/build.gradle << EOL
-plugins {
-    id 'com.android.library'
-    id 'org.jetbrains.kotlin.android'
-}
-
-android {
-    namespace 'com.llamamobile'
-    compileSdk 34
-
-    defaultConfig {
-        minSdk 21
-        targetSdk 34
-
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        consumerProguardFiles "consumer-rules.pro"
-    }
-
-    buildTypes {
-        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-        }
-    }
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
-    }
-    kotlinOptions {
-        jvmTarget = '1.8'
-    }
-    externalNativeBuild {
-        cmake {
-            path "src/main/cpp/CMakeLists.txt"
-            version "3.22.1"
-        }
-    }
-}
-
-dependencies {
-    implementation 'androidx.core:core-ktx:1.12.0'
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    testImplementation 'junit:junit:4.13.2'
-    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
-    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
-}
-EOL
-
-# Create settings.gradle for SDK
-cat > ./llama_mobile-Android-SDK/settings.gradle << EOL
-pluginManagement {
-    repositories {
-        google()
-        mavenCentral()
-        gradlePluginPortal()
-    }
-}
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
-rootProject.name = "llama_mobile_sdk"
-EOL
-
-echo "=== Android library build completed successfully! ==="
-echo "The llama_mobile Android library has been built and placed in ./llama_mobile-android/"
-
-# Make llama_mobile-Android-SDK self-contained
-    echo "=== Making llama_mobile-Android-SDK self-contained ==="
-    
-    # Copy native libraries to SDK
-    echo -n "Copying native libraries to SDK... "
-    if mkdir -p ./llama_mobile-Android-SDK/src/main/jniLibs && cp -r ./llama_mobile-android/src/main/jniLibs/* ./llama_mobile-Android-SDK/src/main/jniLibs/; then
-        echo "✓"
-    else
-        echo "✗"
-        echo "Error: Failed to copy native libraries to SDK!"
-        exit 1
-    fi
-    
-    # Copy JNI bindings to SDK
-    echo -n "Copying JNI bindings to SDK... "
-    if mkdir -p ./llama_mobile-Android-SDK/src/main/cpp && cp ./llama_mobile-android/src/main/cpp/* ./llama_mobile-Android-SDK/src/main/cpp/; then
-        echo "✓"
-    else
-        echo "✗"
-        echo "Error: Failed to copy JNI bindings to SDK!"
-        exit 1
-    fi
-    
-    # Copy Kotlin wrapper to SDK
-    echo -n "Copying Kotlin wrapper to SDK... "
-    if mkdir -p ./llama_mobile-Android-SDK/src/main/java/com/llamamobile && cp ./llama_mobile-android/src/main/java/com/llamamobile/LlamaMobile.kt ./llama_mobile-Android-SDK/src/main/java/com/llamamobile/; then
-        echo "✓"
-    else
-        echo "✗"
-        echo "Error: Failed to copy Kotlin wrapper to SDK!"
-        exit 1
-    fi
-    
-    # Update SDK's CMakeLists.txt to use relative paths
-    echo -n "Updating SDK CMakeLists.txt... "
-    SDK_CMAKE_CONTENT="cmake_minimum_required(VERSION 3.16)
-project(llama_mobile_android_sdk LANGUAGES CXX C)
-
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Add definitions
-add_definitions(
-    -DNDEBUG
-    -DLM_GGML_USE_CPU
-    -DLM_GGML_USE_OPENCL=OFF
-    -DGGML_NO_POSIX_MADVISE
-)
-
-# Include directories
-include_directories(
-    \"\${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib\"
-    \"\${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/llama_cpp\"
-    \"\${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/llama_cpp/ggml-cpu\"
-)
-
-# Import the pre-built llama_mobile library
-add_library(llama_mobile SHARED IMPORTED)
-set_target_properties(llama_mobile PROPERTIES
-    IMPORTED_LOCATION \${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/\${ANDROID_ABI}/libllama_mobile.so
-)
-
-# Create a JNI wrapper
-add_library(llama_mobile_jni SHARED
-    llama_mobile_jni.cpp
-)
-
-# Link libraries
-target_link_libraries(llama_mobile_jni PRIVATE llama_mobile)
-"
-    
-    if echo "$SDK_CMAKE_CONTENT" > ./llama_mobile-Android-SDK/src/main/cpp/CMakeLists.txt; then
-        echo "✓"
-    else
-        echo "✗"
-        echo "Error: Failed to update SDK CMakeLists.txt!"
-        exit 1
-    fi
-    
-    echo "=== Android SDK is now self-contained! ==="
-    echo "You can now run: ./build-android.sh to rebuild the library and SDK"
+echo "=== Android libraries build completed successfully! ==="
+echo "Both Kotlin and Java SDKs have been built and placed in the following directories:"
+echo "- Kotlin SDK: ./llama_mobile-android-SDK/"
+echo "- Java SDK: ./llama_mobile-android-java-SDK/"
+echo ""
+echo "To use the Kotlin SDK:"
+echo "- Add as module: Import llama_mobile-android-SDK directory into your Android Studio project"
+echo "- Or use as standalone SDK: Copy the llama_mobile-android-SDK directory to your project"
+echo ""
+echo "To use the Java SDK:"
+echo "- Add as module: Import llama_mobile-android-java-SDK directory into your Android Studio project"
+echo "- Or use as standalone SDK: Copy the llama_mobile-android-java-SDK directory to your project"

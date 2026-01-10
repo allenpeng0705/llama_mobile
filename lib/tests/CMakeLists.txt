@@ -55,6 +55,36 @@ target_compile_definitions(direct_test PRIVATE
     LLAMA_MOBILE_VERBOSE=0
 )
 
+# Add streaming test executable
+add_executable(test_streaming test_streaming.cpp)
+
+# Link against the core library
+target_link_libraries(test_streaming PRIVATE llama_mobile_core_lib)
+
+# Set C++ standard
+target_compile_features(test_streaming PRIVATE cxx_std_17)
+
+# Add definitions from main CMakeLists.txt
+target_compile_definitions(test_streaming PRIVATE
+    LM_GGML_USE_CPU
+    LLAMA_MOBILE_VERBOSE=0
+)
+
+# Add download test executable
+add_executable(test_download test_download.cpp)
+
+# Link against the core library
+target_link_libraries(test_download PRIVATE llama_mobile_core_lib)
+
+# Set C++ standard
+target_compile_features(test_download PRIVATE cxx_std_17)
+
+# Add definitions from main CMakeLists.txt
+target_compile_definitions(test_download PRIVATE
+    LM_GGML_USE_CPU
+    LLAMA_MOBILE_VERBOSE=0
+)
+
 if(APPLE)
     find_library(FOUNDATION_LIBRARY Foundation)
     find_library(ACCELERATE_FRAMEWORK Accelerate)
@@ -74,6 +104,10 @@ if(APPLE)
             ${FOUNDATION_LIBRARY}
             ${ACCELERATE_FRAMEWORK}
         )
+        target_link_libraries(test_streaming PUBLIC
+            ${FOUNDATION_LIBRARY}
+            ${ACCELERATE_FRAMEWORK}
+        )
     endif()
     
     if(METAL_LIBRARY AND METALKIT_LIBRARY)
@@ -86,6 +120,14 @@ if(APPLE)
             ${METALKIT_LIBRARY}
         )
         target_link_libraries(direct_test PUBLIC
+            ${METAL_LIBRARY}
+            ${METALKIT_LIBRARY}
+        )
+        target_link_libraries(test_streaming PUBLIC
+            ${METAL_LIBRARY}
+            ${METALKIT_LIBRARY}
+        )
+        target_link_libraries(test_download PUBLIC
             ${METAL_LIBRARY}
             ${METALKIT_LIBRARY}
         )

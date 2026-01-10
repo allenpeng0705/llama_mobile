@@ -1,5 +1,0 @@
-module LlamaMobileCAPI {
-    umbrella header "LlamaMobileCAPI.h"
-    export *
-    link "llama_mobile"
-}

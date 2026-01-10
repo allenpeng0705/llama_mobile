@@ -368,4 +368,119 @@ public class LlamaMobileInstrumentedTests {
         assertNull(LlamaMobile.generateCompletion(0L, params1));
         assertNull(LlamaMobile.generateCompletion(0L, params2));
     }
+    
+    @Test
+    public void testLoRAAdaptersAPI() {
+        // Test LoRA adapter operations fail gracefully with invalid context
+        LlamaMobile.LoraAdapter[] adapters = new LlamaMobile.LoraAdapter[] {
+            new LlamaMobile.LoraAdapter("/path/to/lora.gguf"),
+            new LlamaMobile.LoraAdapter("/path/to/lora2.gguf", 0.5f)
+        };
+        
+        // Test LoRA methods
+        assertFalse(LlamaMobile.applyLoraAdapters(0L, adapters));
+        assertNull(LlamaMobile.getLoadedLoraAdapters(0L));
+        LlamaMobile.removeLoraAdapters(0L); // Should not crash
+    }
+    
+    @Test
+    public void testTTSAPI() {
+        // Test TTS operations fail gracefully with invalid context
+        assertFalse(LlamaMobile.initVocoder(0L, "/path/to/vocoder.gguf"));
+        assertFalse(LlamaMobile.isVocoderEnabled(0L));
+        assertEquals(LlamaMobile.TTSModelType.UNKNOWN, LlamaMobile.getTTSType(0L));
+        assertNull(LlamaMobile.getFormattedAudioCompletion(0L, "{\"speaker\": \"default\"}", "Hello world"));
+        assertNull(LlamaMobile.getAudioGuideTokens(0L, "Hello world"));
+        assertNull(LlamaMobile.decodeAudioTokens(0L, new int[]{1, 2, 3}));
+        assertNull(LlamaMobile.generateAudioFromText(0L, "Hello world"));
+        assertNull(LlamaMobile.generateAudioFromText(0L, "Hello world", "{\"speaker\": \"female\"}"));
+        LlamaMobile.releaseVocoder(0L); // Should not crash
+    }
+    
+    @Test
+    public void testConversationAPI() {
+        // Test conversation operations fail gracefully with invalid context
+        assertNull(LlamaMobile.generateResponse(0L, "Hello, how are you?"));
+        assertNull(LlamaMobile.generateResponse(0L, "Hello, how are you?", 100));
+        
+        // Test with progress callback
+        final float[] progressValues = {0.0f};
+        LlamaMobile.ProgressCallback progressCallback = new LlamaMobile.ProgressCallback() {
+            @Override
+            public void onProgress(float progress) {
+                progressValues[0] = progress;
+            }
+        };
+        
+        // Test download methods
+        LlamaMobile.DownloadParams downloadParams = new LlamaMobile.DownloadParams(
+            "https://huggingface.co/invalid/model", "/tmp/test/model.gguf"
+        );
+        
+        LlamaMobile.DownloadResult downloadResult = LlamaMobile.downloadModel(0L, downloadParams, progressCallback);
+        assertNull(downloadResult);
+        
+        downloadResult = LlamaMobile.downloadHfFile(
+            0L, "invalid/repo", "model.gguf", "/tmp/test/model.gguf", null, false, progressCallback
+        );
+        assertNull(downloadResult);
+    }
+    
+    @Test
+    public void testModelInformationAPI() {
+        // Test model information methods with invalid context
+        assertEquals(0, LlamaMobile.getContextWindowSize(0L));
+        assertEquals(0, LlamaMobile.getEmbeddingDimension(0L));
+        assertNull(LlamaMobile.getModelDescription(0L));
+        assertEquals(0L, LlamaMobile.getModelSize(0L));
+        assertEquals(0L, LlamaMobile.getModelParametersCount(0L));
+    }
+    
+    @Test
+    public void testMultimodalAPI() {
+        // Test multimodal operations fail gracefully with invalid context
+        assertFalse(LlamaMobile.initMultimodal(0L, "/path/to/mmproj.bin", true));
+        assertFalse(LlamaMobile.isMultimodalEnabled(0L));
+        assertFalse(LlamaMobile.supportsVision(0L));
+        assertFalse(LlamaMobile.supportsAudio(0L));
+        LlamaMobile.releaseMultimodal(0L); // Should not crash
+        
+        // Test multimodal completion
+        List<String> mediaPaths = new ArrayList<>();
+        mediaPaths.add("/path/to/image.jpg");
+        
+        LlamaMobile.CompletionParams params = new LlamaMobile.CompletionParams(
+            "What's in this image?",
+            0.7f,
+            100,
+            4,
+            -1,
+            40,
+            0.9,
+            0.05,
+            1.0,
+            64,
+            1.1,
+            0.0,
+            0.0,
+            0,
+            5.0,
+            0.1,
+            false,
+            0,
+            null,
+            null,
+            mediaPaths
+        );
+        
+        assertNull(LlamaMobile.generateCompletion(0L, params));
+    }
+    
+    @Test
+    public void testConvenienceMethods() {
+        // Test convenience methods fail gracefully with invalid context
+        assertNull(LlamaMobile.generateCompletion(0L, "Hello world", 100, 0.8f));
+        assertNull(LlamaMobile.generateAudioFromText(0L, "Hello world"));
+        assertNull(LlamaMobile.download(0L, new LlamaMobile.DownloadParams("url", "path")));
+    }
 }

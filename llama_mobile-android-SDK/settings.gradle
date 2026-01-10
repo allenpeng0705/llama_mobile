@@ -12,4 +12,4 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "llama_mobile_sdk"
+rootProject.name = "llama_mobile"

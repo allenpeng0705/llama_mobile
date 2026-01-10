@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(llama_mobile_android_sdk LANGUAGES CXX C)
+project(llama_mobile_android LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,15 +14,15 @@ add_definitions(
 
 # Include directories
 include_directories(
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/llama_cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../lib/llama_cpp/ggml-cpu"
+    "/../../../../../lib"
+    "/../../../../../lib/llama_cpp"
+    "/../../../../../lib/llama_cpp/ggml-cpu"
 )
 
 # Import the pre-built llama_mobile library
 add_library(llama_mobile SHARED IMPORTED)
 set_target_properties(llama_mobile PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}/libllama_mobile.so
+    IMPORTED_LOCATION /../jniLibs//libllama_mobile.so
 )
 
 # Create a JNI wrapper

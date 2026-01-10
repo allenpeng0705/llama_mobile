@@ -95,29 +95,7 @@ llama_mobile_context_t llama_mobile_init(const llama_mobile_init_params_t* param
     return (llama_mobile_context_t) llama_mobile_init_context_c(&ffi_params);
 }
 
-llama_mobile_context_t llama_mobile_init_simple(
-    const char* model_path,
-    int32_t n_ctx,
-    int32_t n_gpu_layers,
-    int32_t n_threads,
-    void (*progress_callback)(float progress)) {
-    
-    if (!model_path) {
-        return nullptr;
-    }
-    
-    llama_mobile_init_params_t params = {0};
-    params.model_path = model_path;
-    params.n_ctx = (n_ctx > 0) ? n_ctx : 2048;  // Default 2048
-    params.n_gpu_layers = n_gpu_layers;
-    params.n_threads = (n_threads > 0) ? n_threads : 4;  // Default 4
-    params.progress_callback = progress_callback;
-    params.embedding = false;  // Disable embedding mode for simple init
-    params.use_mmap = true;  // Sensible defaults
-    params.n_batch = 512;  // Set n_batch which will be used for n_ubatch in convert_init_params
-    
-    return llama_mobile_init(&params);
-}
+
 
 void llama_mobile_free(llama_mobile_context_t ctx) {
     llama_mobile_free_context_c((llama_mobile_context_handle_t) ctx);
@@ -147,32 +125,7 @@ int llama_mobile_completion(
     return status;
 }
 
-int llama_mobile_completion_simple(
-    llama_mobile_context_t ctx,
-    const char* prompt,
-    int32_t max_tokens,
-    double temperature,
-    bool (*token_callback)(const char* token),
-    llama_mobile_completion_result_t* result) {
-    
-    if (!ctx || !prompt || !result) {
-        return -1;
-    }
-    
-    llama_mobile_completion_params_t params = {0};
-    params.prompt = prompt;
-    params.max_tokens = (max_tokens > 0) ? max_tokens : 128;  // Default 128
-    params.temperature = (temperature >= 0.0) ? temperature : 0.8;  // Default 0.8
-    params.token_callback = token_callback;
-    
-    // Set sensible defaults for other sampling parameters
-    params.top_k = 40;
-    params.top_p = 0.95;
-    params.min_p = 0.05;
-    params.penalty_repeat = 1.1;
-    
-    return llama_mobile_completion(ctx, &params, result);
-}
+
 
 int llama_mobile_multimodal_completion(
     llama_mobile_context_t ctx,
@@ -272,17 +225,7 @@ int llama_mobile_init_multimodal(
         use_gpu);
 }
 
-int llama_mobile_init_multimodal_simple(
-    llama_mobile_context_t ctx,
-    const char* mmproj_path) {
-    
-    if (!ctx || !mmproj_path) {
-        return -1;
-    }
-    
-    // Use GPU acceleration by default for multimodal processing
-    return llama_mobile_init_multimodal(ctx, mmproj_path, true);
-}
+
 
 bool llama_mobile_is_multimodal_enabled(llama_mobile_context_t ctx) {
     return llama_mobile_is_multimodal_enabled_c((llama_mobile_context_handle_t) ctx);
@@ -296,36 +239,33 @@ int llama_mobile_generate_response(
     llama_mobile_context_t ctx,
     const char* user_message,
     int32_t max_tokens,
+    bool (*token_callback)(const char* token),
     llama_mobile_conversation_result_t* result) {
     
     if (!ctx || !user_message || !result) {
         return -1;
     }
     
-    llama_mobile_conversation_result_c_t ffi_result = llama_mobile_continue_conversation_c(
-        (llama_mobile_context_handle_t) ctx,
-        user_message,
-        max_tokens);
+    llama_mobile_conversation_result_c_t ffi_result;
+    
+    if (token_callback != nullptr) {
+        ffi_result = llama_mobile_continue_conversation_with_callback_c(
+            (llama_mobile_context_handle_t) ctx,
+            user_message,
+            max_tokens,
+            token_callback);
+    } else {
+        ffi_result = llama_mobile_continue_conversation_c(
+            (llama_mobile_context_handle_t) ctx,
+            user_message,
+            max_tokens);
+    }
     
     convert_conversation_result(&ffi_result, result);
     return 0;
 }
 
-int llama_mobile_generate_response_simple(
-    llama_mobile_context_t ctx,
-    const char* user_message,
-    int32_t max_tokens,
-    llama_mobile_conversation_result_t* result) {
-    
-    if (!ctx || !user_message || !result) {
-        return -1;
-    }
-    
-    // Use default max_tokens if not specified
-    int32_t tokens_to_generate = (max_tokens > 0) ? max_tokens : 128;
-    
-    return llama_mobile_generate_response(ctx, user_message, tokens_to_generate, result);
-}
+
 
 void llama_mobile_clear_conversation(llama_mobile_context_t ctx) {
     llama_mobile_clear_conversation_c((llama_mobile_context_handle_t) ctx);
@@ -364,6 +304,110 @@ void llama_mobile_free_conversation_result(llama_mobile_conversation_result_t* r
         ffi_result.text = result->text;
         llama_mobile_free_conversation_result_members_c(&ffi_result);
         result->text = nullptr;
+    }
+}
+
+// Helper function to convert API download params to FFI download params
+static llama_mobile_download_params_c_t convert_download_params(const llama_mobile_download_params_t* api_params) {
+    llama_mobile_download_params_c_t ffi_params = {0};
+    
+    if (api_params) {
+        ffi_params.repo_id = api_params->repo_id;
+        ffi_params.filename = api_params->filename;
+        ffi_params.destination_path = api_params->destination_path;
+        ffi_params.bearer_token = api_params->bearer_token;
+        ffi_params.offline = api_params->offline;
+        ffi_params.progress_callback = api_params->progress_callback;
+    }
+    
+    return ffi_params;
+}
+
+// Helper function to convert FFI download result to API download result
+static llama_mobile_download_result_t convert_download_result(llama_mobile_download_result_c_t ffi_result) {
+    llama_mobile_download_result_t api_result = {0};
+    api_result.success = ffi_result.success;
+    api_result.local_path = ffi_result.local_path;
+    api_result.error_message = ffi_result.error_message;
+    api_result.file_size = ffi_result.file_size;
+    return api_result;
+}
+
+// TTS (Text-to-Speech) Functions
+
+int llama_mobile_init_vocoder(llama_mobile_context_t ctx, const char* vocoder_model_path) {
+    return llama_mobile_init_vocoder_c(
+        (llama_mobile_context_handle_t) ctx,
+        vocoder_model_path);
+}
+
+bool llama_mobile_is_vocoder_enabled(llama_mobile_context_t ctx) {
+    return llama_mobile_is_vocoder_enabled_c((llama_mobile_context_handle_t) ctx);
+}
+
+int llama_mobile_get_tts_type(llama_mobile_context_t ctx) {
+    return llama_mobile_get_tts_type_c((llama_mobile_context_handle_t) ctx);
+}
+
+llama_mobile_token_array_t llama_mobile_get_audio_guide_tokens(llama_mobile_context_t ctx, const char* text_to_speak) {
+    llama_mobile_token_array_c_t ffi_result = llama_mobile_get_audio_guide_tokens_c(
+        (llama_mobile_context_handle_t) ctx,
+        text_to_speak);
+    return convert_token_array(ffi_result);
+}
+
+llama_mobile_float_array_t llama_mobile_decode_audio_tokens(llama_mobile_context_t ctx, const int32_t* tokens, int32_t count) {
+    llama_mobile_float_array_c_t ffi_result = llama_mobile_decode_audio_tokens_c(
+        (llama_mobile_context_handle_t) ctx,
+        tokens,
+        count);
+    return convert_float_array(ffi_result);
+}
+
+void llama_mobile_release_vocoder(llama_mobile_context_t ctx) {
+    llama_mobile_release_vocoder_c((llama_mobile_context_handle_t) ctx);
+}
+
+// Model Download Functions
+
+llama_mobile_download_result_t llama_mobile_download_model(const llama_mobile_download_params_t* params) {
+    if (!params) {
+        llama_mobile_download_result_t empty_result = {0};
+        return empty_result;
+    }
+    
+    llama_mobile_download_params_c_t ffi_params = convert_download_params(params);
+    llama_mobile_download_result_c_t ffi_result = llama_mobile_download_model_c(&ffi_params);
+    return convert_download_result(ffi_result);
+}
+
+llama_mobile_download_result_t llama_mobile_download_hf_file(
+    const char* repo_id,
+    const char* filename,
+    const char* destination_path,
+    const char* bearer_token,
+    bool offline,
+    llama_mobile_download_progress_callback progress_callback) {
+    
+    llama_mobile_download_result_c_t ffi_result = llama_mobile_download_hf_file_c(
+        repo_id,
+        filename,
+        destination_path,
+        bearer_token,
+        offline,
+        progress_callback);
+    
+    return convert_download_result(ffi_result);
+}
+
+void llama_mobile_free_download_result(llama_mobile_download_result_t* result) {
+    if (result) {
+        llama_mobile_download_result_c_t ffi_result = {0};
+        ffi_result.local_path = result->local_path;
+        ffi_result.error_message = result->error_message;
+        llama_mobile_free_download_result_c(&ffi_result);
+        result->local_path = nullptr;
+        result->error_message = nullptr;
     }
 }
 

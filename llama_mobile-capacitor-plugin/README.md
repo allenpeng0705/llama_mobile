@@ -7,6 +7,11 @@ Capacitor plugin for loading and running LLM models on mobile devices using `lla
 - Initialize LLM models on iOS and Android devices
 - Generate text completions with customizable parameters
 - Support for grammar-based generation (JSON, arithmetic, etc.)
+- Multimodal completion (text + images)
+- Tokenization and detokenization
+- Embedding generation
+- LoRA adapter support
+- Conversation management
 - Efficient resource management
 - Cross-platform compatibility
 
@@ -200,6 +205,183 @@ try {
 - `json` - JSON format
 - `jsonArr` - JSON array format
 - `list` - List format
+
+### Multimodal Completion
+
+Generate text completions with both text and image inputs:
+
+```typescript
+import { LlamaMobile, CompletionParams } from 'llama_mobile-capacitor-plugin';
+
+const completionParams: CompletionParams = {
+  prompt: 'Describe this image:',
+  maxTokens: 200,
+  temperature: 0.8
+};
+
+// Array of image paths (local file URIs)
+const mediaPaths = ['/path/to/image1.jpg', '/path/to/image2.jpg'];
+
+try {
+  const result = await LlamaMobile.multimodalCompletion(completionParams, mediaPaths);
+  console.log('Multimodal completion:', result.output);
+} catch (error) {
+  console.error('Multimodal generation failed:', error);
+}
+```
+
+### Tokenization and Detokenization
+
+Convert text to tokens and vice versa:
+
+```typescript
+import { LlamaMobile } from 'llama_mobile-capacitor-plugin';
+
+// Tokenize text
+const text = 'Hello, world!';
+try {
+  const tokenResult = await LlamaMobile.tokenize(text);
+  console.log('Tokens:', tokenResult.tokens);
+} catch (error) {
+  console.error('Tokenization failed:', error);
+}
+
+// Detokenize tokens
+const tokens = [1, 2, 3, 4, 5];
+try {
+  const detokenResult = await LlamaMobile.detokenize(tokens);
+  console.log('Text:', detokenResult.text);
+} catch (error) {
+  console.error('Detokenization failed:', error);
+}
+```
+
+### Embedding Generation
+
+Generate text embeddings for semantic analysis:
+
+```typescript
+import { LlamaMobile } from 'llama_mobile-capacitor-plugin';
+
+const text = 'Generate embeddings for this text';
+
+try {
+  const result = await LlamaMobile.generateEmbeddings(text);
+  console.log('Embeddings:', result.embeddings);
+  console.log('Embedding length:', result.embeddings.length);
+} catch (error) {
+  console.error('Embedding generation failed:', error);
+}
+```
+
+### LoRA Adapter Support
+
+Apply Low-Rank Adaptation (LoRA) adapters to fine-tune the model:
+
+```typescript
+import { LlamaMobile, LoraAdapter } from 'llama_mobile-capacitor-plugin';
+
+// Apply LoRA adapters
+const adapters: LoraAdapter[] = [
+  { path: '/path/to/lora1.bin', scale: 0.8 },
+  { path: '/path/to/lora2.bin', scale: 0.5 }
+];
+
+try {
+  const result = await LlamaMobile.applyLoraAdapters(adapters);
+  console.log('LoRA adapters applied:', result.success);
+} catch (error) {
+  console.error('Failed to apply LoRA adapters:', error);
+}
+
+// Remove LoRA adapters
+try {
+  await LlamaMobile.removeLoraAdapters();
+  console.log('LoRA adapters removed');
+} catch (error) {
+  console.error('Failed to remove LoRA adapters:', error);
+}
+```
+
+### Multimodal Initialization
+
+Initialize multimodal support for models that support image inputs:
+
+```typescript
+import { LlamaMobile } from 'llama_mobile-capacitor-plugin';
+
+// Initialize multimodal support
+const mmprojPath = '/path/to/mmproj-model.bin';
+const useGpu = true;
+
+try {
+  const result = await LlamaMobile.initMultimodal(mmprojPath, useGpu);
+  console.log('Multimodal initialized:', result.success);
+} catch (error) {
+  console.error('Failed to initialize multimodal:', error);
+}
+
+// Check if multimodal is enabled
+try {
+  const result = await LlamaMobile.isMultimodalEnabled();
+  console.log('Multimodal enabled:', result.enabled);
+} catch (error) {
+  console.error('Failed to check multimodal status:', error);
+}
+
+// Release multimodal resources
+try {
+  await LlamaMobile.releaseMultimodal();
+  console.log('Multimodal resources released');
+} catch (error) {
+  console.error('Failed to release multimodal resources:', error);
+}
+```
+
+### Conversation Management
+
+Manage conversations with context preservation:
+
+```typescript
+import { LlamaMobile } from 'llama_mobile-capacitor-plugin';
+
+// Generate a response in a conversation context
+const userMessage = 'What is the capital of France?';
+const maxTokens = 100;
+
+try {
+  const result = await LlamaMobile.generateResponse(userMessage, maxTokens);
+  console.log('Response:', result.text);
+  console.log('Tokens generated:', result.tokensGenerated);
+  console.log('Time to first token:', result.timeToFirstToken);
+  console.log('Total time:', result.totalTime);
+} catch (error) {
+  console.error('Failed to generate response:', error);
+}
+
+// Clear conversation history
+try {
+  await LlamaMobile.clearConversation();
+  console.log('Conversation cleared');
+} catch (error) {
+  console.error('Failed to clear conversation:', error);
+}
+```
+
+### Stop Completion
+
+Stop an ongoing generation:
+
+```typescript
+import { LlamaMobile } from 'llama_mobile-capacitor-plugin';
+
+try {
+  await LlamaMobile.stopCompletion();
+  console.log('Completion stopped');
+} catch (error) {
+  console.error('Failed to stop completion:', error);
+}
+```
 
 ### Release Resources
 

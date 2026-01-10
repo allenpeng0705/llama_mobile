@@ -56,9 +56,9 @@ void writeWavFile(const std::string& filename, const std::vector<float>& audio_d
 }
 
 int main(int argc, char **argv) {
-    // Local TTS models from lib/models
-    const std::string local_model_path = "../../lib/models/OuteTTS-0.2-500M-Q6_K.gguf";
-    const std::string local_vocoder_path = "../../lib/models/WavTokenizer-Large-75-F16.gguf";
+    // Local TTS models from top-level models directory
+    const std::string local_model_path = "../../models/OuteTTS-0.2-500M-Q6_K.gguf";
+    const std::string local_vocoder_path = "../../models/WavTokenizer-Large-75-F16.gguf";
     
     // Fallback download URLs if local models are not available
     const std::string default_model_url = "https://huggingface.co/OuteAI/OuteTTS-0.2-500M-GGUF/resolve/main/OuteTTS-0.2-500M-Q6_K.gguf";

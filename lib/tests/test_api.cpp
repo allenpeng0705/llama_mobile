@@ -68,11 +68,7 @@ int main(int argc, char* argv[]) {
     } else {
         // Determine models directory relative to executable location
         std::string executable_dir = get_executable_dir();
-        std::string models_dir = executable_dir + "/../../models";
-        std::cout << "Executable directory: " << executable_dir << std::endl;
-        std::cout << "Models directory: " << models_dir << std::endl;
-        std::cout << "Executable directory: " << executable_dir << std::endl;
-        std::cout << "Models directory: " << models_dir << std::endl;
+        std::string models_dir = executable_dir + "/../../../models";
         
         // List available models
         std::vector<std::string> models = list_models(models_dir);
@@ -115,12 +111,19 @@ int main(int argc, char* argv[]) {
     const char* prompt = "Hello, world!";
     llama_mobile_completion_result_t result;
     
-    int status = llama_mobile_completion_simple(
+    llama_mobile_completion_params_t completion_params = {0};
+    completion_params.prompt = prompt;
+    completion_params.max_tokens = 128;
+    completion_params.temperature = 0.8;
+    completion_params.token_callback = token_callback;
+    completion_params.top_k = 40;
+    completion_params.top_p = 0.95;
+    completion_params.min_p = 0.05;
+    completion_params.penalty_repeat = 1.1;
+    
+    int status = llama_mobile_completion(
         ctx,
-        prompt,
-        128,    // max_tokens
-        0.8,    // temperature
-        token_callback,
+        &completion_params,
         &result
     );
     
@@ -177,10 +180,11 @@ int main(int argc, char* argv[]) {
     llama_mobile_conversation_result_t conv_result;
     
     TestResult conversation_result = {"Conversation API", false, ""};
-    status = llama_mobile_generate_response_simple(
+    status = llama_mobile_generate_response(
         ctx,
         user_message,
         128,    // max_tokens
+        nullptr, // token_callback
         &conv_result
     );
     
@@ -211,10 +215,11 @@ int main(int argc, char* argv[]) {
     llama_mobile_conversation_result_t new_conv_result;
     
     TestResult conv_after_clear_result = {"Conversation API After Clear", false, ""};
-    status = llama_mobile_generate_response_simple(
+    status = llama_mobile_generate_response(
         ctx,
         new_message,
         128,    // max_tokens
+        nullptr, // token_callback
         &new_conv_result
     );
     
@@ -326,6 +331,50 @@ int main(int argc, char* argv[]) {
     
     int passed_count = 0;
     int failed_count = 0;
+    
+    // Test 8: TTS API
+    std::cout << "\n--- Testing TTS API ---\n";
+    TestResult tts_result = {"TTS API", true, "All TTS functions tested successfully"};
+    
+    // Note: These are basic tests that check if the API functions work without needing actual TTS models
+    // Initialize vocoder (will fail if no model path provided, but we check the error handling)
+    int vocoder_status = llama_mobile_init_vocoder(ctx, nullptr);
+    bool init_vocoder_result = (vocoder_status != 0); // Expected to fail with null path
+    std::cout << "  llama_mobile_init_vocoder(nullptr): " << (init_vocoder_result ? "PASS (expected failure)" : "FAIL") << std::endl;
+    
+    // Check if vocoder is enabled (should be false initially)
+    bool is_vocoder_enabled = llama_mobile_is_vocoder_enabled(ctx);
+    bool is_enabled_result = !is_vocoder_enabled; // Expected to be false initially
+    std::cout << "  llama_mobile_is_vocoder_enabled(): " << (is_enabled_result ? "PASS (false)" : "FAIL") << std::endl;
+    
+    // Get TTS type (can be any value depending on model support)
+    int tts_type = llama_mobile_get_tts_type(ctx);
+    bool tts_type_result = true; // Any value is acceptable, we're just testing the function works
+    std::cout << "  llama_mobile_get_tts_type(): " << (tts_type_result ? "PASS (value: " + std::to_string(tts_type) + ")" : "FAIL") << std::endl;
+    
+    // Try to get audio guide tokens (should handle null text gracefully)
+    llama_mobile_token_array_t guide_tokens = llama_mobile_get_audio_guide_tokens(ctx, "");
+    bool guide_tokens_result = (guide_tokens.count == 0 && guide_tokens.tokens == nullptr); // Expected to be empty
+    std::cout << "  llama_mobile_get_audio_guide_tokens(empty): " << (guide_tokens_result ? "PASS (empty)" : "FAIL") << std::endl;
+    llama_mobile_free_token_array(guide_tokens);
+    
+    // Try to decode audio tokens (should handle null tokens gracefully)
+    llama_mobile_float_array_t audio_data = llama_mobile_decode_audio_tokens(ctx, nullptr, 0);
+    bool decode_tokens_result = (audio_data.count == 0 && audio_data.values == nullptr); // Expected to be empty
+    std::cout << "  llama_mobile_decode_audio_tokens(null): " << (decode_tokens_result ? "PASS (empty)" : "FAIL") << std::endl;
+    llama_mobile_free_float_array(audio_data);
+    
+    // Release vocoder (should work even if not initialized)
+    llama_mobile_release_vocoder(ctx);
+    std::cout << "  llama_mobile_release_vocoder(): PASS (handles uninitialized)" << std::endl;
+    
+    // Check overall TTS test result
+    if (!init_vocoder_result || !is_enabled_result || !tts_type_result || !guide_tokens_result || !decode_tokens_result) {
+        tts_result.passed = false;
+        tts_result.details = "Some TTS API tests failed";
+    }
+    
+    test_results.push_back(tts_result);
     
     // Summary table
     std::cout << "\nSUMMARY:\n";

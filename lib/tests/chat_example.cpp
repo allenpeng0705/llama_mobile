@@ -122,13 +122,17 @@ int main(int argc, char* argv[]) {
     std::cout << "\nLoading model: " << fs::path(model_path).filename() << std::endl;
     
     // Initialize Llama Mobile
-    llama_mobile_context_t ctx = llama_mobile_init_simple(
-        model_path.c_str(),
-        2048,    // n_ctx
-        20,      // n_gpu_layers (enable GPU)
-        4,       // n_threads
-        nullptr  // progress_callback
-    );
+    llama_mobile_init_params_t params = {0};
+    params.model_path = model_path.c_str();
+    params.n_ctx = 2048;
+    params.n_gpu_layers = 20;
+    params.n_threads = 4;
+    params.progress_callback = nullptr;
+    params.embedding = false;
+    params.use_mmap = true;
+    params.n_batch = 512;
+    
+    llama_mobile_context_t ctx = llama_mobile_init(&params);
     
     if (ctx == nullptr) {
         std::cerr << "Failed to initialize Llama Mobile" << std::endl;

@@ -112,14 +112,10 @@ if not defined n_cpu set "n_cpu=4"
 REM Create necessary directories for all SDKs
 call :script_progress "Creating necessary directories..."
 
-set "DIRS=^"llama_mobile-android\src\main\jniLibs^" ^
-^"llama_mobile-android\src\main\cpp^" ^
-^"llama_mobile-android\src\main\java\com\llamamobile^" ^
-^"llama_mobile-android\src\main\assets\grammars^" ^
-^"llama_mobile-Android-SDK\src\main\jniLibs^" ^
-^"llama_mobile-Android-SDK\src\main\cpp^" ^
-^"llama_mobile-Android-SDK\src\main\java\com\llamamobile^" ^
-^"llama_mobile-Android-SDK\src\main\assets\grammars^" ^
+set "DIRS=^"llama_mobile-android-SDK\src\main\jniLibs^" ^
+^"llama_mobile-android-SDK\src\main\cpp^" ^
+^"llama_mobile-android-SDK\src\main\java\com\llamamobile^" ^
+^"llama_mobile-android-SDK\src\main\assets\grammars^" ^
 ^"llama_mobile-android-java-SDK\src\main\jniLibs^" ^
 ^"llama_mobile-android-java-SDK\src\main\cpp^" ^
 ^"llama_mobile-android-java-SDK\src\main\java\com\llamamobile^" ^
@@ -141,9 +137,8 @@ call :script_progress "✓ All directories created successfully"
 REM Copy grammar files to assets for all SDKs
 call :script_progress "Copying grammar files to assets..."
 set "GRAMMAR_SRC_DIR=lib\grammars"
-set "GRAMMAR_DEST_DIRS=^"llama_mobile-android\src\main\assets\grammars^" ^
+set "GRAMMAR_DEST_DIRS=^"llama_mobile-android-SDK\src\main\assets\grammars^" ^
 ^"llama_mobile-android-java-SDK\src\main\assets\grammars^" ^
-^"llama_mobile-android-SDK\src\main\assets\grammars^" ^
 ^"llama_mobile-react-native-SDK\android\src\main\assets\grammars^""
 
 if exist "!GRAMMAR_SRC_DIR!" (
@@ -243,8 +238,8 @@ for /l %%i in (0,1,!abi_count!-1) do (
     REM Copy the library to all SDKs
     call :script_progress "Copying !ABI! library..."
     set "SOURCE_LIB=!BUILD_DIR!\output\lib\libllama_mobile_core.so"
-    set "DEST_DIRS=^"llama_mobile-android\src\main\jniLibs\!ABI!^" ^
-^"llama_mobile-Android-SDK\src\main\jniLibs\!ABI!^" ^
+    set "DEST_DIRS=^"llama_mobile-android-SDK\src\main\jniLibs\!ABI!^" ^
+^"llama_mobile-android-java-SDK\src\main\jniLibs\!ABI!^" ^
 ^"llama_mobile-react-native-SDK\android\src\main\jniLibs\!ABI!^""
     
     if not exist "!SOURCE_LIB!" (

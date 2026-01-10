@@ -50,9 +50,58 @@ export interface CompletionParams {
   grammar?: string;
 }
 
+export interface CompletionResult {
+  output: string;
+  tokensGenerated: number;
+  tokensEvaluated: number;
+  truncated: boolean;
+  stoppedEos: boolean;
+  stoppedWord: boolean;
+  stoppedLimit: boolean;
+}
+
+export interface LoraAdapter {
+  path: string;
+  scale: number;
+}
+
+export interface ConversationResult {
+  text: string;
+  timeToFirstToken: number;
+  totalTime: number;
+  tokensGenerated: number;
+}
+
 export interface LlamaMobilePlugin {
+  // Model management
   initialize(params: InitParams): Promise<{ success: boolean }>;
-  generate(params: CompletionParams): Promise<{ output: string }>;
-  getGrammarContent(options: { grammarName: GrammarName }): Promise<{ content: string }>;
   release(): Promise<void>;
+
+  // Text generation
+  generate(params: CompletionParams): Promise<CompletionResult>;
+  multimodalCompletion(params: CompletionParams, mediaPaths: string[]): Promise<CompletionResult>;
+  stopCompletion(): Promise<void>;
+
+  // Tokenization
+  tokenize(text: string): Promise<{ tokens: number[] }>;
+  detokenize(tokens: number[]): Promise<{ text: string }>;
+
+  // Embeddings
+  generateEmbeddings(text: string): Promise<{ embeddings: number[] }>;
+
+  // LoRA adapters
+  applyLoraAdapters(adapters: LoraAdapter[]): Promise<{ success: boolean }>;
+  removeLoraAdapters(): Promise<void>;
+
+  // Multimodal support
+  initMultimodal(mmprojPath: string, useGpu: boolean): Promise<{ success: boolean }>;
+  isMultimodalEnabled(): Promise<{ enabled: boolean }>;
+  releaseMultimodal(): Promise<void>;
+
+  // Conversation management
+  generateResponse(userMessage: string, maxTokens: number): Promise<ConversationResult>;
+  clearConversation(): Promise<void>;
+
+  // Grammar
+  getGrammarContent(options: { grammarName: GrammarName }): Promise<{ content: string }>;
 }

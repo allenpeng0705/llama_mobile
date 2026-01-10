@@ -1,10 +1,10 @@
 # llama_mobile-android-java-SDK
 
-A Java-based Android SDK that wraps the `llama_mobile-android` library, providing a convenient and Java-friendly API for interacting with llama models.
+A Java-based Android SDK that wraps the `llama_mobile-android-SDK` library, providing a convenient and Java-friendly API for interacting with llama models.
 
 ## Overview
 
-The `llama_mobile-android-java-SDK` provides a streamlined, higher-level Java API on top of the raw `llama_mobile-android` library. It handles threading, error management, and provides an intuitive interface for Java Android developers.
+The `llama_mobile-android-java-SDK` provides a streamlined, higher-level Java API on top of the raw `llama_mobile-android-SDK` library. It handles threading, error management, and provides an intuitive interface for Java Android developers.
 
 ## Features
 
@@ -46,7 +46,7 @@ cd llama_mobile
 include ':llama_mobile'
 include ':llama_mobile_java_sdk'
 
-project(':llama_mobile').projectDir = new File('../path/to/llama_mobile/llama_mobile-android')
+project(':llama_mobile').projectDir = new File('../path/to/llama_mobile/llama_mobile-android-SDK')
 project(':llama_mobile_java_sdk').projectDir = new File('../path/to/llama_mobile/llama_mobile-android-java-SDK')
 
 // app/build.gradle
@@ -165,6 +165,137 @@ LlamaMobile.CompletionResult jsonResult = LlamaMobile.generateCompletion(context
 // Will generate valid JSON like: {"name": "John", "age": 30}
 ```
 
+### Model Download Support
+
+The Java SDK includes built-in functionality to download models from Hugging Face repositories directly to your application's storage:
+
+```java
+import com.llamamobile.LlamaMobile;
+import com.llamamobile.LlamaMobile.DownloadParams;
+import com.llamamobile.LlamaMobile.DownloadResult;
+import com.llamamobile.LlamaMobile.ProgressCallback;
+
+import java.io.File;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+// Create an executor for background tasks
+ExecutorService executor = Executors.newSingleThreadExecutor();
+
+// Define the local path for the downloaded model
+File filesDir = context.getFilesDir();
+String modelPath = new File(filesDir, "llama-2-7b-chat.Q4_K_M.gguf").getAbsolutePath();
+
+// Create download parameters
+DownloadParams downloadParams = new DownloadParams(
+    "meta-llama/Llama-2-7B-Chat-GGUF", // Hugging Face repository ID
+    modelPath
+);
+
+executor.execute(new Runnable() {
+    @Override
+    public void run() {
+        // Download the model with progress tracking
+        DownloadResult result = LlamaMobile.downloadModel(downloadParams, new ProgressCallback() {
+            @Override
+            public void onProgress(float progress) {
+                final int progressPercentage = Math.round(progress * 100);
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        progressBar.setProgress(progressPercentage);
+                        progressText.setText("Downloading: " + progressPercentage + "%");
+                    }
+                });
+            }
+        });
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (result != null && result.isSuccess()) {
+                    progressText.setText("Download successful!");
+                    
+                    // Now initialize the model with the downloaded file
+                    initModel(result.getLocalPath());
+                } else {
+                    String errorMsg = result != null ? result.getErrorMessage() : "Unknown error";
+                    progressText.setText("Download failed: " + errorMsg);
+                }
+            }
+        });
+    }
+});
+
+private void initModel(String modelPath) {
+    executor.execute(new Runnable() {
+        @Override
+        public void run() {
+            // Initialize the model
+            LlamaMobile.InitParams initParams = new LlamaMobile.InitParams(
+                modelPath,
+                2048,
+                null,
+                null,
+                512,
+                512,
+                4,
+                4,
+                true,
+                false,
+                false,
+                0,
+                0,
+                false,
+                null,
+                null,
+                LlamaMobile.CacheType.MEMORY
+            );
+
+            long contextHandle = LlamaMobile.initContext(initParams);
+            if (contextHandle != 0) {
+                // Model is ready to use
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        statusText.setText("Model initialized successfully!");
+                    }
+                });
+            }
+        }
+    });
+}
+```
+
+### Download with Authentication
+
+For private Hugging Face repositories, you can provide a bearer token for authentication:
+
+```java
+DownloadParams protectedParams = new DownloadParams(
+    "your-username/private-model-repo", // Private Hugging Face repository ID
+    modelPath,
+    "your-hugging-face-token" // Bearer token for authentication
+);
+
+DownloadResult protectedResult = LlamaMobile.download(protectedParams);
+```
+
+### Download Specific File
+
+You can also download specific files from Hugging Face repositories:
+
+```java
+DownloadResult specificFileResult = LlamaMobile.downloadHfFile(
+    "meta-llama/Llama-2-7B-Chat-GGUF", // Repository ID
+    "llama-2-7b-chat.Q2_K.gguf", // Specific filename
+    destinationPath,
+    null, // Bearer token (optional)
+    false, // Offline mode
+    null // Progress callback (optional)
+);
+```
+
 ## API Reference
 
 ### LlamaMobile.InitParams
@@ -207,13 +338,34 @@ Callback interface for streaming token generation.
 |--------|-------------|
 | `onToken(String token)` | Called for each generated token. Return false to stop generation. |
 
-### LlamaMobile.CompletionResult
+### LlamaMobile.ProgressCallback
 
-Result interface for text generation.
+Callback interface for download progress updates.
 
 | Method | Description |
 |--------|-------------|
-| `getText()` | Gets the generated text |
+| `onProgress(float progress)` | Called with download progress (0.0 to 1.0). |
+
+### LlamaMobile.DownloadParams
+
+Parameters for downloading models or files from Hugging Face.
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `url` | String | Hugging Face repository ID (e.g., "meta-llama/Llama-2-7B-Chat-GGUF") | - |
+| `localPath` | String | Local path to save the downloaded file | - |
+| `password` | String | Bearer token for authentication (optional) | null |
+
+### LlamaMobile.DownloadResult
+
+Result of a download operation.
+
+| Method | Description |
+|--------|-------------|
+| `isSuccess()` | Whether the download was successful |
+| `getLocalPath()` | Local path where the file was saved |
+| `getErrorMessage()` | Error message if download failed |
+| `getFileSize()` | Size of the downloaded file in bytes |
 
 ### LlamaMobile Methods
 
@@ -223,16 +375,24 @@ Result interface for text generation.
 | `generateCompletion(long contextHandle, CompletionParams params)` | Generates text completion |
 | `releaseContext(long contextHandle)` | Releases the llama context |
 | `grammarContent(Context context, GrammarName name)` | Gets grammar content for constrained generation |
+| `downloadModel(DownloadParams params, ProgressCallback progressCallback)` | Downloads a model from Hugging Face repository |
+| `downloadHfFile(String repoId, String filename, String destinationPath, String bearerToken, boolean offline, ProgressCallback progressCallback)` | Downloads a specific file from Hugging Face repository |
+| `download(DownloadParams params)` | Convenience method for downloading models |
 
-## Testing
+## Tests
+
+The llama_mobile Android Java SDK includes a comprehensive test suite consisting of both unit tests and instrumented tests to ensure API correctness and reliability.
 
 ### Test Structure
 
-The Android Java SDK includes two types of tests:
+The SDK uses two types of tests:
 
 #### Unit Tests
 
-Unit tests verify core functionality in isolation:
+- Located in `src/test/java/com/llamamobile/LlamaMobileUnitTests.java`
+- Run on the local JVM without requiring an Android device or emulator
+- Test core functionality, parameter validation, and error handling
+- Focus on pure Java logic and API structure
 
 ```
 src/test/
@@ -244,7 +404,10 @@ src/test/
 
 #### Instrumented Tests
 
-Instrumented tests verify functionality on actual Android devices or emulators:
+- Located in `src/androidTest/java/com/llamamobile/LlamaMobileInstrumentedTests.java`
+- Run on physical Android devices or emulators
+- Test real-world behavior, device-specific functionality, and integration with Android framework
+- Verify API behavior in actual runtime environment
 
 ```
 src/androidTest/
@@ -281,25 +444,30 @@ cp -r ../lib/grammars/* src/androidTest/resources/grammars/
 
 ### Running Tests
 
-#### Running Unit Tests
+#### Using Android Studio
 
-Use Gradle to run unit tests:
+1. Open the `llama_mobile-android-java-SDK` directory in Android Studio
+2. **Unit Tests**: 
+   - Navigate to `LlamaMobileUnitTests.java` in the Project view
+   - Right-click and select "Run 'LlamaMobileUnitTests'"
+
+3. **Instrumented Tests**: 
+   - Connect a physical device or start an emulator
+   - Navigate to `LlamaMobileInstrumentedTests.java` in the Project view
+   - Right-click and select "Run 'LlamaMobileInstrumentedTests'"
+
+#### Using Command Line
 
 ```bash
+# Navigate to the SDK directory
+cd llama_mobile-android-java-SDK
+
+# Run unit tests
 ./gradlew test
-```
 
-#### Running Instrumented Tests
-
-Use Gradle to run instrumented tests on connected devices/emulators:
-
-```bash
+# Run instrumented tests (requires connected device/emulator)
 ./gradlew connectedAndroidTest
-```
 
-#### Running Specific Tests
-
-```bash
 # Run specific unit tests
 ./gradlew test --tests "com.llamamobile.LlamaMobileUnitTests"
 
@@ -309,19 +477,28 @@ Use Gradle to run instrumented tests on connected devices/emulators:
 
 ### Test Coverage
 
-The Android Java SDK tests cover:
+The test suite covers all major SDK APIs:
 
-- SDK initialization and model loading
-- Text generation and completion
-- Token streaming functionality
-- Error handling
-- Grammar-constrained generation
-- Memory management
+- **Initialization**: Context creation, parameter validation, error handling
+- **Completion Generation**: Text generation, streaming, parameter combinations
+- **Conversation**: Chat API, conversation history, streaming responses
+- **Tokenization**: Text-to-tokens and tokens-to-text conversion
+- **Embeddings**: Generating and validating embeddings
+- **Multimodal**: Vision/audio input processing
+- **TTS**: Text-to-speech functionality
+- **LoRA Adapters**: Loading and managing adapters
+- **Download**: Model downloading with progress tracking
+- **Error Handling**: Graceful handling of invalid inputs and failures
+- **Grammar Constraints**: Constrained text generation
+- **Memory Management**: Resource cleanup and context handling
 
-### Example Test Class
+### Adding New Tests
+
+#### Unit Tests
+
+Add new unit tests to `src/test/java/com/llamamobile/LlamaMobileUnitTests.java`:
 
 ```java
-// src/test/java/com/llamamobile/LlamaMobileUnitTests.java
 package com.llamamobile;
 
 import org.junit.Test;
@@ -330,34 +507,40 @@ import org.junit.Assert;
 public class LlamaMobileUnitTests {
     
     @Test
-    public void testInitParamsCreation() {
-        LlamaMobile.InitParams params = new LlamaMobile.InitParams(
-            "/path/to/model.gguf",
-            2048
-        );
-        
-        Assert.assertNotNull(params);
-        Assert.assertEquals("/path/to/model.gguf", params.getModelPath());
-        Assert.assertEquals(2048, params.getNCtx());
-        Assert.assertEquals(0, params.getNGpuLayers());
-        Assert.assertEquals(4, params.getNThreads());
-    }
-    
-    @Test
-    public void testCompletionParamsCreation() {
-        LlamaMobile.CompletionParams params = new LlamaMobile.CompletionParams(
-            "Hello, world!",
-            0.7f,
-            50
-        );
-        
-        Assert.assertNotNull(params);
-        Assert.assertEquals("Hello, world!", params.getPrompt());
-        Assert.assertEquals(0.7f, params.getTemperature(), 0.01f);
-        Assert.assertEquals(50, params.getMaxTokens());
+    public void testMyNewFeature() {
+        // Test implementation
+        LlamaMobile.MyNewClass instance = new LlamaMobile.MyNewClass();
+        Assert.assertEquals(42, instance.getAnswer());
     }
 }
 ```
+
+#### Instrumented Tests
+
+Add new instrumented tests to `src/androidTest/java/com/llamamobile/LlamaMobileInstrumentedTests.java`:
+
+```java
+package com.llamamobile;
+
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.Assert;
+
+@RunWith(AndroidJUnit4.class)
+public class LlamaMobileInstrumentedTests {
+    
+    @Test
+    public void testMyNewFeatureOnDevice() {
+        android.content.Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        Assert.assertNotNull(appContext);
+        
+        // Test implementation with device context
+        LlamaMobile.MyNewClass instance = new LlamaMobile.MyNewClass(appContext);
+        Assert.assertTrue(instance.isDeviceCompatible());
+    }
+}```
 
 ## Example App
 

@@ -6,7 +6,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 show_help() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
-    echo "Builds the llama_mobile iOS framework and copies it to the Swift SDK."
+    echo "Builds the llama_mobile iOS framework as a standalone SDK."
     echo ""
     echo "Options:"
     echo "  -h, --help         Show this help message and exit"
@@ -28,69 +28,9 @@ if ! command -v cmake &> /dev/null; then
   exit 1
 fi
 
-# Function to copy framework to SDKs
-function copy_to_sdk() {
-    echo "=== Updating llama_mobile iOS SDKs with latest framework ==="
-
-    # Check if necessary directories exist
-    if [ ! -d "$ROOT_DIR/llama_mobile-ios" ]; then
-        echo "✗ Error: llama_mobile-ios directory not found!"
-        exit 1
-    fi
-
-    if [ ! -d "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework" ]; then
-        echo "✗ Error: llama_mobile.xcframework not found in llama_mobile-ios directory!"
-        echo "Please build the iOS framework first using: $0"
-        exit 1
-    fi
-
-    # Define SDK destinations
-    SDK_DESTINATIONS=(
-        "$ROOT_DIR/llama_mobile-ios-SDK/Frameworks"
-        "$ROOT_DIR/llama_mobile-react-native-SDK/ios/Frameworks"
-    )
-
-    for DEST_DIR in "${SDK_DESTINATIONS[@]}"; do
-        # Create Frameworks directory if it doesn't exist
-        echo -n "Creating Frameworks directory in $(basename $(dirname "$DEST_DIR"))... "
-        if mkdir -p "$DEST_DIR"; then
-            echo "✓"
-        else
-            echo "✗"
-            echo "Failed to create directory: $DEST_DIR"
-            exit 1
-        fi
-
-        # Remove old framework if it exists
-        if [ -d "$DEST_DIR/llama_mobile.xcframework" ]; then
-            echo -n "Removing old framework from $(basename $(dirname "$DEST_DIR"))... "
-            if rm -rf "$DEST_DIR/llama_mobile.xcframework"; then
-                echo "✓"
-            else
-                echo "✗"
-                echo "Failed to remove old framework"
-                exit 1
-            fi
-        fi
-
-        # Copy latest framework to SDK
-        echo -n "Copying latest framework to $(basename $(dirname "$DEST_DIR"))... "
-        if cp -R "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework" "$DEST_DIR/"; then
-            echo "✓"
-        else
-            echo "✗"
-            echo "Failed to copy framework to $DEST_DIR"
-            exit 1
-        fi
-    done
-
-    echo "✓ Framework update completed successfully!"
-    echo "The latest llama_mobile.xcframework has been copied to all iOS SDKs."
-}
-
 function cp_headers() {
   # Create main directories
-  HEADER_DIR="$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/$1/llama_mobile.framework/Headers"
+  HEADER_DIR="$ROOT_DIR/llama_mobile-ios-SDK/llama_mobile.xcframework/$1/llama_mobile.framework/Headers"
   
   if ! mkdir -p "$HEADER_DIR"; then
     echo "✗ Failed to create header directory: $HEADER_DIR"
@@ -153,7 +93,7 @@ function build_framework() {
   # Configure CMake
   echo -n "Configuring CMake for $4... "
   
-  if ! cmake "$ROOT_DIR/llama_mobile-ios" \
+  if ! cmake "$ROOT_DIR/llama_mobile-ios-SDK" \
     -GXcode \
     -DCMAKE_SYSTEM_NAME=$1 \
     -DCMAKE_OSX_ARCHITECTURES="$2" \
@@ -179,7 +119,7 @@ function build_framework() {
   echo "✓"
 
   # Setup framework directory
-  DEST_DIR="$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/$4"
+  DEST_DIR="$ROOT_DIR/llama_mobile-ios-SDK/llama_mobile.xcframework/$4"
   FRAMEWORK_SRC="Release-$3/llama_mobile.framework"
   FRAMEWORK_DEST="$DEST_DIR/llama_mobile.framework"
 
@@ -363,7 +303,7 @@ t0=$(date +%s)
 
 # Build the framework
 # Clean existing xcframework to ensure we start fresh
-rm -rf "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework"
+rm -rf "$ROOT_DIR/llama_mobile-ios-SDK/llama_mobile.xcframework"
 
 # Build iOS simulator framework - build each architecture separately then combine
 # Build arm64 simulator
@@ -377,9 +317,9 @@ mkdir -p "$ROOT_DIR/build-ios-simulator-x86_64"
 build_framework "iOS" "x86_64" "iphonesimulator" "ios-x86_64-simulator" "$ROOT_DIR/build-ios-simulator-x86_64"
 
 # Combine the two simulator architectures into one
-SIMULATOR_ARM64_FRAMEWORK="$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/ios-arm64-simulator/llama_mobile.framework"
-SIMULATOR_X86_64_FRAMEWORK="$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/ios-x86_64-simulator/llama_mobile.framework"
-SIMULATOR_COMBINED_DIR="$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/ios-arm64_x86_64-simulator"
+SIMULATOR_ARM64_FRAMEWORK="$ROOT_DIR/llama_mobile-ios-SDK/llama_mobile.xcframework/ios-arm64-simulator/llama_mobile.framework"
+SIMULATOR_X86_64_FRAMEWORK="$ROOT_DIR/llama_mobile-ios-SDK/llama_mobile.xcframework/ios-x86_64-simulator/llama_mobile.framework"
+SIMULATOR_COMBINED_DIR="$ROOT_DIR/llama_mobile-ios-SDK/llama_mobile.xcframework/ios-arm64_x86_64-simulator"
 SIMULATOR_COMBINED_FRAMEWORK="$SIMULATOR_COMBINED_DIR/llama_mobile.framework"
 
 # Create combined directory
@@ -396,8 +336,8 @@ rm -rf "$ROOT_DIR/build-ios-simulator-arm64"
 rm -rf "$ROOT_DIR/build-ios-simulator-x86_64"
 
 # Remove individual simulator framework directories
-rm -rf "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/ios-arm64-simulator"
-rm -rf "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework/ios-x86_64-simulator"
+rm -rf "$ROOT_DIR/llama_mobile-ios-SDK/llama_mobile.xcframework/ios-arm64-simulator"
+rm -rf "$ROOT_DIR/llama_mobile-ios-SDK/llama_mobile.xcframework/ios-x86_64-simulator"
 
 # Build iOS device framework
 rm -rf "$ROOT_DIR/build-ios-device"
@@ -415,19 +355,19 @@ rm -rf "$ROOT_DIR/build-ios-device"
 # rm -rf build-tvos
 
 # Create XCFramework using xcodebuild
-XCFRAMEWORK_DIR="$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework"
+XCFRAMEWORK_DIR="$ROOT_DIR/llama_mobile-ios-SDK/llama_mobile.xcframework"
 SIMULATOR_FRAMEWORK="$XCFRAMEWORK_DIR/ios-arm64_x86_64-simulator/llama_mobile.framework"
 DEVICE_FRAMEWORK="$XCFRAMEWORK_DIR/ios-arm64/llama_mobile.framework"
 
 # Fix Info.plist encoding issues
 # Convert all Info.plist files in the xcframework to XML format (UTF-8 compatible)
 echo -n "Fixing Info.plist encoding... "
-find "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework" -name "*.plist" -exec plutil -convert xml1 {} \;
+find "$ROOT_DIR/llama_mobile-ios-SDK/llama_mobile.xcframework" -name "*.plist" -exec plutil -convert xml1 {} \;
 echo "✓"
 
 # Remove UIRequiredDeviceCapabilities from simulator Info.plist files to fix build issues
 echo -n "Fixing simulator UIRequiredDeviceCapabilities... "
-SIMULATOR_INFO_PLISTS=$(find "$ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework" -path "*simulator*" -name "Info.plist")
+SIMULATOR_INFO_PLISTS=$(find "$ROOT_DIR/llama_mobile-ios-SDK/llama_mobile.xcframework" -path "*simulator*" -name "Info.plist")
 for plist in $SIMULATOR_INFO_PLISTS; do
   /usr/libexec/PlistBuddy -c "Delete :UIRequiredDeviceCapabilities" "$plist" 2>/dev/null || true
 done
@@ -436,7 +376,7 @@ echo "✓"
 # Use xcodebuild to create XCFramework
 # First, clean up the existing XCFramework structure but keep the frameworks
 echo -n "Recreating XCFramework with proper Info.plist... "
-TEMP_XCFRAMEWORK="$ROOT_DIR/llama_mobile-ios/llama_mobile_temp.xcframework"
+TEMP_XCFRAMEWORK="$ROOT_DIR/llama_mobile-ios-SDK/llama_mobile_temp.xcframework"
 
 xcodebuild -create-xcframework \
   -framework "$SIMULATOR_FRAMEWORK" \
@@ -453,11 +393,14 @@ else
   echo "Warning: Failed to recreate XCFramework with xcodebuild, keeping manually created structure"
 fi
 
-# Copy the framework to SDK
-copy_to_sdk
+
 
 t1=$(date +%s)
 echo "Complete!"
 echo "Total time: $((t1 - t0)) seconds"
-echo "xcframework is available at: $ROOT_DIR/llama_mobile-ios/llama_mobile.xcframework"
-echo "The project is configured to use this xcframework directly via absolute path reference."
+echo "xcframework is available at: $ROOT_DIR/llama_mobile-ios-SDK/llama_mobile.xcframework"
+echo ""
+echo "=== LlamaMobile iOS SDK is ready to use! ==="
+echo "- Add as Swift Package: Drag llama_mobile-ios-SDK directory to your Xcode project"
+echo "- Or use Swift Package Manager: Open Package.swift in Xcode"
+echo "- Or manually copy llama_mobile.xcframework to your project"
