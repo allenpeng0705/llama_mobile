@@ -49,3 +49,6 @@ build-output.txt
 llama_mobile-Android/src/main/jniLibs/arm64-v8a/libllama_mobile.so
 /build-ios-simulator-x86_64
 /llama_mobile-react-native-SDK/node_modules
+/llama_mobile-react-native-SDK/android/build
+/examples/reactnativeSDKExample/android/.gradle
+/llama_mobile-react-native-SDK/android/.gradle
