@@ -1,4 +1,60 @@
 #!/bin/bash -e
+
+# ============================================================================
+# FLUTTER BUILD SCRIPT
+# This script uses variables from config.env and provides auto-detection
+# ============================================================================
+
+# Load centralized configuration from config.env
+CONFIG_FILE="$(dirname "$0")/config.env"
+if [ -f "$CONFIG_FILE" ]; then
+    # Extract all relevant variables from config.env, excluding comments
+    # Use sed to remove comments after variable assignments
+    export $(grep -E '^(FLUTTER_HOME|FLUTTER_BUILD_TYPE|CMAKE_PATH|CMAKE_JOBS|IOS_BUILD_TYPE|ANDROID_BUILD_TYPE|NO_CLEAN|KEEP_BUILD|VERBOSE)=' "$CONFIG_FILE" | sed 's/\s*#.*$//' | xargs)
+fi
+
+# Local variables with defaults from centralized config
+FLUTTER_HOME=${FLUTTER_HOME:-""}                    # Path to Flutter SDK
+FLUTTER_BUILD_TYPE=${FLUTTER_BUILD_TYPE:-"release"} # release or debug
+
+# Build behavior flags with defaults
+NO_CLEAN=${NO_CLEAN:-false}                # Skip cleaning build directories
+KEEP_BUILD=${KEEP_BUILD:-false}            # Keep intermediate build files
+VERBOSE=${VERBOSE:-false}                  # Show verbose output
+
+# Function to update config.env with detected values
+update_config_env() {
+    local var_name=$1
+    local var_value=$2
+    if [ -f "$CONFIG_FILE" ]; then
+        if grep -q "^${var_name}=" "$CONFIG_FILE"; then
+            # Update existing variable
+            sed -i '' "s|^${var_name}=.*|${var_name}=\"${var_value}\"|" "$CONFIG_FILE"
+        else
+            # Add new variable
+            echo "${var_name}=\"${var_value}\"" >> "$CONFIG_FILE"
+        fi
+    fi
+}
+
+# Update config.env with reasonable defaults if they're not set
+DEFAULT_FLUTTER_BUILD_TYPE="release"
+if [ -z "$FLUTTER_BUILD_TYPE" ]; then
+    update_config_env "FLUTTER_BUILD_TYPE" "$DEFAULT_FLUTTER_BUILD_TYPE"
+fi
+
+if [ -z "$NO_CLEAN" ]; then
+    update_config_env "NO_CLEAN" "$NO_CLEAN"
+fi
+
+if [ -z "$KEEP_BUILD" ]; then
+    update_config_env "KEEP_BUILD" "$KEEP_BUILD"
+fi
+
+if [ -z "$VERBOSE" ]; then
+    update_config_env "VERBOSE" "$VERBOSE"
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 FLUTTER_SDK_DIR="$ROOT_DIR/llama_mobile-flutter-SDK"
@@ -10,9 +66,13 @@ show_help() {
     echo ""
     echo "Builds the llama_mobile Flutter plugin and optionally the example app."
     echo ""
+    echo "Build variables can be configured in scripts/config.env:"
+    echo "  - FLUTTER_HOME: Path to Flutter SDK"
+    echo "  - FLUTTER_BUILD_TYPE: release or debug"
+    echo ""
     echo "Options:"
-echo "  -h, --help             Show this help message and exit"
-exit 0
+    echo "  -h, --help             Show this help message and exit"
+    exit 0
 }
 
 # Parse command line arguments
@@ -25,8 +85,18 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # Check if flutter is installed
+if [ -n "$FLUTTER_HOME" ]; then
+  # Add Flutter SDK to PATH if FLUTTER_HOME is set
+  export PATH="$FLUTTER_HOME/bin:$PATH"
+fi
+
 if ! command -v flutter &> /dev/null; then
-  echo "flutter could not be found, please install Flutter SDK from https://flutter.dev/docs/get-started/install"
+  echo "flutter could not be found."
+  if [ -z "$FLUTTER_HOME" ]; then
+    echo "Please set FLUTTER_HOME in scripts/config.env or install Flutter SDK from https://flutter.dev/docs/get-started/install"
+  else
+    echo "Please check that FLUTTER_HOME ($FLUTTER_HOME) is set correctly"
+  fi
   exit 1
 fi
 

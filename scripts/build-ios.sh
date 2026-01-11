@@ -1,15 +1,146 @@
 #!/bin/bash -e
+
+# ============================================================================
+# IOS BUILD VARIABLES
+# These variables can be modified to customize the build process
+# ============================================================================
+
+# Load centralized configuration from config.env
+CONFIG_FILE="$(dirname "$0")/config.env"
+if [ -f "$CONFIG_FILE" ]; then
+    # Extract all relevant variables from config.env, excluding comments
+    # Use sed to remove comments after variable assignments
+    export $(grep -E '^(IOS_BUILD_TYPE|IOS_SIMULATOR_ARCHES|IOS_DEVICE_ARCHES|XCODE_PATH|CMAKE_BUILD_TYPE|CMAKE_JOBS|NO_CLEAN|KEEP_BUILD|VERBOSE)=' "$CONFIG_FILE" | sed 's/\s*#.*$//' | xargs)
+fi
+
+# Local variables with defaults from centralized config
+BUILD_TYPE=${IOS_BUILD_TYPE:-"Release"}          # Release or Debug build
+SIMULATOR_ARCHES=${IOS_SIMULATOR_ARCHES:-"arm64 x86_64"} # Simulator architectures to build
+DEVICE_ARCHES=${IOS_DEVICE_ARCHES:-"arm64"}          # Device architectures to build
+ANDROID_PLATFORM="android-21"  # Minimum Android API level (for Android cross-compilation)
+
+# Build behavior flags with defaults
+NO_CLEAN=${NO_CLEAN:-false}                # Skip cleaning build directories
+KEEP_BUILD=${KEEP_BUILD:-false}            # Keep intermediate build files
+VERBOSE=${VERBOSE:-false}                  # Show verbose output
+
+# Build paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+METAL_LIB_DIR="$ROOT_DIR/lib/llama_cpp"
+OUTPUT_DIR="$ROOT_DIR/llama_mobile-ios-SDK"
+
+# Function to update config.env with detected values
+update_config_env() {
+    local var_name=$1
+    local var_value=$2
+    if [ -f "$CONFIG_FILE" ]; then
+        if grep -q "^${var_name}=" "$CONFIG_FILE"; then
+            # Update existing variable
+            sed -i '' "s|^${var_name}=.*|${var_name}=\"${var_value}\"|" "$CONFIG_FILE"
+        else
+            # Add new variable
+            echo "${var_name}=\"${var_value}\"" >> "$CONFIG_FILE"
+        fi
+    fi
+}
+
+# Update config.env with reasonable defaults if they're not set
+if [ -z "$IOS_BUILD_TYPE" ]; then
+    update_config_env "IOS_BUILD_TYPE" "$BUILD_TYPE"
+fi
+
+if [ -z "$IOS_SIMULATOR_ARCHES" ]; then
+    update_config_env "IOS_SIMULATOR_ARCHES" "$SIMULATOR_ARCHES"
+fi
+
+if [ -z "$IOS_DEVICE_ARCHES" ]; then
+    update_config_env "IOS_DEVICE_ARCHES" "$DEVICE_ARCHES"
+fi
+
+if [ -z "$CMAKE_BUILD_TYPE" ]; then
+    update_config_env "CMAKE_BUILD_TYPE" "$BUILD_TYPE"
+fi
+
+if [ -z "$NO_CLEAN" ]; then
+    update_config_env "NO_CLEAN" "$NO_CLEAN"
+fi
+
+if [ -z "$KEEP_BUILD" ]; then
+    update_config_env "KEEP_BUILD" "$KEEP_BUILD"
+fi
+
+if [ -z "$VERBOSE" ]; then
+    update_config_env "VERBOSE" "$VERBOSE"
+fi
+
+# ============================================================================
+# SCRIPT SETUP - DO NOT MODIFY BELOW THIS LINE UNLESS YOU KNOW WHAT YOU'RE DOING
+# ============================================================================
+
+# Color definitions for better output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Enhanced logging function
+log_message() {
+    local level="INFO"
+    local color="${BLUE}"
+    local message="$1"
+    
+    if [[ "$message" =~ ^\[(ERROR|WARN|INFO|SUCCESS)\] ]]; then
+        level="${BASH_REMATCH[1]}"
+        message="${message:$((${#level} + 2))}"
+        
+        case "$level" in
+            ERROR) color="${RED}" ;;
+            WARN) color="${YELLOW}" ;;
+            INFO) color="${BLUE}" ;;
+            SUCCESS) color="${GREEN}" ;;
+        esac
+    fi
+    
+    echo -e "${color}[$(date '+%H:%M:%S')] [${level}] $message${NC}"
+}
+
+# Script progress function
+script_progress() {
+    log_message "[INFO] $1"
+}
+
+# Error handling function
+handle_error() {
+    local exit_code=$1
+    local message="$2"
+    log_message "[ERROR] $message"
+    log_message "[ERROR] Build failed with exit code: $exit_code"
+    exit $exit_code
+}
 
 # Show help message
 show_help() {
-    echo "Usage: $0 [OPTIONS]"
+    echo -e "${BLUE}Usage: $0 [OPTIONS]${NC}"
     echo ""
     echo "Builds the llama_mobile iOS framework as a standalone SDK."
     echo ""
+    echo "Build variables can be configured in scripts/config.env:"
+    echo "  - IOS_BUILD_TYPE: Release or Debug build"
+    echo "  - IOS_SIMULATOR_ARCHES: Simulator architectures"
+    echo "  - IOS_DEVICE_ARCHES: Device architectures"
+    echo "  - XCODE_PATH: Path to Xcode application"
+    echo ""
     echo "Options:"
     echo "  -h, --help         Show this help message and exit"
+    echo "  --build-type=TYPE  Build type: Release or Debug (default: $BUILD_TYPE)"
+    echo "  --verbose          Show verbose output"
+    echo ""
+    echo "Required Dependencies:"
+    echo "  - Xcode with Command Line Tools"
+    echo "  - CMake (version 3.16 or higher)"
+    echo ""
     exit 0
 }
 
@@ -17,39 +148,78 @@ show_help() {
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -h|--help) show_help ;;
-        *) echo "Unknown parameter: $1" ; show_help ;;
+        --build-type=*) BUILD_TYPE="${1#*=}" ;;
+        --verbose) VERBOSE=true ;;
+        *) log_message "[ERROR] Unknown parameter: $1" ; show_help ;;
     esac
     shift
 
 done
 
+# Check for required dependencies
+script_progress "Checking for required dependencies..."
+
+# Check CMake
 if ! command -v cmake &> /dev/null; then
-  echo "✗ cmake could not be found, please install it"
-  exit 1
+  handle_error 1 "cmake could not be found. Please install it using: brew install cmake"
+fi
+log_message "[SUCCESS] Found CMake"
+
+# Check Xcode command line tools
+if ! command -v xcodebuild &> /dev/null; then
+  handle_error 1 "Xcode command line tools could not be found. Please install Xcode and run: xcode-select --install"
+fi
+log_message "[SUCCESS] Found Xcode command line tools"
+
+# Detect Xcode path if not set in config
+if [ -z "$XCODE_PATH" ]; then
+  script_progress "Xcode path not set, trying to detect..."
+  XCODE_PATH=$(xcode-select -print-path 2>/dev/null || echo "")
+  if [ -n "$XCODE_PATH" ]; then
+    log_message "[SUCCESS] Detected Xcode path: $XCODE_PATH"
+  else
+    log_message "[WARN] Could not detect Xcode path. Using system defaults."
+  fi
 fi
 
+# Check xcrun
+if ! command -v xcrun &> /dev/null; then
+  handle_error 1 "xcrun could not be found. Please ensure Xcode is installed properly."
+fi
+log_message "[SUCCESS] Found xcrun"
+
+# Check lipo
+if ! command -v lipo &> /dev/null; then
+  handle_error 1 "lipo could not be found. Please ensure Xcode is installed properly."
+fi
+log_message "[SUCCESS] Found lipo"
+
+log_message "[SUCCESS] All required dependencies found"
+
 function cp_headers() {
+  # Parameters:
+  # $1: framework variant (e.g., ios-arm64-simulator)
+  
   # Create main directories
   HEADER_DIR="$ROOT_DIR/llama_mobile-ios-SDK/llama_mobile.xcframework/$1/llama_mobile.framework/Headers"
   
+  script_progress "Copying headers to $HEADER_DIR..."
+  
   if ! mkdir -p "$HEADER_DIR"; then
-    echo "✗ Failed to create header directory: $HEADER_DIR"
-    exit 1
+    handle_error 1 "Failed to create header directory: $HEADER_DIR"
   fi
   
   # Copy the public API headers
   for header in "llama_mobile_ffi.h" "llama_mobile_api.h"; do
     if ! cp "$ROOT_DIR/lib/$header" "$HEADER_DIR/"; then
-      echo "✗ Failed to copy header: $header"
-      exit 1
+      handle_error 1 "Failed to copy header: $header"
     fi
   done
 
   # Recursively copy all llama_cpp headers while preserving folder structure
   LLAMA_CPP_HEADER_DIR="$HEADER_DIR/llama_cpp/"
   if ! rsync -av "$ROOT_DIR/lib/llama_cpp/" "$LLAMA_CPP_HEADER_DIR" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"; then
-    echo "✗ Failed to copy llama_cpp headers"
-    exit 1
+    handle_error 1 "Failed to copy llama_cpp headers"
   fi
   
   # Copy external library headers to the root Headers directory for proper <angled> include support
@@ -57,24 +227,22 @@ function cp_headers() {
   # nlohmann headers
   NLOHMANN_DIR="$HEADER_DIR/nlohmann/"
   if ! mkdir -p "$NLOHMANN_DIR"; then
-    echo "✗ Failed to create nlohmann directory"
-    exit 1
+    handle_error 1 "Failed to create nlohmann directory"
   fi
   if ! cp "$ROOT_DIR/lib/llama_cpp/nlohmann"/*.hpp "$NLOHMANN_DIR"; then
-    echo "✗ Failed to copy nlohmann headers"
-    exit 1
+    handle_error 1 "Failed to copy nlohmann headers"
   fi
   
   # minja headers
   MINJA_DIR="$HEADER_DIR/minja/"
   if ! mkdir -p "$MINJA_DIR"; then
-    echo "✗ Failed to create minja directory"
-    exit 1
+    handle_error 1 "Failed to create minja directory"
   fi
   if ! cp "$ROOT_DIR/lib/llama_cpp/minja"/*.hpp "$MINJA_DIR"; then
-    echo "✗ Failed to copy minja headers"
-    exit 1
+    handle_error 1 "Failed to copy minja headers"
   fi
+  
+  log_message "[SUCCESS] Headers copied successfully"
 }
 
 function build_framework() {
@@ -86,12 +254,11 @@ function build_framework() {
   # $5: build_dir
 
   if ! cd "$5"; then
-    echo "✗ Failed to change to build directory: $5"
-    exit 1
+    handle_error 1 "Failed to change to build directory: $5"
   fi
 
   # Configure CMake
-  echo -n "Configuring CMake for $4... "
+  script_progress "Configuring CMake for $4..."
   
   if ! cmake "$ROOT_DIR/llama_mobile-ios-SDK" \
     -GXcode \
@@ -101,57 +268,44 @@ function build_framework() {
     -DCMAKE_INSTALL_PREFIX="$(pwd)/install" \
     -DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH=NO \
     -DCMAKE_IOS_INSTALL_COMBINED=YES; then
-    echo "✗"
-    echo "CMake configuration failed!"
-    exit 1
+    handle_error 1 "CMake configuration failed for $4!"
   fi
-  echo "✓"
+  log_message "[SUCCESS] CMake configuration completed for $4"
 
   # Build
-  echo -n "Building framework for $4... "
-  NUM_CORES=$(sysctl -n hw.logicalcpu)
+  script_progress "Building framework for $4..."
   
-  if ! cmake --build . --config Release -j $NUM_CORES; then
-    echo "✗"
-    echo "Build failed!"
-    exit 1
+  if ! cmake --build . --config $BUILD_TYPE -j $NUM_CORES; then
+    handle_error 1 "Build failed for $4!"
   fi
-  echo "✓"
+  log_message "[SUCCESS] Framework built successfully for $4"
 
   # Setup framework directory
   DEST_DIR="$ROOT_DIR/llama_mobile-ios-SDK/llama_mobile.xcframework/$4"
-  FRAMEWORK_SRC="Release-$3/llama_mobile.framework"
+  FRAMEWORK_SRC="$BUILD_TYPE-$3/llama_mobile.framework"
   FRAMEWORK_DEST="$DEST_DIR/llama_mobile.framework"
 
-  echo -n "Preparing destination directory... "
+  script_progress "Preparing destination directory..."
   if ! rm -rf "$DEST_DIR" || ! mkdir -p "$DEST_DIR"; then
-    echo "✗"
-    echo "Failed to prepare destination directory: $DEST_DIR"
-    exit 1
+    handle_error 1 "Failed to prepare destination directory: $DEST_DIR"
   fi
-  echo "✓"
+  log_message "[SUCCESS] Destination directory prepared: $DEST_DIR"
 
   # Copy the built framework to the destination
-  echo -n "Copying built framework... "
+  script_progress "Copying built framework..."
   if [ -d "$FRAMEWORK_SRC" ]; then
     if ! cp -R "$FRAMEWORK_SRC" "$FRAMEWORK_DEST"; then
-      echo "✗"
-      echo "Failed to copy framework from $FRAMEWORK_SRC to $FRAMEWORK_DEST"
-      exit 1
+      handle_error 1 "Failed to copy framework from $FRAMEWORK_SRC to $FRAMEWORK_DEST"
     fi
-    echo "✓"
+    log_message "[SUCCESS] Framework copied successfully"
   else
-    echo "✗"
-    echo "Error: Expected framework not found at $FRAMEWORK_SRC"
-    exit 1
+    handle_error 1 "Expected framework not found at $FRAMEWORK_SRC"
   fi
 
   # Copy headers and metallib
-  echo -n "Copying headers... "
   cp_headers $4
-  echo "✓"
 
-  echo -n "Copying metallib file... "
+  script_progress "Copying metallib file..."
   if [[ "$4" == *"-simulator" ]]; then
     METALLIB_SRC="$ROOT_DIR/lib/llama_cpp/ggml-llama-sim.metallib"
     METALLIB_DEST="$FRAMEWORK_DEST/ggml-llama-sim.metallib"
@@ -161,37 +315,29 @@ function build_framework() {
   fi
   
   if ! cp "$METALLIB_SRC" "$METALLIB_DEST"; then
-    echo "✗"
-    echo "Failed to copy metallib file"
-    exit 1
+    handle_error 1 "Failed to copy metallib file from $METALLIB_SRC to $METALLIB_DEST"
   fi
-  echo "✓"
+  log_message "[SUCCESS] Metallib file copied successfully"
   
   # Copy grammar files
-  echo -n "Copying grammar files... "
+  script_progress "Copying grammar files..."
   GRAMMAR_SRC_DIR="$ROOT_DIR/lib/grammars"
   GRAMMAR_DEST_DIR="$FRAMEWORK_DEST/grammars"
   
   if ! mkdir -p "$GRAMMAR_DEST_DIR"; then
-    echo "✗"
-    echo "Failed to create grammar directory"
-    exit 1
+    handle_error 1 "Failed to create grammar directory: $GRAMMAR_DEST_DIR"
   fi
   
   if ! cp "$GRAMMAR_SRC_DIR"/*.gbnf "$GRAMMAR_DEST_DIR/"; then
-    echo "✗"
-    echo "Failed to copy grammar files"
-    exit 1
+    handle_error 1 "Failed to copy grammar files from $GRAMMAR_SRC_DIR to $GRAMMAR_DEST_DIR"
   fi
-  echo "✓"
+  log_message "[SUCCESS] Grammar files copied successfully"
   
   # Create Modules directory with module map
-  echo -n "Creating module map... "
+  script_progress "Creating module map..."
   MODULE_DIR="$FRAMEWORK_DEST/Modules"
   if ! mkdir -p "$MODULE_DIR"; then
-    echo "✗"
-    echo "Failed to create Modules directory"
-    exit 1
+    handle_error 1 "Failed to create Modules directory: $MODULE_DIR"
   fi
   
   MODULE_MAP="$MODULE_DIR/module.modulemap"
@@ -205,33 +351,29 @@ framework module llama_mobile {
 EOL
   
   if [ $? -ne 0 ]; then
-    echo "✗"
-    echo "Failed to create module map"
-    exit 1
+    handle_error 1 "Failed to create module map: $MODULE_MAP"
   fi
-  echo "✓"
+  log_message "[SUCCESS] Module map created successfully"
 
   # Code sign the framework
-  echo -n "Signing the framework... "
+  script_progress "Signing the framework..."
   if codesign --force --deep --sign "Apple Development" "$FRAMEWORK_DEST"; then
-    echo "✓"
+    log_message "[SUCCESS] Framework signed successfully"
   else
-    echo "✗"
-    echo "Note: Manual signing may be required. Try running:"
-    echo "codesign --force --deep --sign 'Apple Development' '$FRAMEWORK_DEST'"
+    log_message "[WARN] Framework signing failed. Manual signing may be required."
+    log_message "[WARN] Try running: codesign --force --deep --sign 'Apple Development' '$FRAMEWORK_DEST'"
   fi
 
   if ! cd ..; then
-    echo "✗ Failed to change back to parent directory"
-    exit 1
+    handle_error 1 "Failed to change back to parent directory"
   fi
   
-  echo -n "Cleaning up build directory... "
+  script_progress "Cleaning up build directory..."
   if ! rm -rf "$5"; then
-    echo "✗"
-    echo "Failed to clean up build directory: $5"
+    log_message "[WARN] Failed to clean up build directory: $5"
+    log_message "[WARN] You may need to delete it manually."
   else
-    echo "✓"
+    log_message "[SUCCESS] Build directory cleaned up: $5"
   fi
 }
 
