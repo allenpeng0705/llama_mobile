@@ -10,9 +10,47 @@ This directory contains build scripts for the Llama Mobile project, supporting m
 | `build-android.sh` / `build-android.bat` | Build Android SDK | macOS / Windows |
 | `build-ios.sh` / `build-ios.bat` | Build iOS SDK | macOS / Windows |
 | `build-flutter.sh` / `build-flutter.bat` | Build Flutter SDK | macOS / Windows |
-| `build-capacitor.sh` | Build Capacitor plugin | macOS / Linux |
+| `build-capacitor.sh` / `build-capacitor.bat` | Build Capacitor plugin | macOS / Windows |
 | `build-react-native.sh` / `build-react-native.bat` | Build React Native SDK | macOS / Windows |
-| `env.bat` | Windows environment variables | Windows |
+| `build-tests-run.sh` | Run tests | macOS / Windows |
+
+## Configuration System
+
+All build scripts now use a **centralized configuration system** through the `config.env` file. This file contains all environment variables needed for building different SDKs and plugins, with auto-detection and default values for most parameters.
+
+### config.env File
+
+The `config.env` file is located in the `scripts/` directory and contains organized sections for each platform:
+
+- **Core Library Build Variables**: CMake configuration, compiler paths
+- **Android SDK Build Variables**: ANDROID_HOME, NDK_PATH, build types, architectures
+- **iOS SDK Build Variables**: iOS build types, architectures, Xcode path
+- **Flutter SDK Build Variables**: Flutter configuration
+- **React Native SDK Build Variables**: Node.js, npm, Yarn paths
+- **Capacitor Plugin Build Variables**: Capacitor configuration
+- **Logging and Behavior**: Build behavior flags
+
+### Key Features
+
+1. **Auto-detection**: Most SDK paths (ANDROID_HOME, NDK_PATH, XCODE_PATH) are automatically detected and populated in the config file
+2. **Default Values**: Reasonable defaults are set for build types (Release), architectures, and behavior flags
+3. **User Customization**: Users can modify any variable in the config file, and changes will be preserved
+4. **Cross-Platform**: The same configuration system works for both macOS/Linux (.sh) and Windows (.bat) scripts
+
+### Example Configuration
+
+```ini
+# CMake configuration
+CMAKE_PATH=""
+CMAKE_BUILD_TYPE="Release"
+CMAKE_JOBS="8"
+
+# Android SDK configuration
+ANDROID_HOME=""
+NDK_PATH=""
+ANDROID_BUILD_TYPE="Release"
+ANDROID_ABIS="arm64-v8a,x86_64"
+```
 
 ## Prerequisites
 
@@ -61,38 +99,43 @@ This directory contains build scripts for the Llama Mobile project, supporting m
    git clone https://github.com/yourusername/llama_mobile.git
    cd llama_mobile
    ```
-5. Configure environment variables in `scripts/env.bat` (optional)
+5. No manual environment configuration is needed - the build scripts will auto-configure `scripts/config.env` for you
 
 ## Configuration
 
-### Environment Variables
+### Using config.env
 
-#### macOS
+1. **Auto-configuration**: When you first run any build script, the `config.env` file will be automatically populated with detected values and default settings for most parameters.
 
-Create a `.env` file in the root directory with the following variables:
+2. **Manual configuration**: If you need to override any settings, edit the `scripts/config.env` file directly:
 
-```bash
-# Android build variables
-ANDROID_HOME=/Users/yourusername/Library/Android/sdk
-NDK_HOME=/Users/yourusername/Library/Android/sdk/ndk/25.1.8937393
-```
+   ```bash
+   # Example: Set specific Android NDK path
+   NDK_PATH="/Users/yourusername/Library/Android/sdk/ndk/25.1.8937393"
+   
+   # Example: Change Android architectures
+   ANDROID_ABIS="arm64-v8a"
+   ```
 
-#### Windows
+3. **Preservation of changes**: Any manual changes you make to `config.env` will be preserved across script runs.
 
-Edit the `scripts/env.bat` file with your configuration:
+### Common Configuration Parameters
 
-```batch
-@echo off
+#### Android
+- `ANDROID_HOME`: Path to Android SDK (auto-detected)
+- `NDK_PATH`: Path to Android NDK (auto-detected)
+- `ANDROID_BUILD_TYPE`: Release or Debug (default: Release)
+- `ANDROID_ABIS`: Target architectures (default: arm64-v8a,x86_64)
 
-REM Android SDK path
-set ANDROID_HOME=C:\Users\yourusername\AppData\Local\Android\Sdk
+#### iOS
+- `IOS_BUILD_TYPE`: Release or Debug (default: Release)
+- `IOS_SIMULATOR_ARCHES`: Simulator architectures (default: arm64 x86_64)
+- `IOS_DEVICE_ARCHES`: Device architectures (default: arm64)
 
-REM NDK path
-set NDK_HOME=C:\Users\yourusername\AppData\Local\Android\Sdk\ndk\25.1.8937393
-
-REM Visual Studio version (2019 or 2022)
-set VS_VERSION=2022
-```
+#### Build Behavior
+- `NO_CLEAN`: Skip cleaning build directories (default: false)
+- `KEEP_BUILD`: Keep intermediate build files (default: false)
+- `VERBOSE`: Show verbose output (default: false)
 
 ## Usage
 

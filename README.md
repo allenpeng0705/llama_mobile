@@ -101,39 +101,74 @@ Each SDK and plugin comes with example applications that demonstrate basic usage
 - **llama_mobile_reactnative/**: ReactNative plugin
 - **llama_mobile_capacitor/**: Capacitor plugin for web-based apps
 
+## Build Configuration
+
+All build scripts now use a **centralized configuration system** through the `scripts/config.env` file. This file contains all environment variables needed for building different SDKs and plugins, with auto-detection and default values for most parameters.
+
+### Key Features
+
+- **Auto-detection**: SDK paths (ANDROID_HOME, NDK_PATH, XCODE_PATH) are automatically detected
+- **Default values**: Reasonable defaults for build types (Release), architectures, and behavior flags
+- **User customization**: Users can modify any variable in `config.env` and changes will be preserved
+- **Cross-platform**: Works on both macOS/Linux (.sh) and Windows (.bat) scripts
+
+For detailed configuration information, see the [Build Scripts README](scripts/README.md).
+
 ## Build Scripts
 
-The project contains various build scripts:
+The project contains various build scripts in the `scripts/` directory:
 
-- **build_and_run_lib_test.sh**: Builds the core library and tests, then runs them
+- **build-tests-run.sh**: Builds and runs tests
 - **build-ios.sh**: Builds the iOS framework based on the core library
 - **build-android.sh**: Builds the Android library and SDK
 - **build-flutter.sh**: Builds the Flutter plugin
-- (Planned) **build-reactnative.sh**: Builds the ReactNative plugin
+- **build-reactnative.sh**: Builds the ReactNative plugin
+- **build-capacitor.sh**: Builds the Capacitor plugin
+
+All scripts use the centralized configuration system in `scripts/config.env`. For detailed information, see the [Build Scripts README](scripts/README.md).
 
 ## Getting Started
 
 ### Build Core Library
 
 ```bash
-# Build core library
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
+# Build core library using the build script (uses config.env)
+./scripts/build-lib.sh
 ```
 
 ### Build iOS Framework
 
 ```bash
-# Build iOS framework
-./build-ios.sh
+# Build iOS framework (uses config.env)
+./scripts/build-ios.sh
 ```
 
 ### Build Android Library and SDK
 
 ```bash
-# Build Android library and SDK
-./build-android.sh
+# Build Android library and SDK (uses config.env)
+./scripts/build-android.sh
+```
+
+### Build Flutter Plugin
+
+```bash
+# Build Flutter plugin (uses config.env)
+./scripts/build-flutter.sh
+```
+
+### Build ReactNative Plugin
+
+```bash
+# Build ReactNative plugin (uses config.env)
+./scripts/build-reactnative.sh
+```
+
+### Build Capacitor Plugin
+
+```bash
+# Build Capacitor plugin (uses config.env)
+./scripts/build-capacitor.sh
 ```
 
 ### Build and Run Tests
@@ -152,8 +187,8 @@ The Core C++ library includes a comprehensive test suite (`lib/tests/test_api.cp
 To build and run the Core library tests:
 
 ```bash
-# Build and run tests
-./scripts/build_and_run_lib_test.sh
+# Build and run tests (uses config.env)
+./scripts/build-tests-run.sh
 ```
 
 Alternatively, you can build and run the tests manually:
