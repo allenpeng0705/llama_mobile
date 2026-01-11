@@ -42,6 +42,14 @@ struct ContentView: View {
                     }
                     .tag(0)
                 
+                // Tokenization Tab
+                TokenizationTestView(appState: appState)
+                    .tabItem {
+                        Image(systemName: "number.circle.fill")
+                        Text("Tokenize")
+                    }
+                    .tag(1)
+                
                 // Embedding Tab
                 EmbeddingTestView(appState: appState)
                     .tabItem {
@@ -50,13 +58,29 @@ struct ContentView: View {
                     }
                     .tag(1)
                 
+                // LoRA Tab
+                LoRATestView(appState: appState)
+                    .tabItem {
+                        Image(systemName: "gearshape.2.fill")
+                        Text("LoRA")
+                    }
+                    .tag(2)
+                
                 // Image Tab
                 MultimodalTestView(appState: appState)
                     .tabItem {
                         Image(systemName: "camera.badge.ellipsis")
                         Text("Image")
                     }
-                    .tag(2)
+                    .tag(3)
+                
+                // Grammar Tab
+                GrammarTestView(appState: appState)
+                    .tabItem {
+                        Image(systemName: "textformat.fill")
+                        Text("Grammar")
+                    }
+                    .tag(4)
                 
                 // TTS Tab
                 TTSTestView(appState: appState)
@@ -64,7 +88,7 @@ struct ContentView: View {
                         Image(systemName: "speaker.wave.2.fill")
                         Text("TTS")
                     }
-                    .tag(3)
+                    .tag(5)
                 
                 // More Tab
                 SettingsView(appState: appState)
@@ -72,7 +96,7 @@ struct ContentView: View {
                         Image(systemName: "gearshape.fill")
                         Text("More")
                     }
-                    .tag(4)
+                    .tag(6)
             }
             .accentColor(.blue)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -944,6 +968,384 @@ struct TTSTestView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             self.isPlaying = false
             self.ttsResult += "\n\nNote: Audio playback would happen here with AVAudioEngine."
+        }
+    }
+}
+
+// Tokenization Test View
+struct TokenizationTestView: View {
+    @ObservedObject var appState: AppState
+    @State private var text = "Hello world"
+    @State private var tokens: [Int32] = []
+    @State private var detokenizedText = ""
+    @State private var isProcessing = false
+    
+    var body: some View {
+        Form {
+            Section(header: Text("Text Input")) {
+                TextField("Enter text to tokenize...", text: $text, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(2...4)
+                    .disabled(!appState.enableTokenization || !appState.isModelLoaded || isProcessing)
+            }
+            
+            Section(header: Text("Tokenization")) {
+                Button(action: tokenizeText) {
+                    HStack {
+                        Spacer()
+                        Text(isProcessing ? "Tokenizing..." : "Tokenize")
+                            .foregroundColor(.white)
+                        Spacer()
+                    }
+                }
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !appState.enableTokenization || !appState.isModelLoaded || isProcessing)
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+                
+                if !tokens.isEmpty {
+                    Button(action: detokenizeTokens) {
+                        HStack {
+                            Spacer()
+                            Text(isProcessing ? "Detokenizing..." : "Detokenize")
+                                .foregroundColor(.white)
+                            Spacer()
+                        }
+                    }
+                    .disabled(isProcessing)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                }
+            }
+            
+            if !tokens.isEmpty {
+                Section(header: Text("Tokens")) {
+                    Text(formatTokens(tokens))
+                        .font(.system(.body, design: .monospaced))
+                        .lineLimit(nil)
+                }
+            }
+            
+            if !detokenizedText.isEmpty {
+                Section(header: Text("Detokenized Result")) {
+                    Text(detokenizedText)
+                        .font(.system(.body, design: .monospaced))
+                }
+            }
+        }
+        .navigationTitle("Tokenization Test")
+    }
+    
+    func tokenizeText() {
+        guard !text.isEmpty else { return }
+        
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        isProcessing = true
+        
+        Task {
+            await performTokenization(for: trimmedText)
+        }
+    }
+    
+    func detokenizeTokens() {
+        guard !tokens.isEmpty else { return }
+        
+        isProcessing = true
+        
+        Task {
+            await performDetokenization(for: tokens)
+        }
+    }
+    
+    func performTokenization(for text: String) async {
+        defer { DispatchQueue.main.async { self.isProcessing = false } }
+        
+        do {
+            if let tokenized = appState.llamaMobile.tokenize(text: text, addBOS: false, special: false) {
+                DispatchQueue.main.async {
+                    self.tokens = tokenized
+                    self.detokenizedText = ""
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.appState.errorMessage = "Failed to tokenize text"
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.appState.errorMessage = "Error tokenizing text: \(error.localizedDescription)"
+            }
+        }
+    }
+    
+    func performDetokenization(for tokens: [Int32]) async {
+        defer { DispatchQueue.main.async { self.isProcessing = false } }
+        
+        do {
+            if let detokenized = appState.llamaMobile.detokenize(tokens: tokens, special: false) {
+                DispatchQueue.main.async {
+                    self.detokenizedText = detokenized
+                }
+            } else {
+                DispatchQueue.main.async {
+                    self.appState.errorMessage = "Failed to detokenize tokens"
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.appState.errorMessage = "Error detokenizing tokens: \(error.localizedDescription)"
+            }
+        }
+    }
+    
+    func formatTokens(_ tokens: [Int32]) -> String {
+        let tokenStrings = tokens.prefix(20).map { String($0) }
+        var result = tokenStrings.joined(separator: ", ")
+        
+        if tokens.count > 20 {
+            result += ", ... (and \(tokens.count - 20) more tokens)"
+        }
+        
+        result += "\n\nTotal tokens: \(tokens.count)"
+        return result
+    }
+}
+
+// LoRA Adapters Test View
+struct LoRATestView: View {
+    @ObservedObject var appState: AppState
+    @State private var loraPath = ""
+    @State private var scale: Float = 1.0
+    @State private var isProcessing = false
+    @State private var loraApplied = false
+    
+    var body: some View {
+        Form {
+            Section(header: Text("LoRA Adapter Configuration")) {
+                TextField("LoRA Adapter Path", text: $loraPath)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(!appState.enableLoRA || !appState.isModelLoaded || isProcessing)
+                
+                TextField("LoRA Scale", value: $scale, formatter: NumberFormatter())
+                    .textFieldStyle(.roundedBorder)
+                    .keyboardType(.decimalPad)
+                    .disabled(!appState.enableLoRA || !appState.isModelLoaded || isProcessing)
+            }
+            
+            Section(header: Text("Apply LoRA Adapter")) {
+                Button(action: applyLoRA) {
+                    HStack {
+                        Spacer()
+                        Text(isProcessing ? "Applying LoRA..." : "Apply LoRA")
+                            .foregroundColor(.white)
+                        Spacer()
+                    }
+                }
+                .disabled(loraPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !appState.enableLoRA || !appState.isModelLoaded || isProcessing)
+                .buttonStyle(.borderedProminent)
+                .tint(.blue)
+                
+                Button(action: removeLoRA) {
+                    HStack {
+                        Spacer()
+                        Text(isProcessing ? "Removing LoRA..." : "Remove LoRA")
+                            .foregroundColor(.white)
+                        Spacer()
+                    }
+                }
+                .disabled(!loraApplied || !appState.enableLoRA || !appState.isModelLoaded || isProcessing)
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+            }
+            
+            Section(header: Text("Status")) {
+                Text(loraApplied ? "✅ LoRA adapter applied successfully" : "❌ No LoRA adapter applied")
+                    .fontWeight(.medium)
+                    .foregroundColor(loraApplied ? .green : .red)
+            }
+        }
+        .navigationTitle("LoRA Adapters Test")
+    }
+    
+    func applyLoRA() {
+        guard !loraPath.isEmpty else { return }
+        
+        let trimmedPath = loraPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        isProcessing = true
+        
+        Task {
+            await performApplyLoRA(path: trimmedPath)
+        }
+    }
+    
+    func removeLoRA() {
+        isProcessing = true
+        
+        Task {
+            await performRemoveLoRA()
+        }
+    }
+    
+    func performApplyLoRA(path: String) async {
+        defer { DispatchQueue.main.async { self.isProcessing = false } }
+        
+        do {
+            let loraAdapter = LlamaMobile.LoraAdapter(path: path, scale: scale)
+            if appState.llamaMobile.applyLoraAdapters([loraAdapter]) {
+                DispatchQueue.main.async {
+                    self.loraApplied = true
+                }
+            } else {
+                DispatchQueue.main.async {
+                    appState.errorMessage = "Failed to apply LoRA adapter"
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                appState.errorMessage = "Error applying LoRA adapter: \(error.localizedDescription)"
+            }
+        }
+    }
+    
+    func performRemoveLoRA() async {
+        defer { DispatchQueue.main.async { self.isProcessing = false } }
+        
+        do {
+            if appState.llamaMobile.removeLoraAdapters() {
+                DispatchQueue.main.async {
+                    self.loraApplied = false
+                }
+            } else {
+                DispatchQueue.main.async {
+                    appState.errorMessage = "Failed to remove LoRA adapter"
+                }
+            }
+        } catch {
+            DispatchQueue.main.async {
+                appState.errorMessage = "Error removing LoRA adapter: \(error.localizedDescription)"
+            }
+        }
+    }
+}
+
+// Grammar Test View
+struct GrammarTestView: View {
+    @ObservedObject var appState: AppState
+    @State private var grammarName = "json"
+    @State private var grammarContent = ""
+    @State private var prompt = "Generate a JSON object with name, age, and city fields"
+    @State private var result = ""
+    @State private var isLoading = false
+    
+    let availableGrammars = ["json", "json_arr", "list", "arithmetic", "c", "chess", "english", "japanese"]
+    
+    var body: some View {
+        Form {
+            // Grammar Selection
+            Section(header: Text("Grammar Configuration")) {
+                Picker("Grammar", selection: $grammarName) {
+                    ForEach(availableGrammars, id: \.self) {
+                        Text($0)
+                    }
+                }
+                .pickerStyle(.menu)
+                
+                Button("Get Grammar Content") {
+                    Task {
+                        await getGrammarContent()
+                    }
+                }
+                
+                if !grammarContent.isEmpty {
+                    Section(header: Text("Grammar Content")) {
+                        Text(grammarContent)
+                            .font(.system(.caption, design: .monospaced))
+                            .frame(maxHeight: 100)
+                            .padding()
+                            .background(Color(.systemGroupedBackground))
+                            .cornerRadius(8)
+                            .scrollContentBackground(.hidden)
+                    }
+                }
+            }
+            
+            // Generate with Grammar
+            Section(header: Text("Generate with Grammar")) {
+                TextField("Enter prompt...", text: $prompt, axis: .vertical)
+                    .textFieldStyle(.roundedBorder)
+                    .lineLimit(1...3)
+                
+                Button(action: generateWithGrammar) {
+                    Text(isLoading ? "Generating..." : "Generate")
+                }
+                .disabled(isLoading)
+            }
+            
+            // Result
+            if !result.isEmpty {
+                Section(header: Text("Result")) {
+                    Text(result)
+                        .font(.system(.body, design: .monospaced))
+                        .padding()
+                        .background(Color(.systemGroupedBackground))
+                        .cornerRadius(8)
+                        .scrollContentBackground(.hidden)
+                }
+            }
+        }
+        .navigationTitle("Grammar Test")
+    }
+    
+    func getGrammarContent() async {
+        Task {
+            do {
+                let content = try await appState.llamaMobile.getGrammarContent(for: grammarName)
+                await MainActor.run {
+                    self.grammarContent = content
+                }
+            } catch {
+                await MainActor.run {
+                    self.grammarContent = "Error getting grammar content: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
+    
+    func generateWithGrammar() {
+        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        
+        Task {
+            await MainActor.run {
+                self.isLoading = true
+                self.result = ""
+            }
+            
+            do {
+                let grammarContent = try await appState.llamaMobile.getGrammarContent(for: grammarName)
+                
+                let params = GenerateParams(
+                    prompt: prompt,
+                    maxTokens: 512,
+                    temperature: 0.7,
+                    topK: 40,
+                    topP: 0.95,
+                    minP: 0.05,
+                    grammar: grammarContent
+                )
+                
+                let generated = try await appState.llamaMobile.generate(params: params)
+                
+                await MainActor.run {
+                    self.result = generated
+                }
+            } catch {
+                await MainActor.run {
+                    self.result = "Error: \(error.localizedDescription)"
+                }
+            } finally {
+                await MainActor.run {
+                    self.isLoading = false
+                }
+            }
         }
     }
 }

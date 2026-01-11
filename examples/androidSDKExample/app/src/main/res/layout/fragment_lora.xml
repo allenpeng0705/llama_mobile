@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp"
+    tools:context=".LoRAFragment">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gap="16dp">
+
+        <!-- LoRA Configuration Section -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="?android:attr/colorBackgroundFloating"
+            android:padding="16dp"
+            android:elevation="2dp"
+            android:borderRadius="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="LoRA Adapter Configuration"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:fontFamily="sans-serif-medium"
+                android:layout_marginBottom="12dp" />
+
+            <EditText
+                android:id="@+id/loraPathEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Enter LoRA adapter path..."
+                android:inputType="text"
+                android:background="@android:drawable/editbox_background_normal"
+                android:padding="8dp"
+                android:layout_marginBottom="8dp" />
+
+            <EditText
+                android:id="@+id/loraScaleEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Enter LoRA scale..."
+                android:inputType="numberDecimal"
+                android:background="@android:drawable/editbox_background_normal"
+                android:padding="8dp"
+                android:layout_marginBottom="8dp" />
+
+            <Button
+                android:id="@+id/applyLoraButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Apply LoRA Adapter"
+                android:enabled="false"
+                android:layout_marginBottom="8dp" />
+
+            <Button
+                android:id="@+id/removeLoraButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Remove LoRA Adapter"
+                android:enabled="false"
+                android:layout_marginBottom="8dp" />
+
+            <ProgressBar
+                android:id="@+id/progressBar"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/loraStatusTextView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="❌ No LoRA adapter applied"
+                android:textSize="14sp"
+                android:padding="8dp"
+                android:background="?android:attr/colorBackground"
+                android:borderRadius="4dp"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Status Section -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <TextView
+                android:id="@+id/statusTextView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Model not loaded"
+                android:textSize="14sp"
+                android:textStyle="italic"
+                android:textColor="@android:color/holo_red_dark"
+                android:gravity="center_horizontal" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

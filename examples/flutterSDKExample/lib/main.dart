@@ -39,6 +39,9 @@ class LlamaMobileExample extends StatefulWidget {
   State<LlamaMobileExample> createState() => _LlamaMobileExampleState();
 }
 
+// Tab index constants
+enum ExampleTab { chat, tokenization, embeddings, lora, multimodal, grammar }
+
 class _LlamaMobileExampleState extends State<LlamaMobileExample> {
   final _llamaSdk = LlamaMobileFlutterSdk();
   bool _isInitialized = false;
@@ -61,6 +64,37 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
   double _topP = 0.95;
   GrammarName? _selectedGrammar;
 
+  // Tokenization parameters
+  final _tokenizeTextController = TextEditingController(text: 'Hello world');
+  List<int> _tokens = [];
+  String _detokenizeResult = '';
+
+  // Embeddings parameters
+  final _embedTextController = TextEditingController(
+    text: 'This is a test sentence',
+  );
+  List<double> _embeddings = [];
+
+  // LoRA parameters
+  final _loraPathController = TextEditingController(
+    text: '/path/to/your/lora.adapter',
+  );
+  double _loraScale = 1.0;
+  bool _loraApplied = false;
+
+  // Multimodal parameters
+  final _mmprojPathController = TextEditingController(
+    text: '/path/to/your/mmproj.gguf',
+  );
+  bool _multimodalEnabled = false;
+  final _imagePathController = TextEditingController(
+    text: '/path/to/your/image.jpg',
+  );
+
+  // Grammar parameters
+  final _grammarNameController = TextEditingController(text: 'json');
+  String _grammarContent = '';
+
   final List<GrammarName> _grammars = GrammarName.values;
   final List<Message> _messages = [];
   final ScrollController _scrollController = ScrollController();
@@ -69,6 +103,12 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
   void dispose() {
     _modelPathController.dispose();
     _promptController.dispose();
+    _tokenizeTextController.dispose();
+    _embedTextController.dispose();
+    _loraPathController.dispose();
+    _mmprojPathController.dispose();
+    _imagePathController.dispose();
+    _grammarNameController.dispose();
     _scrollController.dispose();
     _release();
     super.dispose();
@@ -238,6 +278,273 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
         duration: Duration(seconds: 2),
       ),
     );
+  }
+
+  // Tokenization APIs
+  Future<void> _handleTokenize() async {
+    if (!_isInitialized) {
+      _showModelNotLoadedSnackBar();
+      return;
+    }
+
+    setState(() {
+      _isGenerating = true;
+      _status = 'Tokenizing text...';
+    });
+
+    try {
+      final tokens = await _llamaSdk.tokenize(_tokenizeTextController.text);
+      setState(() {
+        _tokens = tokens;
+        _status = 'Tokenization successful';
+      });
+    } catch (e) {
+      setState(() {
+        _status = 'Error tokenizing text: $e';
+      });
+    } finally {
+      setState(() {
+        _isGenerating = false;
+      });
+    }
+  }
+
+  Future<void> _handleDetokenize() async {
+    if (!_isInitialized) {
+      _showModelNotLoadedSnackBar();
+      return;
+    }
+
+    if (_tokens.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No tokens to detokenize'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isGenerating = true;
+      _status = 'Detokenizing tokens...';
+    });
+
+    try {
+      final text = await _llamaSdk.detokenize(_tokens);
+      setState(() {
+        _detokenizeResult = text;
+        _status = 'Detokenization successful';
+      });
+    } catch (e) {
+      setState(() {
+        _status = 'Error detokenizing tokens: $e';
+      });
+    } finally {
+      setState(() {
+        _isGenerating = false;
+      });
+    }
+  }
+
+  // Embeddings API
+  Future<void> _handleGenerateEmbeddings() async {
+    if (!_isInitialized) {
+      _showModelNotLoadedSnackBar();
+      return;
+    }
+
+    setState(() {
+      _isGenerating = true;
+      _status = 'Generating embeddings...';
+    });
+
+    try {
+      final embeddings = await _llamaSdk.generateEmbeddingsForPrompt(
+        _embedTextController.text,
+      );
+      setState(() {
+        _embeddings = embeddings;
+        _status = 'Embeddings generation successful';
+      });
+    } catch (e) {
+      setState(() {
+        _status = 'Error generating embeddings: $e';
+      });
+    } finally {
+      setState(() {
+        _isGenerating = false;
+      });
+    }
+  }
+
+  // LoRA adapters APIs
+  Future<void> _handleApplyLora() async {
+    if (!_isInitialized) {
+      _showModelNotLoadedSnackBar();
+      return;
+    }
+
+    setState(() {
+      _isGenerating = true;
+      _status = 'Applying LoRA adapter...';
+    });
+
+    try {
+      final loraAdapters = [
+        LoraAdapter(path: _loraPathController.text, scale: _loraScale),
+      ];
+      final success = await _llamaSdk.applyLoraAdapters(loraAdapters);
+      setState(() {
+        _loraApplied = success;
+        _status = success
+            ? 'LoRA adapter applied successfully'
+            : 'Failed to apply LoRA adapter';
+      });
+    } catch (e) {
+      setState(() {
+        _status = 'Error applying LoRA adapter: $e';
+      });
+    } finally {
+      setState(() {
+        _isGenerating = false;
+      });
+    }
+  }
+
+  // LoRA adapters can be removed by re-initializing the model
+
+  // Multimodal APIs
+  Future<void> _handleInitMultimodal() async {
+    if (!_isInitialized) {
+      _showModelNotLoadedSnackBar();
+      return;
+    }
+
+    setState(() {
+      _isGenerating = true;
+      _status = 'Initializing multimodal...';
+    });
+
+    try {
+      // Note: The Flutter SDK's initMultimodal doesn't accept parameters
+      final success = await _llamaSdk.initMultimodal();
+      setState(() {
+        _multimodalEnabled = success;
+        _status = success
+            ? 'Multimodal initialized successfully'
+            : 'Failed to initialize multimodal';
+      });
+    } catch (e) {
+      setState(() {
+        _status = 'Error initializing multimodal: $e';
+      });
+    } finally {
+      setState(() {
+        _isGenerating = false;
+      });
+    }
+  }
+
+  // Multimodal resources are released when the model is released
+
+  Future<void> _handleMultimodalCompletion() async {
+    if (!_isInitialized) {
+      _showModelNotLoadedSnackBar();
+      return;
+    }
+
+    if (!_multimodalEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Multimodal support not enabled'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isGenerating = true;
+      _status = 'Generating multimodal response...';
+    });
+
+    try {
+      final params = CompletionParams(
+        prompt: _promptController.text,
+        maxTokens: _maxTokens,
+        temperature: _temperature,
+        topK: _topK,
+        topP: _topP,
+        minP: 0.05,
+        typicalP: 1.0,
+        seed: -1,
+        nThreads: _nThreads,
+        penaltyLastN: 64,
+        penaltyRepeat: 1.1,
+        penaltyFreq: 0.0,
+        penaltyPresent: 0.0,
+        mirostat: 0,
+        mirostatTau: 5.0,
+        mirostatEta: 0.1,
+        ignoreEos: false,
+        stopSequences: [],
+      );
+
+      // Note: Multimodal completion is handled differently in the Flutter SDK
+      final result = await _llamaSdk.generate(params);
+      setState(() {
+        _promptController.text = '';
+        _messages.add(Message(Message.roleUser, _promptController.text));
+        _messages.add(Message(Message.roleAssistant, result));
+        _status = 'Multimodal completion successful';
+      });
+    } catch (e) {
+      setState(() {
+        _status = 'Error generating multimodal response: $e';
+      });
+    } finally {
+      setState(() {
+        _isGenerating = false;
+      });
+    }
+  }
+
+  // Grammar API
+  Future<void> _handleGetGrammarContent() async {
+    if (!_isInitialized) {
+      _showModelNotLoadedSnackBar();
+      return;
+    }
+
+    setState(() {
+      _isGenerating = true;
+      _status = 'Getting grammar content...';
+    });
+
+    try {
+      // Convert string to GrammarName enum
+      final grammarName = GrammarName.values.firstWhere(
+        (e) =>
+            e.toString().split('.').last ==
+            _grammarNameController.text.toLowerCase(),
+        orElse: () => GrammarName.json, // Default to json if not found
+      );
+
+      final content = await _llamaSdk.getGrammarContent(grammarName);
+      setState(() {
+        _grammarContent = content ?? '';
+        _status = 'Grammar content retrieved successfully';
+      });
+    } catch (e) {
+      setState(() {
+        _status = 'Error getting grammar content: $e';
+      });
+    } finally {
+      setState(() {
+        _isGenerating = false;
+      });
+    }
   }
 
   Widget _buildMessageBubble(Message message) {
@@ -434,24 +741,497 @@ class _LlamaMobileExampleState extends State<LlamaMobileExample> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('Llama Mobile Flutter SDK Example'),
-        actions: [
-          IconButton(
-            onPressed: () {
-              // Show model configuration dialog
-              showDialog(
-                context: context,
-                builder: (context) => _buildModelConfigDialog(),
-              );
+    return DefaultTabController(
+      length: ExampleTab.values.length,
+      initialIndex: ExampleTab.chat.index,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+          title: const Text('Llama Mobile Flutter SDK Example'),
+          actions: [
+            IconButton(
+              onPressed: () {
+                // Show model configuration dialog
+                showDialog(
+                  context: context,
+                  builder: (context) => _buildModelConfigDialog(),
+                );
+              },
+              icon: const Icon(Icons.settings),
+            ),
+          ],
+          bottom: TabBar(
+            isScrollable: true,
+            tabs: ExampleTab.values.map((tab) {
+              String tabName;
+              IconData tabIcon;
+
+              switch (tab) {
+                case ExampleTab.chat:
+                  tabName = 'Chat';
+                  tabIcon = Icons.chat_bubble_outline;
+                  break;
+                case ExampleTab.tokenization:
+                  tabName = 'Tokenization';
+                  tabIcon = Icons.text_fields;
+                  break;
+                case ExampleTab.embeddings:
+                  tabName = 'Embeddings';
+                  tabIcon = Icons.analytics;
+                  break;
+                case ExampleTab.lora:
+                  tabName = 'LoRA';
+                  tabIcon = Icons.adjust;
+                  break;
+                case ExampleTab.multimodal:
+                  tabName = 'Multimodal';
+                  tabIcon = Icons.image;
+                  break;
+                case ExampleTab.grammar:
+                  tabName = 'Grammar';
+                  tabIcon = Icons.code;
+                  break;
+              }
+
+              return Tab(icon: Icon(tabIcon), text: tabName);
+            }).toList(),
+          ),
+        ),
+        body: _isInitialized ? _buildTabContent() : _buildModelNotLoadedUI(),
+      ),
+    );
+  }
+
+  // Tab content selector
+  Widget _buildTabContent() {
+    return TabBarView(
+      children: ExampleTab.values.map((tab) {
+        switch (tab) {
+          case ExampleTab.chat:
+            return _buildChatUI();
+          case ExampleTab.tokenization:
+            return _buildTokenizationTab();
+          case ExampleTab.embeddings:
+            return _buildEmbeddingsTab();
+          case ExampleTab.lora:
+            return _buildLoraTab();
+          case ExampleTab.multimodal:
+            return _buildMultimodalTab();
+          case ExampleTab.grammar:
+            return _buildGrammarTab();
+        }
+      }).toList(),
+    );
+  }
+
+  // Tokenization Tab UI
+  Widget _buildTokenizationTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Tokenization API',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _tokenizeTextController,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Text to Tokenize',
+              hintText: 'Enter text to tokenize...',
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+            ),
+            maxLines: 3,
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _isGenerating ? null : _handleTokenize,
+            child: const Text('Tokenize'),
+          ),
+          const SizedBox(height: 24),
+          if (_tokens.isNotEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Generated Tokens:',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Text(
+                      _tokens.take(20).join(', '),
+                      style: const TextStyle(fontFamily: 'Monospace'),
+                    ),
+                  ),
+                ),
+                if (_tokens.length > 20)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      '... and ${_tokens.length - 20} more tokens',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _isGenerating ? null : _handleDetokenize,
+                  child: const Text('Detokenize'),
+                ),
+              ],
+            ),
+          const SizedBox(height: 24),
+          if (_detokenizeResult.isNotEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Detokenized Text:',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(_detokenizeResult),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  // Embeddings Tab UI
+  Widget _buildEmbeddingsTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Embeddings API',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _embedTextController,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Text to Embed',
+              hintText: 'Enter text to generate embeddings...',
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+            ),
+            maxLines: 3,
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _isGenerating ? null : _handleGenerateEmbeddings,
+            child: const Text('Generate Embeddings'),
+          ),
+          const SizedBox(height: 24),
+          if (_embeddings.isNotEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Embeddings (Dimension: ${_embeddings.length}):',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Text(
+                      _embeddings
+                          .take(10)
+                          .map((e) => e.toStringAsFixed(4))
+                          .join(', '),
+                      style: const TextStyle(fontFamily: 'Monospace'),
+                    ),
+                  ),
+                ),
+                if (_embeddings.length > 10)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      '... and ${_embeddings.length - 10} more values',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                Text(
+                  'First 5 values in detail:',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: _embeddings
+                        .take(5)
+                        .map((e) => Text(e.toStringAsFixed(6)))
+                        .toList(),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  // LoRA Tab UI
+  Widget _buildLoraTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'LoRA Adapters API',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _loraPathController,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'LoRA Adapter Path',
+              hintText: 'Enter path to LoRA adapter...',
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: TextEditingController(text: _loraScale.toString()),
+            onChanged: (value) {
+              _loraScale = double.tryParse(value) ?? 1.0;
             },
-            icon: const Icon(Icons.settings),
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'LoRA Scale',
+              hintText: '1.0',
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+            ),
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _isGenerating ? null : _handleApplyLora,
+                  child: const Text('Apply LoRA'),
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Note: LoRA adapters can be removed by re-initializing the model
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'LoRA Applied: ${_loraApplied ? '✅' : '❌'}',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: _loraApplied ? Colors.green : Colors.red,
+            ),
           ),
         ],
       ),
-      body: _isInitialized ? _buildChatUI() : _buildModelNotLoadedUI(),
+    );
+  }
+
+  // Multimodal Tab UI
+  Widget _buildMultimodalTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Multimodal API',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _mmprojPathController,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'MMProj Path',
+              hintText: 'Enter path to mmproj file...',
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _isGenerating ? null : _handleInitMultimodal,
+                  child: const Text('Enable Multimodal'),
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Note: Multimodal resources are released when the model is released
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Multimodal Enabled: ${_multimodalEnabled ? '✅' : '❌'}',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: _multimodalEnabled ? Colors.green : Colors.red,
+            ),
+          ),
+          const SizedBox(height: 24),
+          if (_multimodalEnabled)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Multimodal Completion',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _imagePathController,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Image Path',
+                    hintText: 'Enter path to image...',
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _promptController,
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    labelText: 'Prompt',
+                    hintText: 'Enter your prompt...',
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _isGenerating ? null : _handleMultimodalCompletion,
+                  child: const Text('Generate Multimodal Response'),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  // Grammar Tab UI
+  Widget _buildGrammarTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Grammar API',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _grammarNameController,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              labelText: 'Grammar Name',
+              hintText: 'Enter grammar name (e.g., json, list)...',
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _isGenerating ? null : _handleGetGrammarContent,
+            child: const Text('Get Grammar Content'),
+          ),
+          const SizedBox(height: 24),
+          if (_grammarContent.isNotEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Grammar Content:',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.vertical,
+                    child: Text(
+                      _grammarContent,
+                      style: const TextStyle(fontFamily: 'Monospace'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
     );
   }
 

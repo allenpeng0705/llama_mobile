@@ -30,6 +30,8 @@ class AppState {
     var enableEmbedding = false
     var enableMultimodal = false
     var enableTTS = false
+    var enableTokenization = true
+    var enableLoRA = true
 
     // Chat configuration
     var systemPrompt = "You are a local AI assistant. Please respond to user queries in a polite, helpful, and clear manner. Focus on providing accurate information and maintaining a friendly tone."

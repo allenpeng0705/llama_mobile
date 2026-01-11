@@ -134,6 +134,33 @@
             color: #666;
             font-size: 14px;
         }
+        /* Tabs styles */
+        .tabs {
+            display: flex;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        .tab-button {
+            padding: 10px 20px;
+            border: none;
+            background-color: transparent;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 5px;
+        }
+        .tab-button.active {
+            border-bottom-color: #007bff;
+            color: #007bff;
+            font-weight: bold;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -162,19 +189,104 @@
             </div>
         </div>
 
-        <div class="section">
-            <h2 class="section-title">Text Generation</h2>
-            <textarea id="prompt" class="input textarea" placeholder="Enter your prompt here...">Hello, how are you?</textarea>
-            <div class="button-group">
-                <button id="generate-text" class="button primary-button" disabled>Generate Text</button>
-                <button id="generate-stream" class="button primary-button" disabled>Generate Stream</button>
-                <button id="stop-generation" class="button danger-button" disabled>Stop</button>
+        <!-- Tabs navigation -->
+        <div class="tabs">
+            <button class="tab-button active" data-tab="chat">Chat</button>
+            <button class="tab-button" data-tab="tokenization">Tokenization</button>
+            <button class="tab-button" data-tab="embeddings">Embeddings</button>
+            <button class="tab-button" data-tab="lora">LoRA</button>
+            <button class="tab-button" data-tab="multimodal">Multimodal</button>
+            <button class="tab-button" data-tab="grammar">Grammar</button>
+        </div>
+
+        <!-- Chat Tab -->
+        <div id="chat-tab" class="tab-content active">
+            <div class="section">
+                <h2 class="section-title">Text Generation</h2>
+                <textarea id="prompt" class="input textarea" placeholder="Enter your prompt here...">Hello, how are you?</textarea>
+                <div class="button-group">
+                    <button id="generate-text" class="button primary-button" disabled>Generate Text</button>
+                    <button id="generate-stream" class="button primary-button" disabled>Generate Stream</button>
+                    <button id="stop-generation" class="button danger-button" disabled>Stop</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tokenization Tab -->
+        <div id="tokenization-tab" class="tab-content">
+            <div class="section">
+                <h2 class="section-title">Tokenization</h2>
+                <textarea id="tokenize-text" class="input textarea" placeholder="Enter text to tokenize...">Hello world</textarea>
+                <div class="button-group">
+                    <button id="tokenize-button" class="button primary-button" disabled>Tokenize</button>
+                    <button id="detokenize-button" class="button primary-button" disabled>Detokenize</button>
+                </div>
+                <div id="tokenization-result" class="response" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Embeddings Tab -->
+        <div id="embeddings-tab" class="tab-content">
+            <div class="section">
+                <h2 class="section-title">Embeddings</h2>
+                <textarea id="embed-text" class="input textarea" placeholder="Enter text to embed...">This is a test sentence</textarea>
+                <div class="button-group">
+                    <button id="generate-embeddings-button" class="button primary-button" disabled>Generate Embeddings</button>
+                </div>
+                <div id="embeddings-result" class="response" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- LoRA Tab -->
+        <div id="lora-tab" class="tab-content">
+            <div class="section">
+                <h2 class="section-title">LoRA Adapters</h2>
+                <input type="text" id="lora-path" class="input" placeholder="LoRA Adapter Path" value="/path/to/your/lora.adapter">
+                <input type="text" id="lora-scale" class="input" placeholder="LoRA Scale" value="1.0">
+                <div class="button-group">
+                    <button id="apply-lora-button" class="button primary-button" disabled>Apply LoRA</button>
+                    <button id="remove-lora-button" class="button primary-button" disabled>Remove LoRA</button>
+                </div>
+                <div id="lora-status" class="status" style="display: none;"></div>
+            </div>
+        </div>
+
+        <!-- Multimodal Tab -->
+        <div id="multimodal-tab" class="tab-content">
+            <div class="section">
+                <h2 class="section-title">Multimodal Configuration</h2>
+                <input type="text" id="mmproj-path" class="input" placeholder="MMProj Path" value="/path/to/your/mmproj.gguf">
+                <div class="button-group">
+                    <button id="init-multimodal-button" class="button primary-button" disabled>Enable Multimodal</button>
+                    <button id="release-multimodal-button" class="button primary-button" disabled>Release Multimodal</button>
+                </div>
+                <div id="multimodal-status" class="status" style="display: none;"></div>
+            </div>
+            <div class="section">
+                <h2 class="section-title">Multimodal Completion</h2>
+                <input type="text" id="image-path" class="input" placeholder="Image Path" value="/path/to/your/image.jpg">
+                <textarea id="mm-prompt" class="input textarea" placeholder="Enter your prompt here...">Describe this image</textarea>
+                <div class="button-group">
+                    <button id="mm-completion-button" class="button primary-button" disabled>Generate Response</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grammar Tab -->
+        <div id="grammar-tab" class="tab-content">
+            <div class="section">
+                <h2 class="section-title">Grammar Support</h2>
+                <input type="text" id="grammar-name" class="input" placeholder="Grammar Name" value="json">
+                <div class="button-group">
+                    <button id="get-grammar-button" class="button primary-button" disabled>Get Grammar Content</button>
+                </div>
+                <div id="grammar-result" class="response" style="display: none;"></div>
             </div>
         </div>
 
         <div id="loading" class="loading" style="display: none;">
             <div class="spinner"></div>
-            <span>Generating...</span>
+            <span>Processing...</span>
         </div>
 
         <div id="response-container" class="section" style="display: none;">
@@ -183,7 +295,7 @@
         </div>
 
         <div class="footer">
-            <p>Note: Replace the model path with the actual path to your GGUF model file.</p>
+            <p>Note: Replace file paths with actual paths to your model and resource files.</p>
         </div>
     </div>
 
@@ -198,13 +310,55 @@
         const modelPathInput = document.getElementById('model-path');
         const loadModelButton = document.getElementById('load-model');
         const unloadModelButton = document.getElementById('unload-model');
+        
+        // Chat elements
         const promptInput = document.getElementById('prompt');
         const generateTextButton = document.getElementById('generate-text');
         const generateStreamButton = document.getElementById('generate-stream');
         const stopGenerationButton = document.getElementById('stop-generation');
+        
+        // Tokenization elements
+        const tokenizeTextInput = document.getElementById('tokenize-text');
+        const tokenizeButton = document.getElementById('tokenize-button');
+        const detokenizeButton = document.getElementById('detokenize-button');
+        const tokenizationResultElement = document.getElementById('tokenization-result');
+        
+        // Embeddings elements
+        const embedTextInput = document.getElementById('embed-text');
+        const generateEmbeddingsButton = document.getElementById('generate-embeddings-button');
+        const embeddingsResultElement = document.getElementById('embeddings-result');
+        
+        // LoRA elements
+        const loraPathInput = document.getElementById('lora-path');
+        const loraScaleInput = document.getElementById('lora-scale');
+        const applyLoraButton = document.getElementById('apply-lora-button');
+        const removeLoraButton = document.getElementById('remove-lora-button');
+        const loraStatusElement = document.getElementById('lora-status');
+        
+        // Multimodal elements
+        const mmprojPathInput = document.getElementById('mmproj-path');
+        const initMultimodalButton = document.getElementById('init-multimodal-button');
+        const releaseMultimodalButton = document.getElementById('release-multimodal-button');
+        const multimodalStatusElement = document.getElementById('multimodal-status');
+        const imagePathInput = document.getElementById('image-path');
+        const mmPromptInput = document.getElementById('mm-prompt');
+        const mmCompletionButton = document.getElementById('mm-completion-button');
+        
+        // Grammar elements
+        const grammarNameInput = document.getElementById('grammar-name');
+        const getGrammarButton = document.getElementById('get-grammar-button');
+        const grammarResultElement = document.getElementById('grammar-result');
+        
+        // Common elements
         const loadingElement = document.getElementById('loading');
         const responseContainerElement = document.getElementById('response-container');
         const responseElement = document.getElementById('response');
+
+        // State variables
+        let isGenerating = false;
+        let currentTokens = [];
+        let isLoraApplied = false;
+        let isMultimodalEnabled = false;
 
         // Initialize the SDK on page load
         async function initializeSDK() {
@@ -248,6 +402,11 @@
                 unloadModelButton.disabled = false;
                 generateTextButton.disabled = false;
                 generateStreamButton.disabled = false;
+                tokenizeButton.disabled = false;
+                generateEmbeddingsButton.disabled = false;
+                applyLoraButton.disabled = false;
+                initMultimodalButton.disabled = false;
+                getGrammarButton.disabled = false;
             } catch (error) {
                 console.error('Failed to load model:', error);
                 alert(`Failed to load model: ${error.message}`);
@@ -269,6 +428,22 @@
                 generateTextButton.disabled = true;
                 generateStreamButton.disabled = true;
                 stopGenerationButton.disabled = true;
+                tokenizeButton.disabled = true;
+                detokenizeButton.disabled = true;
+                generateEmbeddingsButton.disabled = true;
+                applyLoraButton.disabled = true;
+                removeLoraButton.disabled = true;
+                initMultimodalButton.disabled = true;
+                releaseMultimodalButton.disabled = true;
+                mmCompletionButton.disabled = true;
+                getGrammarButton.disabled = true;
+                
+                // Reset states
+                currentTokens = [];
+                isLoraApplied = false;
+                isMultimodalEnabled = false;
+                updateLoRAStatus();
+                updateMultimodalStatus();
             } catch (error) {
                 console.error('Failed to unload model:', error);
                 alert(`Failed to unload model: ${error.message}`);
@@ -359,6 +534,218 @@
             }
         }
 
+        // Tokenization APIs
+        async function tokenize() {
+            const text = tokenizeTextInput.value.trim();
+            if (!text) {
+                alert('Please enter text to tokenize');
+                return;
+            }
+
+            try {
+                loadingElement.style.display = 'flex';
+                const { tokens } = await LlamaMobileCapacitorPlugin.tokenize({
+                    text: text
+                });
+                currentTokens = tokens;
+                tokenizationResultElement.textContent = `Tokens (${tokens.length}): ${tokens.slice(0, 20).join(', ')}${tokens.length > 20 ? '...' : ''}`;
+                tokenizationResultElement.style.display = 'block';
+                detokenizeButton.disabled = false;
+            } catch (error) {
+                console.error('Tokenization failed:', error);
+                alert(`Tokenization failed: ${error.message}`);
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        }
+
+        async function detokenize() {
+            if (currentTokens.length === 0) {
+                alert('No tokens to detokenize');
+                return;
+            }
+
+            try {
+                loadingElement.style.display = 'flex';
+                const { text } = await LlamaMobileCapacitorPlugin.detokenize({
+                    tokens: currentTokens
+                });
+                tokenizationResultElement.textContent += `\n\nDetokenized: ${text}`;
+            } catch (error) {
+                console.error('Detokenization failed:', error);
+                alert(`Detokenization failed: ${error.message}`);
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        }
+
+        // Embeddings API
+        async function generateEmbeddings() {
+            const text = embedTextInput.value.trim();
+            if (!text) {
+                alert('Please enter text to embed');
+                return;
+            }
+
+            try {
+                loadingElement.style.display = 'flex';
+                const { embeddings } = await LlamaMobileCapacitorPlugin.generateEmbeddings({
+                    text: text
+                });
+                embeddingsResultElement.textContent = `Embeddings (Dimension: ${embeddings.length}):\n${embeddings.slice(0, 10).map(e => e.toFixed(4)).join(', ')}${embeddings.length > 10 ? '...' : ''}`;
+                embeddingsResultElement.style.display = 'block';
+            } catch (error) {
+                console.error('Embeddings generation failed:', error);
+                alert(`Embeddings generation failed: ${error.message}`);
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        }
+
+        // LoRA APIs
+        function updateLoRAStatus() {
+            loraStatusElement.textContent = `LoRA Applied: ${isLoraApplied ? '✅' : '❌'}`;
+            loraStatusElement.className = isLoraApplied ? 'status success' : 'status error';
+            loraStatusElement.style.display = 'block';
+            removeLoraButton.disabled = !isLoraApplied;
+        }
+
+        async function applyLora() {
+            const loraPath = loraPathInput.value.trim();
+            const loraScale = parseFloat(loraScaleInput.value.trim());
+            if (!loraPath) {
+                alert('Please enter a LoRA path');
+                return;
+            }
+            if (isNaN(loraScale)) {
+                alert('Please enter a valid LoRA scale');
+                return;
+            }
+
+            try {
+                loadingElement.style.display = 'flex';
+                const { success } = await LlamaMobileCapacitorPlugin.applyLoraAdapters({
+                    adapters: [{
+                        path: loraPath,
+                        scale: loraScale
+                    }]
+                });
+                isLoraApplied = success;
+                updateLoRAStatus();
+            } catch (error) {
+                console.error('Failed to apply LoRA:', error);
+                alert(`Failed to apply LoRA: ${error.message}`);
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        }
+
+        async function removeLora() {
+            try {
+                loadingElement.style.display = 'flex';
+                await LlamaMobileCapacitorPlugin.removeLoraAdapters();
+                isLoraApplied = false;
+                updateLoRAStatus();
+            } catch (error) {
+                console.error('Failed to remove LoRA:', error);
+                alert(`Failed to remove LoRA: ${error.message}`);
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        }
+
+        // Multimodal APIs
+        function updateMultimodalStatus() {
+            multimodalStatusElement.textContent = `Multimodal Enabled: ${isMultimodalEnabled ? '✅' : '❌'}`;
+            multimodalStatusElement.className = isMultimodalEnabled ? 'status success' : 'status error';
+            multimodalStatusElement.style.display = 'block';
+            releaseMultimodalButton.disabled = !isMultimodalEnabled;
+            mmCompletionButton.disabled = !isMultimodalEnabled;
+        }
+
+        async function initMultimodal() {
+            const mmprojPath = mmprojPathInput.value.trim();
+            if (!mmprojPath) {
+                alert('Please enter a MMProj path');
+                return;
+            }
+
+            try {
+                loadingElement.style.display = 'flex';
+                const { success } = await LlamaMobileCapacitorPlugin.initMultimodal({
+                    path: mmprojPath,
+                    offloadLayers: false
+                });
+                isMultimodalEnabled = success;
+                updateMultimodalStatus();
+            } catch (error) {
+                console.error('Failed to initialize multimodal:', error);
+                alert(`Failed to initialize multimodal: ${error.message}`);
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        }
+
+        async function releaseMultimodal() {
+            try {
+                loadingElement.style.display = 'flex';
+                await LlamaMobileCapacitorPlugin.releaseMultimodal();
+                isMultimodalEnabled = false;
+                updateMultimodalStatus();
+            } catch (error) {
+                console.error('Failed to release multimodal:', error);
+                alert(`Failed to release multimodal: ${error.message}`);
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        }
+
+        async function multimodalCompletion() {
+            const prompt = mmPromptInput.value.trim();
+            const imagePath = imagePathInput.value.trim();
+            if (!prompt || !imagePath) {
+                alert('Please enter both a prompt and image path');
+                return;
+            }
+
+            try {
+                loadingElement.style.display = 'flex';
+                const { output } = await LlamaMobileCapacitorPlugin.multimodalCompletion({
+                    prompt: prompt,
+                    maxTokens: 128
+                }, [imagePath]);
+                displayResponse(output);
+            } catch (error) {
+                console.error('Multimodal completion failed:', error);
+                alert(`Multimodal completion failed: ${error.message}`);
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        }
+
+        // Grammar API
+        async function getGrammarContent() {
+            const grammarName = grammarNameInput.value.trim();
+            if (!grammarName) {
+                alert('Please enter a grammar name');
+                return;
+            }
+
+            try {
+                loadingElement.style.display = 'flex';
+                const { content } = await LlamaMobileCapacitorPlugin.getGrammarContent({
+                    grammarName: grammarName
+                });
+                grammarResultElement.textContent = content;
+                grammarResultElement.style.display = 'block';
+            } catch (error) {
+                console.error('Failed to get grammar content:', error);
+                alert(`Failed to get grammar content: ${error.message}`);
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        }
+
         // Display response
         function displayResponse(text) {
             responseElement.textContent = text;
@@ -371,13 +758,57 @@
             responseContainerElement.style.display = 'none';
         }
 
+        // Tab switching functionality
+        function setupTabs() {
+            const tabButtons = document.querySelectorAll('.tab-button');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    // Remove active classes
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    tabContents.forEach(content => content.classList.remove('active'));
+                    
+                    // Add active class to clicked button and corresponding content
+                    button.classList.add('active');
+                    const tabId = button.getAttribute('data-tab');
+                    document.getElementById(`${tabId}-tab`).classList.add('active');
+                });
+            });
+        }
+
         // Register event listeners
-        document.addEventListener('DOMContentLoaded', initializeSDK);
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeSDK();
+            setupTabs();
+        });
+        
         loadModelButton.addEventListener('click', loadModel);
         unloadModelButton.addEventListener('click', unloadModel);
+        
+        // Chat event listeners
         generateTextButton.addEventListener('click', generateText);
         generateStreamButton.addEventListener('click', generateTextStream);
         stopGenerationButton.addEventListener('click', stopGeneration);
+        
+        // Tokenization event listeners
+        tokenizeButton.addEventListener('click', tokenize);
+        detokenizeButton.addEventListener('click', detokenize);
+        
+        // Embeddings event listeners
+        generateEmbeddingsButton.addEventListener('click', generateEmbeddings);
+        
+        // LoRA event listeners
+        applyLoraButton.addEventListener('click', applyLora);
+        removeLoraButton.addEventListener('click', removeLora);
+        
+        // Multimodal event listeners
+        initMultimodalButton.addEventListener('click', initMultimodal);
+        releaseMultimodalButton.addEventListener('click', releaseMultimodal);
+        mmCompletionButton.addEventListener('click', multimodalCompletion);
+        
+        // Grammar event listeners
+        getGrammarButton.addEventListener('click', getGrammarContent);
 
         // Listen for stream events
         document.addEventListener('llamamobile:textStream', (event) => {
