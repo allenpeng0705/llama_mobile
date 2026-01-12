@@ -6,9 +6,10 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import org.json.JSONException;
+
 import java.util.ArrayList;
 import java.util.List;
-import org.json.JSONException;
 
 @CapacitorPlugin(name = "LlamaMobile")
 public class LlamaMobilePlugin extends Plugin {
@@ -63,7 +64,7 @@ public class LlamaMobilePlugin extends Plugin {
     public void multimodalCompletion(PluginCall call) {
         JSObject params = call.getObject("params");
         JSArray mediaPathsArray = call.getArray("mediaPaths");
-
+        
         if (params == null || mediaPathsArray == null) {
             call.reject("Missing params or mediaPaths");
             return;
@@ -74,7 +75,7 @@ public class LlamaMobilePlugin extends Plugin {
             for (int i = 0; i < mediaPathsArray.length(); i++) {
                 mediaPaths.add(mediaPathsArray.getString(i));
             }
-
+            
             JSObject result = implementation.multimodalCompletion(params, mediaPaths);
             if (result != null) {
                 call.resolve(result);
@@ -123,7 +124,7 @@ public class LlamaMobilePlugin extends Plugin {
             for (int i = 0; i < tokensArray.length(); i++) {
                 tokens.add(tokensArray.getInt(i));
             }
-
+            
             String text = implementation.detokenize(tokens);
             if (text != null) {
                 JSObject result = new JSObject();
@@ -168,7 +169,7 @@ public class LlamaMobilePlugin extends Plugin {
             for (int i = 0; i < adaptersArray.length(); i++) {
                 adapters.add(adaptersArray.getJSObject(i));
             }
-
+            
             boolean success = implementation.applyLoraAdapters(adapters);
             JSObject result = new JSObject();
             result.put("success", success);
@@ -188,7 +189,7 @@ public class LlamaMobilePlugin extends Plugin {
     public void initMultimodal(PluginCall call) {
         String mmprojPath = call.getString("mmprojPath");
         Boolean useGpu = call.getBoolean("useGpu");
-
+        
         if (mmprojPath == null || useGpu == null) {
             call.reject("Missing mmprojPath or useGpu");
             return;
@@ -218,7 +219,7 @@ public class LlamaMobilePlugin extends Plugin {
     public void generateResponse(PluginCall call) {
         String userMessage = call.getString("userMessage");
         Integer maxTokens = call.getInt("maxTokens");
-
+        
         if (userMessage == null || maxTokens == null) {
             call.reject("Missing userMessage or maxTokens");
             return;

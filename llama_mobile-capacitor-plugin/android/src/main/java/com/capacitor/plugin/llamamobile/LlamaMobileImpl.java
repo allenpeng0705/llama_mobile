@@ -9,12 +9,12 @@ import com.llamamobile.LlamaMobile.CompletionParams;
 import com.llamamobile.LlamaMobile.CompletionResult;
 import com.llamamobile.LlamaMobile.GrammarName;
 import com.llamamobile.LlamaMobile.InitParams;
-import java.util.ArrayList;
-import java.util.List;
 import org.json.JSONException;
 
-public class LlamaMobileImpl {
+import java.util.ArrayList;
+import java.util.List;
 
+public class LlamaMobileImpl {
     private long contextHandle;
     private Context context;
     private boolean isMultimodalInitialized;

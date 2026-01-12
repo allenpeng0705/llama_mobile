@@ -7,6 +7,7 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 class MockLlamaMobileFlutterSdkPlatform
     with MockPlatformInterfaceMixin
     implements LlamaMobileFlutterSdkPlatform {
+
   @override
   Future<String?> getPlatformVersion() => Future.value('42');
 
@@ -14,8 +15,7 @@ class MockLlamaMobileFlutterSdkPlatform
   Future<bool> loadModel(ModelConfig config) => Future.value(true);
 
   @override
-  Future<String> generateCompletion(GenerationConfig config) =>
-      Future.value('Mock completion');
+  Future<String> generateCompletion(GenerationConfig config) => Future.value('Mock completion');
 
   @override
   Future<void> release() => Future.value();
@@ -24,26 +24,22 @@ class MockLlamaMobileFlutterSdkPlatform
   Future<bool> initialize(InitParams params) => Future.value(true);
 
   @override
-  Future<String> generate(CompletionParams params) =>
-      Future.value('Mock completion');
+  Future<String> generate(CompletionParams params) => Future.value('Mock completion');
 
   @override
-  Future<String?> getGrammarContent(GrammarName grammarName) =>
-      Future.value('Mock grammar content');
+  Future<String?> getGrammarContent(GrammarName grammarName) => Future.value('Mock grammar content');
 
   @override
   Future<CompletionResult> generateResponse(CompletionParams params) {
-    return Future.value(
-      CompletionResult(
-        text: 'Mock completion',
-        tokensGenerated: 10,
-        tokensEvaluated: 5,
-        truncated: false,
-        stoppedEos: true,
-        stoppedWord: false,
-        stoppedLimit: false,
-      ),
-    );
+    return Future.value(CompletionResult(
+      text: 'Mock completion',
+      tokensGenerated: 10,
+      tokensEvaluated: 5,
+      truncated: false,
+      stoppedEos: true,
+      stoppedWord: false,
+      stoppedLimit: false,
+    ));
   }
 
   @override
@@ -59,34 +55,28 @@ class MockLlamaMobileFlutterSdkPlatform
   Future<List<int>> tokenize(String text) => Future.value([1, 2, 3, 4, 5]);
 
   @override
-  Future<String> detokenize(List<int> tokens) =>
-      Future.value('Mock detokenized text');
+  Future<String> detokenize(List<int> tokens) => Future.value('Mock detokenized text');
 
   @override
   Future<List<double>> generateEmbeddings() => Future.value([0.1, 0.2, 0.3]);
 
   @override
-  Future<List<double>> generateEmbeddingsForPrompt(String prompt) =>
-      Future.value([0.1, 0.2, 0.3]);
+  Future<List<double>> generateEmbeddingsForPrompt(String prompt) => Future.value([0.1, 0.2, 0.3]);
 
   @override
   Future<bool> initMultimodal() => Future.value(true);
 
   @override
-  Future<bool> initTTS(String ttsPath, TTSModelType modelType) =>
-      Future.value(true);
+  Future<bool> initTTS(String ttsPath, TTSModelType modelType) => Future.value(true);
 
   @override
-  Future<String> generateAudio(TTSParams params) =>
-      Future.value('/mock/audio/path.mp3');
+  Future<String> generateAudio(TTSParams params) => Future.value('/mock/audio/path.mp3');
 
   @override
-  Future<bool> applyLoraAdapters(List<LoraAdapter> adapters) =>
-      Future.value(true);
+  Future<bool> applyLoraAdapters(List<LoraAdapter> adapters) => Future.value(true);
 
   @override
-  Future<String> createConversation(ConversationParams params) =>
-      Future.value('mock-conversation-id');
+  Future<String> createConversation(ConversationParams params) => Future.value('mock-conversation-id');
 
   @override
   Future<String> generateConversationResponse(
@@ -102,9 +92,7 @@ class MockLlamaMobileFlutterSdkPlatform
   ) => Future.value('Mock streamed conversation response');
 
   @override
-  Future<List<Map<String, dynamic>>> getConversationHistory(
-    String conversationId,
-  ) {
+  Future<List<Map<String, dynamic>>> getConversationHistory(String conversationId) {
     return Future.value([
       {'role': 'user', 'content': 'Hello'},
       {'role': 'assistant', 'content': 'Hi there!'},
@@ -125,8 +113,7 @@ class MockLlamaMobileFlutterSdkPlatform
 }
 
 void main() {
-  final LlamaMobileFlutterSdkPlatform initialPlatform =
-      LlamaMobileFlutterSdkPlatform.instance;
+  final LlamaMobileFlutterSdkPlatform initialPlatform = LlamaMobileFlutterSdkPlatform.instance;
 
   test('$MethodChannelLlamaMobileFlutterSdk is the default instance', () {
     expect(initialPlatform, isInstanceOf<MethodChannelLlamaMobileFlutterSdk>());
@@ -134,8 +121,7 @@ void main() {
 
   test('getPlatformVersion', () async {
     LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
-    MockLlamaMobileFlutterSdkPlatform fakePlatform =
-        MockLlamaMobileFlutterSdkPlatform();
+    MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
     LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
     expect(await llamaMobileFlutterSdkPlugin.getPlatformVersion(), '42');
@@ -143,10 +129,8 @@ void main() {
 
   group('Completion Tests', () {
     test('generateResponse', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
       final result = await llamaMobileFlutterSdkPlugin.generateResponse(
@@ -158,10 +142,8 @@ void main() {
     });
 
     test('streamCompletion', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
       final result = await llamaMobileFlutterSdkPlugin.streamCompletion(
@@ -172,10 +154,8 @@ void main() {
     });
 
     test('stopCompletion', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
       await llamaMobileFlutterSdkPlugin.stopCompletion();
@@ -185,10 +165,8 @@ void main() {
 
   group('Tokenization Tests', () {
     test('tokenize', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
       final result = await llamaMobileFlutterSdkPlugin.tokenize('Hello');
@@ -196,10 +174,8 @@ void main() {
     });
 
     test('detokenize', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
       final result = await llamaMobileFlutterSdkPlugin.detokenize([1, 2, 3]);
@@ -209,10 +185,8 @@ void main() {
 
   group('Embeddings Tests', () {
     test('generateEmbeddings', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
       final result = await llamaMobileFlutterSdkPlugin.generateEmbeddings();
@@ -220,24 +194,19 @@ void main() {
     });
 
     test('generateEmbeddingsForPrompt', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
-      final result = await llamaMobileFlutterSdkPlugin
-          .generateEmbeddingsForPrompt('Hello');
+      final result = await llamaMobileFlutterSdkPlugin.generateEmbeddingsForPrompt('Hello');
       expect(result, [0.1, 0.2, 0.3]);
     });
   });
 
   group('Multimodal & TTS Tests', () {
     test('initMultimodal', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
       final result = await llamaMobileFlutterSdkPlugin.initMultimodal();
@@ -245,10 +214,8 @@ void main() {
     });
 
     test('initTTS', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
       final result = await llamaMobileFlutterSdkPlugin.initTTS(
@@ -259,10 +226,8 @@ void main() {
     });
 
     test('generateAudio', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
       final result = await llamaMobileFlutterSdkPlugin.generateAudio(
@@ -274,26 +239,22 @@ void main() {
 
   group('LoRA Tests', () {
     test('applyLoraAdapters', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
-      final adapters = [LoraAdapter(path: '/mock/lora/path', scale: 0.8)];
-      final result = await llamaMobileFlutterSdkPlugin.applyLoraAdapters(
-        adapters,
-      );
+      final adapters = [
+        LoraAdapter(path: '/mock/lora/path', scale: 0.8),
+      ];
+      final result = await llamaMobileFlutterSdkPlugin.applyLoraAdapters(adapters);
       expect(result, true);
     });
   });
 
   group('Conversation Tests', () {
     test('createConversation', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
       final result = await llamaMobileFlutterSdkPlugin.createConversation(
@@ -306,71 +267,55 @@ void main() {
     });
 
     test('generateConversationResponse', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
-      final result = await llamaMobileFlutterSdkPlugin
-          .generateConversationResponse(
-            'mock-conversation-id',
-            CompletionParams(prompt: 'Hello'),
-          );
+      final result = await llamaMobileFlutterSdkPlugin.generateConversationResponse(
+        'mock-conversation-id',
+        CompletionParams(prompt: 'Hello'),
+      );
       expect(result, 'Mock conversation response');
     });
 
     test('streamConversationResponse', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
-      final result = await llamaMobileFlutterSdkPlugin
-          .streamConversationResponse(
-            'mock-conversation-id',
-            CompletionParams(prompt: 'Hello'),
-            (token) {},
-          );
+      final result = await llamaMobileFlutterSdkPlugin.streamConversationResponse(
+        'mock-conversation-id',
+        CompletionParams(prompt: 'Hello'),
+        (token) {},
+      );
       expect(result, 'Mock streamed conversation response');
     });
 
     test('getConversationHistory', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
-      final result = await llamaMobileFlutterSdkPlugin.getConversationHistory(
-        'mock-conversation-id',
-      );
+      final result = await llamaMobileFlutterSdkPlugin.getConversationHistory('mock-conversation-id');
       expect(result.length, 2);
       expect(result[0]['role'], 'user');
       expect(result[1]['role'], 'assistant');
     });
 
     test('clearConversation', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
-      await llamaMobileFlutterSdkPlugin.clearConversation(
-        'mock-conversation-id',
-      );
+      await llamaMobileFlutterSdkPlugin.clearConversation('mock-conversation-id');
       // Test passes if no exception is thrown
     });
   });
 
   group('Download Tests', () {
     test('downloadModel', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
       final result = await llamaMobileFlutterSdkPlugin.downloadModel(
@@ -387,10 +332,8 @@ void main() {
 
   group('Version Tests', () {
     test('getVersion', () async {
-      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin =
-          LlamaMobileFlutterSdk();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdk llamaMobileFlutterSdkPlugin = LlamaMobileFlutterSdk();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform = MockLlamaMobileFlutterSdkPlatform();
       LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
 
       final result = await llamaMobileFlutterSdkPlugin.getVersion();
