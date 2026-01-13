@@ -298,6 +298,44 @@ build_target() {
         cp "$ROOT_DIR/lib/grammars"/* "$DEST_PATH/grammars/" 2>/dev/null || true
     fi
     
+    # Copy Metal files
+    if [[ -f "$ROOT_DIR/lib/llama_cpp/ggml-metal.metal" ]]; then
+        cp "$ROOT_DIR/lib/llama_cpp/ggml-metal.metal" "$DEST_PATH/"
+    fi
+    
+    # Compile Metal files into metallib
+    if [[ -f "$DEST_PATH/ggml-metal.metal" && -x "$(which xcrun)" && -f "$DEST_PATH/Headers/llama_cpp/ggml-common.h" ]]; then
+        # Copy necessary headers for Metal compilation
+        cp "$DEST_PATH/Headers/llama_cpp/ggml-common.h" "$DEST_PATH/"
+        cp "$DEST_PATH/Headers/llama_cpp/ggml-metal-impl.h" "$DEST_PATH/"
+        
+        # Get the correct SDK path based on target
+        if [[ "$OUTPUT_SUBDIR" == *"simulator"* ]]; then
+            METAL_SDK="iphonesimulator"
+        else
+            METAL_SDK="iphoneos"
+        fi
+        
+        # Compile device-specific metallib with proper include paths
+        cd "$DEST_PATH"
+        xcrun -sdk $METAL_SDK metal -I. ggml-metal.metal -o ggml-llama.metallib 2>/dev/null || true
+        
+        # Compile simulator-specific metallib (if needed)
+        if [[ "$OUTPUT_SUBDIR" != *"simulator"* ]]; then
+            xcrun -sdk iphonesimulator metal -I. ggml-metal.metal -o ggml-llama-sim.metallib 2>/dev/null || true
+        fi
+        
+        # Clean up copied headers
+        rm -f "$DEST_PATH/ggml-common.h" "$DEST_PATH/ggml-metal-impl.h"
+    fi
+    
+    # Check for compiled metallib files in build directory as fallback
+    METAL_DIR="$BUILD_DIR"
+    if [[ -d "$METAL_DIR" ]]; then
+        # Copy any metallib files found
+        find "$METAL_DIR" -name "*.metallib" -exec cp {} "$DEST_PATH/" \; 2>/dev/null || true
+    fi
+    
     # Create Modules directory and module.modulemap
     mkdir -p "$DEST_PATH/Modules"
     cat > "$DEST_PATH/Modules/module.modulemap" << EOF

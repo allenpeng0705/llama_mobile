@@ -1,0 +1,8 @@
+framework module llama_mobile {
+    umbrella header "llama_mobile_api.h"
+    
+    export *
+    module * { export * }
+    
+    link "llama_mobile"
+}

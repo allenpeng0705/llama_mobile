@@ -1,591 +1,438 @@
-# llama_mobile iOS SDK
+# LlamaMobile iOS SDK
 
-A lightweight, high-performance iOS SDK for running large language models (LLMs) locally on iOS devices, based on llama.cpp.
+## Clean SDK Structure
 
-## SDK Type
+```
+llama_mobile-ios-SDK/
+├── llama_mobile.xcframework/       # Pre-built iOS framework
+│   ├── ios-arm64/                 # ARM64 device binary
+│   │   └── llama_mobile.framework/
+│   │       ├── Headers/           # All API headers
+│   │       │   ├── llama_mobile_api.h  # Main API header
+│   │       │   ├── llama_mobile_ffi.h  # FFI interface
+│   │       │   └── llama_cpp/     # llama_cpp headers (including Metal)
+│   │       ├── grammars/          # Grammar files for structured output
+│   │       ├── Modules/           # Xcode module definition
+│   │       └── llama_mobile       # Binary library
+│   └── ios-arm64-simulator/       # Simulator binary (same structure)
+├── Sources/
+│   └── LlamaMobile/
+│       └── LlamaMobile.swift      # Swift wrapper API
+├── Tests/
+│   └── LlamaMobileTests/          # Tests for Swift wrapper
+│       └── LlamaMobileTests.swift
+└── README.md                      # This documentation
+```
 
-llama_mobile iOS SDK is a **dynamic library** distributed as an XCFramework. This means:
+## How to Use
 
-### Dynamic Library vs Static Library
+### 1. Add Framework to Xcode Project
+- Drag and drop `llama_mobile.xcframework` into your Xcode project
+- In the target's Build Phases, ensure it's added to Link Binary With Libraries
+- Set Embed & Sign in Framework, Libraries, and Embedded Content
 
-| Feature | Static Library | Dynamic Library |
-|---------|----------------|-----------------|
-| Linking | Linked at compile time | Loaded at runtime |
-| File Size | Increases app binary size | Does not increase app binary size |
-| Updates | Requires app update to change | Can be updated independently (rare on iOS) |
-| Memory Usage | Duplicated if used by multiple apps | Shared between apps (not applicable on iOS due to sandboxing) |
-| Loading Time | Slightly faster app launch | Slightly slower app launch (negligible for most cases) |
+### 2. Add Swift Wrapper
+- Add `Sources/LlamaMobile/LlamaMobile.swift` to your Xcode project
+- This provides a Swift-friendly API that wraps the C++ implementation
 
-On iOS, dynamic libraries offer several advantages:
-- Smaller app binary size as the library code is not embedded
-- Better code isolation and security
-- Support for platform-specific optimizations like Metal acceleration
-
-## Features
-
-- 📱 **Local inference**: Run LLMs entirely on-device without internet connectivity
-- 🚀 **High performance**: Optimized for Apple Silicon with Metal acceleration support
-- 🔄 **Streaming generation**: Real-time token-by-token text generation
-- 🎯 **Conversational interface**: Easy-to-use chat API with conversation history management
-- 🖼️ **Multimodal support**: Process images and audio alongside text (requires compatible models)
-- 📦 **LoRA adapters**: Support for lightweight model fine-tuning
-- 📊 **Embeddings**: Generate text embeddings for semantic understanding
-
-## Integration
-
-### Option 1: Using Swift Package Manager (Recommended)
-
-1. In Xcode, go to **File** > **Add Package Dependencies**
-2. Enter the path to the `llama_mobile-ios-SDK` directory
-3. Select the package and add it to your target
-
-### Option 2: Using the pre-built xcframework
-
-1. Add `llama_mobile.xcframework` to your Xcode project:
-   - Drag and drop `llama_mobile.xcframework` into your project navigator
-   - Ensure "Copy items if needed" is selected
-   - Add to your target's "Frameworks, Libraries, and Embedded Content"
-
-2. Import the framework in your Swift/Objective-C code:
-
-   ```swift
-   import llama_mobile
-   ```
-
-   ```objective-c
-   #import <llama_mobile/llama_mobile_api.h>
-   ```
-
-### Option 3: Building from source
-
-1. Run the build script:
-   ```bash
-   ./scripts/build-ios.sh
-   ```
-
-2. The built xcframework will be available at `llama_mobile-ios-SDK/llama_mobile.xcframework`
-
-## API Usage
-
-### Swift API (Recommended)
-
-The Swift API provides a more idiomatic and type-safe interface to the llama_mobile framework:
-
-#### Initialization
-
+### 3. Basic Usage Example
 ```swift
-import llama_mobile
+import Foundation
 import LlamaMobile
 
-// Create a LlamaMobile instance with minimal parameters
-let modelPath = "/path/to/model.gguf"
-guard let llama = LlamaMobile(with: .init(modelPath: modelPath, nGpuLayers: 4, nCtx: 2048)) else {
-    print("Failed to initialize model")
-    return
-}
+// Initialize with model path
+let llama = LlamaMobile(modelPath: "/path/to/model.gguf", nGpuLayers: 10)
 
-// Or with custom parameters
-let params = LlamaMobile.InitParams(
-    modelPath: modelPath,
-    nCtx: 4096,
-    nGpuLayers: 10,
-    nThreads: 8,
-    useMmap: true,
-    flashAttention: true
+// Generate completion
+let result = llama.generateCompletion(
+    prompt: "Hello, how are you?",
+    maxTokens: 128,
+    temperature: 0.7
 )
 
-guard let llama = LlamaMobile(with: params) else {
-    print("Failed to initialize model")
-    return
-}
+print(result?.text ?? "No result")
 ```
 
-#### Text Completion
+### 4. Structured Output with Grammars
+
+Use built-in grammars to constrain output format:
 
 ```swift
-// Generate completion with default parameters
-let prompt = "Once upon a time"
-if let result = llama.generateCompletion(prompt: prompt, maxTokens: 100) {
-    print("Generated text: \(result.text)")
-    print("Tokens generated: \(result.tokensGenerated)")
-}
-
-// Generate completion with streaming tokens
-let streamingParams = LlamaMobile.CompletionParams(prompt: "Explain quantum computing in simple terms")
-if let result = llama.generateCompletion(with: streamingParams) {
-    print("Final result: \(result.text)")
-}
-```
-
-#### Multimodal Support
-
-```swift
-// Initialize multimodal support (for vision models)
-let mmprojPath = "/path/to/mmproj-model.gguf"
-if llama.initMultimodal(mmprojPath: mmprojPath) {
-    // Generate completion with image
-    let multimodalParams = LlamaMobile.CompletionParams(
-        multimodalPrompt: "Describe this image",
-        mediaPaths: ["/path/to/image.jpg"]
+// Access grammars from framework bundle
+if let bundlePath = Bundle.main.path(forResource: "llama_mobile", ofType: "framework", inDirectory: "Frameworks") {
+    let grammarPath = bundlePath + "/grammars/json.gbnf"
+    
+    // Generate valid JSON output
+    let jsonResult = llama.generateCompletion(
+        prompt: "Generate a JSON object with name and age fields:",
+        maxTokens: 128,
+        temperature: 0.7,
+        grammarPath: grammarPath
     )
     
-    if let result = llama.generateCompletion(with: multimodalParams) {
-        print("Image description: \(result.text)")
-    }
+    print("JSON result:", jsonResult?.text ?? "No result")
 }
 ```
 
-#### Model Download Support
+Available grammars:
+- `json.gbnf` - Valid JSON output
+- `json_arr.gbnf` - Valid JSON arrays
+- `arithmetic.gbnf` - Arithmetic expressions
+- `c.gbnf` - C programming code
+- `chess.gbnf` - Chess moves notation
+- `english.gbnf` - English language bias
+- `japanese.gbnf` - Japanese language bias
+- `list.gbnf` - Structured lists
 
-The iOS SDK includes built-in functionality to download models from Hugging Face repositories directly to your application's storage:
+### 5. Advanced Features
 
+#### Multimodal Support
 ```swift
-// Create a download task with progress tracking
-let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-let modelPath = documentsDir.appendingPathComponent("llama-2-7b-chat.Q4_K_M.gguf").path
-
-let downloadParams = LlamaMobile.DownloadParams(
-    url: "meta-llama/Llama-2-7B-Chat-GGUF",  // Hugging Face repository ID
-    localPath: modelPath,
-    progressCallback: { progress in
-        print("Download progress: \(Int(progress * 100))%")
-    }
+// Generate completion with image input
+let imageResult = llama.generateCompletion(
+    prompt: "Describe this image:",
+    imagePath: "/path/to/image.jpg",
+    maxTokens: 256,
+    temperature: 0.7
 )
-
-// Create a LlamaMobile instance (needed for download functionality)
-let llama = LlamaMobile(modelPath: "/tmp/placeholder.gguf") // Placeholder path, model won't be loaded
-
-// Download the model
-let downloadResult = llama.download(with: downloadParams)
-
-if downloadResult.success {
-    print("Model downloaded successfully to: \(downloadResult.localPath)")
-    
-    // Now you can initialize the model using the downloaded file
-    let params = LlamaMobile.InitParams(modelPath: downloadResult.localPath, nGpuLayers: 4, nCtx: 2048)
-    if let downloadedLlama = LlamaMobile(with: params) {
-        // Use the downloaded model
-        let completion = downloadedLlama.generateCompletion(prompt: "Hello, world!")
-        print(completion?.text ?? "Failed to generate completion")
-    }
-} else {
-    print("Download failed: \(downloadResult.errorMessage ?? "Unknown error")")
-}
 ```
 
-#### Download with Authentication
-
+#### LoRA Adapter
 ```swift
-// Download from a protected Hugging Face repository
-let protectedDownloadParams = LlamaMobile.DownloadParams(
-    url: "your-username/private-model-repo",  // Private Hugging Face repository ID
-    localPath: modelPath,
-    password: "your-hugging-face-token"  // Bearer token for authentication
+// Initialize with LoRA adapter
+let llamaWithLora = LlamaMobile(
+    modelPath: "/path/to/model.gguf",
+    nGpuLayers: 10,
+    loraPath: "/path/to/adapter.lora"
 )
-
-let protectedResult = llama.download(with: protectedDownloadParams)
 ```
 
-### C API (For Advanced Users)
-
-The C API provides direct access to the underlying functionality:
-
-#### Initialization
-
-Initialize the model with a path to your GGUF model file:
-
-```c
-#include <llama_mobile/llama_mobile_api.h>
-
-// Simple initialization
-llama_mobile_context_t ctx = llama_mobile_init_simple(
-    "/path/to/model.gguf",  // Path to model file
-    2048,                    // Context window size
-    0,                       // GPU layers (0 to disable GPU)
-    4,                       // Number of threads
-    NULL                     // Progress callback
-);
-
-if (ctx == NULL) {
-    printf("Failed to initialize model\n");
-    return 1;
-}
-
-// Advanced initialization with custom parameters
-llama_mobile_init_params_t params = {
-    .model_path = "/path/to/model.gguf",
-    .n_ctx = 4096,
-    .n_gpu_layers = 10,
-    .n_threads = 4,
-    .temperature = 0.8,
-    .top_k = 40,
-    .top_p = 0.95
-};
-
-llama_mobile_context_t ctx = llama_mobile_init(&params);
-```
-
-### Text Completion
-
-Generate text completions from a prompt:
-
-```c
-// Simple completion
-llama_mobile_completion_result_t result;
-int status = llama_mobile_completion_simple(
-    ctx,
-    "Once upon a time",
-    100,          // Max tokens
-    0.8,          // Temperature
-    NULL,         // Token callback
-    &result
-);
-
-if (status == 0) {
-    printf("Generated: %s\n", result.text);
-    printf("Tokens generated: %d\n", result.tokens_generated);
-    
-    // Free the result when done
-    llama_mobile_free_completion_result(&result);
-    llama_mobile_free_string(result.text);
-}
-
-// Advanced completion with streaming
-bool token_callback(const char* token) {
-    printf("%s", token);
-    fflush(stdout);
-    return true; // Return false to stop generation
-}
-
-llama_mobile_completion_params_t completion_params = {
-    .prompt = "Explain quantum computing in simple terms",
-    .max_tokens = 200,
-    .temperature = 0.7,
-    .top_k = 50,
-    .top_p = 0.9,
-    .stop_sequences = (const char*[]) {"\n\n"},
-    .stop_sequence_count = 1,
-    .token_callback = token_callback
-};
-
-llama_mobile_completion_result_t result;
-int status = llama_mobile_completion(ctx, &completion_params, &result);
-```
-
-### Conversational Interface
-
-Maintain conversation context for natural back-and-forth interactions:
-
-```c
-// Generate a response in conversation context
-llama_mobile_conversation_result_t conv_result;
-int status = llama_mobile_generate_response_simple(
-    ctx,
-    "Hello, how are you?",
-    100,          // Max tokens
-    &conv_result
-);
-
-if (status == 0) {
-    printf("Response: %s\n", conv_result.text);
-    printf("Time to first token: %lld ms\n", conv_result.time_to_first_token);
-    printf("Total time: %lld ms\n", conv_result.total_time);
-    
-    // Free resources
-    llama_mobile_free_string(conv_result.text);
-}
-
-// Continue the conversation
-status = llama_mobile_generate_response_simple(
-    ctx,
-    "Tell me about yourself",
-    150,
-    &conv_result
-);
-
-// Clear conversation history when done
-llama_mobile_clear_conversation(ctx);
-```
-
-### Multimodal Support
-
-Process images alongside text (requires compatible multimodal models):
-
-```c
-// Initialize multimodal support
-int status = llama_mobile_init_multimodal_simple(
-    ctx,
-    "/path/to/mmproj-model.gguf"  // Path to multimodal projection file
-);
-
-if (status == 0) {
-    // Generate completion with image
-    const char* media_paths[] = {
-        "/path/to/image.jpg"
-    };
-    
-    llama_mobile_completion_params_t params = {
-        .prompt = "Describe this image: <image>",
-        .max_tokens = 150,
-        .temperature = 0.7
-    };
-    
-    llama_mobile_completion_result_t result;
-    status = llama_mobile_multimodal_completion(
-        ctx, &params, media_paths, 1, &result
-    );
-    
-    if (status == 0) {
-        printf("Image description: %s\n", result.text);
-        llama_mobile_free_completion_result(&result);
-        llama_mobile_free_string(result.text);
+#### Token Streaming
+```swift
+// Generate with token callback
+llama.generateCompletion(
+    prompt: "Write a poem about AI:",
+    maxTokens: 256,
+    temperature: 0.8
+) { token, isDone in
+    if let token = token {
+        print(token, terminator: "")
     }
-}
-
-// Release multimodal resources when done
-llama_mobile_release_multimodal(ctx);
-```
-
-### Embeddings
-
-Generate text embeddings for semantic understanding:
-
-```c
-llama_mobile_float_array_t embedding = llama_mobile_embedding(
-    ctx,
-    "The quick brown fox jumps over the lazy dog"
-);
-
-if (embedding.count > 0) {
-    printf("Embedding dimension: %d\n", embedding.count);
-    printf("First few values: %f, %f, %f\n", 
-           embedding.values[0], embedding.values[1], embedding.values[2]);
-    
-    // Free embedding when done
-    llama_mobile_free_float_array(embedding);
+    return true // Return false to stop generation
 }
 ```
 
-### Cleanup
+### 6. Available API Methods
+The Swift wrapper provides these main functionalities:
+- `init(modelPath: nGpuLayers: nCtx: nThreads:)` - Initialize with model
+- `generateCompletion(prompt: maxTokens: temperature: tokenCallback:)` - Generate text
+- `generateCompletion(prompt: imagePath: maxTokens: temperature: tokenCallback:)` - Multimodal generation
+- `generateEmbeddings(for:)` - Generate embeddings
+- `tokenize(text:)` - Tokenize text
+- `detokenize(tokens:)` - Detokenize tokens
+- `download(with:)` - Download models
+- `speak(text:)` - Text-to-Speech conversion
+- `stopGeneration()` - Stop ongoing generation
 
-Always free resources when done:
+## Key Features
 
-```c
-llama_mobile_free(ctx);
-```
+### Metal Support
+The framework includes Metal acceleration:
+- Built-in GPU support for faster inference
+- Includes all necessary Metal shader files
+- Enabled when `nGpuLayers > 0` in initialization
 
-## Key API Functions
+### Grammar Support
+- Built-in grammars for structured output (JSON, lists, arithmetic, etc.)
+- Available in `grammars/` directory within the framework bundle
+- Can be used with completion parameters
 
-### Context Management
-- `llama_mobile_init()` - Initialize model with detailed parameters
-- `llama_mobile_init_simple()` - Simple model initialization with defaults
-- `llama_mobile_free()` - Free all model resources
+### API Compatibility
+- Maintains backward compatibility with existing code
+- Same Swift API as previous versions
+- Works with both device and simulator
 
-### Text Generation
-- `llama_mobile_completion()` - Generate text completion with advanced options
-- `llama_mobile_completion_simple()` - Simple text completion
-- `llama_mobile_stop_completion()` - Stop ongoing generation
+## Building
 
-### Conversation
-- `llama_mobile_generate_response()` - Generate conversational response
-- `llama_mobile_generate_response_simple()` - Simple conversational response
-- `llama_mobile_clear_conversation()` - Clear conversation history
-
-### Multimodal
-- `llama_mobile_init_multimodal()` - Enable multimodal support
-- `llama_mobile_init_multimodal_simple()` - Simple multimodal initialization
-- `llama_mobile_multimodal_completion()` - Generate from text + media
-- `llama_mobile_release_multimodal()` - Disable multimodal support
-
-### Advanced
-- `llama_mobile_tokenize()` - Convert text to tokens
-- `llama_mobile_detokenize()` - Convert tokens to text
-- `llama_mobile_embedding()` - Generate text embeddings
-- `llama_mobile_apply_lora_adapters()` - Apply LoRA fine-tuning adapters
-- `llama_mobile_remove_lora_adapters()` - Remove applied LoRA adapters
-
-## Building the Framework
-
-### Requirements
-
-- macOS 13.0+
-- Xcode 14.0+
-- CMake 3.16+
-- Command Line Tools for Xcode
-
-### Build Steps
-
-1. Ensure all submodules are initialized:
-   ```bash
-   git submodule update --init --recursive
-   ```
-
-2. Run the build script:
-   ```bash
-   ./scripts/build-ios.sh
-   ```
-
-3. The built xcframework will be available at:
-   ```
-   llama_mobile-ios-SDK/llama_mobile.xcframework
-   ```
-
-## iOS SDK Example
-
-A demo iOS application named `iOSFrameworkExample` is available in the `examples` folder to help you understand how to use the llama_mobile framework in practice. This example demonstrates:
-
-- Complete integration with the framework
-- Testing all major APIs (initialization, completion, conversation, embeddings)
-- Loading models from the `lib/models` directory
-- Running on both simulator and physical devices
-
-### How to Use the Example
-
-1. Open `examples/iOSFrameworkExample/iOSFrameworkExample.xcodeproj` in Xcode
-2. Ensure you have a GGUF model in the `lib/models` directory (e.g., `llama-2-7b-chat.Q4_K_M.gguf`)
-3. Select a simulator or physical device as the run destination
-4. Build and run the application
-
-### Key Features Demonstrated
-
-- **Model Initialization**: Loading models from the `lib/models` directory with custom parameters
-- **Text Completion**: Generating text from prompts with streaming support
-- **Conversational Interface**: Maintaining conversation history and generating responses
-- **Embeddings**: Creating text embeddings for semantic understanding
-- **Multi-architecture Support**: Working on both simulator (arm64/x86_64) and device (arm64)
-
-## Tests
-
-The llama_mobile iOS SDK includes a comprehensive test suite that covers all API functionality. These tests are designed to verify that the SDK behaves as expected and maintains backward compatibility.
-
-### Building and Running Tests
-
-#### Using Swift Package Manager (Recommended)
-
-SPM automatically handles building when running tests, but you can also build separately:
+To rebuild the SDK:
 
 ```bash
-# Navigate to the SDK directory
-cd llama_mobile-ios-SDK
+# First build the framework
+./scripts/build-ios-framework.sh
 
-# Build the package (including tests)
-swift build
-
-# Run all tests (automatically builds if needed)
-swift test
-
-# Run tests with verbose output
-swift test --verbose
+# Then build the SDK
+./scripts/build-ios-SDK.sh
 ```
 
-#### Using Xcode
+## Testing
 
-Xcode handles building automatically when running tests:
+### Running Tests with Xcode (Recommended)
 
-1. Open the package in Xcode by double-clicking on `llama_mobile-ios-SDK/Package.swift`
-2. Build the package: `Cmd+B`
-3. Use the Test Navigator (Cmd+6) to view all test cases
-4. Click the "Play" button next to individual tests or press `Cmd+U` to run all tests
-5. Test results will be displayed in the Test Report navigator
+1. **Create Xcode Project**
+   ```bash
+   cd llama_mobile-ios-SDK
+   swift package init --type library --force
+   swift package generate-xcodeproj
+   ```
 
-#### Using xcodebuild (Advanced)
+2. **Open in Xcode**
+   ```bash
+   open LlamaMobile.xcodeproj
+   ```
+
+3. **Configure Test Scheme**
+   - Select `LlamaMobileTests` from the scheme dropdown
+   - Click on `Product > Scheme > Edit Scheme...`
+   - Ensure `Test` is selected on the left sidebar
+
+4. **Run Tests**
+   - Click the "Run" button (▶️) or press `Cmd+U`
+   - Tests will appear in the Test Navigator (`Cmd+6`)
+
+### Test Configuration
+
+The tests expect model files at specific paths:
+```swift
+struct TestPaths {
+    static let modelPath = "/tmp/test/model.gguf"
+    static let vocoderPath = "/tmp/test/vocoder.gguf"
+    static let mmprojPath = "/tmp/test/mmproj.bin"
+    static let loraPath = "/tmp/test/lora.gguf"
+    static let imagePath = "/tmp/test/image.jpg"
+}
+```
+
+To make tests pass:
+- Place actual model files at these paths, or
+- Modify `Tests/LlamaMobileTests/LlamaMobileTests.swift` to point to your model files
+
+### Running Tests from Command Line
+
+The LlamaMobile iOS SDK requires an iOS simulator destination to run tests, which has limitations with the Swift CLI. You can use the provided helper script:
 
 ```bash
-# Navigate to the SDK directory
 cd llama_mobile-ios-SDK
+./run-tests.sh
+```
 
-# Build the test target
-xcodebuild build -scheme LlamaMobileTests -destination "platform=iOS Simulator,name=iPhone 15,OS=latest"
+The script will:
+1. Verify the framework is available
+2. Ensure Package.swift is properly configured
+3. Attempt to build for iOS simulator
+4. Provide guidance on running tests in Xcode
+
+### Recommended: Running Tests from Xcode
+
+For the most reliable test experience:
+
+1. Open the project in Xcode
+2. Select an iOS simulator as the destination
+3. Run the tests from the Test Navigator
+4. The SDK has been configured to link properly with the xcframework
+
+### Test Configuration
+
+Test paths can be modified in:
+`Tests/LlamaMobileTests/LlamaMobileTests.swift`
+
+Update these constants to point to your actual model files:
+```swift
+static let modelPath = "/tmp/test/model.gguf"
+static let loraPath = "/tmp/test/lora.gguf"
+static let imagePath = "/tmp/test/image.jpg"
+```
+
+## API Reference
+
+### Core Classes & Structs
+
+#### `LlamaMobile`
+The main class for interacting with the LlamaMobile framework.
+
+**Initialization**:
+```swift
+// Basic initialization
+let llama = try LlamaMobile(modelPath: "/path/to/model.gguf")
+
+// Advanced initialization
+let params = LlamaParams(
+    threads: 4,
+    gpuLayers: 1,
+    ropeScaling: "yarn",
+    ropeFactor: 1.0,
+    batchSize: 512
+)
+let llama = try LlamaMobile(modelPath: "/path/to/model.gguf", params: params)
+```
+
+**Key Methods**:
+
+```swift
+// Text completion
+generateCompletion(prompt: String, maxTokens: Int32 = 128, temperature: Double = 0.8, tokenCallback: ((String) -> Bool)? = nil) -> CompletionResult?
+
+// Structured output with grammar
+generateCompletion(prompt: String, grammarPath: String) -> CompletionResult?
+
+// Embeddings
+generateEmbeddings(for text: String) -> [Float]?
+
+// Tokenization
+tokenize(text: String) -> [Int32]?
+detokenize(tokens: [Int32]) -> String?
+
+// Multimodal
+initMultimodal(mmprojPath: String, useGpu: Bool = true) -> Bool
+generateCompletion(prompt: String, mediaPaths: [String]) -> CompletionResult?
+
+// TTS
+generateAudioFromText(text: String, speakerJson: String = "{\"speaker\": \"default\"}") -> [Float]?
+```
+
+#### `CompletionParams`
+Parameters for text completion generation.
+
+```swift
+public struct CompletionParams {
+    public var prompt: String
+    public var maxTokens: Int32 = 128
+    public var temperature: Double = 0.8
+    public var topP: Double = 0.95
+    public var topK: Int32 = 40
+    public var grammarPath: String? = nil
+    public var mediaPaths: [String] = []
+    // ... more parameters
+}
+```
+
+#### `CompletionResult`
+Result of text completion generation.
+
+```swift
+public struct CompletionResult {
+    public let text: String
+    public let tokensGenerated: Int32
+    public let tokensEvaluated: Int32
+    public let truncated: Bool
+    public let stoppedEos: Bool
+    public let stoppedWord: Bool
+    public let stoppedLimit: Bool
+    // ... more fields
+}
+```
+
+### API Categories
+
+#### Text Generation
+- `generateCompletion(with:)` - Generate text with full parameter control
+- `generateCompletion(prompt:)` - Simplified text generation
+- `stopCompletion()` - Stop ongoing generation
+
+#### Embeddings
+- `generateEmbeddings(for:)` - Generate embeddings for text
+
+#### Tokenization
+- `tokenize(text:)` - Convert text to tokens
+- `detokenize(tokens:)` - Convert tokens back to text
+
+#### Multimodal
+- `initMultimodal(mmprojPath:)` - Initialize multimodal support
+- `supportsVision()` - Check if vision is supported
+- `supportsAudio()` - Check if audio is supported
+- `releaseMultimodal()` - Release multimodal resources
+
+#### TTS (Text-to-Speech)
+- `initVocoder(vocoderModelPath:)` - Initialize TTS vocoder
+- `generateAudioFromText(text:)` - Convert text to speech audio
+- `getFormattedAudioCompletion(speakerJson:textToSpeak:)` - Format text for audio generation
+
+#### LoRA Adapters
+- `applyLoraAdapters(_:)` - Apply LoRA adapters to the model
+- `removeLoraAdapters()` - Remove all LoRA adapters
+- `getLoadedLoraAdapters()` - Get loaded LoRA adapters
+
+#### Conversation Management
+- `generateResponse(userMessage:)` - Generate a response in conversation
+- `clearConversation()` - Clear conversation context
+- `isConversationActive()` - Check if conversation is active
+
+#### Model Information
+- `getModelDescription()` - Get model description
+- `getModelSize()` - Get model size in bytes
+- `getModelParametersCount()` - Get number of model parameters
+- `getContextWindowSize()` - Get context window size
+- `getEmbeddingDimension()` - Get embedding dimension
+
+## Requirements
+- iOS 15.0+
+- Xcode 15.0+
+- Swift 5.9+
+- CMake 3.21+ (for building from source)
+
+## Testing Tools
+
+### Package.swift
+A Swift Package Manager manifest file that enables building and testing the LlamaMobile library using SPM.
+
+**Purpose:**
+- Defines the library structure and dependencies
+- Configures xcframework integration
+- Sets up test targets for automated testing
+
+**Key Features:**
+```swift
+// Binary target for the llama_mobile xcframework
+.binaryTarget(
+    name: "llama_mobile",
+    path: "./llama_mobile.xcframework"
+)
+
+// Test target configuration
+.testTarget(
+    name: "LlamaMobileTests",
+    dependencies: ["LlamaMobile"]
+)
+```
+
+### run-tests.sh
+A shell script that simplifies the process of running LlamaMobile iOS SDK tests.
+
+**Purpose:**
+- Automates framework availability checks
+- Creates Package.swift if missing
+- Runs tests with proper configuration
+- Provides troubleshooting information
+
+**Usage:**
+```bash
+# Make the script executable (if needed)
+chmod +x run-tests.sh
 
 # Run the tests
-xcodebuild test -scheme LlamaMobileTests -destination "platform=iOS Simulator,name=iPhone 15,OS=latest"
+./run-tests.sh
 ```
 
-#### Standalone Test Script
+**What the script does:**
+1. Verifies the presence of `llama_mobile.xcframework`
+2. Ensures Package.swift is properly configured
+3. Executes tests using Swift Package Manager
+4. Displays test results and helpful tips
 
-The SDK includes a standalone test script `TestLlamaMobile.swift` that demonstrates API usage:
-
-```bash
-# Navigate to the SDK directory
-cd llama_mobile-ios-SDK
-
-# Update model paths in TestLlamaMobile.swift first
-# You can edit the file directly or use sed for quick updates
-sed -i '' 's|/path/to/model.gguf|/your/actual/model/path.gguf|g' TestLlamaMobile.swift
-
-# Build the standalone test script
-swiftc -o TestRunner -framework llama_mobile TestLlamaMobile.swift
-
-# Or run with automatic building
-swift run --configuration release TestLlamaMobile
+**Output example:**
+```
+=== LlamaMobile iOS SDK Test Runner ===
+✅ Found llama_mobile.xcframework
+✅ Created Package.swift
+=== Running tests ===
+Note: Tests may fail because they require actual model files at specific paths
 ```
 
-### Test Coverage
+## Using the Testing Tools Together
 
-The test suite covers all major SDK APIs:
+The Package.swift and run-tests.sh files work together to provide a seamless testing experience:
 
-- **Initialization**: Context creation, parameter validation, error handling
-- **Completion Generation**: Text generation, streaming, parameter combinations
-- **Conversation**: Chat API, conversation history, streaming responses
-- **Tokenization**: Text-to-tokens and tokens-to-text conversion
-- **Embeddings**: Generating and validating embeddings
-- **Multimodal**: Vision/audio input processing
-- **TTS**: Text-to-speech functionality
-- **LoRA Adapters**: Loading and managing adapters
-- **Download**: Model downloading with progress tracking
-- **Error Handling**: Graceful handling of invalid inputs and failures
+1. **run-tests.sh** provides a user-friendly interface for test execution
+2. **Package.swift** provides the technical configuration for SPM
+3. Together, they eliminate the need for manual Xcode project setup
 
-### Adding New Tests
-
-To add new tests to the suite:
-
-1. Create a new Swift file in the `Tests/LlamaMobileTests` directory
-2. Import `XCTest` and `LlamaMobile`
-3. Create a test class that inherits from `XCTestCase`
-4. Add test methods using the `func testXxx() throws` naming convention
-
-```swift
-import XCTest
-import LlamaMobile
-
-class MyNewTests: XCTestCase {
-    func testMyNewFeature() {
-        // Test implementation
-        XCTAssertTrue(true)
-    }
-}
-```
-
-## Troubleshooting
-
-### Model Loading Issues
-
-- **"Failed to initialize model"**: Ensure the model path is correct and the file is accessible
-- **"Model format not supported"**: Verify you're using a GGUF-format model compatible with llama.cpp
-- **"Insufficient memory"**: Reduce the context window size (`n_ctx`) or disable GPU layers
-
-### Performance Optimization
-
-- **Slow inference**: Increase the number of threads (`n_threads`) or enable GPU acceleration
-- **High memory usage**: Use smaller models or reduce `n_gpu_layers` to limit GPU memory usage
-- **Battery drain**: Disable Metal acceleration (`n_gpu_layers = 0`) if battery life is a concern
-
-### Common Errors
-
-- **`EXC_BAD_ACCESS`**: Ensure you're not using a freed context or result
-- **`LLAMA_MOBILE_ERROR_INVALID_PARAMS`**: Check that all required parameters are valid
-- **`LLAMA_MOBILE_ERROR_NOT_INITIALIZED`**: Verify the context is properly initialized before use
-
-## License
-
-The llama_mobile framework is licensed under the MIT License.
-
-## Credits
-
-- Based on [llama.cpp](https://github.com/ggerganov/llama.cpp) by Georgi Gerganov
-- Metal optimizations for Apple Silicon
-- GGUF model format support
-
-## Contact
-
-For issues, questions, or feature requests, please open an issue on the project repository.
+These tools are particularly useful for CI/CD pipelines and automated testing workflows.

@@ -119,23 +119,59 @@ public class LlamaMobile {
     }
     
     /// Parameters for initializing the llama_mobile context
+    ///
+    /// This struct configures how the model is loaded and executed, including
+    /// performance settings, memory management, and feature enablement.
     public struct InitParams {
+        /// Path to the model file (GGUF format)
         public var modelPath: String
+        
+        /// Custom chat template for conversation management
         public var chatTemplate: String? = nil
+        
+        /// System prompt to use for conversations
         public var systemPrompt: String? = nil
+        
+        /// Context window size (maximum number of tokens that can be processed)
         public var nCtx: Int32 = Int32(2048)
+        
+        /// Batch size for processing tokens (affects performance)
         public var nBatch: Int32 = Int32(512)
+        
+        /// Micro-batch size for processing tokens (affects performance)
         public var nUBatch: Int32 = Int32(512)
+        
+        /// Number of layers to offload to GPU (0 = CPU only)
         public var nGpuLayers: Int32 = Int32(0)
+        
+        /// Number of CPU threads to use for inference
         public var nThreads: Int32 = Int32(4)
+        
+        /// Use memory mapping for faster model loading
         public var useMmap: Bool = true
+        
+        /// Lock model memory to prevent swapping
         public var useMlock: Bool = false
+        
+        /// Enable embedding generation functionality
         public var embedding: Bool = false
+        
+        /// Embedding pooling type (0 = mean, 1 = max, 2 = cls)
         public var poolingType: Int32 = Int32(0)
+        
+        /// Normalize embeddings before returning
         public var embdNormalize: Int32 = Int32(0)
+        
+        /// Enable flash attention (faster attention computation on supported GPUs)
         public var flashAttention: Bool = false
+        
+        /// K cache type (e.g., "fp16", "q4_0")
         public var cacheTypeK: String? = nil
+        
+        /// V cache type (e.g., "fp16", "q4_0")
         public var cacheTypeV: String? = nil
+        
+        /// Callback for model loading progress (0.0 to 1.0)
         public var progressCallback: ((Float) -> Void)? = nil
         
         /// Convenience initializer with minimal parameters
@@ -159,27 +195,71 @@ public class LlamaMobile {
     }
     
     /// Parameters for generating text completions
+    ///
+    /// This struct controls all aspects of text generation, including sampling
+    /// behavior, output constraints, and multimodal inputs.
     public struct CompletionParams {
+        /// The input prompt text to generate completions for
         public var prompt: String
+        
+        /// Maximum number of tokens to generate (0 = no limit)
         public var maxTokens: Int32 = 128
+        
+        /// Override the number of CPU threads to use (nil = use initialization value)
         public var nThreads: Int32? = nil
+        
+        /// Random seed for generation (-1 = random seed)
         public var seed: Int32 = -1
+        
+        /// Sampling temperature (higher = more creative, lower = more deterministic)
         public var temperature: Double = 0.8
+        
+        /// Top-k sampling (selects from top k most likely tokens)
         public var topK: Int32 = 40
+        
+        /// Nucleus sampling threshold (selects smallest set of tokens whose cumulative probability exceeds top_p)
         public var topP: Double = 0.95
+        
+        /// Minimum probability for a token to be considered (alternative to top-k)
         public var minP: Double = 0.05
+        
+        /// Typical sampling threshold (controls diversity by filtering tokens with low typicality)
         public var typicalP: Double = 1.0
+        
+        /// Number of tokens to look back for repetition penalty
         public var penaltyLastN: Int32 = 64
+        
+        /// Repetition penalty (higher = more diverse output, lower = more repetitive)
         public var penaltyRepeat: Double = 1.1
+        
+        /// Frequency penalty (penalizes frequent tokens)
         public var penaltyFreq: Double = 0.0
+        
+        /// Presence penalty (penalizes tokens that have already appeared)
         public var penaltyPresent: Double = 0.0
+        
+        /// Mirostat sampling mode (0 = disabled, 1 = mirostat, 2 = mirostat 2.0)
         public var mirostat: Int32 = 0
+        
+        /// Mirostat target entropy (controls output quality)
         public var mirostatTau: Double = 5.0
+        
+        /// Mirostat learning rate (controls adaptation speed)
         public var mirostatEta: Double = 0.1
+        
+        /// Ignore end-of-sequence tokens
         public var ignoreEos: Bool = false
+        
+        /// Custom stop sequences to end generation
         public var stopSequences: [String] = []
+        
+        /// Grammar string for structured output
         public var grammar: String? = nil
+        
+        /// Streaming callback for generated tokens
         public var tokenCallback: ((String) -> Bool)? = nil
+        
+        /// Paths to media files for multimodal generation (images/audio)
         public var mediaPaths: [String] = []
         
         /// Default initializer with minimal parameters
@@ -223,21 +303,45 @@ public class LlamaMobile {
     }
     
     /// Result of a text completion generation
+    ///
+    /// Contains the generated text and metadata about the completion process.
     public struct CompletionResult {
+        /// The generated completion text
         public var text: String
+        
+        /// Number of tokens generated in the completion
         public var tokensGenerated: Int32
+        
+        /// Number of tokens evaluated from the prompt
         public var tokensEvaluated: Int32
+        
+        /// Whether the completion was truncated (due to context window limits)
         public var truncated: Bool
+        
+        /// Whether generation stopped due to end-of-sequence token
         public var stoppedEos: Bool
+        
+        /// Whether generation stopped due to a stop sequence
         public var stoppedWord: Bool
+        
+        /// Whether generation stopped due to reaching maxTokens limit
         public var stoppedLimit: Bool
     }
     
     /// LoRA adapter configuration
+    ///
+    /// Low-Rank Adaptation (LoRA) allows fine-tuning models with minimal parameters.
     public struct LoraAdapter {
+        /// Path to the LoRA adapter file (.gguf format)
         public var path: String
+        
+        /// LoRA adapter scale (controls the strength of the adaptation)
         public var scale: Float
         
+        /// Initialize a LoRA adapter configuration
+        /// - Parameters:
+        ///   - path: Path to the LoRA adapter file
+        ///   - scale: LoRA adapter scale (default: 1.0)
         public init(path: String, scale: Float = 1.0) {
             self.path = path
             self.scale = scale
@@ -245,27 +349,56 @@ public class LlamaMobile {
     }
     
     /// Result of a conversation generation
+    ///
+    /// Contains the generated response and performance metrics for the conversation.
     public struct ConversationResult {
+        /// The generated conversation response text
         public var text: String
+        
+        /// Time taken to generate the first token (in milliseconds)
         public var timeToFirstToken: Int64
+        
+        /// Total time taken for the entire generation (in milliseconds)
         public var totalTime: Int64
+        
+        /// Number of tokens generated in the response
         public var tokensGenerated: Int32
     }
     
     /// Parameters for downloading models or files
+    ///
+    /// Used for downloading models from Hugging Face or other sources.
     public struct DownloadParams {
+        /// URL to download from (supports Hugging Face repo IDs)
         public var url: String
+        
+        /// Local path to save the downloaded file
         public var localPath: String
+        
+        /// Username for authentication (if required)
         public var username: String? = nil
+        
+        /// Password or API token for authentication (if required)
         public var password: String? = nil
+        
+        /// Custom HTTP headers for the download request
         public var headers: [String: String]? = nil
+        
+        /// Callback for download progress (0.0 to 1.0)
         public var progressCallback: ((Float) -> Void)? = nil
     }
     
     /// Result of a download operation
+    ///
+    /// Contains the outcome of a model or file download.
     public struct DownloadResult {
+        /// Whether the download was successful
         public var success: Bool
+        
+        /// Local path where the file was saved
         public var localPath: String
+        
+        /// Error message if the download failed (nil if successful)
         public var errorMessage: String? = nil
     }
     
@@ -301,13 +434,14 @@ public class LlamaMobile {
     /// Internal initialization method
     private func initialize(with params: InitParams) -> Bool {
         // Create progress callback wrapper if needed
-        var callbackWrapper: (@convention(c) (Float) -> Void)? = nil
+        typealias ProgressCallbackType = @convention(c) (Float) -> Void
+        var callbackWrapper: ProgressCallbackType? = nil
         
         if params.progressCallback != nil {
             // Store the closure in global context
             progressCallbackContext = params.progressCallback
             // Use the global C-compatible function
-            callbackWrapper = { @convention(c) (progress: Float) -> Void in
+            callbackWrapper = { (progress: Float) -> Void in
                 cProgressCallback(progress: progress)
             }
         }
@@ -365,13 +499,14 @@ public class LlamaMobile {
         }
         
         // Create token callback wrapper if needed
-        var tokenCallbackPtr: (@convention(c) (UnsafePointer<CChar>?) -> Bool)? = nil
+        typealias TokenCallbackType = @convention(c) (UnsafePointer<CChar>?) -> Bool
+        var tokenCallbackPtr: TokenCallbackType? = nil
         
         if params.tokenCallback != nil {
             // Store the closure in global context
             tokenCallbackContext = params.tokenCallback
             // Use the global C-compatible function
-            tokenCallbackPtr = { @convention(c) (token: UnsafePointer<CChar>?) -> Bool in
+            tokenCallbackPtr = { (token: UnsafePointer<CChar>?) -> Bool in
                 cTokenCallback(token: token)
             }
         }
@@ -484,13 +619,14 @@ public class LlamaMobile {
     /// - Returns: Download result containing success status and local path
     public func download(with params: DownloadParams) -> DownloadResult {
         // Create a progress callback wrapper if needed
-        var callbackWrapper: (@convention(c) (Float, UnsafePointer<CChar>?, Int64, Int64) -> Void)? = nil
+        typealias DownloadProgressCallbackType = @convention(c) (Float, UnsafePointer<CChar>?, Int64, Int64) -> Void
+        var callbackWrapper: DownloadProgressCallbackType? = nil
         
         if params.progressCallback != nil {
             // Store the closure in global context
             downloadProgressCallbackContext = params.progressCallback
             // Use the global C-compatible function
-            callbackWrapper = { @convention(c) (progress: Float, status: UnsafePointer<CChar>?, downloadedBytes: Int64, totalBytes: Int64) -> Void in
+            callbackWrapper = { (progress: Float, status: UnsafePointer<CChar>?, downloadedBytes: Int64, totalBytes: Int64) -> Void in
                 cDownloadProgressCallback(progress: progress, status: status, downloadedBytes: downloadedBytes, totalBytes: totalBytes)
             }
         }
@@ -904,13 +1040,14 @@ public class LlamaMobile {
         }
         
         // Create token callback wrapper if needed
-        var tokenCallbackPtr: (@convention(c) (UnsafePointer<CChar>?) -> Bool)? = nil
+        typealias TokenCallbackType = @convention(c) (UnsafePointer<CChar>?) -> Bool
+        var tokenCallbackPtr: TokenCallbackType? = nil
         
         if tokenCallback != nil {
             // Store the closure in global context
             tokenCallbackContext = tokenCallback
             // Use the global C-compatible function
-            tokenCallbackPtr = { @convention(c) (token: UnsafePointer<CChar>?) -> Bool in
+            tokenCallbackPtr = { (token: UnsafePointer<CChar>?) -> Bool in
                 cTokenCallback(token: token)
             }
         }
