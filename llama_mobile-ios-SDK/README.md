@@ -458,23 +458,66 @@ A demo iOS application named `iOSFrameworkExample` is available in the `examples
 
 The llama_mobile iOS SDK includes a comprehensive test suite that covers all API functionality. These tests are designed to verify that the SDK behaves as expected and maintains backward compatibility.
 
-### Running Tests
+### Building and Running Tests
 
-#### Using Xcode
+#### Using Swift Package Manager (Recommended)
 
-1. Open the project in Xcode by double-clicking on `llama_mobile-ios-SDK/llama_mobile.xcframework` or by dragging it into Xcode
-2. Navigate to the `Tests` directory in the project navigator
-3. Select the `LlamaMobileTests` target
-4. Click the "Play" button or press `Cmd+U` to run the test suite
-
-#### Using Command Line
+SPM automatically handles building when running tests, but you can also build separately:
 
 ```bash
 # Navigate to the SDK directory
 cd llama_mobile-ios-SDK
 
-# Run tests using xcodebuild
+# Build the package (including tests)
+swift build
+
+# Run all tests (automatically builds if needed)
+swift test
+
+# Run tests with verbose output
+swift test --verbose
+```
+
+#### Using Xcode
+
+Xcode handles building automatically when running tests:
+
+1. Open the package in Xcode by double-clicking on `llama_mobile-ios-SDK/Package.swift`
+2. Build the package: `Cmd+B`
+3. Use the Test Navigator (Cmd+6) to view all test cases
+4. Click the "Play" button next to individual tests or press `Cmd+U` to run all tests
+5. Test results will be displayed in the Test Report navigator
+
+#### Using xcodebuild (Advanced)
+
+```bash
+# Navigate to the SDK directory
+cd llama_mobile-ios-SDK
+
+# Build the test target
+xcodebuild build -scheme LlamaMobileTests -destination "platform=iOS Simulator,name=iPhone 15,OS=latest"
+
+# Run the tests
 xcodebuild test -scheme LlamaMobileTests -destination "platform=iOS Simulator,name=iPhone 15,OS=latest"
+```
+
+#### Standalone Test Script
+
+The SDK includes a standalone test script `TestLlamaMobile.swift` that demonstrates API usage:
+
+```bash
+# Navigate to the SDK directory
+cd llama_mobile-ios-SDK
+
+# Update model paths in TestLlamaMobile.swift first
+# You can edit the file directly or use sed for quick updates
+sed -i '' 's|/path/to/model.gguf|/your/actual/model/path.gguf|g' TestLlamaMobile.swift
+
+# Build the standalone test script
+swiftc -o TestRunner -framework llama_mobile TestLlamaMobile.swift
+
+# Or run with automatic building
+swift run --configuration release TestLlamaMobile
 ```
 
 ### Test Coverage

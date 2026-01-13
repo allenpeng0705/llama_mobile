@@ -8,6 +8,7 @@
 #include <thread>
 #include <chrono>
 #include <iomanip>
+#include <filesystem>
 
 #include "utils.h"
 #include "../../lib/llama_mobile.h"
@@ -15,6 +16,8 @@
 // Include nlohmann json for proper JSON handling
 #include "../../lib/llama_cpp/nlohmann/json.hpp"
 using json = nlohmann::ordered_json;
+
+namespace fs = std::filesystem;
 
 struct GenerationResult {
     std::string text;
@@ -194,12 +197,11 @@ void demonstrateSamplingVariations(llama_mobile::llama_mobile_context& context) 
 }
 
 int main(int argc, char **argv) {
-    // Use local Qwen3 model by default
-    std::string model_path = "../../models/Qwen3-1.7B-Q4_K_M.gguf";
-    std::string demo_mode = "";
-    
     std::cout << "\n=== Cactus LLM Example ===" << std::endl;
-    std::cout << "Using model: " << model_path << std::endl;
+
+    // Step 1: Determine the model path
+    std::string model_path;
+    std::string demo_mode = "";
     
     // Parse command-line arguments
     if (argc > 1) {
@@ -215,7 +217,59 @@ int main(int argc, char **argv) {
             }
         }
     }
-
+    
+    // If no model path specified, try to find one
+    if (model_path.empty()) {
+        // Use local Qwen3 model by default with absolute path
+        model_path = "/Users/shileipeng/Documents/mygithub/llama_mobile/models/Qwen3-1.7B-Q4_K_M.gguf";
+        
+        // Check if the specific model exists, otherwise try any GGUF file in the models directory
+        if (!fs::exists(model_path)) {
+            std::cout << "Model file not found: " << model_path << std::endl;
+            std::cout << "Searching for any GGUF file in the models directory..." << std::endl;
+            
+            std::string models_dir = "/Users/shileipeng/Documents/mygithub/llama_mobile/models";
+            
+            if (fs::exists(models_dir)) {
+                bool found = false;
+                for (const auto& entry : fs::directory_iterator(models_dir)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".gguf") {
+                        model_path = entry.path().string();
+                        std::cout << "Found model: " << model_path << std::endl;
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if (!found) {
+                    std::cerr << "\n❌ ERROR: No GGUF files found in models directory: " << models_dir << std::endl;
+                    std::cerr << "Please download at least one LLM model in GGUF format.\n" << std::endl;
+                    std::cerr << "Example command:" << std::endl;
+                    std::cerr << "  cd " << models_dir << std::endl;
+                    std::cerr << "  wget https://huggingface.co/BAAI/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf\n" << std::endl;
+                    return 1;
+                }
+            } else {
+                std::cerr << "\n❌ ERROR: Models directory not found: " << models_dir << std::endl;
+                std::cerr << "Please create this directory and place GGUF model files there.\n" << std::endl;
+                std::cerr << "Example commands:" << std::endl;
+                std::cerr << "  mkdir -p " << models_dir << std::endl;
+                std::cerr << "  cd " << models_dir << std::endl;
+                std::cerr << "  wget https://huggingface.co/BAAI/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf\n" << std::endl;
+                return 1;
+            }
+        }
+    }
+    
+    // Step 2: Verify the model file exists
+    if (!fs::exists(model_path)) {
+        std::cerr << "\n❌ ERROR: Model file not found: " << model_path << std::endl;
+        std::cerr << "Please check the path and try again.\n" << std::endl;
+        return 1;
+    }
+    
+    std::cout << "Using model: " << model_path << std::endl;
+    
     try {
         llama_mobile::llama_mobile_context context;
         
@@ -240,15 +294,18 @@ int main(int argc, char **argv) {
         // Configure stop tokens
         params.antiprompt.push_back("<|im_end|>");
         
-        std::cout << "Loading model: " << model_path << std::endl;
+        std::cout << "Loading model..." << std::endl;
         if (!context.loadModel(params)) {
-            std::cerr << "Failed to load model" << std::endl;
+            std::cerr << "\n❌ ERROR: Failed to load model: " << model_path << std::endl;
+            std::cerr << "Possible reasons:" << std::endl;
+            std::cerr << "  1. The file is not a valid GGUF LLM model" << std::endl;
+            std::cerr << "  2. The model is corrupted" << std::endl;
+            std::cerr << "  3. The model is not compatible with the current implementation" << std::endl;
+            std::cerr << "  4. Insufficient memory to load the model\n" << std::endl;
             return 1;
         }
         
         std::cout << "Model loaded successfully!" << std::endl;
-        std::cout << "Model: " << context.llama_init->model() << std::endl;
-        std::cout << "Context: " << context.llama_init->context() << std::endl;
         
         // Run different demonstrations
         if (demo_mode == "chat") {
@@ -274,7 +331,7 @@ int main(int argc, char **argv) {
         }
         
     } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "\n❌ ERROR: " << e.what() << std::endl;
         return 1;
     }
     

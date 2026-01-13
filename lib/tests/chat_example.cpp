@@ -179,33 +179,16 @@ int main(int argc, char* argv[]) {
                 continue;
             }
             
-            // Build the conversation prompt
-            if (conversation_history.empty()) {
-                // First interaction - add system prompt
-                conversation_history = "<system>You are a helpful assistant. Respond naturally to user queries.</system>\n";
-            }
-            conversation_history += "<user>" + user_input + "</user>\n<assistant>";
+            // Use a simple prompt format
+            std::string prompt = "You are a helpful assistant. User: " + user_input + " Assistant: ";
             
-            // Generate response with streaming
+            // Generate response without streaming
             std::cout << "\nAssistant: ";
             std::cout.flush();
             
-            // Load JSON grammar
-            std::string grammar_path = get_executable_dir() + "/../../grammars/json.gbnf";
-            std::ifstream grammar_file(grammar_path);
-            std::string grammar_content;
-            if (grammar_file.is_open()) {
-                grammar_content = std::string((std::istreambuf_iterator<char>(grammar_file)),
-                                           std::istreambuf_iterator<char>());
-                grammar_file.close();
-                std::cout << "\n[DEBUG] Loaded grammar from: " << grammar_path << std::endl;
-            } else {
-                std::cerr << "\n[WARNING] Could not load grammar file: " << grammar_path << std::endl;
-            }
-            
             // Set up completion parameters with grammar support
             llama_mobile_completion_params_t params = {
-                .prompt = conversation_history.c_str(),
+                .prompt = prompt.c_str(),
                 .max_tokens = 200,
                 .temperature = 0.8,
                 .top_k = 40,
@@ -214,14 +197,19 @@ int main(int argc, char* argv[]) {
                 .penalty_repeat = 1.1,
                 .stop_sequences = nullptr,
                 .stop_sequence_count = 0,
-                .grammar = grammar_content.empty() ? nullptr : grammar_content.c_str(),
-                .token_callback = token_callback
+                .grammar = nullptr,
+                .token_callback = nullptr
             };
             
             llama_mobile_completion_result_t result;
             int status = llama_mobile_completion(ctx, &params, &result);
             
-            std::cout << std::endl;  // Add newline after streaming completes
+            // Print the complete result
+            if (status == 0 && result.text) {
+                std::cout << result.text << std::endl;
+            } else {
+                std::cout << std::endl;
+            }
             
             if (status == 0) {
                 if (result.text) {

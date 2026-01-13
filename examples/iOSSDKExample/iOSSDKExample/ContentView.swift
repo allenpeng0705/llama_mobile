@@ -4,7 +4,7 @@
 //
 
 import SwiftUI
-import LlamaMobileSDK
+import LlamaMobile
 
 // Main application state
 class AppState: ObservableObject {
@@ -1320,6 +1320,14 @@ struct GrammarTestView: View {
             }
             
             do {
+                defer {
+                    Task {
+                        await MainActor.run {
+                            self.isLoading = false
+                        }
+                    }
+                }
+                
                 let grammarContent = try await appState.llamaMobile.getGrammarContent(for: grammarName)
                 
                 let params = GenerateParams(
@@ -1340,10 +1348,6 @@ struct GrammarTestView: View {
             } catch {
                 await MainActor.run {
                     self.result = "Error: \(error.localizedDescription)"
-                }
-            } finally {
-                await MainActor.run {
-                    self.isLoading = false
                 }
             }
         }

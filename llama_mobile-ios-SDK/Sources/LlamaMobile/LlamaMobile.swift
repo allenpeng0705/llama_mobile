@@ -8,6 +8,45 @@
 import Foundation
 import llama_mobile
 
+// Global callback context holders
+private var progressCallbackContext: ((Float) -> Void)? = nil
+private var downloadProgressCallbackContext: ((Float) -> Void)? = nil
+private var tokenCallbackContext: ((String) -> Bool)? = nil
+private var completionCallbackContext: ((String) -> Void)? = nil
+private var chunkCallbackContext: ((String) -> Void)? = nil
+private var embeddingCallbackContext: (([Float]) -> Void)? = nil
+
+// C-compatible callback functions
+private func cProgressCallback(progress: Float) -> Void {
+    progressCallbackContext?(progress)
+}
+
+private func cDownloadProgressCallback(progress: Float, status: UnsafePointer<CChar>?, downloadedBytes: Int64, totalBytes: Int64) -> Void {
+    downloadProgressCallbackContext?(progress)
+}
+
+private func cTokenCallback(token: UnsafePointer<CChar>?) -> Bool {
+    guard let token = token else { return true }
+    let tokenString = String(cString: token)
+    return tokenCallbackContext?(tokenString) ?? true
+}
+
+private func cCompletionCallback(text: UnsafePointer<Int8>?) -> Void {
+    guard let text = text else { return }
+    completionCallbackContext?(String(cString: text))
+}
+
+private func cChunkCallback(text: UnsafePointer<Int8>?) -> Void {
+    guard let text = text else { return }
+    chunkCallbackContext?(String(cString: text))
+}
+
+private func cEmbeddingCallback(embedding: UnsafePointer<Float>?, count: Int) -> Void {
+    guard let embedding = embedding else { return }
+    let embeddingArray = Array(UnsafeBufferPointer(start: embedding, count: count))
+    embeddingCallbackContext?(embeddingArray)
+}
+
 /// LlamaMobile API wrapper for iOS
 /// 
 /// This class provides a Swift-friendly interface to the llama_mobile C API, 
@@ -84,16 +123,16 @@ public class LlamaMobile {
         public var modelPath: String
         public var chatTemplate: String? = nil
         public var systemPrompt: String? = nil
-        public var nCtx: Int32 = 2048
-        public var nBatch: Int32 = 512
-        public var nUBatch: Int32 = 512
-        public var nGpuLayers: Int32 = 0
-        public var nThreads: Int32 = ProcessInfo.processInfo.processorCount
+        public var nCtx: Int32 = Int32(2048)
+        public var nBatch: Int32 = Int32(512)
+        public var nUBatch: Int32 = Int32(512)
+        public var nGpuLayers: Int32 = Int32(0)
+        public var nThreads: Int32 = Int32(4)
         public var useMmap: Bool = true
         public var useMlock: Bool = false
         public var embedding: Bool = false
-        public var poolingType: Int32 = 0
-        public var embdNormalize: Int32 = 0
+        public var poolingType: Int32 = Int32(0)
+        public var embdNormalize: Int32 = Int32(0)
         public var flashAttention: Bool = false
         public var cacheTypeK: String? = nil
         public var cacheTypeV: String? = nil
@@ -263,11 +302,13 @@ public class LlamaMobile {
     private func initialize(with params: InitParams) -> Bool {
         // Create progress callback wrapper if needed
         var callbackWrapper: (@convention(c) (Float) -> Void)? = nil
-        var callbackClosure: ((Float) -> Void)? = params.progressCallback
         
-        if callbackClosure != nil {
-            callbackWrapper = { progress in
-                callbackClosure?(progress)
+        if params.progressCallback != nil {
+            // Store the closure in global context
+            progressCallbackContext = params.progressCallback
+            // Use the global C-compatible function
+            callbackWrapper = { @convention(c) (progress: Float) -> Void in
+                cProgressCallback(progress: progress)
             }
         }
         
@@ -325,13 +366,13 @@ public class LlamaMobile {
         
         // Create token callback wrapper if needed
         var tokenCallbackPtr: (@convention(c) (UnsafePointer<CChar>?) -> Bool)? = nil
-        var tokenCallbackClosure = params.tokenCallback
         
-        if tokenCallbackClosure != nil {
-            tokenCallbackPtr = {(token: UnsafePointer<CChar>?) -> Bool in
-                guard let token = token else { return true }
-                let tokenString = String(cString: token)
-                return tokenCallbackClosure?(tokenString) ?? true
+        if params.tokenCallback != nil {
+            // Store the closure in global context
+            tokenCallbackContext = params.tokenCallback
+            // Use the global C-compatible function
+            tokenCallbackPtr = { @convention(c) (token: UnsafePointer<CChar>?) -> Bool in
+                cTokenCallback(token: token)
             }
         }
         
@@ -361,7 +402,7 @@ public class LlamaMobile {
         
         // Generate completion - use multimodal if media paths are provided
         var cResult = llama_mobile_completion_result_c_t()
-        let status: Int
+        let status: Int32
         
         if !params.mediaPaths.isEmpty {
             // Convert media paths to C array
@@ -444,11 +485,13 @@ public class LlamaMobile {
     public func download(with params: DownloadParams) -> DownloadResult {
         // Create a progress callback wrapper if needed
         var callbackWrapper: (@convention(c) (Float, UnsafePointer<CChar>?, Int64, Int64) -> Void)? = nil
-        var callbackClosure: ((Float) -> Void)? = params.progressCallback
         
-        if callbackClosure != nil {
-            callbackWrapper = { progress, status, downloadedBytes, totalBytes in
-                callbackClosure?(progress)
+        if params.progressCallback != nil {
+            // Store the closure in global context
+            downloadProgressCallbackContext = params.progressCallback
+            // Use the global C-compatible function
+            callbackWrapper = { @convention(c) (progress: Float, status: UnsafePointer<CChar>?, downloadedBytes: Int64, totalBytes: Int64) -> Void in
+                cDownloadProgressCallback(progress: progress, status: status, downloadedBytes: downloadedBytes, totalBytes: totalBytes)
             }
         }
         
@@ -475,7 +518,7 @@ public class LlamaMobile {
         cParams.offline = false
         cParams.progress_callback = callbackWrapper
         
-        let cResult = llama_mobile_download_model_c(&cParams)
+        var cResult = llama_mobile_download_model_c(&cParams)
         
         // Convert C result to Swift result
         defer {
@@ -790,7 +833,7 @@ public class LlamaMobile {
             return nil
         }
         
-        let cResult = llama_mobile_get_loaded_lora_adapters_c(context)
+        var cResult = llama_mobile_get_loaded_lora_adapters_c(context)
         defer { llama_mobile_free_lora_adapters_c(&cResult) }
         
         guard let cAdapters = cResult.adapters else {
@@ -828,7 +871,7 @@ public class LlamaMobile {
         }
         
         return userMessage.withCString { messageC in
-            let cResult = llama_mobile_continue_conversation_c(
+            var cResult = llama_mobile_continue_conversation_c(
                 context,
                 messageC,
                 maxTokens
@@ -862,18 +905,18 @@ public class LlamaMobile {
         
         // Create token callback wrapper if needed
         var tokenCallbackPtr: (@convention(c) (UnsafePointer<CChar>?) -> Bool)? = nil
-        var tokenCallbackClosure = tokenCallback
         
-        if tokenCallbackClosure != nil {
-            tokenCallbackPtr = {(token: UnsafePointer<CChar>?) -> Bool in
-                guard let token = token else { return true }
-                let tokenString = String(cString: token)
-                return tokenCallbackClosure?(tokenString) ?? true
+        if tokenCallback != nil {
+            // Store the closure in global context
+            tokenCallbackContext = tokenCallback
+            // Use the global C-compatible function
+            tokenCallbackPtr = { @convention(c) (token: UnsafePointer<CChar>?) -> Bool in
+                cTokenCallback(token: token)
             }
         }
         
         return userMessage.withCString { messageC in
-            let cResult = llama_mobile_continue_conversation_with_callback_c(
+            var cResult = llama_mobile_continue_conversation_with_callback_c(
                 context,
                 messageC,
                 maxTokens,

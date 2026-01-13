@@ -5,9 +5,12 @@
 #include <cmath>
 #include <iomanip>
 #include <algorithm>
+#include <filesystem>
 
 #include "utils.h"
 #include "../../lib/llama_mobile.h"
+
+namespace fs = std::filesystem;
 
 float cosineSimilarity(const std::vector<float>& a, const std::vector<float>& b) {
     if (a.size() != b.size()) {
@@ -58,17 +61,62 @@ std::vector<float> getSentenceEmbedding(llama_mobile::llama_mobile_context& cont
 }
 
 int main(int argc, char **argv) {
-    // Use local embedding model by default
-    std::string model_path = "../../models/embedding/Qwen3-Embedding-0.6B-Q8_0.gguf";
+    std::cout << "\n=== Cactus Embedding Similarity Example ===" << std::endl;
+
+    // Step 1: Determine the model path
+    std::string model_path;
     
-    // Allow user to specify a different model path
+    // Option 1: User specified path
     if (argc > 1) {
         model_path = argv[1];
+        std::cout << "Using user-specified model: " << model_path << std::endl;
+    } 
+    // Option 2: Try to find a model in the default directory
+    else {
+        std::string embedding_dir = "/Users/shileipeng/Documents/mygithub/llama_mobile/models/embedding";
+        std::cout << "Searching for embedding models in: " << embedding_dir << std::endl;
+        
+        // Check if directory exists
+        if (!fs::exists(embedding_dir)) {
+            std::cerr << "\n❌ ERROR: Embedding directory not found: " << embedding_dir << std::endl;
+            std::cerr << "Please create this directory and place GGUF embedding model files there.\n" << std::endl;
+            std::cerr << "Example commands:" << std::endl;
+            std::cerr << "  mkdir -p " << embedding_dir << std::endl;
+            std::cerr << "  cd " << embedding_dir << std::endl;
+            std::cerr << "  wget https://huggingface.co/cactus-ai/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf\n" << std::endl;
+            return 1;
+        }
+        
+        // Search for any GGUF file
+        bool found = false;
+        for (const auto& entry : fs::directory_iterator(embedding_dir)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".gguf") {
+                model_path = entry.path().string();
+                found = true;
+                break;
+            }
+        }
+        
+        if (!found) {
+            std::cerr << "\n❌ ERROR: No GGUF model files found in " << embedding_dir << std::endl;
+            std::cerr << "Please download at least one embedding model in GGUF format.\n" << std::endl;
+            std::cerr << "Example command:" << std::endl;
+            std::cerr << "  cd " << embedding_dir << std::endl;
+            std::cerr << "  wget https://huggingface.co/cactus-ai/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf\n" << std::endl;
+            return 1;
+        }
+        
+        std::cout << "Found model: " << model_path << std::endl;
     }
 
-    std::cout << "\n=== Cactus Embedding Similarity Example ===" << std::endl;
-    std::cout << "Using model: " << model_path << std::endl;
-
+    // Step 2: Verify the model file exists
+    if (!fs::exists(model_path)) {
+        std::cerr << "\n❌ ERROR: Model file not found: " << model_path << std::endl;
+        std::cerr << "Please check the path and try again.\n" << std::endl;
+        return 1;
+    }
+    
+    // Step 3: Try to load the model
     try {
         llama_mobile::llama_mobile_context context;
 
@@ -82,9 +130,13 @@ int main(int argc, char **argv) {
         params.embd_normalize = 2; 
         params.pooling_type = LLAMA_POOLING_TYPE_MEAN; 
 
-        std::cout << "Loading embedding model..." << std::endl;
+        std::cout << "\nLoading embedding model..." << std::endl;
         if (!context.loadModel(params)) {
-            std::cerr << "Failed to load model" << std::endl;
+            std::cerr << "\n❌ ERROR: Failed to load model: " << model_path << std::endl;
+            std::cerr << "Possible reasons:" << std::endl;
+            std::cerr << "  1. The file is not a valid GGUF embedding model" << std::endl;
+            std::cerr << "  2. The model is corrupted" << std::endl;
+            std::cerr << "  3. The model is not compatible with the current implementation\n" << std::endl;
             return 1;
         }
 
@@ -196,9 +248,9 @@ int main(int argc, char **argv) {
         std::cout << "\n=== Embedding Analysis Complete ===" << std::endl;
 
     } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "\n❌ ERROR: " << e.what() << std::endl;
         return 1;
     }
 
     return 0;
-} 
+}

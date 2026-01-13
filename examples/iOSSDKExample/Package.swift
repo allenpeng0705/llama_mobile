@@ -13,12 +13,12 @@ let package = Package(
             targets: ["iOSSDKExample"])
     ],
     dependencies: [
-        .package(name: "LlamaMobileSDK", path: "../../llama_mobile-ios-SDK")
+        .package(name: "LlamaMobile", path: "../../llama_mobile-ios-SDK")
     ],
     targets: [
         .target(
             name: "iOSSDKExample",
-            dependencies: [.product(name: "LlamaMobileSDK", package: "LlamaMobileSDK")],
+            dependencies: [.product(name: "LlamaMobile", package: "LlamaMobile")],
             path: "iOSSDKExample",
             resources: [
                 .process("Assets.xcassets")
