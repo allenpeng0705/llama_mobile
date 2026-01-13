@@ -58,3 +58,5 @@ scripts/config.env
 /llama_mobile-ios-SDK/build
 /llama_mobile-ios-SDK/CMakeFiles
 /llama_mobile-ios-SDK/Debug-iphonesimulator
+llama_mobile-ios/llama_mobile.xcframework/ios-arm64-simulator/llama_mobile.framework/llama_mobile
+llama_mobile-ios/llama_mobile.xcframework/ios-arm64/llama_mobile.framework/llama_mobile
