@@ -20,11 +20,17 @@ let package = Package(
         .target(
             name: "LlamaMobile",
             dependencies: ["llama_mobile"],
-            path: "Sources/LlamaMobile"
+            path: "Sources/LlamaMobile",
+            linkerSettings: [
+                .linkedFramework("Accelerate")
+            ]
         ),
         .testTarget(
             name: "LlamaMobileTests",
-            dependencies: ["LlamaMobile"]
+            dependencies: ["LlamaMobile"],
+            linkerSettings: [
+                .linkedFramework("Accelerate")
+            ]
         )
     ]
 )

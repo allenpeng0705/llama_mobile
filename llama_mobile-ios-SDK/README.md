@@ -168,26 +168,30 @@ To rebuild the SDK:
 
 ### Running Tests with Xcode (Recommended)
 
-1. **Create Xcode Project**
+1. **Open the Project in Xcode**
    ```bash
    cd llama_mobile-ios-SDK
-   swift package init --type library --force
-   swift package generate-xcodeproj
+   open Package.swift
    ```
 
-2. **Open in Xcode**
-   ```bash
-   open LlamaMobile.xcodeproj
-   ```
+2. **Select iOS Simulator Destination**
+   - In Xcode's top bar, select an iOS simulator as the destination
+   - Choose from available simulators like "iPhone 15" or "iPhone 15 Pro"
+   - Avoid selecting "Any iOS Device" as the framework requires a simulator
 
-3. **Configure Test Scheme**
-   - Select `LlamaMobileTests` from the scheme dropdown
-   - Click on `Product > Scheme > Edit Scheme...`
-   - Ensure `Test` is selected on the left sidebar
+3. **Run Tests**
+   - Open the Test Navigator (`Cmd+6`)
+   - Click the "Play" button next to "LlamaMobileTests" to run all tests
+   - Or run individual test methods by clicking their play buttons
+   - You can also use `Cmd+U` to run all tests in the current scheme
 
-4. **Run Tests**
-   - Click the "Run" button (▶️) or press `Cmd+U`
-   - Tests will appear in the Test Navigator (`Cmd+6`)
+### What to Expect
+
+The Xcode project is automatically configured with:
+- Proper framework linking to `llama_mobile.xcframework`
+- Correct iOS platform settings (iOS 15+)
+- All necessary dependencies configured
+- Test targets already set up and ready to run
 
 ### Test Configuration
 
@@ -232,15 +236,37 @@ For the most reliable test experience:
 
 ### Test Configuration
 
-Test paths can be modified in:
-`Tests/LlamaMobileTests/LlamaMobileTests.swift`
+The tests have been configured to use actual model files from the project's models directory:
 
-Update these constants to point to your actual model files:
 ```swift
-static let modelPath = "/tmp/test/model.gguf"
-static let loraPath = "/tmp/test/lora.gguf"
-static let imagePath = "/tmp/test/image.jpg"
+// Root path to models directory
+static let rootPath = "/Users/shileipeng/Documents/mygithub/llama_mobile/models"
+
+// Regular text model
+static let modelPath = rootPath + "/SmolLM-360M-Instruct.Q6_K.gguf"
+
+// TTS vocoder model
+static let vocoderPath = rootPath + "/OuteTTS-0.2-500M-Q6_K.gguf"
+
+// Multimodal projection file
+static let mmprojPath = rootPath + "/mmproj-SmolVLM-256M-Instruct-Q8_0.gguf"
 ```
+
+### Available Models in Test Suite
+
+The tests are pre-configured to use these models:
+- **Text Model**: SmolLM-360M-Instruct.Q6_K.gguf (360M parameters, text generation)
+- **TTS Model**: OuteTTS-0.2-500M-Q6_K.gguf (text-to-speech)
+- **Vision Model**: SmolVLM-256M-Instruct-Q8_0.gguf (image understanding)
+
+### Running Tests with Real Models
+
+With the updated configuration, tests can now run with real models. When executed in Xcode:
+1. Select an iOS simulator as the destination
+2. Run the tests from the Test Navigator
+3. The tests will automatically use the model files from the models directory
+
+Note: Some tests still use temporary paths for files that aren't in the models directory (LoRA adapters, test images), but the core model files will be loaded from the proper location.
 
 ## API Reference
 

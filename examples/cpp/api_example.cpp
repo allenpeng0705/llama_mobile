@@ -7,6 +7,10 @@
 #include <cstring>
 #include <algorithm>
 
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
+
 #include "../../lib/llama_mobile_api.h"
 
 // Function to list available GGUF models in top-level models directory (excluding embedding folder)

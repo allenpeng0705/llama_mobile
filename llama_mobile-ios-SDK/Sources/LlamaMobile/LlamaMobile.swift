@@ -80,7 +80,7 @@ public class LlamaMobile {
         case outETTSv02
         case outETTSv03
         
-        init(rawValue: Int) {
+        public init(rawValue: Int) {
             switch rawValue {
             case 1:
                 self = .outETTSv02
@@ -91,7 +91,7 @@ public class LlamaMobile {
             }
         }
         
-        var rawValue: Int {
+        public var rawValue: Int {
             switch self {
             case .unknown:
                 return -1
@@ -108,7 +108,7 @@ public class LlamaMobile {
         case full
         case partial
         
-        var rawValue: Int {
+        public var rawValue: Int {
             switch self {
             case .full:
                 return 0
@@ -145,7 +145,7 @@ public class LlamaMobile {
         public var nGpuLayers: Int32 = Int32(0)
         
         /// Number of CPU threads to use for inference
-        public var nThreads: Int32 = Int32(4)
+        public var nThreads: Int32 = Int32(ProcessInfo.processInfo.processorCount)
         
         /// Use memory mapping for faster model loading
         public var useMmap: Bool = true
@@ -300,12 +300,47 @@ public class LlamaMobile {
             self.maxTokens = maxTokens
             self.mediaPaths = mediaPaths
         }
+        
+        /// Full initializer with all parameters
+        public init(prompt: String, maxTokens: Int32 = 128, nThreads: Int32? = nil, seed: Int32 = -1, temperature: Double = 0.8, topK: Int32 = 40, topP: Double = 0.95, minP: Double = 0.05, typicalP: Double = 1.0, penaltyLastN: Int32 = 64, penaltyRepeat: Double = 1.1, penaltyFreq: Double = 0.0, penaltyPresent: Double = 0.0, mirostat: Int32 = 0, mirostatTau: Double = 5.0, mirostatEta: Double = 0.1, ignoreEos: Bool = false, stopSequences: [String] = [], grammar: String? = nil, mediaPaths: [String] = [], tokenCallback: ((String) -> Bool)? = nil) {
+            self.prompt = prompt
+            self.maxTokens = maxTokens
+            self.nThreads = nThreads
+            self.seed = seed
+            self.temperature = temperature
+            self.topK = topK
+            self.topP = topP
+            self.minP = minP
+            self.typicalP = typicalP
+            self.penaltyLastN = penaltyLastN
+            self.penaltyRepeat = penaltyRepeat
+            self.penaltyFreq = penaltyFreq
+            self.penaltyPresent = penaltyPresent
+            self.mirostat = mirostat
+            self.mirostatTau = mirostatTau
+            self.mirostatEta = mirostatEta
+            self.ignoreEos = ignoreEos
+            self.stopSequences = stopSequences
+            self.grammar = grammar
+            self.mediaPaths = mediaPaths
+            self.tokenCallback = tokenCallback
+        }
     }
     
     /// Result of a text completion generation
     ///
     /// Contains the generated text and metadata about the completion process.
     public struct CompletionResult {
+        /// Default initializer with all parameters
+        public init(text: String, tokensGenerated: Int32, tokensEvaluated: Int32, truncated: Bool, stoppedEos: Bool, stoppedWord: Bool, stoppedLimit: Bool) {
+            self.text = text
+            self.tokensGenerated = tokensGenerated
+            self.tokensEvaluated = tokensEvaluated
+            self.truncated = truncated
+            self.stoppedEos = stoppedEos
+            self.stoppedWord = stoppedWord
+            self.stoppedLimit = stoppedLimit
+        }
         /// The generated completion text
         public var text: String
         
@@ -331,7 +366,7 @@ public class LlamaMobile {
     /// LoRA adapter configuration
     ///
     /// Low-Rank Adaptation (LoRA) allows fine-tuning models with minimal parameters.
-    public struct LoraAdapter {
+    public struct LoraAdapter: Equatable {
         /// Path to the LoRA adapter file (.gguf format)
         public var path: String
         
@@ -352,6 +387,13 @@ public class LlamaMobile {
     ///
     /// Contains the generated response and performance metrics for the conversation.
     public struct ConversationResult {
+        /// Default initializer with all parameters
+        public init(text: String, timeToFirstToken: Int64, totalTime: Int64, tokensGenerated: Int32) {
+            self.text = text
+            self.timeToFirstToken = timeToFirstToken
+            self.totalTime = totalTime
+            self.tokensGenerated = tokensGenerated
+        }
         /// The generated conversation response text
         public var text: String
         
@@ -369,6 +411,15 @@ public class LlamaMobile {
     ///
     /// Used for downloading models from Hugging Face or other sources.
     public struct DownloadParams {
+        /// Default initializer with all parameters
+        public init(url: String, localPath: String, username: String? = nil, password: String? = nil, headers: [String: String]? = nil, progressCallback: ((Float) -> Void)? = nil) {
+            self.url = url
+            self.localPath = localPath
+            self.username = username
+            self.password = password
+            self.headers = headers
+            self.progressCallback = progressCallback
+        }
         /// URL to download from (supports Hugging Face repo IDs)
         public var url: String
         
@@ -392,6 +443,12 @@ public class LlamaMobile {
     ///
     /// Contains the outcome of a model or file download.
     public struct DownloadResult {
+        /// Default initializer with all parameters
+        public init(success: Bool, localPath: String, errorMessage: String? = nil) {
+            self.success = success
+            self.localPath = localPath
+            self.errorMessage = errorMessage
+        }
         /// Whether the download was successful
         public var success: Bool
         

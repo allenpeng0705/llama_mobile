@@ -61,7 +61,7 @@ std::vector<float> getSentenceEmbedding(llama_mobile::llama_mobile_context& cont
 }
 
 int main(int argc, char **argv) {
-    std::cout << "\n=== Cactus Embedding Similarity Example ===" << std::endl;
+    std::cout << "\n=== Embedding Similarity Example ===" << std::endl;
 
     // Step 1: Determine the model path
     std::string model_path;
