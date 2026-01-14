@@ -120,7 +120,9 @@ The project contains various build scripts in the `scripts/` directory:
 
 - **build-tests-run.sh**: Builds and runs tests
 - **build-ios.sh**: Builds the iOS framework based on the core library
+- **build-ios-SDK.sh**: Builds the iOS SDK from pre-built libraries
 - **build-android.sh**: Builds the Android library and SDK
+- **build-android-SDK.sh**: Builds the Android SDK from pre-built libraries
 - **build-flutter.sh**: Builds the Flutter plugin
 - **build-reactnative.sh**: Builds the ReactNative plugin
 - **build-capacitor.sh**: Builds the Capacitor plugin
@@ -143,11 +145,25 @@ All scripts use the centralized configuration system in `scripts/config.env`. Fo
 ./scripts/build-ios.sh
 ```
 
+### Build iOS SDK from Pre-built Libraries
+
+```bash
+# Build iOS SDK using pre-built framework
+./scripts/build-ios-SDK.sh
+```
+
 ### Build Android Library and SDK
 
 ```bash
 # Build Android library and SDK (uses config.env)
 ./scripts/build-android.sh
+```
+
+### Build Android SDK from Pre-built Libraries
+
+```bash
+# Build Android SDK using pre-built libraries
+./scripts/build-android-SDK.sh
 ```
 
 ### Build Flutter Plugin
@@ -201,6 +217,36 @@ make test_api
 
 # Run the tests
 ./test_api
+```
+
+### Running SDK Tests
+
+#### iOS SDK Tests
+
+```bash
+# Build the iOS SDK (if not already built)
+./scripts/build-ios-SDK.sh
+
+# Run the iOS SDK tests in Xcode
+# Open the project: llama_mobile-ios-SDK/llama_mobile-ios-SDK.xcodeproj
+# Select the "Tests" scheme and run
+```
+
+#### Android SDK Tests
+
+```bash
+# Build the Android SDK (if not already built)
+./scripts/build-android-SDK.sh
+
+# Run the Android SDK tests in Android Studio
+# 1. Open Android Studio
+# 2. Import the module: llama_mobile-android-SDK/
+# 3. Navigate to the "test" directory in the project structure
+# 4. Right-click on the test file (LlamaMobileUnitTests.kt) and select "Run Tests"
+
+# Or run tests from the command line using Gradle
+cd llama_mobile-android-SDK
+./gradlew test
 ```
 
 #### SDK Tests
@@ -803,17 +849,17 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.llamamobile.sdk.LlamaMobileSdk
+import com.llamamobile.LlamaMobile
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 
 class MainActivity : AppCompatActivity() {
-    private lateinit var llamaSdk: LlamaMobileSdk
     private lateinit var generateButton: Button
     private lateinit var resultText: TextView
     private var modelPath: String? = null
+    private var modelContext: Long? = null
     
     private val REQUEST_PERMISSIONS = 1001
     private val requiredPermissions = arrayOf(
@@ -827,8 +873,6 @@ class MainActivity : AppCompatActivity() {
         
         generateButton = findViewById(R.id.generateButton)
         resultText = findViewById(R.id.resultText)
-        
-        llamaSdk = LlamaMobileSdk()
         
         // Request permissions
         if (checkPermissions()) {
@@ -893,8 +937,16 @@ class MainActivity : AppCompatActivity() {
     private fun loadModel() {
         try {
             if (modelPath != null) {
-                val success = llamaSdk.loadModel(modelPath!!)
-                if (success) {
+                // Initialize model context with default parameters
+                val params = LlamaMobile.InitParams(
+                    modelPath = modelPath!!,
+                    nThreads = 4,
+                    nCtx = 1024
+                )
+                
+                modelContext = LlamaMobile.initContext(params)
+                
+                if (modelContext != null && modelContext != 0L) {
                     resultText.text = "Model loaded successfully!"
                 } else {
                     resultText.text = "Failed to load model"
@@ -908,9 +960,25 @@ class MainActivity : AppCompatActivity() {
     
     private fun generateText() {
         try {
-            val prompt = "Hello, how are you?"
-            val result = llamaSdk.generateText(prompt, 100, 0.7f)
-            resultText.text = "Generated: \n\$result"
+            if (modelContext != null && modelContext != 0L) {
+                // Create completion parameters
+                val params = LlamaMobile.CompletionParams(
+                    prompt = "Hello, how are you?",
+                    maxTokens = 50,
+                    temperature = 0.7f,
+                    topK = 40,
+                    topP = 0.9f
+                )
+                
+                // Generate text
+                val result = LlamaMobile.generateCompletion(modelContext!!, params)
+                
+                if (result != null) {
+                    resultText.text = "Generated: \n{result.text}"
+                } else {
+                    resultText.text = "Failed to generate text"
+                }
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             resultText.text = "Error generating text: \${e.message}"
@@ -919,7 +987,12 @@ class MainActivity : AppCompatActivity() {
     
     override fun onDestroy() {
         super.onDestroy()
-        llamaSdk.release()
+        
+        // Clean up resources
+        if (modelContext != null && modelContext != 0L) {
+            LlamaMobile.releaseContext(modelContext!!)
+            modelContext = null
+        }
     }
 }
 ```

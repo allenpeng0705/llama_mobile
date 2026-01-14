@@ -14,15 +14,15 @@ add_definitions(
 
 # Include directories
 include_directories(
-    "/../../../../../lib"
-    "/../../../../../lib/llama_cpp"
-    "/../../../../../lib/llama_cpp/ggml-cpu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/llama_cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/llama_cpp/ggml-cpu"
 )
 
 # Import the pre-built llama_mobile library
 add_library(llama_mobile SHARED IMPORTED)
 set_target_properties(llama_mobile PROPERTIES
-    IMPORTED_LOCATION /../jniLibs//libllama_mobile.so
+    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}/libllama_mobile.so
 )
 
 # Create a JNI wrapper
