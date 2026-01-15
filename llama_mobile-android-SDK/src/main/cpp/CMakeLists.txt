@@ -1,6 +1,6 @@
 # CMakeLists.txt for llama_mobile JNI implementation
 
-cmake_minimum_required(VERSION 3.22.1)
+cmake_minimum_required(VERSION 3.18.1)
 
 project("llama_mobile_jni")
 

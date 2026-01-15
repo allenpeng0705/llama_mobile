@@ -191,7 +191,7 @@ int main(int argc, char **argv) {
         final_model_path = model_paths[selection - 1];
     }
     
-    std::cout << "\n=== Cactus Conversation FFI Example ===" << std::endl;
+    std::cout << "\n=== LLama Mobile Conversation FFI Example ===" << std::endl;
     std::cout << "Using model: " << final_model_path << std::endl;
     
     try {

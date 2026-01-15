@@ -197,7 +197,7 @@ void demonstrateSamplingVariations(llama_mobile::llama_mobile_context& context) 
 }
 
 int main(int argc, char **argv) {
-    std::cout << "\n=== Cactus LLM Example ===" << std::endl;
+    std::cout << "\n=== LLama Mobile LLM Example ===" << std::endl;
 
     // Step 1: Determine the model path
     std::string model_path;

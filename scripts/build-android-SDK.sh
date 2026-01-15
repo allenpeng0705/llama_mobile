@@ -133,21 +133,7 @@ if [ -d "$JAVA_SDK_DIR" ]; then
         cp "$JAVA_SDK_DIR/src/main/cpp/CMakeLists.txt" "$TEMP_JAVA_JNI_CMAKELISTS"
         log_message "INFO" "Preserved existing Java JNI CMakeLists.txt temporarily"
     fi
-    
-    # Preserve Java unit tests
-    if [ -f "$JAVA_SDK_DIR/src/test/java/com/llamamobile/LlamaMobileUnitTests.java" ]; then
-        TEMP_JAVA_UNIT_TESTS="$TEMP_DIR/LlamaMobileUnitTests.java"
-        cp "$JAVA_SDK_DIR/src/test/java/com/llamamobile/LlamaMobileUnitTests.java" "$TEMP_JAVA_UNIT_TESTS"
-        log_message "INFO" "Preserved existing Java unit tests temporarily"
-    fi
-    
-    # Preserve Java instrumented tests
-    if [ -f "$JAVA_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileInstrumentedTests.java" ]; then
-        TEMP_JAVA_INSTRUMENTED_TESTS="$TEMP_DIR/LlamaMobileInstrumentedTests.java"
-        cp "$JAVA_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileInstrumentedTests.java" "$TEMP_JAVA_INSTRUMENTED_TESTS"
-        log_message "INFO" "Preserved existing Java instrumented tests temporarily"
-    fi
-    
+       
     # Preserve Java comprehensive tests if they exist
     if [ -f "$JAVA_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileComprehensiveTests.java" ]; then
         TEMP_JAVA_COMPREHENSIVE_TESTS="$TEMP_DIR/LlamaMobileComprehensiveTests.java"
@@ -204,7 +190,7 @@ mkdir -p "$KOTLIN_SDK_DIR/src/main/assets/grammars"
 mkdir -p "$KOTLIN_SDK_DIR/src/main/java/com/llamamobile"
 mkdir -p "$KOTLIN_SDK_DIR/src/main/cpp"
 mkdir -p "$KOTLIN_SDK_DIR/src/androidTest/java/com/llamamobile"
-mkdir -p "$KOTLIN_SDK_DIR/libs"
+
 
 # Create Java SDK directories
 log_message "INFO" "Creating Java SDK directories..."
@@ -213,9 +199,9 @@ mkdir -p "$JAVA_SDK_DIR/src/main/jniLibs/x86_64"
 mkdir -p "$JAVA_SDK_DIR/src/main/assets/grammars"
 mkdir -p "$JAVA_SDK_DIR/src/main/java/com/llamamobile"
 mkdir -p "$JAVA_SDK_DIR/src/main/cpp"
-mkdir -p "$JAVA_SDK_DIR/src/test/java/com/llamamobile"
+
 mkdir -p "$JAVA_SDK_DIR/src/androidTest/java/com/llamamobile"
-mkdir -p "$JAVA_SDK_DIR/libs"
+
 
 # Function to find libc++_shared.so in NDK
 find_libcpp_shared() {
@@ -784,190 +770,6 @@ if [ -f "$TEMP_KOTLIN_UNIT_TESTS" ]; then
     log_message "INFO" "Copied Kotlin unit tests to $KOTLIN_SDK_DIR/src/test/java/com/llamamobile/LlamaMobileUnitTests.kt"
 fi
 
-# Handle Java unit tests
-log_message "INFO" "Creating Java unit tests..."
-cat > "$JAVA_SDK_DIR/src/test/java/com/llamamobile/LlamaMobileUnitTests.java" << 'EOF'
-package com.llamamobile;
-
-import org.junit.Test;
-import org.junit.Before;
-import static org.junit.Assert.*;
-
-import java.util.ArrayList;
-import java.util.List;
-
-/**
- * Unit tests for LlamaMobile Java SDK
- */
-public class LlamaMobileUnitTests {
-
-    // Test paths for model files
-    public static class TestPaths {
-        public static final String rootPath = "/sdcard/llama_mobile/models";
-        public static final String modelPath = rootPath + "/SmolLM-360M-Instruct.Q6_K.gguf";
-        public static final String ttsModelPath = rootPath + "/OuteTTS-0.2-500M-Q6_K.gguf";
-        public static final String vocoderPath = rootPath + "/WavTokenizer-Large-75-F16.gguf";
-        public static final String embeddingPath = rootPath + "/embedding/Qwen3-Embedding-0.6B-Q8_0.gguf";
-        public static final String mmprojPath = rootPath + "/mmproj-SmolVLM-256M-Instruct-Q8_0.gguf";
-        public static final String imageModelPath = rootPath + "/SmolVLM-256M-Instruct-Q8_0.gguf";
-        public static final String imagePath = rootPath + "/img/image.jpg";
-    }
-
-    private long contextHandle;
-
-    @Before
-    public void setUp() {
-        // Initialize with minimal context for testing
-        // This will fail if the model file doesn't exist, but that's expected in unit tests
-        try {
-            LlamaMobile.InitParams params = new LlamaMobile.InitParams(TestPaths.modelPath)
-                    .setNGpuLayers(0)
-                    .setNCtx(512)
-                    .setNThreads(2)
-                    .setVerbose(false);
-            contextHandle = LlamaMobile.initContext(params);
-        } catch (Exception e) {
-            // Model might not be available, that's okay for unit tests
-            contextHandle = -1;
-        }
-    }
-
-    @Test
-    public void testInitParamsConstructors() {
-        // Test basic constructor
-        LlamaMobile.InitParams params = new LlamaMobile.InitParams("test_path");
-        assertEquals("test_path", params.modelPath);
-        assertEquals(0, params.nGpuLayers);
-        assertEquals(2048, params.nCtx);
-        assertEquals(4, params.nThreads);
-
-        // Test builder pattern
-        params = new LlamaMobile.InitParams("test_path")
-                .setNGpuLayers(4)
-                .setNCtx(4096)
-                .setNThreads(8)
-                .setVerbose(true);
-        assertEquals("test_path", params.modelPath);
-        assertEquals(4, params.nGpuLayers);
-        assertEquals(4096, params.nCtx);
-        assertEquals(8, params.nThreads);
-        assertTrue(params.verbose);
-    }
-
-    @Test
-    public void testCompletionParamsConstructors() {
-        // Test basic constructor
-        LlamaMobile.CompletionParams params = new LlamaMobile.CompletionParams("test prompt");
-        assertEquals("test prompt", params.prompt);
-        assertEquals(1024, params.maxTokens);
-        assertEquals(0.8f, params.temperature, 0.01f);
-        assertEquals(0.95f, params.topP, 0.01f);
-
-        // Test builder pattern
-        List<String> mediaPaths = new ArrayList<>();
-        mediaPaths.add("test.jpg");
-        
-        params = new LlamaMobile.CompletionParams("test prompt")
-                .setMaxTokens(512)
-                .setTemperature(0.5f)
-                .setTopP(0.8f)
-                .setTopK(30)
-                .setRepeatPenalty(1.05f)
-                .setGrammar("json.gbnf")
-                .setMediaPaths(mediaPaths)
-                .setEcho(true);
-        
-        assertEquals("test prompt", params.prompt);
-        assertEquals(512, params.maxTokens);
-        assertEquals(0.5f, params.temperature, 0.01f);
-        assertEquals(0.8f, params.topP, 0.01f);
-        assertEquals(30, params.topK, 0.01f);
-        assertEquals(1.05f, params.repeatPenalty, 0.01f);
-        assertEquals("json.gbnf", params.grammar);
-        assertEquals(mediaPaths, params.mediaPaths);
-        assertTrue(params.echo);
-    }
-
-    @Test
-    public void testAudioParamsConstructors() {
-        // Test basic constructor
-        LlamaMobile.AudioParams params = new LlamaMobile.AudioParams("test text");
-        assertEquals("test text", params.text);
-        assertEquals(48000, params.sampleRate);
-        assertEquals(0, params.speakerId);
-        assertEquals(1.0f, params.speed, 0.01f);
-
-        // Test builder pattern
-        params = new LlamaMobile.AudioParams("test text")
-                .setSampleRate(24000)
-                .setSpeakerId(1)
-                .setSpeed(0.8f)
-                .setVolume(1.2f);
-        
-        assertEquals("test text", params.text);
-        assertEquals(24000, params.sampleRate);
-        assertEquals(1, params.speakerId);
-        assertEquals(0.8f, params.speed, 0.01f);
-        assertEquals(1.2f, params.volume, 0.01f);
-    }
-
-    @Test
-    public void testLoraAdapterConstructors() {
-        // Test basic constructor
-        LlamaMobile.LoraAdapter adapter = new LlamaMobile.LoraAdapter("test_path");
-        assertEquals("test_path", adapter.path);
-        assertEquals(1.0f, adapter.scale, 0.01f);
-
-        // Test builder pattern
-        adapter = new LlamaMobile.LoraAdapter("test_path").setScale(0.8f);
-        assertEquals("test_path", adapter.path);
-        assertEquals(0.8f, adapter.scale, 0.01f);
-    }
-
-    @Test
-    public void testCompletionResult() {
-        LlamaMobile.CompletionResult result = new LlamaMobile.CompletionResult(
-                "test text", 1.5f, true, 10
-        );
-        
-        assertEquals("test text", result.text);
-        assertEquals(1.5f, result.perplexity, 0.01f);
-        assertTrue(result.finished);
-        assertEquals(10, result.tokenCount);
-    }
-
-    @Test
-    public void testContextSafety() {
-        // Test context validation with invalid context
-        assertFalse(LlamaMobile.isContextValid(-1));
-        assertFalse(LlamaMobile.releaseContext(-1));
-    }
-
-    @Test
-    public void testConvenienceMethods() {
-        // These tests just verify the methods exist and compile
-        assertNotNull(LlamaMobile.class.getDeclaredMethods());
-    }
-
-    @Test
-    public void testLogLevelConstants() {
-        assertEquals(0, LlamaMobile.LOG_LEVEL_DEBUG);
-        assertEquals(1, LlamaMobile.LOG_LEVEL_INFO);
-        assertEquals(2, LlamaMobile.LOG_LEVEL_WARN);
-        assertEquals(3, LlamaMobile.LOG_LEVEL_ERROR);
-        assertEquals(4, LlamaMobile.LOG_LEVEL_SILENT);
-    }
-
-    @Test
-    public void testDefaultConstants() {
-        assertEquals(2048, LlamaMobile.DEFAULT_N_CTX);
-        assertEquals(0, LlamaMobile.DEFAULT_N_GPU_LAYERS);
-        assertEquals(48000, LlamaMobile.DEFAULT_SAMPLE_RATE);
-    }
-}
-EOF
-
-log_message "INFO" "Created Java unit tests at $JAVA_SDK_DIR/src/test/java/com/llamamobile/LlamaMobileUnitTests.java"
 
 # Copy instrumented tests to both SDKs
 log_message "INFO" "Copying instrumented tests..."
@@ -986,174 +788,7 @@ if [ -f "$TEMP_KOTLIN_COMPREHENSIVE_TESTS" ]; then
     log_message "INFO" "Copied Kotlin comprehensive tests to $KOTLIN_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileComprehensiveTests.kt"
 fi
 
-# Handle Java instrumented tests
-log_message "INFO" "Processing Java instrumented tests..."
-if [ -f "$TEMP_JAVA_INSTRUMENTED_TESTS" ]; then
-    cp -f "$TEMP_JAVA_INSTRUMENTED_TESTS" "$JAVA_SDK_DIR/src/androidTest/java/com/llamamobile/"
-    log_message "INFO" "Restored Java instrumented tests from temporary storage"
-else
-    log_message "INFO" "Creating Java instrumented tests..."
-    cat > "$JAVA_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileInstrumentedTests.java" << 'EOF'
-package com.llamamobile;
 
-import android.content.Context;
-import android.content.res.AssetManager;
-import android.os.Build;
-import android.os.Environment;
-import android.util.Log;
-
-import androidx.test.platform.app.InstrumentationRegistry;
-import androidx.test.ext.junit.runners.AndroidJUnit4;
-
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import static org.junit.Assert.*;
-
-import java.io.File;
-import java.io.InputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.Arrays;
-
-/**
- * Instrumented tests for LlamaMobile Java SDK
- * These tests run on an Android device or emulator.
- */
-@RunWith(AndroidJUnit4.class)
-public class LlamaMobileInstrumentedTests {
-
-    private static final String TAG = "LlamaMobileTests";
-    private static final String TEST_ASSET_DIR = "grammars";
-    private static final String TEST_GRAMMAR_FILE = "json.gbnf";
-    private static final String TEST_MODEL_DIR = "/sdcard/llama_mobile/models";
-
-    @Test
-    public void testAssetLoading() {
-        Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
-        AssetManager assetManager = appContext.getAssets();
-
-        try {
-            // List all grammar files
-            String[] grammarFiles = assetManager.list(TEST_ASSET_DIR);
-            assertNotNull("Grammar directory should exist", grammarFiles);
-            Log.d(TAG, "Found grammar files: " + Arrays.toString(grammarFiles));
-            
-            // Check if specific grammar file exists
-            boolean hasJsonGrammar = false;
-            for (String file : grammarFiles) {
-                if (file.equals(TEST_GRAMMAR_FILE)) {
-                    hasJsonGrammar = true;
-                    break;
-                }
-            }
-            assertTrue("JSON grammar file should exist", hasJsonGrammar);
-            
-        } catch (IOException e) {
-            Log.e(TAG, "Error accessing assets: " + e.getMessage());
-            fail("Asset loading should succeed");
-        }
-    }
-
-    @Test
-    public void testFileDirectoryAccess() {
-        // Test if we can create a directory for models
-        File modelDir = new File(TEST_MODEL_DIR);
-        boolean dirCreated = modelDir.mkdirs() || modelDir.exists();
-        
-        // This might fail if we don't have write permission, but we can still check if directory exists
-        Log.d(TAG, "Model directory exists: " + modelDir.exists());
-        Log.d(TAG, "Can write to model directory: " + modelDir.canWrite());
-        
-        // Just check if external storage is available
-        String state = Environment.getExternalStorageState();
-        assertTrue("External storage should be available", 
-                Environment.MEDIA_MOUNTED.equals(state) || Environment.MEDIA_MOUNTED_READ_ONLY.equals(state));
-    }
-
-    @Test
-    public void testNativeLibraryLoading() {
-        try {
-            // The library should be loaded automatically via static block
-            Log.d(TAG, "Native library loaded successfully");
-            
-            // Test that we can access native methods
-            long invalidContext = -1;
-            assertFalse("Invalid context should not be valid", LlamaMobile.isContextValid(invalidContext));
-            
-        } catch (UnsatisfiedLinkError e) {
-            Log.e(TAG, "Native library loading failed: " + e.getMessage());
-            // This might fail on some test environments, so we don't fail the test
-            Log.w(TAG, "Skipping native library test - this is expected on some environments");
-        } catch (Exception e) {
-            Log.e(TAG, "Unexpected error: " + e.getMessage());
-            fail("Native library test should not throw exceptions");
-        }
-    }
-
-    @Test
-    public void testContextSafety() {
-        // Test with invalid context
-        long invalidContext = -1;
-        assertFalse("Invalid context should not be valid", LlamaMobile.isContextValid(invalidContext));
-        assertFalse("Should fail to release invalid context", LlamaMobile.releaseContext(invalidContext));
-        
-        // These should be safe to call with invalid context
-        LlamaMobile.generateEmbedding(invalidContext, "test");
-        LlamaMobile.generateCompletion(invalidContext, "test");
-        
-        Log.d(TAG, "Context safety tests passed");
-    }
-
-    @Test
-    public void testDeviceCompatibility() {
-        Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
-        
-        // Log device information
-        Log.d(TAG, "Device: " + Build.MANUFACTURER + " " + Build.MODEL);
-        Log.d(TAG, "Android Version: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")");
-        Log.d(TAG, "ABIs: " + Arrays.toString(Build.SUPPORTED_ABIS));
-        
-        // Check if device architecture is supported
-        boolean hasSupportedAbi = false;
-        for (String abi : Build.SUPPORTED_ABIS) {
-            if (abi.equals("arm64-v8a") || abi.equals("x86_64")) {
-                hasSupportedAbi = true;
-                break;
-            }
-        }
-        
-        if (hasSupportedAbi) {
-            Log.d(TAG, "Device has supported ABI");
-        } else {
-            Log.w(TAG, "Device ABI may not be fully supported: " + Arrays.toString(Build.SUPPORTED_ABIS));
-        }
-        
-        // Test should pass regardless of architecture
-        assertTrue("Device compatibility test should pass", true);
-    }
-
-    private void copyAssetToStorage(Context context, String assetPath, String destPath) throws IOException {
-        AssetManager assetManager = context.getAssets();
-        InputStream in = assetManager.open(assetPath);
-        File outFile = new File(destPath);
-        
-        // Create directory if it doesn't exist
-        outFile.getParentFile().mkdirs();
-        
-        FileOutputStream out = new FileOutputStream(outFile);
-        byte[] buffer = new byte[1024];
-        int read;
-        while ((read = in.read(buffer)) != -1) {
-            out.write(buffer, 0, read);
-        }
-        in.close();
-        out.close();
-    }
-}
-EOF
-
-log_message "INFO" "Created Java instrumented tests at $JAVA_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileInstrumentedTests.java"
-fi
 
 # Restore Java comprehensive tests if they exist
 if [ -f "$TEMP_JAVA_COMPREHENSIVE_TESTS" ]; then
@@ -1250,7 +885,7 @@ android {
     externalNativeBuild {
         cmake {
             path "src/main/cpp/CMakeLists.txt"
-            version "3.22.1"
+            version "3.18.1"
         }
     }
 }
@@ -1261,6 +896,15 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    
+    // Resolve duplicate Kotlin library conflicts
+    implementation(platform('org.jetbrains.kotlin:kotlin-bom:1.9.20'))
+    
+    // Exclude older Kotlin stdlib modules
+    configurations.all {
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+    }
 }
 EOF
 log_message "INFO" "Created build.gradle for Kotlin SDK"
@@ -1313,6 +957,15 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+    
+    // Resolve duplicate Kotlin library conflicts
+    implementation(platform('org.jetbrains.kotlin:kotlin-bom:1.9.20'))
+    
+    // Exclude older Kotlin stdlib modules
+    configurations.all {
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+        exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+    }
 }
 EOF
 log_message "INFO" "Created build.gradle for Java SDK"

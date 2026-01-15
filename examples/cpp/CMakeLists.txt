@@ -51,7 +51,6 @@ if(APPLE)
     set(METALLIB_PATHS
         ${CMAKE_CURRENT_SOURCE_DIR}/../../llama_mobile-ios/llama_mobile.xcframework/ios-arm64/llama_mobile.framework/ggml-llama.metallib
         ${CMAKE_CURRENT_SOURCE_DIR}/../../llama_mobile-ios/llama_mobile.xcframework/ios-arm64_x86_64-simulator/llama_mobile.framework/ggml-llama-sim.metallib
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../cactus-flutter/ios/cactus.xcframework/ios-arm64/cactus.framework/ggml-llama.metallib
     )
     
     foreach(PATH ${METALLIB_PATHS})

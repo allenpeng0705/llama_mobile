@@ -1,5 +1,5 @@
-#ifndef CACTUS_EXAMPLES_UTILS_H
-#define CACTUS_EXAMPLES_UTILS_H
+#ifndef LLAMA_MOBILE_EXAMPLES_UTILS_H
+#define LLAMA_MOBILE_EXAMPLES_UTILS_H
 
 #include <iostream>
 #include <string>
@@ -57,4 +57,4 @@ inline bool downloadFile(const std::string& url, const std::string& filepath, co
     }
 }
 
-#endif // CACTUS_EXAMPLES_UTILS_H 
+#endif // LLAMA_MOBILE_EXAMPLES_UTILS_H 

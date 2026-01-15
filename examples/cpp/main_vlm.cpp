@@ -67,7 +67,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    std::cout << "\n=== Cactus Core API VLM Example ===" << std::endl;
+    std::cout << "\n=== LLama Mobile Core API VLM Example ===" << std::endl;
 
     try {
         llama_mobile::llama_mobile_context context;

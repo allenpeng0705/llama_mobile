@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
             std::cerr << "Example commands:" << std::endl;
             std::cerr << "  mkdir -p " << embedding_dir << std::endl;
             std::cerr << "  cd " << embedding_dir << std::endl;
-            std::cerr << "  wget https://huggingface.co/cactus-ai/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf\n" << std::endl;
+            std::cerr << "  wget https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/blob/main/Qwen3-Embedding-0.6B-Q8_0.gguf\n" << std::endl;
             return 1;
         }
         
@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
             std::cerr << "Please download at least one embedding model in GGUF format.\n" << std::endl;
             std::cerr << "Example command:" << std::endl;
             std::cerr << "  cd " << embedding_dir << std::endl;
-            std::cerr << "  wget https://huggingface.co/cactus-ai/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf\n" << std::endl;
+            std::cerr << "  wget https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/blob/main/Qwen3-Embedding-0.6B-Q8_0.gguf\n" << std::endl;
             return 1;
         }
         

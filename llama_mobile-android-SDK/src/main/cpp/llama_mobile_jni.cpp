@@ -95,6 +95,7 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     params.chat_template = chatTemplate;
     params.system_prompt = systemPrompt;
     params.n_batch = nBatch;
+    params.n_ubatch = nUBatch;
     params.n_gpu_layers = nGpuLayers;
     params.n_threads = nThreads;
     params.use_mmap = useMmap;

@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    std::cout << "\n=== Cactus FFI VLM Example ===" << std::endl;
+    std::cout << "\n=== LLama Mobile FFI VLM Example ===" << std::endl;
 
     try {
         // Initialize context using FFI

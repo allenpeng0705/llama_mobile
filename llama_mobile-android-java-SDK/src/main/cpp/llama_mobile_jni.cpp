@@ -40,7 +40,7 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     jfieldID chatTemplateField = env->GetFieldID(paramsClass, "chatTemplate", "Ljava/lang/String;");
     jfieldID systemPromptField = env->GetFieldID(paramsClass, "systemPrompt", "Ljava/lang/String;");
     jfieldID nBatchField = env->GetFieldID(paramsClass, "nBatch", "I");
-    jfieldID nUbatchField = env->GetFieldID(paramsClass, "nUbatch", "I");
+    jfieldID nUBatchField = env->GetFieldID(paramsClass, "nUbatch", "I");
     jfieldID nGpuLayersField = env->GetFieldID(paramsClass, "nGpuLayers", "I");
     jfieldID nThreadsField = env->GetFieldID(paramsClass, "nThreads", "I");
     jfieldID useMmapField = env->GetFieldID(paramsClass, "useMmap", "Z");
@@ -64,7 +64,7 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     jstring chatTemplateStr = (jstring)env->GetObjectField(initParamsObj, chatTemplateField);
     jstring systemPromptStr = (jstring)env->GetObjectField(initParamsObj, systemPromptField);
     jint nBatch = (nBatchField != nullptr) ? env->GetIntField(initParamsObj, nBatchField) : 512;
-    jint nUbatch = (nUbatchField != nullptr) ? env->GetIntField(initParamsObj, nUbatchField) : 512;
+    jint nUbatch = (nUBatchField != nullptr) ? env->GetIntField(initParamsObj, nUBatchField) : 512;
     jint nGpuLayers = (nGpuLayersField != nullptr) ? env->GetIntField(initParamsObj, nGpuLayersField) : 0;
     jint nThreads = (nThreadsField != nullptr) ? env->GetIntField(initParamsObj, nThreadsField) : 4;
     jboolean useMmap = (useMmapField != nullptr) ? env->GetBooleanField(initParamsObj, useMmapField) : true;
@@ -99,7 +99,7 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     const char* cacheTypeV = (cacheTypeVField != nullptr && cacheTypeVStr != nullptr) ? getStringUTFChars(env, cacheTypeVStr) : nullptr;
     
     // Debug model path
-    printf("[JNI-JAVA] Model path: %s\n", modelPath ? modelPath : "null");
+    // printf("[JNI-JAVA] Model path: %s\n", modelPath ? modelPath : "null");
     
     // Set params
     memset(&params, 0, sizeof(llama_mobile_init_params_c_t));
@@ -108,6 +108,7 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     params.chat_template = chatTemplate;
     params.system_prompt = systemPrompt;
     params.n_batch = nBatch;
+    params.n_ubatch = nUbatch;
     params.n_gpu_layers = nGpuLayers;
     params.n_threads = nThreads;
     params.use_mmap = useMmap;
@@ -118,8 +119,10 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     params.flash_attn = flashAttn;
     params.cache_type_k = cacheTypeK;
     params.cache_type_v = cacheTypeV;
-    params.cache_type = cacheType;
     params.progress_callback = nullptr;
+    
+    // Debug embedding parameter
+    // printf("[JNI-JAVA] Embedding parameter set to: %d\n", embedding);
     
     env->DeleteLocalRef(paramsClass);
     env->DeleteLocalRef(modelPathStr);
@@ -290,7 +293,7 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
 }
 
 // Create CompletionResult Java object from C struct
-static jobject createCompletionResult(JNIEnv* env, const llama_mobile_completion_result_t& result) {
+static jobject createCompletionResult(JNIEnv* env, const llama_mobile_completion_result_c_t& result) {
     // Find the CompletionResult class
     jclass resultClass = env->FindClass("com/llamamobile/LlamaMobile$CompletionResult");
     if (resultClass == nullptr) {
@@ -298,7 +301,7 @@ static jobject createCompletionResult(JNIEnv* env, const llama_mobile_completion
     }
     
     // Get the constructor
-    jmethodID constructor = env->GetMethodID(resultClass, "<init>", "(Ljava/lang/String;IZZZZZ)V");
+    jmethodID constructor = env->GetMethodID(resultClass, "<init>", "(Ljava/lang/String;IIZZZZ)V");
     if (constructor == nullptr) {
         env->DeleteLocalRef(resultClass);
         return nullptr;
@@ -308,7 +311,7 @@ static jobject createCompletionResult(JNIEnv* env, const llama_mobile_completion
     jstring text = env->NewStringUTF(result.text);
     jobject completionResult = env->NewObject(resultClass, constructor,
         text,
-        (jint)result.tokens_generated,
+        (jint)result.tokens_predicted,
         (jint)result.tokens_evaluated,
         (jboolean)result.truncated,
         (jboolean)result.stopped_eos,
@@ -419,7 +422,12 @@ JNIEXPORT jlong JNICALL Java_com_llamamobile_LlamaMobile_initContext(JNIEnv* env
 
 // Generates completion text based on the given prompt and parameters
 JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_generateCompletion(JNIEnv* env, jclass clazz, jlong contextHandle, jobject completionParamsObj) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    // Check if context is invalid
+    if (contextHandle <= 0) {
+        return nullptr;
+    }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     llama_mobile_completion_params_c_t params;
     const char* prompt = nullptr;
@@ -465,7 +473,7 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_generateCompletion(JN
 
 // Stops an ongoing completion generation
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_stopCompletion(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     llama_mobile_stop_completion_c(context);
 }
 
@@ -475,7 +483,7 @@ JNIEXPORT jintArray JNICALL Java_com_llamamobile_LlamaMobile_tokenize(JNIEnv* en
         return nullptr;
     }
     
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     const char* cText = getStringUTFChars(env, text);
     if (cText == nullptr) {
@@ -505,7 +513,7 @@ JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_detokenize(JNIEnv* en
         return nullptr;
     }
     
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     // Get the token array
     jsize length = env->GetArrayLength(tokens);
@@ -537,11 +545,11 @@ JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_detokenize(JNIEnv* en
 
 // Generates embeddings for the given text
 JNIEXPORT jfloatArray JNICALL Java_com_llamamobile_LlamaMobile_generateEmbeddings(JNIEnv* env, jclass clazz, jlong contextHandle, jstring text) {
-    if (contextHandle == 0) {
+    if (contextHandle <= 0) {
         return nullptr;
     }
     
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     const char* cText = getStringUTFChars(env, text);
     if (cText == nullptr) {
@@ -571,7 +579,7 @@ JNIEXPORT jfloatArray JNICALL Java_com_llamamobile_LlamaMobile_generateEmbedding
 
 // Initializes multimodal support
 JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_initMultimodal(JNIEnv* env, jclass clazz, jlong contextHandle, jstring mmprojPath, jboolean useGpu) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     const char* cMmprojPath = getStringUTFChars(env, mmprojPath);
     if (cMmprojPath == nullptr) {
@@ -587,31 +595,46 @@ JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_initMultimodal(JNIEn
 
 // Checks if multimodal support is enabled
 JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_isMultimodalEnabled(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return JNI_FALSE;
+    }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     return llama_mobile_is_multimodal_enabled_c(context) ? JNI_TRUE : JNI_FALSE;
 }
 
 // Checks if vision is supported
 JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_supportsVision(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return JNI_FALSE;
+    }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     return llama_mobile_supports_vision_c(context) ? JNI_TRUE : JNI_FALSE;
 }
 
 // Checks if audio is supported
 JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_supportsAudio(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return JNI_FALSE;
+    }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     return llama_mobile_supports_audio_c(context) ? JNI_TRUE : JNI_FALSE;
 }
 
 // Releases multimodal resources
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_releaseMultimodal(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     llama_mobile_release_multimodal_c(context);
 }
 
 // Initializes vocoder for text-to-speech
 JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_initVocoder(JNIEnv* env, jclass clazz, jlong contextHandle, jstring vocoderModelPath) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     const char* cVocoderModelPath = getStringUTFChars(env, vocoderModelPath);
     if (cVocoderModelPath == nullptr) {
@@ -627,7 +650,12 @@ JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_initVocoder(JNIEnv* 
 
 // Checks if vocoder is enabled
 JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_isVocoderEnabled(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return JNI_FALSE;
+    }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     return llama_mobile_is_vocoder_enabled_c(context) ? JNI_TRUE : JNI_FALSE;
 }
 
@@ -659,7 +687,7 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_getTTSType(JNIEnv* en
         // For invalid context, return UNKNOWN which is index 0
         index = 0;
     } else {
-        llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+        llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
         int ttsType = static_cast<int>(llama_mobile_get_tts_type_c(context));
         // Map TTS type to enum index
         switch (ttsType) {
@@ -685,7 +713,7 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_getTTSType(JNIEnv* en
 
 // Gets formatted audio completion
 JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_getFormattedAudioCompletion(JNIEnv* env, jclass clazz, jlong contextHandle, jstring speakerJson, jstring textToSpeak) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     const char* cSpeakerJson = getStringUTFChars(env, speakerJson);
     const char* cTextToSpeak = getStringUTFChars(env, textToSpeak);
@@ -714,7 +742,7 @@ JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_getFormattedAudioComp
 
 // Gets audio guide tokens
 JNIEXPORT jintArray JNICALL Java_com_llamamobile_LlamaMobile_getAudioGuideTokens(JNIEnv* env, jclass clazz, jlong contextHandle, jstring textToSpeak) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     const char* cTextToSpeak = getStringUTFChars(env, textToSpeak);
     if (cTextToSpeak == nullptr) {
@@ -746,7 +774,7 @@ JNIEXPORT jintArray JNICALL Java_com_llamamobile_LlamaMobile_getAudioGuideTokens
 
 // Decodes audio tokens
 JNIEXPORT jfloatArray JNICALL Java_com_llamamobile_LlamaMobile_decodeAudioTokens(JNIEnv* env, jclass clazz, jlong contextHandle, jintArray tokens) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     // Get the token array
     jsize length = env->GetArrayLength(tokens);
@@ -786,7 +814,7 @@ JNIEXPORT jfloatArray JNICALL Java_com_llamamobile_LlamaMobile_decodeAudioTokens
 
 // Releases vocoder resources
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_releaseVocoder(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     llama_mobile_release_vocoder_c(context);
 }
 
@@ -799,7 +827,7 @@ JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_applyLoraAdapters(JN
 
 // Removes all LoRA adapters
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_removeLoraAdapters(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     // Not implemented in FFI yet
 }
 
@@ -812,7 +840,12 @@ JNIEXPORT jobjectArray JNICALL Java_com_llamamobile_LlamaMobile_getLoadedLoraAda
 
 // Generates a response in conversation mode
 JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_generateResponse(JNIEnv* env, jclass clazz, jlong contextHandle, jstring userMessage, jint maxTokens) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    // Check if context is invalid
+    if (contextHandle <= 0) {
+        return nullptr;
+    }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     const char* cUserMessage = getStringUTFChars(env, userMessage);
     if (cUserMessage == nullptr) {
@@ -837,31 +870,51 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_generateResponse(JNIE
 
 // Clears the current conversation context
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_clearConversation(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     llama_mobile_clear_conversation_c(context);
 }
 
 // Checks if a conversation is currently active
 JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_isConversationActive(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return JNI_FALSE;
+    }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     return llama_mobile_is_conversation_active_c(context) ? JNI_TRUE : JNI_FALSE;
 }
 
 // Gets the context window size
 JNIEXPORT jint JNICALL Java_com_llamamobile_LlamaMobile_getContextWindowSize(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return 0;
+    }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     return static_cast<jint>(llama_mobile_get_n_ctx_c(context));
 }
 
 // Gets the embedding dimension
 JNIEXPORT jint JNICALL Java_com_llamamobile_LlamaMobile_getEmbeddingDimension(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    // Check if context is invalid
+    if (contextHandle <= 0) {
+        return 0;
+    }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     return static_cast<jint>(llama_mobile_get_n_embd_c(context));
 }
 
 // Gets the model description
 JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_getModelDescription(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return nullptr;
+    }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     const char* description = llama_mobile_get_model_desc_c(context);
     if (description == nullptr) {
@@ -876,19 +929,29 @@ JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_getModelDescription(J
 
 // Gets the model size in bytes
 JNIEXPORT jlong JNICALL Java_com_llamamobile_LlamaMobile_getModelSize(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return 0L;
+    }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     return static_cast<jlong>(llama_mobile_get_model_size_c(context));
 }
 
 // Gets the number of model parameters
 JNIEXPORT jlong JNICALL Java_com_llamamobile_LlamaMobile_getModelParametersCount(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return 0L;
+    }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     return static_cast<jlong>(llama_mobile_get_model_params_c(context));
 }
 
 // Releases the context and all associated resources
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_releaseContext(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     llama_mobile_free_context_c(context);
 }
 

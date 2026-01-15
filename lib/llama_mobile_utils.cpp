@@ -35,7 +35,7 @@ void log(const char *level, const char *function, int line,
              }
             priority = ANDROID_LOG_DEBUG;
         }
-        __android_log_vprint(priority, "Cactus", prefix, args);
+        __android_log_vprint(priority, "LLamaMobile", prefix, args);
         va_end(args);
     #else
         if (!::llama_mobile_verbose && strcmp(level, "VERBOSE") == 0) {
