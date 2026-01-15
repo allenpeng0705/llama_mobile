@@ -5,14 +5,15 @@
 	};
 	objectVersion = 63;
 	objects = {
-
 /* Begin PBXBuildFile section */
 		29EC1F212F16187900A7AA32 /* llama_mobile.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 29EC1F202F16187900A7AA32 /* llama_mobile.xcframework */; };
-		29EC1F222F16187900A7AA32 /* llama_mobile.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 29EC1F202F16187900A7AA32 /* llama_mobile.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		99D1E4732F162D4B009B1F3A /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 99D1E4722F162D4B009B1F3A /* Accelerate.framework */; };
+/* End PBXBuildFile section */29EC1F222F16187900A7AA32 /* llama_mobile.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 29EC1F202F16187900A7AA32 /* llama_mobile.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		34C4DB9E947B0D8D5098F38B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C9BE87A5686B4EA2318609A1 /* Assets.xcassets */; };
 		5F3E4A2B1A6C4F989A4D7B5E /* models in Resources */ = {isa = PBXBuildFile; fileRef = 2D1A5E3B4F8D4A7E9C6F8B3A /* models */; };
 		74142D8FC0BFD09F20DBE738 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1988D476BD568ACC2ACB4A8 /* ContentView.swift */; };
 		7B251F70B0348A4A302D225B /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C8A2E18D37A50BBFB5303B /* AppDelegate.swift */; };
+		8A1B2C3D4E5F6789 /* LlamaMobile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1234567890ABCDEF /* LlamaMobile.swift */; };
 		B585EB96D4D40A4EE0468573 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B93EB37C1376ABA72525EAB /* SceneDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -31,16 +32,18 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		29EC1F202F16187900A7AA32 /* llama_mobile.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = llama_mobile.xcframework; path = "../../llama_mobile-ios-SDK/llama_mobile.xcframework"; sourceTree = "<group>"; };
+		29EC1F202F16187900A7AA32 /* llama_mobile.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = llama_mobile.xcframework; path = "../../llama_mobile-ios-SDK/llama_mobile.xcframework"; sourceTree = SOURCE_ROOT; };
+		99D1E4722F162D4B009B1F3A /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = "System/Library/Frameworks/Accelerate.framework"; sourceTree = SDKROOT; };
 		2D1A5E3B4F8D4A7E9C6F8B3A /* models */ = {isa = PBXFileReference; lastKnownFileType = folder; path = models; sourceTree = SOURCE_ROOT; };
 		391AFDBA783D22F52E99297C /* ios-sample.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "ios-sample.entitlements"; sourceTree = "<group>"; };
 		53DD4CA16EF8A7C261A034A6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		5B93EB37C1376ABA72525EAB /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		71722B24BD5FAE2827C1B09B /* llama_mobile-ios-SDK */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "llama_mobile-ios-SDK"; path = "../../llama_mobile-ios-SDK"; sourceTree = SOURCE_ROOT; };
+
 		99C8A2E18D37A50BBFB5303B /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		C9BE87A5686B4EA2318609A1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D166726F7AFEFC3E69EB8080 /* iOSSDKExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iOSSDKExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F1988D476BD568ACC2ACB4A8 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		1234567890ABCDEF /* LlamaMobile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaMobile.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -49,6 +52,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				29EC1F212F16187900A7AA32 /* llama_mobile.xcframework in Frameworks */,
+				99D1E4732F162D4B009B1F3A /* Accelerate.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -59,6 +63,7 @@
 			isa = PBXGroup;
 			children = (
 				29EC1F202F16187900A7AA32 /* llama_mobile.xcframework */,
+				99D1E4722F162D4B009B1F3A /* Accelerate.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -77,7 +82,6 @@
 		A5FFD6A452F481F755D12285 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
-				71722B24BD5FAE2827C1B09B /* llama_mobile-ios-SDK */,
 			);
 			name = Packages;
 			sourceTree = "<group>";
@@ -99,6 +103,7 @@
 				53DD4CA16EF8A7C261A034A6 /* Info.plist */,
 				391AFDBA783D22F52E99297C /* ios-sample.entitlements */,
 				5B93EB37C1376ABA72525EAB /* SceneDelegate.swift */,
+				1234567890ABCDEF /* LlamaMobile.swift */,
 			);
 			path = iOSSDKExample;
 			sourceTree = "<group>";
@@ -145,9 +150,7 @@
 			);
 			mainGroup = 61FB86AA797BA392EF9DA395;
 			minimizedProjectReferenceProxies = 1;
-			packageReferences = (
-				69C96D37C8B971690456EED5 /* XCLocalSwiftPackageReference "../../llama_mobile-ios-SDK" */,
-			);
+
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -175,6 +178,7 @@
 			files = (
 				7B251F70B0348A4A302D225B /* AppDelegate.swift in Sources */,
 				74142D8FC0BFD09F20DBE738 /* ContentView.swift in Sources */,
+				8A1B2C3D4E5F6789 /* LlamaMobile.swift in Sources */,
 				B585EB96D4D40A4EE0468573 /* SceneDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -210,6 +214,10 @@
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
 				CLANG_CXX_LIBRARY = "libc++";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lc++",
+				);
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;

@@ -7,8 +7,10 @@ This directory contains build scripts for the Llama Mobile project, supporting m
 | Script Name | Description | Platform |
 |-------------|-------------|----------|
 | `build-lib.sh` / `build-lib.bat` | Build the core library | macOS / Windows |
-| `build-android.sh` / `build-android.bat` | Build Android SDK | macOS / Windows |
-| `build-ios.sh` / `build-ios.bat` | Build iOS SDK | macOS / Windows |
+| `build-android-lib.sh` / `build-android-lib.bat` | Build Android native libraries | macOS / Windows |
+| `build-android-SDK.sh` / `build-android-SDK.bat` | Build Android SDK (Kotlin/Java) | macOS / Windows |
+| `build-ios-framework.sh` | Build iOS framework | macOS |
+| `build-ios-SDK.sh` | Build iOS SDK | macOS |
 | `build-flutter.sh` / `build-flutter.bat` | Build Flutter SDK | macOS / Windows |
 | `build-capacitor.sh` / `build-capacitor.bat` | Build Capacitor plugin | macOS / Windows |
 | `build-react-native.sh` / `build-react-native.bat` | Build React Native SDK | macOS / Windows |
@@ -168,20 +170,45 @@ build-lib.bat [options]
 - `--cmake-args` - Additional CMake arguments
 - `--rc-compiler` - Path to RC compiler (Windows only)
 
-### Android SDK Build
+### Android Native Libraries Build
 
 #### macOS
 
 ```bash
 cd scripts
-./build-android.sh [options]
+./build-android-lib.sh [options]
 ```
 
 #### Windows
 
 ```batch
 cd scripts
-build-android.bat [options]
+build-android-lib.bat [options]
+```
+
+### Android SDK Build (Kotlin/Java)
+
+#### macOS
+
+```bash
+cd scripts
+./build-android-SDK.sh [options]
+```
+
+#### Windows
+
+```batch
+cd scripts
+build-android-SDK.bat [options]
+```
+
+### iOS Framework Build
+
+#### macOS
+
+```bash
+cd scripts
+./build-ios-framework.sh [options]
 ```
 
 ### iOS SDK Build
@@ -190,15 +217,10 @@ build-android.bat [options]
 
 ```bash
 cd scripts
-./build-ios.sh [options]
+./build-ios-SDK.sh [options]
 ```
 
-#### Windows
-
-```batch
-cd scripts
-build-ios.bat [options]
-```
+**Note:** iOS builds are only supported on macOS due to Xcode dependencies.
 
 ### Flutter SDK Build
 
@@ -247,11 +269,17 @@ build-react-native.bat [options]
 # Build core library in debug mode with 8 jobs
 ./build-lib.sh -d -j 8
 
-# Build Android SDK with custom NDK path
-./build-android.sh --ndk-path /Users/user/Library/Android/sdk/ndk/26.0.10792818
+# Build Android native libraries with custom NDK path
+./build-android-lib.sh --ndk-path /Users/user/Library/Android/sdk/ndk/26.0.10792818
 
-# Build iOS SDK with custom SDK path
-./build-ios.sh --sdk-path /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS17.0.sdk
+# Build Android SDK (Kotlin/Java)
+./build-android-SDK.sh
+
+# Build iOS framework
+./build-ios-framework.sh
+
+# Build iOS SDK
+./build-ios-SDK.sh
 ```
 
 ### Windows Examples
@@ -260,8 +288,11 @@ build-react-native.bat [options]
 # Build core library in debug mode
 build-lib.bat -t Debug
 
-# Build Android SDK with custom NDK path
-build-android.bat --ndk-path "C:\Android\Sdk\ndk\26.0.10792818"
+# Build Android native libraries with custom NDK path
+build-android-lib.bat --ndk-path "C:\Android\Sdk\ndk\26.0.10792818"
+
+# Build Android SDK (Kotlin/Java)
+build-android-SDK.bat
 
 # Build React Native SDK with custom Node.js path
 build-react-native.bat --node-path "C:\Program Files\nodejs\node.exe"

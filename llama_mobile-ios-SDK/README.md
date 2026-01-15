@@ -32,7 +32,7 @@ llama_mobile-ios-SDK/
 - Set Embed & Sign in Framework, Libraries, and Embedded Content
 
 ### 2. Add Swift Wrapper
-- Add `Sources/LlamaMobile/LlamaMobile.swift` to your Xcode project
+- Add `Sources/LlamaMobile/LlamaMobile.swift` to your Xcode project (Copy LlamaMobile.swift to your project source code folder)
 - This provides a Swift-friendly API that wraps the C++ implementation
 
 ### 3. Basic Usage Example
@@ -390,10 +390,59 @@ public struct CompletionResult {
 - `getEmbeddingDimension()` - Get embedding dimension
 
 ## Requirements
-- iOS 15.0+
+- iOS 17.0+
 - Xcode 15.0+
 - Swift 5.9+
 - CMake 3.21+ (for building from source)
+- **System Dependencies** (automatically linked via xcframework):
+  - Accelerate framework (for vDSP optimized operations)
+  - Metal framework (for GPU acceleration)
+  - C++ Standard Library (libc++ for C++ functionality)
+
+## Troubleshooting
+
+### Q&A
+
+#### Q: Cannot import LlamaMobile correctly
+**A:** Ensure you've added both the `llama_mobile.xcframework` to your project and copied the `LlamaMobile.swift` file to your source code folder. Verify that the framework is properly linked in Build Phases > Link Binary With Libraries and set to Embed & Sign in Framework, Libraries, and Embedded Content.
+
+#### Q: Metal library loading errors
+**A:** The framework automatically handles Metal library paths. If you encounter errors like "library not found" or "unsupported Metal language version", ensure:
+- Your device/simulator is running iOS 17.0+
+- The framework was built with the correct Metal version (3.1 for iOS 17+)
+- The metallib files are present in the framework bundle
+
+#### Q: Cannot load local model files
+**A:** Verify the model path is correct:
+- Use absolute paths to your model files
+- Ensure the model format is supported (GGUF format recommended)
+- Check that the model file size is appropriate for your device
+
+#### Q: Framework bundle path issues
+**A:** The SDK includes automatic bundle detection to find the framework within your app bundle. If you're still having issues, you can manually specify the framework path:
+```swift
+let frameworkBundle = Bundle(for: LlamaMobile.self)
+print("Framework bundle path: \(frameworkBundle.bundlePath)")
+```
+
+#### Q: Build errors about missing dependencies
+**A:** Ensure Xcode is using the correct iOS SDK and that you've installed all required development tools:
+```bash
+xcode-select --install
+brew install cmake
+```
+
+#### Q: Metal performance issues
+**A:** Optimize GPU usage with these tips:
+- Adjust `nGpuLayers` parameter (higher values use more GPU memory but faster inference)
+- Use models optimized for mobile (e.g., Q4_K to Q6_K quantization)
+- Ensure your device has sufficient available memory
+
+#### Q: Framework compatibility with iOS versions
+**A:** The framework is built for iOS 17.0+ with Metal 3.1. If you need to support older iOS versions:
+- Modify `build-ios-framework.sh` to set a lower deployment target
+- Update the Metal compilation command to use an older Metal language version
+- Note that performance may be reduced on older devices
 
 ## Testing Tools
 

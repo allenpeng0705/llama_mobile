@@ -255,7 +255,7 @@ build_target() {
         -DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH=NO \
         -DCMAKE_IOS_INSTALL_COMBINED=YES \
         -DCMAKE_XCODE_ATTRIBUTE_SDKROOT="$SYSROOT" \
-        -DCMAKE_XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET="15.0" \
+        -DCMAKE_XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET="17.0" \
         -DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH="NO"
     
     if [[ $? -ne 0 ]]; then
@@ -318,11 +318,11 @@ build_target() {
         
         # Compile device-specific metallib with proper include paths
         cd "$DEST_PATH"
-        xcrun -sdk $METAL_SDK metal -I. ggml-metal.metal -o ggml-llama.metallib 2>/dev/null || true
+        xcrun -sdk $METAL_SDK metal -I. -std=metal3.1 -mios-version-min=17.0 ggml-metal.metal -o ggml-llama.metallib 2>/dev/null || true
         
         # Compile simulator-specific metallib (if needed)
         if [[ "$OUTPUT_SUBDIR" != *"simulator"* ]]; then
-            xcrun -sdk iphonesimulator metal -I. ggml-metal.metal -o ggml-llama-sim.metallib 2>/dev/null || true
+            xcrun -sdk iphonesimulator metal -I. -std=metal3.1 -mios-version-min=17.0 ggml-metal.metal -o ggml-llama-sim.metallib 2>/dev/null || true
         fi
         
         # Clean up copied headers
@@ -449,6 +449,31 @@ mv "$TEMP_XCFRAMEWORK" "$XCFRAMEWORK_PATH"
 # Fix Info.plist encoding
 log_message "[INFO] Fixing Info.plist encoding..."
 find "$XCFRAMEWORK_PATH" -name "*.plist" -exec plutil -convert xml1 {} \;
+
+# Add RequiredFrameworks and RequiredLibraries to XCFramework Info.plist
+log_message "[INFO] Adding required dependencies to XCFramework Info.plist..."
+XCFRAMEWORK_INFO_PLIST="$XCFRAMEWORK_PATH/Info.plist"
+
+# Get the number of AvailableLibraries entries
+LIBRARY_COUNT=$(/usr/libexec/PlistBuddy -c "Print :AvailableLibraries:" "$XCFRAMEWORK_INFO_PLIST" 2>/dev/null | grep -c "Dict")
+
+if [[ $LIBRARY_COUNT -gt 0 ]]; then
+    for ((INDEX=0; INDEX<LIBRARY_COUNT; INDEX++)); do
+        # Add RequiredFrameworks
+        /usr/libexec/PlistBuddy -c "Add :AvailableLibraries:$INDEX:RequiredFrameworks array" "$XCFRAMEWORK_INFO_PLIST" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c "Add :AvailableLibraries:$INDEX:RequiredFrameworks:0 string 'Accelerate'" "$XCFRAMEWORK_INFO_PLIST" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c "Add :AvailableLibraries:$INDEX:RequiredFrameworks:1 string 'Metal'" "$XCFRAMEWORK_INFO_PLIST" 2>/dev/null || true
+        
+        # Add RequiredLibraries
+        /usr/libexec/PlistBuddy -c "Add :AvailableLibraries:$INDEX:RequiredLibraries array" "$XCFRAMEWORK_INFO_PLIST" 2>/dev/null || true
+        /usr/libexec/PlistBuddy -c "Add :AvailableLibraries:$INDEX:RequiredLibraries:0 string 'libc++'" "$XCFRAMEWORK_INFO_PLIST" 2>/dev/null || true
+    done
+    log_message "[INFO] Added dependencies to $LIBRARY_COUNT library variants"
+else
+    log_message "[WARN] No AvailableLibraries found in XCFramework Info.plist"
+fi
+
+log_message "[INFO] Added Accelerate framework and libc++ as required dependencies"
 
 # Clean up any temporary build directories
 rm -rf "$ROOT_DIR/build-ios-*"

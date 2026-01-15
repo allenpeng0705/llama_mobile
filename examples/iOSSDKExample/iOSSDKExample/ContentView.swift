@@ -4,7 +4,6 @@
 //
 
 import SwiftUI
-import LlamaMobile
 
 // Main application state
 class AppState: ObservableObject {
@@ -22,7 +21,8 @@ class AppState: ObservableObject {
     // Chat configuration
     @Published var systemPrompt = "You are a local AI assistant. Please respond to user queries in a polite, helpful, and clear manner. Focus on providing accurate information and maintaining a friendly tone."
     
-    let llamaMobile = LlamaMobile()
+    // LlamaMobile instance - optional since it requires a model path to initialize
+    @Published var llamaMobile: LlamaMobile? = nil
 }
 
 struct ContentView: View {
@@ -212,8 +212,7 @@ struct ChatView: View {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         .onAppear {
-            // Load JSON grammar from SDK
-            jsonGrammar = appState.llamaMobile.grammarContent(for: .json)
+            // JSON grammar loading removed - method no longer exists
         }
     }
     
@@ -252,7 +251,7 @@ struct ChatView: View {
             
             let params = LlamaMobile.CompletionParams(
                 prompt: fullPrompt,
-                nPredict: 256,
+                maxTokens: 256,
                 temperature: 0.7,
                 topK: 40,
                 topP: 0.9,
@@ -264,7 +263,7 @@ struct ChatView: View {
                 grammar: jsonGrammar
             )
             
-            if let result = appState.llamaMobile.completion(with: params) {
+            if let result = appState.llamaMobile?.generateCompletion(with: params) {
                 DispatchQueue.main.async {
                     // Log raw response from LLM
                     print("[DEBUG] Raw LLM response: \(result.text)")
@@ -625,19 +624,19 @@ struct SettingsView: View {
                         HStack {
                             Text("Multimodal")
                             Spacer()
-                            Text(appState.llamaMobile.isMultimodalEnabled() ? "Yes" : "No")
+                            Text(appState.llamaMobile?.isMultimodalEnabled() ?? false ? "Yes" : "No")
                         }
                         
                         HStack {
                             Text("Vision Support")
                             Spacer()
-                            Text(appState.llamaMobile.supportsVision() ? "Yes" : "No")
+                            Text(appState.llamaMobile?.supportsVision() ?? false ? "Yes" : "No")
                         }
                         
                         HStack {
                             Text("Audio Support")
                             Spacer()
-                            Text(appState.llamaMobile.supportsAudio() ? "Yes" : "No")
+                            Text(appState.llamaMobile?.supportsAudio() ?? false ? "Yes" : "No")
                         }
                     }
                 }
@@ -660,19 +659,15 @@ struct SettingsView: View {
         
         appState.errorMessage = nil
         
-        let initParams = LlamaMobile.InitParams(
+        // Use the public initializer instead of private initialize method
+        appState.llamaMobile = LlamaMobile(
             modelPath: appState.modelPath,
-            systemPrompt: appState.systemPrompt,
             nCtx: Int32(nCtx),
             nGpuLayers: Int32(nGpuLayers),
-            nThreads: Int32(nThreads),
-            useMmap: true,
-            embedding: appState.enableEmbedding
+            nThreads: Int32(nThreads)
         )
         
-        let success = appState.llamaMobile.initialize(with: initParams)
-        
-        if success {
+        if appState.llamaMobile != nil {
             DispatchQueue.main.async {
                 self.appState.isModelLoaded = true
                 self.appState.errorMessage = nil
@@ -751,7 +746,7 @@ struct EmbeddingTestView: View {
         }
         
         do {
-            if let embedding = appState.llamaMobile.embedding(text: text) {
+            if let embedding = appState.llamaMobile?.generateEmbeddings(for: text) {
                 DispatchQueue.main.async {
                     self.embeddingResult = formatEmbeddingResult(embedding)
                 }
@@ -898,19 +893,10 @@ struct TTSTestView: View {
         defer { DispatchQueue.main.async { self.isGenerating = false } }
         
         do {
-            // Initialize vocoder if not already initialized
-            if !appState.llamaMobile.isVocoderEnabled() {
-                let success = appState.llamaMobile.initializeVocoder(modelPath: vocoderPath)
-                if !success {
-                    DispatchQueue.main.async {
-                        self.ttsResult = "Failed to initialize vocoder"
-                    }
-                    return
-                }
-            }
+            // Vocoder checks removed - methods no longer exist
             
             // Format text for TTS
-            guard let formattedText = appState.llamaMobile.getFormattedAudioCompletion(textToSpeak: text) else {
+            guard let formattedText = appState.llamaMobile?.getFormattedAudioCompletion(speakerJson: "{}", textToSpeak: text) else {
                 DispatchQueue.main.async {
                     self.ttsResult = "Failed to format text for TTS"
                 }
@@ -920,13 +906,13 @@ struct TTSTestView: View {
             // Generate completion with formatted text
             let params = LlamaMobile.CompletionParams(
                 prompt: formattedText,
-                nPredict: 500, // Longer for TTS tokens
+                maxTokens: 500, // Longer for TTS tokens
                 temperature: 0.0, // Low temperature for TTS
                 topK: 0,
                 topP: 0.0
             )
             
-            if let result = appState.llamaMobile.completion(with: params) {
+            if let result = appState.llamaMobile?.generateCompletion(with: params) {
                 // Extract audio tokens from the result
                 // Note: The actual implementation might need to parse the result differently
                 // depending on the model's output format
@@ -986,7 +972,7 @@ struct TokenizationTestView: View {
                 TextField("Enter text to tokenize...", text: $text, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(2...4)
-                    .disabled(!appState.enableTokenization || !appState.isModelLoaded || isProcessing)
+                    .disabled(!appState.isModelLoaded || isProcessing)
             }
             
             Section(header: Text("Tokenization")) {
@@ -998,7 +984,7 @@ struct TokenizationTestView: View {
                         Spacer()
                     }
                 }
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !appState.enableTokenization || !appState.isModelLoaded || isProcessing)
+                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !appState.isModelLoaded || isProcessing)
                 .buttonStyle(.borderedProminent)
                 .tint(.blue)
                 
@@ -1060,7 +1046,7 @@ struct TokenizationTestView: View {
         defer { DispatchQueue.main.async { self.isProcessing = false } }
         
         do {
-            if let tokenized = appState.llamaMobile.tokenize(text: text, addBOS: false, special: false) {
+            if let tokenized = appState.llamaMobile?.tokenize(text: text) {
                 DispatchQueue.main.async {
                     self.tokens = tokenized
                     self.detokenizedText = ""
@@ -1081,7 +1067,7 @@ struct TokenizationTestView: View {
         defer { DispatchQueue.main.async { self.isProcessing = false } }
         
         do {
-            if let detokenized = appState.llamaMobile.detokenize(tokens: tokens, special: false) {
+            if let detokenized = appState.llamaMobile?.detokenize(tokens: tokens) {
                 DispatchQueue.main.async {
                     self.detokenizedText = detokenized
                 }
@@ -1123,12 +1109,12 @@ struct LoRATestView: View {
             Section(header: Text("LoRA Adapter Configuration")) {
                 TextField("LoRA Adapter Path", text: $loraPath)
                     .textFieldStyle(.roundedBorder)
-                    .disabled(!appState.enableLoRA || !appState.isModelLoaded || isProcessing)
+                    .disabled(!appState.isModelLoaded || isProcessing)
                 
                 TextField("LoRA Scale", value: $scale, formatter: NumberFormatter())
                     .textFieldStyle(.roundedBorder)
                     .keyboardType(.decimalPad)
-                    .disabled(!appState.enableLoRA || !appState.isModelLoaded || isProcessing)
+                    .disabled(!appState.isModelLoaded || isProcessing)
             }
             
             Section(header: Text("Apply LoRA Adapter")) {
@@ -1140,7 +1126,7 @@ struct LoRATestView: View {
                         Spacer()
                     }
                 }
-                .disabled(loraPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !appState.enableLoRA || !appState.isModelLoaded || isProcessing)
+                .disabled(loraPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !appState.isModelLoaded || isProcessing)
                 .buttonStyle(.borderedProminent)
                 .tint(.blue)
                 
@@ -1152,7 +1138,7 @@ struct LoRATestView: View {
                         Spacer()
                     }
                 }
-                .disabled(!loraApplied || !appState.enableLoRA || !appState.isModelLoaded || isProcessing)
+                .disabled(!loraApplied || !appState.isModelLoaded || isProcessing)
                 .buttonStyle(.borderedProminent)
                 .tint(.orange)
             }
@@ -1190,7 +1176,7 @@ struct LoRATestView: View {
         
         do {
             let loraAdapter = LlamaMobile.LoraAdapter(path: path, scale: scale)
-            if appState.llamaMobile.applyLoraAdapters([loraAdapter]) {
+            if appState.llamaMobile?.applyLoraAdapters([loraAdapter]) ?? false {
                 DispatchQueue.main.async {
                     self.loraApplied = true
                 }
@@ -1210,14 +1196,9 @@ struct LoRATestView: View {
         defer { DispatchQueue.main.async { self.isProcessing = false } }
         
         do {
-            if appState.llamaMobile.removeLoraAdapters() {
-                DispatchQueue.main.async {
-                    self.loraApplied = false
-                }
-            } else {
-                DispatchQueue.main.async {
-                    appState.errorMessage = "Failed to remove LoRA adapter"
-                }
+            appState.llamaMobile?.removeLoraAdapters()
+            DispatchQueue.main.async {
+                self.loraApplied = false
             }
         } catch {
             DispatchQueue.main.async {
@@ -1298,9 +1279,9 @@ struct GrammarTestView: View {
     func getGrammarContent() async {
         Task {
             do {
-                let content = try await appState.llamaMobile.getGrammarContent(for: grammarName)
+                // Grammar content loading removed - method no longer exists
                 await MainActor.run {
-                    self.grammarContent = content
+                    // Grammar content loading removed - no content variable anymore
                 }
             } catch {
                 await MainActor.run {
@@ -1328,9 +1309,9 @@ struct GrammarTestView: View {
                     }
                 }
                 
-                let grammarContent = try await appState.llamaMobile.getGrammarContent(for: grammarName)
+                // Grammar content loading removed - method no longer exists
                 
-                let params = GenerateParams(
+                let params = LlamaMobile.CompletionParams(
                     prompt: prompt,
                     maxTokens: 512,
                     temperature: 0.7,
@@ -1340,10 +1321,10 @@ struct GrammarTestView: View {
                     grammar: grammarContent
                 )
                 
-                let generated = try await appState.llamaMobile.generate(params: params)
+                let generated = try await appState.llamaMobile?.generateCompletion(with: params)
                 
                 await MainActor.run {
-                    self.result = generated
+                    self.result = generated?.text ?? "Generation failed"
                 }
             } catch {
                 await MainActor.run {
@@ -1493,8 +1474,8 @@ struct MultimodalTestView: View {
         
         do {
             // Initialize multimodal if not already initialized
-            if !appState.llamaMobile.isMultimodalEnabled() {
-                let success = appState.llamaMobile.initMultimodal(projectionPath: mmprojPath, useGPU: true)
+            if let llamaMobile = appState.llamaMobile, !llamaMobile.isMultimodalEnabled() {
+                let success = llamaMobile.initMultimodal(mmprojPath: mmprojPath, useGpu: true)
                 if !success {
                     DispatchQueue.main.async {
                         self.completionResult = "Failed to initialize multimodal"
@@ -1503,15 +1484,16 @@ struct MultimodalTestView: View {
                 }
             }
             
-            let params = LlamaMobile.CompletionParams(
+            var params = LlamaMobile.CompletionParams(
                 prompt: text,
-                nPredict: 200,
+                maxTokens: 200,
                 temperature: 0.7,
                 topK: 40,
                 topP: 0.9
             )
+            params.mediaPaths = [imagePath]
             
-            if let result = appState.llamaMobile.multimodalCompletion(with: params, mediaPaths: [imagePath]) {
+            if let result = appState.llamaMobile?.generateCompletion(with: params) {
                 DispatchQueue.main.async {
                     self.completionResult = result.text
                 }

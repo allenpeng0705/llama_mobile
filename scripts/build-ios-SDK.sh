@@ -81,6 +81,15 @@ else
     exit 1
 fi
 
+# Verify the framework has the correct dependency information
+log_message "INFO" "Verifying framework dependencies..."
+
+if grep -q "RequiredFrameworks" "$SDK_DIR/$XCFRAMEWORK_NAME/Info.plist" && grep -q "Accelerate" "$SDK_DIR/$XCFRAMEWORK_NAME/Info.plist" && grep -q "Metal" "$SDK_DIR/$XCFRAMEWORK_NAME/Info.plist" && grep -q "libc++" "$SDK_DIR/$XCFRAMEWORK_NAME/Info.plist"; then
+    log_message "SUCCESS" "Framework has correct dependency information (Accelerate, Metal, libc++)"
+else
+    log_message "WARNING" "Framework is missing dependency information. Ensure build-ios-framework.sh was run with dependency updates."
+fi
+
 log_message "INFO" "iOS SDK build completed successfully!"
 log_message "INFO" ""
 log_message "INFO" "SDK Location: $SDK_DIR"

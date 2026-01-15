@@ -135,12 +135,80 @@ lm_ggml_metal_library_t lm_ggml_metal_library_init(lm_ggml_metal_device_t dev) {
 #ifdef SWIFT_PACKAGE
         NSBundle * bundle = SWIFTPM_MODULE_BUNDLE;
 #else
-        NSBundle * bundle = [NSBundle bundleForClass:[LMGGMLMetalClass class]];
+        // Try to find the framework bundle by looking for it within the main bundle
+        NSBundle * mainBundle = [NSBundle mainBundle];
+        NSBundle * bundle = nil;
+        
+        // First try the normal bundle detection
+        bundle = [NSBundle bundleForClass:[LMGGMLMetalClass class]];
+        
+        // If it's the same as main bundle, we need to find the actual framework bundle
+        if (bundle == mainBundle) {
+            LM_GGML_LOG_INFO("%s: Detected main bundle, searching for framework bundle...\n", __func__);
+            
+            // Look for the framework in the Frameworks directory of the main bundle
+            NSString * frameworksPath = [mainBundle pathForResource:@"Frameworks" ofType:nil];
+            if (frameworksPath != nil) {
+                NSString * frameworkPath = [frameworksPath stringByAppendingPathComponent:@"llama_mobile.framework"];
+                if ([[NSFileManager defaultManager] fileExistsAtPath:frameworkPath]) {
+                    bundle = [NSBundle bundleWithPath:frameworkPath];
+                    LM_GGML_LOG_INFO("%s: Found framework bundle at: %s\n", __func__, [frameworkPath UTF8String]);
+                } else {
+                    LM_GGML_LOG_INFO("%s: Framework bundle not found in Frameworks directory\n", __func__);
+                }
+            } else {
+                LM_GGML_LOG_INFO("%s: Frameworks directory not found\n", __func__);
+            }
+        }
+        
+        // Fallback to main bundle if framework bundle not found
+        if (bundle == nil) {
+            bundle = mainBundle;
+        }
 #endif
 
-        NSString * path_lib = [bundle pathForResource:@"ggml-llama" ofType:@"metallib"];
+        // Try to find the resource in framework bundle first
+        NSString * path_lib = nil;
+        
+        // Log framework bundle path for debugging
+        LM_GGML_LOG_INFO("%s: Framework bundle path = %s\n", __func__, [[bundle bundlePath] UTF8String]);
+        
+        // First, check framework bundle root directly for precompiled metallib files
+        // This is where they are actually located in our XCFramework structure
+        NSString *frameworkBundlePath = [bundle bundlePath];
+        
+        // Try device metallib first, then simulator metallib
+        path_lib = [frameworkBundlePath stringByAppendingPathComponent:@"ggml-llama.metallib"];
+        if (![[NSFileManager defaultManager] fileExistsAtPath:path_lib]) {
+            path_lib = [frameworkBundlePath stringByAppendingPathComponent:@"ggml-llama-sim.metallib"];
+        }
+        
+        // Log if we found a metallib file
+        if (path_lib != nil && [[NSFileManager defaultManager] fileExistsAtPath:path_lib]) {
+            LM_GGML_LOG_INFO("%s: found precompiled metallib at: %s\n", __func__, [path_lib UTF8String]);
+        } else {
+            LM_GGML_LOG_INFO("%s: precompiled metallib not found at framework root\n", __func__);
+            path_lib = nil;
+        }
+        
+        // If still not found, try bundle's resource path
+        if (path_lib == nil) {
+            path_lib = [bundle pathForResource:@"ggml-llama" ofType:@"metallib"];
+            if (path_lib != nil) {
+                LM_GGML_LOG_INFO("%s: found metallib in bundle resources: %s\n", __func__, [path_lib UTF8String]);
+            } else {
+                LM_GGML_LOG_INFO("%s: metallib not found in bundle resources\n", __func__);
+            }
+        }
+        
+        // Try simulator metallib in bundle resources if needed
         if (path_lib == nil) {
             path_lib = [bundle pathForResource:@"ggml-llama-sim" ofType:@"metallib"];
+            if (path_lib != nil) {
+                LM_GGML_LOG_INFO("%s: found simulator metallib in bundle resources: %s\n", __func__, [path_lib UTF8String]);
+            } else {
+                LM_GGML_LOG_INFO("%s: simulator metallib not found in bundle resources\n", __func__);
+            }
         }
         if (path_lib == nil) {
             // Try to find the resource in the directory where the current binary located.
@@ -215,15 +283,23 @@ lm_ggml_metal_library_t lm_ggml_metal_library_init(lm_ggml_metal_device_t dev) {
             if (path_resource) {
                 path_source = [path_resource stringByAppendingPathComponent:@"ggml-metal.metal"];
             } else {
+                // First try bundle's resource path
                 path_source = [bundle pathForResource:@"ggml-metal" ofType:@"metal"];
+                
+                // If not found in Resources, try directly at framework bundle root
+                if (path_source == nil) {
+                    NSString *frameworkBundlePath = [bundle bundlePath];
+                    path_source = [frameworkBundlePath stringByAppendingPathComponent:@"ggml-metal.metal"];
+                    LM_GGML_LOG_INFO("%s: trying framework root path: %s\n", __func__, [path_source UTF8String]);
+                }
             }
 
-            if (path_source == nil) {
+            if (path_source == nil || ![[NSFileManager defaultManager] fileExistsAtPath:path_source]) {
                 LM_GGML_LOG_WARN("%s: error: could not use bundle path to find ggml-metal.metal, trying app bundle directory\n", __func__);
                 // Try to find the file in the app bundle's main directory
                 NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
                 path_source = [bundlePath stringByAppendingPathComponent:@"ggml-metal.metal"];
-                LM_GGML_LOG_INFO("%s: trying path: %s\n", __func__, [path_source UTF8String]);
+                LM_GGML_LOG_INFO("%s: trying app bundle path: %s\n", __func__, [path_source UTF8String]);
             }
 
             LM_GGML_LOG_INFO("%s: loading '%s'\n", __func__, [path_source UTF8String]);

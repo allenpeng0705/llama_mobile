@@ -6,10 +6,6 @@ defaults:
   ios:
     deploymentTarget: "15.0"
 
-packages:
-  LlamaMobileSDK:
-    path: "../../llama_mobile-ios-SDK"
-
 targets:
   iOSSDKExample:
     type: application
@@ -19,9 +15,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.llama.mobile.iossdkexample
         SWIFT_VERSION: "5.9"
-    dependencies:
-      - package: LlamaMobileSDK
-        product: LlamaMobileSDK
     resources:
       - path: iOSSDKExample/Assets.xcassets
         type: folder
