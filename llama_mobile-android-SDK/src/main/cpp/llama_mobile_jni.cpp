@@ -268,7 +268,7 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
 }
 
 // Create CompletionResult Java object from C struct
-static jobject createCompletionResult(JNIEnv* env, const llama_mobile_completion_result_t& result) {
+static jobject createCompletionResult(JNIEnv* env, const llama_mobile_completion_result_c_t& result) {
     // Find the CompletionResult class
     jclass resultClass = env->FindClass("com/llamamobile/LlamaMobile$CompletionResult");
     if (resultClass == nullptr) {
