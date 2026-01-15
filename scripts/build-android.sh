@@ -696,7 +696,7 @@ JNIEXPORT jlong JNICALL Java_com_llamamobile_LlamaMobile_initContext(
 }
 
 // Generate completion
-JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_generateCompletion(
+JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_generateCompletion(
     JNIEnv *env, jobject thiz, jlong contextHandle, jobject completionParamsObj) {
     
     if (contextHandle == 0) {
@@ -714,19 +714,51 @@ JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_generateCompletion(
         return nullptr;
     }
     
-    char *result = llama_mobile_generate_completion_c(reinterpret_cast<void*>(contextHandle), &params);
+    llama_mobile_completion_result_c_t result = {};
+    int status = llama_mobile_completion_c(reinterpret_cast<void*>(contextHandle), &params, &result);
     
     // Release prompt string
     releaseStringUTFChars(env, nullptr, prompt);
     
-    if (result == nullptr) {
+    if (status != 0 || result.text == nullptr) {
         return nullptr;
     }
     
-    jstring javaResult = env->NewStringUTF(result);
-    free(result);
+    // Find the CompletionResult class
+    jclass completionResultClass = env->FindClass("com/llamamobile/LlamaMobile$CompletionResult");
+    if (completionResultClass == nullptr) {
+        llama_mobile_free_completion_result_members_c(&result);
+        return nullptr;
+    }
     
-    return javaResult;
+    // Get the constructor
+    jmethodID constructor = env->GetMethodID(completionResultClass, "<init>", "(Ljava/lang/String;IIZZZ)V");
+    if (constructor == nullptr) {
+        env->DeleteLocalRef(completionResultClass);
+        llama_mobile_free_completion_result_members_c(&result);
+        return nullptr;
+    }
+    
+    // Create the CompletionResult object
+    jstring text = env->NewStringUTF(result.text);
+    jobject completionResult = env->NewObject(
+        completionResultClass,
+        constructor,
+        text,
+        result.tokens_predicted,    // tokensGenerated
+        result.tokens_evaluated,    // tokensEvaluated
+        result.truncated,           // truncated
+        result.stopped_eos,         // stoppedEos
+        result.stopped_word,        // stoppedWord
+        result.stopped_limit        // stoppedLimit
+    );
+    
+    // Release resources
+    env->DeleteLocalRef(text);
+    env->DeleteLocalRef(completionResultClass);
+    llama_mobile_free_completion_result_members_c(&result);
+    
+    return completionResult;
 }
 
 // Release context

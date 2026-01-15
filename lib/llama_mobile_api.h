@@ -97,6 +97,7 @@ typedef struct llama_mobile_context_opaque* llama_mobile_context_t;
 typedef struct {
     const char* model_path;          /**< Path to the model file (required) */
     const char* chat_template;       /**< Chat template to use (optional, NULL for default) */
+    const char* system_prompt;       /**< System prompt to use (optional, NULL for default) */
     int32_t n_ctx;                   /**< Context window size (default: 512) */
     int32_t n_batch;                 /**< Batch size for inference (default: 512) */
     int32_t n_gpu_layers;            /**< Number of layers to offload to GPU (default: 0) */
@@ -104,6 +105,9 @@ typedef struct {
     bool use_mmap;                   /**< Use memory-mapped I/O for model loading (default: true) */
     bool use_mlock;                  /**< Lock model in memory (default: false) */
     bool embedding;                  /**< Enable embedding mode (default: false) */
+    int32_t pooling_type;            /**< Pooling type for embeddings (default: 0) */
+    int32_t embd_normalize;          /**< Normalize embeddings (default: 0) */
+    bool flash_attn;                 /**< Enable flash attention (default: false) */
     double temperature;              /**< Sampling temperature (default: 0.8) */
     int32_t top_k;                   /**< Top-K sampling parameter (default: 40) */
     double top_p;                    /**< Top-P sampling parameter (default: 0.95) */
@@ -127,7 +131,15 @@ typedef struct {
     int32_t top_k;                    /**< Top-K sampling parameter (default: 40) */
     double top_p;                     /**< Top-P sampling parameter (default: 0.95) */
     double min_p;                     /**< Min-P sampling parameter (default: 0.05) */
+    double typical_p;                 /**< Typical-P sampling parameter (default: 1.0) */
+    int32_t penalty_last_n;           /**< Number of tokens to apply penalties to (default: 64) */
     double penalty_repeat;            /**< Repeat penalty (default: 1.1) */
+    double penalty_freq;              /**< Frequency penalty (default: 0.0) */
+    double penalty_present;           /**< Presence penalty (default: 0.0) */
+    int32_t mirostat;                 /**< Mirostat mode (0=disabled, 1=v1, 2=v2, default: 0) */
+    double mirostat_tau;              /**< Mirostat target entropy (default: 5.0) */
+    double mirostat_eta;              /**< Mirostat learning rate (default: 0.1) */
+    bool ignore_eos;                  /**< Ignore end-of-sequence tokens (default: false) */
     const char** stop_sequences;      /**< Array of stop sequences to terminate generation (optional) */
     int stop_sequence_count;          /**< Number of stop sequences (optional, 0 for none) */
     const char* grammar;              /**< Path to grammar file (optional, NULL for no grammar) */

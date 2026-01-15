@@ -1,5 +1,7 @@
 package com.llamamobile
 
+import kotlin.jvm.JvmStatic
+
 /**
  * LlamaMobile Android Library
  * 
@@ -82,23 +84,27 @@ object LlamaMobile {
         val cacheTypeK: String? = null,
         val cacheTypeV: String? = null
     ) {
-        /**
-         * Convenience initializer for GPU-accelerated inference
-         */
-        constructor(modelPath: String, nGpuLayers: Int, nCtx: Int = 2048) : this(
-            modelPath = modelPath,
-            nCtx = nCtx,
-            nGpuLayers = nGpuLayers
-        )
-        
-        /**
-         * Convenience initializer for embedding generation
-         */
-        constructor(modelPath: String, embedding: Boolean, poolingType: Int = 0) : this(
-            modelPath = modelPath,
-            embedding = embedding,
-            poolingType = poolingType
-        )
+        companion object {
+            /**
+             * Convenience factory for GPU-accelerated inference
+             */
+            @JvmStatic
+            fun gpu(modelPath: String, nGpuLayers: Int, nCtx: Int = 2048): InitParams = InitParams(
+                modelPath = modelPath,
+                nCtx = nCtx,
+                nGpuLayers = nGpuLayers
+            )
+            
+            /**
+             * Convenience factory for embedding generation
+             */
+            @JvmStatic
+            fun embedding(modelPath: String, poolingType: Int = 0): InitParams = InitParams(
+                modelPath = modelPath,
+                embedding = true,
+                poolingType = poolingType
+            )
+        }
     }
     
     /**
@@ -143,47 +149,53 @@ object LlamaMobile {
         val grammar: String? = null,
         val mediaPaths: List<String> = emptyList()
     ) {
-        /**
-         * Convenience initializer for creative writing
-         */
-        constructor(creativePrompt: String, maxTokens: Int = 512) : this(
-            prompt = creativePrompt,
-            maxTokens = maxTokens,
-            temperature = 1.0f,
-            topP = 0.98f,
-            topK = 100
-        )
-        
-        /**
-         * Convenience initializer for factual/accurate outputs
-         */
-        constructor(factualPrompt: String) : this(
-            prompt = factualPrompt,
-            temperature = 0.1f,
-            topP = 0.9f,
-            topK = 20
-        )
-        
-        /**
-         * Convenience initializer for chat-like responses
-         */
-        constructor(chatPrompt: String, maxTokens: Int = 256) : this(
-            prompt = chatPrompt,
-            maxTokens = maxTokens,
-            temperature = 0.7f,
-            topP = 0.95f,
-            topK = 40,
-            penaltyRepeat = 1.2f
-        )
-        
-        /**
-         * Convenience initializer for multimodal inputs
-         */
-        constructor(multimodalPrompt: String, mediaPaths: List<String>, maxTokens: Int = 256) : this(
-            prompt = multimodalPrompt,
-            maxTokens = maxTokens,
-            mediaPaths = mediaPaths
-        )
+        companion object {
+            /**
+             * Convenience factory for creative writing
+             */
+            @JvmStatic
+            fun creative(prompt: String, maxTokens: Int = 512): CompletionParams = CompletionParams(
+                prompt = prompt,
+                maxTokens = maxTokens,
+                temperature = 1.0f,
+                topP = 0.98f,
+                topK = 100
+            )
+            
+            /**
+             * Convenience factory for factual/accurate outputs
+             */
+            @JvmStatic
+            fun factual(prompt: String): CompletionParams = CompletionParams(
+                prompt = prompt,
+                temperature = 0.1f,
+                topP = 0.9f,
+                topK = 20
+            )
+            
+            /**
+             * Convenience factory for chat-like responses
+             */
+            @JvmStatic
+            fun chat(prompt: String, maxTokens: Int = 256): CompletionParams = CompletionParams(
+                prompt = prompt,
+                maxTokens = maxTokens,
+                temperature = 0.7f,
+                topP = 0.95f,
+                topK = 40,
+                penaltyRepeat = 1.2f
+            )
+            
+            /**
+             * Convenience factory for multimodal inputs
+             */
+            @JvmStatic
+            fun multimodal(prompt: String, mediaPaths: List<String>, maxTokens: Int = 256): CompletionParams = CompletionParams(
+                prompt = prompt,
+                maxTokens = maxTokens,
+                mediaPaths = mediaPaths
+            )
+        }
     }
     
     /**
@@ -265,8 +277,25 @@ object LlamaMobile {
      * Loads the native libraries
      */
     init {
-        System.loadLibrary("llama_mobile")
-        System.loadLibrary("llama_mobile_jni")
+        // Load C++ shared library first - explicitly handle potential errors
+        try {
+            System.loadLibrary("c++_shared")
+            // Then load our native library
+            System.loadLibrary("llama_mobile")
+            // Load JNI wrapper library
+            System.loadLibrary("llama_mobile_jni")
+        } catch (e: UnsatisfiedLinkError) {
+            e.printStackTrace()
+            // Try alternative loading approach if primary fails
+            try {
+                System.loadLibrary("c++_shared")
+                System.loadLibrary("llama_mobile")
+                System.loadLibrary("llama_mobile_jni")
+            } catch (e2: UnsatisfiedLinkError) {
+                e2.printStackTrace()
+                throw e2
+            }
+        }
     }
     
     /**
@@ -278,13 +307,13 @@ object LlamaMobile {
     external fun initContext(params: InitParams): Long
     
     /**
-     * Generates text completion with detailed parameters
+     * Generates text completion with custom parameters
      * 
      * @param contextHandle Context handle obtained from initContext
      * @param params Completion parameters
-     * @return Completion result, or null if generation failed
+     * @return Generated text, or null if generation failed
      */
-    external fun generateCompletion(contextHandle: Long, params: CompletionParams): CompletionResult?
+    external fun generateCompletion(contextHandle: Long, params: CompletionParams): String?
     
     /**
      * Generates text completion with simplified parameters
@@ -297,7 +326,20 @@ object LlamaMobile {
      */
     fun generateCompletion(contextHandle: Long, prompt: String, maxTokens: Int = 128, temperature: Float = 0.8f): CompletionResult? {
         val params = CompletionParams(prompt = prompt, maxTokens = maxTokens, temperature = temperature)
-        return generateCompletion(contextHandle, params)
+        val text = generateCompletion(contextHandle, params)
+        return text?.let {
+            // Create a CompletionResult object with the generated text
+            // Note: We're missing some fields that would require more complex JNI implementation
+            CompletionResult(
+                text = it,
+                tokensGenerated = 0, // Will need to be updated in JNI implementation
+                tokensEvaluated = 0, // Will need to be updated in JNI implementation
+                truncated = false,    // Will need to be updated in JNI implementation
+                stoppedEos = false,   // Will need to be updated in JNI implementation
+                stoppedWord = false,  // Will need to be updated in JNI implementation
+                stoppedLimit = false  // Will need to be updated in JNI implementation
+            )
+        }
     }
     
     /**
@@ -582,7 +624,7 @@ object LlamaMobile {
      * @param params Download parameters
      * @return Download result
      */
-    fun download(with params: DownloadParams): DownloadResult? {
+    fun download(params: DownloadParams): DownloadResult? {
         return downloadModel(params)
     }
     
@@ -593,3 +635,4 @@ object LlamaMobile {
      */
     external fun releaseContext(contextHandle: Long)
 }
+

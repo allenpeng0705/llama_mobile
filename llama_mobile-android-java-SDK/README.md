@@ -1,580 +1,492 @@
-# llama_mobile-android-java-SDK
+# Llama Mobile Android SDK (Java)
 
-A Java-based Android SDK that wraps the `llama_mobile-android-SDK` library, providing a convenient and Java-friendly API for interacting with llama models.
+Native Android SDK for running AI models using llama_mobile, providing Java bindings for seamless integration with Android applications.
 
-## Overview
+## Project Overview
 
-The `llama_mobile-android-java-SDK` provides a streamlined, higher-level Java API on top of the raw `llama_mobile-android-SDK` library. It handles threading, error management, and provides an intuitive interface for Java Android developers.
+The Llama Mobile Android SDK (Java) is a lightweight, high-performance library for running AI models on Android devices. It provides a Java wrapper around the llama_mobile native C++ library, enabling developers to integrate large language models (LLMs) into Android applications with minimal effort.
 
 ## Features
 
-- Simplified Java API for model loading and text generation
-- Built-in threading support to avoid UI blocking
-- Callback-based API for asynchronous operations
-- Error handling with descriptive exceptions
-- Consistent naming and Java idioms
-- Grammar-constrained text generation
-- Token streaming support
+- **Java API**: Clean, modern Java interface for easy integration
+- **Pre-built Native Libraries**: Optimized C++ libraries with Neon SIMD support
+- **Model Compatibility**: Support for various GGUF model formats
+- **Multimodal Support**: Text generation, embeddings, and text-to-speech capabilities
+- **Structured Output**: Built-in grammar support for JSON and other formats
+- **LoRA Adapter Support**: Dynamic model fine-tuning at runtime
 
-## Installation
+## Project Structure
 
-### Prerequisites
+```
+llama_mobile-android-java-SDK/
+├── src/
+│   ├── main/
+│   │   ├── assets/               # Grammar files for structured output
+│   │   │   └── grammars/         # Various GBNF grammar definitions
+│   │   ├── java/                 # Java source code
+│   │   │   └── com/llamamobile/
+│   │   │       └── LlamaMobile.java # Java wrapper API
+│   │   ├── jniLibs/              # Pre-built native libraries
+│   │   │   ├── arm64-v8a/        # 64-bit ARM devices
+│   │   │   │   ├── libllama_mobile.so
+│   │   │   │   └── libc++_shared.so
+│   │   │   └── x86_64/           # x86_64 emulators
+│   │   │       ├── libllama_mobile.so
+│   │   │       └── libc++_shared.so
+│   │   └── AndroidManifest.xml   # Android manifest file
+│   └── androidTest/              # Comprehensive instrumented tests
+│       └── java/com/llamamobile/
+│           ├── LlamaMobileInstrumentedTests.java
+│           └── LlamaMobileComprehensiveTests.java
+│   └── test/                     # Unit tests
+│       └── java/com/llamamobile/
+│           └── LlamaMobileUnitTests.java
+├── build.gradle                  # Gradle build configuration
+├── settings.gradle               # Gradle settings
+├── consumer-rules.pro            # ProGuard rules for SDK users
+└── proguard-rules.pro            # ProGuard rules for the SDK itself
+```
 
-- Android SDK 21 or higher
-- Android NDK 25 or higher
-- CMake 3.22 or higher
+## Building
 
-### Adding to Your Project
+### What is "Building" the SDK?
 
-1. Clone the repository:
+The Llama Mobile Android SDK (Java) is a library project that packages:
+- **Pre-built native libraries** (copied from `llama_mobile-android/libs/`)
+- **Java wrapper code** (LlamaMobile.java)
+- **Grammar files** for structured output
+
+"Building" the SDK refers to compiling the Java wrapper and packaging everything into an AAR (Android Archive) file that can be imported into Android applications. The native C++ libraries are pre-built and simply copied during this process.
+
+### When to Build the SDK
+
+You typically need to build the SDK:
+1. To generate an AAR file for distribution
+2. To verify the Java wrapper compiles correctly
+3. To run instrumented tests on devices/emulators
+
+### How to Build the SDK
+
+#### Using Android Studio
+
+1. Open Android Studio
+2. Select `File > Open` and navigate to the `llama_mobile-android-java-SDK` directory
+3. Click `Open` to load the project as a library
+4. Select `Build > Make Project` (or press Cmd+F9 on macOS, Ctrl+F9 on Windows)
+
+#### Using the Build Script
 
 ```bash
-git clone https://github.com/yourusername/llama_mobile.git
+# Navigate to the root directory
 cd llama_mobile
+
+# Rebuild the Android SDK structure
+./scripts/build-android-SDK.sh
 ```
 
-2. Build the Android library and SDK:
+This script will:
+1. Copy the latest pre-built native libraries from `llama_mobile-android/libs/`
+2. Copy grammar files from `llama_mobile-android/grammars/`
+3. Update the Android SDK structure with the latest files
+4. Preserve any custom modifications in your test files
 
-```bash
-./build-android.sh
-```
+## Native Libraries
 
-3. Add both modules as dependencies in your Android Studio project:
+The SDK requires two native libraries:
+- `libllama_mobile.so` - The main llama_mobile library
+- `libc++_shared.so` - C++ standard library (included in the SDK)
 
-```gradle
-// settings.gradle
-include ':llama_mobile'
-include ':llama_mobile_java_sdk'
-
-project(':llama_mobile').projectDir = new File('../path/to/llama_mobile/llama_mobile-android-SDK')
-project(':llama_mobile_java_sdk').projectDir = new File('../path/to/llama_mobile/llama_mobile-android-java-SDK')
-
-// app/build.gradle
-dependencies {
-    implementation project(':llama_mobile_java_sdk')
-}
-```
+These libraries are located in the `src/main/jniLibs/` directory with support for both `arm64-v8a` and `x86_64` architectures.
 
 ## Usage
 
-### Basic Example
+```java
+// Initialize the SDK
+LlamaMobile.InitParams params = new LlamaMobile.InitParams();
+params.setModelPath("path/to/model.gguf");
+params.setNGpuLayers(10);
+params.setNCtx(2048);
+long context = LlamaMobile.initContext(params);
+
+if (context != 0L) {
+    // Generate text
+    String prompt = "Hello, world!";
+    LlamaMobile.CompletionParams completionParams = new LlamaMobile.CompletionParams();
+    completionParams.setPrompt(prompt);
+    completionParams.setMaxTokens(50);
+    completionParams.setTemperature(0.7f);
+    
+    LlamaMobile.CompletionResult result = LlamaMobile.generateCompletion(context, completionParams);
+    if (result != null) {
+        System.out.println(result.getText());
+    }
+    
+    // Release resources
+    LlamaMobile.releaseContext(context);
+}
+```
+
+## Using the SDK in Your Android Application
+
+There are two primary ways to use the Llama Mobile Android SDK (Java) in your project:
+
+### Option 1: Import as a Module in Android Studio
+
+1. **Open your Android project** in Android Studio
+2. **Import the SDK as a module**:
+   - Select `File > New > Import Module`
+   - Navigate to the `llama_mobile-android-java-SDK` directory
+   - Click `Finish` to import
+3. **Add the dependency**:
+   - Open your app's `build.gradle` file
+   - In the `dependencies` block, add:
+     ```gradle
+     implementation project(":llama_mobile-android-java-SDK")
+     ```
+4. **Sync your project** with Gradle
+
+### Option 2: Use the AAR File
+
+1. **Generate the AAR file**:
+   - Open the SDK project in Android Studio
+   - Select `Build > Make Project`
+   - Find the AAR file at `llama_mobile-android-java-SDK/build/outputs/aar/llama_mobile-android-java-SDK-debug.aar` (or release version)
+
+2. **Add the AAR to your project**:
+   - Create a `libs` directory in your app's module if it doesn't exist
+   - Copy the AAR file into `app/libs/`
+
+3. **Update your app's build.gradle**:
+   ```gradle
+   repositories {
+       flatDir {
+           dirs 'libs'
+       }
+   }
+   
+   dependencies {
+       implementation(name: 'llama_mobile-android-java-SDK-debug', ext: 'aar')
+   }
+   ```
+
+4. **Sync your project** with Gradle
+
+### Option 3: Direct Integration (For Advanced Users)
+
+If you prefer to integrate the components directly:
+
+1. **Copy the native libraries**:
+   - Copy `llama_mobile-android-java-SDK/src/main/jniLibs/` to your app's `src/main/jniLibs/`
+   - This includes both `libllama_mobile.so` and the required `libc++_shared.so` (C++ standard library)
+
+2. **Copy the grammar files**:
+   - Copy `llama_mobile-android-java-SDK/src/main/assets/grammars/` to your app's `src/main/assets/grammars/`
+
+3. **Copy the Java wrapper**:
+   - Copy `llama_mobile-android-java-SDK/src/main/java/com/llamamobile/LlamaMobile.java` to your app's source directory
+
+4. **Add required dependencies**:
+   ```gradle
+   dependencies {
+       implementation 'androidx.core:core-ktx:1.12.0'
+       implementation 'androidx.appcompat:appcompat:1.6.1'
+   }
+   ```
+
+## Verifying the Integration
+
+After integrating the SDK, you can verify it works by adding a simple test to your app:
+
+```java
+import com.llamamobile.LlamaMobile;
+
+// Check if the library is properly loaded
+long context = LlamaMobile.initContext(new LlamaMobile.InitParams());
+if (context == 0L) {
+    System.out.println("Library loaded successfully, but context initialization failed (expected without model)");
+} else {
+    System.out.println("Library loaded and context initialized successfully");
+    LlamaMobile.releaseContext(context);
+}
+```
+
+## Basic Usage Example
+
+Here's a simple example of using the SDK to generate text completion:
 
 ```java
 import com.llamamobile.LlamaMobile;
 import com.llamamobile.LlamaMobile.InitParams;
 import com.llamamobile.LlamaMobile.CompletionParams;
+import com.llamamobile.LlamaMobile.CompletionResult;
 
-// Initialize the context
-InitParams initParams = new InitParams(
-    "/sdcard/Download/mistral-7b-v0.1.Q4_K_M.gguf",
-    2048 // Context size
-);
+// Model path on the device
+String modelPath = "/storage/emulated/0/Android/data/com.yourapp/files/models/SmolLM-360M-Instruct.Q6_K.gguf";
 
-long contextHandle = LlamaMobile.initContext(initParams);
-if (contextHandle != 0) {
-    // Generate text completion
-    CompletionParams completionParams = new CompletionParams(
-        "Hello, how are you?",
-        0.8f, // Temperature
-        100   // Max tokens
-    );
+// Initialize model context
+InitParams initParams = new InitParams();
+initParams.setModelPath(modelPath);
+initParams.setNCtx(4096);
+initParams.setNThreads(4);
+
+long context = LlamaMobile.initContext(initParams);
+if (context != 0L) {
+    // Generate completion
+    CompletionParams completionParams = new CompletionParams();
+    completionParams.setPrompt("Hello, how are you?");
+    completionParams.setMaxTokens(50);
+    completionParams.setTemperature(0.7f);
     
-    LlamaMobile.CompletionResult result = LlamaMobile.generateCompletion(contextHandle, completionParams);
+    CompletionResult result = LlamaMobile.generateCompletion(context, completionParams);
     if (result != null) {
-        String generatedText = result.getText();
-        // Use the generated text
-        System.out.println("Generated: " + generatedText);
+        System.out.println("Completion: " + result.getText());
     }
     
     // Release resources
-    LlamaMobile.releaseContext(contextHandle);
+    LlamaMobile.releaseContext(context);
 }
 ```
-
-### Example with Streaming
-
-```java
-// Initialize context (same as above)
-
-// Create completion params with streaming callback
-CompletionParams streamingParams = new CompletionParams(
-    "Explain quantum computing in simple terms",
-    0.7f,
-    200,
-    4, // Threads
-    -1, // Seed (-1 for random)
-    40, // Top K
-    0.9, // Top P
-    0.05, // Min P
-    1.0, // Typical P
-    64, // Penalty last N
-    1.1, // Penalty repeat
-    0.0, // Penalty freq
-    0.0, // Penalty present
-    0, // Mirostat
-    5.0, // Mirostat tau
-    0.1, // Mirostat eta
-    false, // Ignore EOS
-    0, // N probs
-    null, // Grammar
-    null, // Stop sequences
-    token -> {
-        // Process each token as it's generated
-        System.out.print(token);
-        return true; // Return false to stop generation
-    }
-);
-
-LlamaMobile.generateCompletion(contextHandle, streamingParams);
-```
-
-### Example with Grammar Constraints
-
-```java
-// Initialize context (same as above)
-
-// Get grammar content
-String jsonGrammar = LlamaMobile.grammarContent(getApplicationContext(), LlamaMobile.GrammarName.JSON);
-
-// Create completion params with grammar
-CompletionParams jsonParams = new CompletionParams(
-    "Generate a JSON object with name and age fields: ",
-    0.7f,
-    100,
-    4,
-    -1,
-    40,
-    0.9,
-    0.05,
-    1.0,
-    64,
-    1.1,
-    0.0,
-    0.0,
-    0,
-    5.0,
-    0.1,
-    false,
-    0,
-    jsonGrammar, // Grammar constraint
-    null,
-    null
-);
-
-LlamaMobile.CompletionResult jsonResult = LlamaMobile.generateCompletion(contextHandle, jsonParams);
-// Will generate valid JSON like: {"name": "John", "age": 30}
-```
-
-### Model Download Support
-
-The Java SDK includes built-in functionality to download models from Hugging Face repositories directly to your application's storage:
-
-```java
-import com.llamamobile.LlamaMobile;
-import com.llamamobile.LlamaMobile.DownloadParams;
-import com.llamamobile.LlamaMobile.DownloadResult;
-import com.llamamobile.LlamaMobile.ProgressCallback;
-
-import java.io.File;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-// Create an executor for background tasks
-ExecutorService executor = Executors.newSingleThreadExecutor();
-
-// Define the local path for the downloaded model
-File filesDir = context.getFilesDir();
-String modelPath = new File(filesDir, "llama-2-7b-chat.Q4_K_M.gguf").getAbsolutePath();
-
-// Create download parameters
-DownloadParams downloadParams = new DownloadParams(
-    "meta-llama/Llama-2-7B-Chat-GGUF", // Hugging Face repository ID
-    modelPath
-);
-
-executor.execute(new Runnable() {
-    @Override
-    public void run() {
-        // Download the model with progress tracking
-        DownloadResult result = LlamaMobile.downloadModel(downloadParams, new ProgressCallback() {
-            @Override
-            public void onProgress(float progress) {
-                final int progressPercentage = Math.round(progress * 100);
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        progressBar.setProgress(progressPercentage);
-                        progressText.setText("Downloading: " + progressPercentage + "%");
-                    }
-                });
-            }
-        });
-
-        runOnUiThread(new Runnable() {
-            @Override
-            public void run() {
-                if (result != null && result.isSuccess()) {
-                    progressText.setText("Download successful!");
-                    
-                    // Now initialize the model with the downloaded file
-                    initModel(result.getLocalPath());
-                } else {
-                    String errorMsg = result != null ? result.getErrorMessage() : "Unknown error";
-                    progressText.setText("Download failed: " + errorMsg);
-                }
-            }
-        });
-    }
-});
-
-private void initModel(String modelPath) {
-    executor.execute(new Runnable() {
-        @Override
-        public void run() {
-            // Initialize the model
-            LlamaMobile.InitParams initParams = new LlamaMobile.InitParams(
-                modelPath,
-                2048,
-                null,
-                null,
-                512,
-                512,
-                4,
-                4,
-                true,
-                false,
-                false,
-                0,
-                0,
-                false,
-                null,
-                null,
-                LlamaMobile.CacheType.MEMORY
-            );
-
-            long contextHandle = LlamaMobile.initContext(initParams);
-            if (contextHandle != 0) {
-                // Model is ready to use
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        statusText.setText("Model initialized successfully!");
-                    }
-                });
-            }
-        }
-    });
-}
-```
-
-### Download with Authentication
-
-For private Hugging Face repositories, you can provide a bearer token for authentication:
-
-```java
-DownloadParams protectedParams = new DownloadParams(
-    "your-username/private-model-repo", // Private Hugging Face repository ID
-    modelPath,
-    "your-hugging-face-token" // Bearer token for authentication
-);
-
-DownloadResult protectedResult = LlamaMobile.download(protectedParams);
-```
-
-### Download Specific File
-
-You can also download specific files from Hugging Face repositories:
-
-```java
-DownloadResult specificFileResult = LlamaMobile.downloadHfFile(
-    "meta-llama/Llama-2-7B-Chat-GGUF", // Repository ID
-    "llama-2-7b-chat.Q2_K.gguf", // Specific filename
-    destinationPath,
-    null, // Bearer token (optional)
-    false, // Offline mode
-    null // Progress callback (optional)
-);
-```
-
-## API Reference
-
-### LlamaMobile.InitParams
-
-Initialization parameters for creating a llama context.
-
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| `modelPath` | String | Path to the llama model file (.gguf) | - |
-| `nCtx` | int | Context window size | 512 |
-| `chatTemplate` | String | Chat template to use | null |
-| `systemPrompt` | String | System prompt | null |
-| `nGpuLayers` | int | Number of layers to offload to GPU | 0 |
-| `nThreads` | int | Number of CPU threads | 4 |
-| `useMmap` | boolean | Use memory-mapped I/O | true |
-| `cacheType` | CacheType | Cache type (NONE or MEMORY) | MEMORY |
-
-### LlamaMobile.CompletionParams
-
-Configuration for generating text completions.
-
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| `prompt` | String | Input prompt for text generation | - |
-| `temperature` | float | Temperature for sampling | 0.8 |
-| `maxTokens` | int | Maximum number of tokens to generate | 100 |
-| `nThreads` | int | Number of CPU threads | 4 |
-| `topK` | int | Top-K sampling parameter | 40 |
-| `topP` | double | Top-P sampling parameter | 0.9 |
-| `penaltyRepeat` | double | Repetition penalty | 1.1 |
-| `grammar` | String | Grammar content for constrained generation | null |
-| `stopSequences` | List<String> | Stop sequences to end generation | empty |
-| `tokenCallback` | TokenCallback | Callback for streaming tokens | null |
-
-### LlamaMobile.TokenCallback
-
-Callback interface for streaming token generation.
-
-| Method | Description |
-|--------|-------------|
-| `onToken(String token)` | Called for each generated token. Return false to stop generation. |
-
-### LlamaMobile.ProgressCallback
-
-Callback interface for download progress updates.
-
-| Method | Description |
-|--------|-------------|
-| `onProgress(float progress)` | Called with download progress (0.0 to 1.0). |
-
-### LlamaMobile.DownloadParams
-
-Parameters for downloading models or files from Hugging Face.
-
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| `url` | String | Hugging Face repository ID (e.g., "meta-llama/Llama-2-7B-Chat-GGUF") | - |
-| `localPath` | String | Local path to save the downloaded file | - |
-| `password` | String | Bearer token for authentication (optional) | null |
-
-### LlamaMobile.DownloadResult
-
-Result of a download operation.
-
-| Method | Description |
-|--------|-------------|
-| `isSuccess()` | Whether the download was successful |
-| `getLocalPath()` | Local path where the file was saved |
-| `getErrorMessage()` | Error message if download failed |
-| `getFileSize()` | Size of the downloaded file in bytes |
-
-### LlamaMobile Methods
-
-| Method | Description |
-|--------|-------------|
-| `initContext(InitParams params)` | Initializes a new llama context |
-| `generateCompletion(long contextHandle, CompletionParams params)` | Generates text completion |
-| `releaseContext(long contextHandle)` | Releases the llama context |
-| `grammarContent(Context context, GrammarName name)` | Gets grammar content for constrained generation |
-| `downloadModel(DownloadParams params, ProgressCallback progressCallback)` | Downloads a model from Hugging Face repository |
-| `downloadHfFile(String repoId, String filename, String destinationPath, String bearerToken, boolean offline, ProgressCallback progressCallback)` | Downloads a specific file from Hugging Face repository |
-| `download(DownloadParams params)` | Convenience method for downloading models |
-
-## Tests
-
-The llama_mobile Android Java SDK includes a comprehensive test suite consisting of both unit tests and instrumented tests to ensure API correctness and reliability.
-
-### Test Structure
-
-The SDK uses two types of tests:
-
-#### Unit Tests
-
-- Located in `src/test/java/com/llamamobile/LlamaMobileUnitTests.java`
-- Run on the local JVM without requiring an Android device or emulator
-- Test core functionality, parameter validation, and error handling
-- Focus on pure Java logic and API structure
-
-```
-src/test/
-├── java/com/llamamobile/      # Unit test classes
-└── resources/
-    ├── models/                # Place model files here for unit tests
-    └── grammars/              # Place grammar files here for unit tests
-```
-
-#### Instrumented Tests
-
-- Located in `src/androidTest/java/com/llamamobile/LlamaMobileInstrumentedTests.java`
-- Run on physical Android devices or emulators
-- Test real-world behavior, device-specific functionality, and integration with Android framework
-- Verify API behavior in actual runtime environment
-
-```
-src/androidTest/
-├── java/com/llamamobile/      # Instrumented test classes
-└── resources/
-    ├── models/                # Place model files here for instrumented tests
-    └── grammars/              # Place grammar files here for instrumented tests
-```
-
-### Test Resources
-
-#### Models
-
-1. Download a GGUF format model (e.g., `mistral-7b-v0.1.Q4_K_M.gguf`)
-2. Copy the model file to both test resource folders:
-
-```bash
-# For unit tests
-cp model.gguf src/test/resources/models/
-
-# For instrumented tests
-cp model.gguf src/androidTest/resources/models/
-```
-
-#### Grammars
-
-Grammar files are used for constrained generation tests:
-
-```bash
-# Copy grammar files from the Core library
-cp -r ../lib/grammars/* src/test/resources/grammars/
-cp -r ../lib/grammars/* src/androidTest/resources/grammars/
-```
-
-### Running Tests
-
-#### Using Android Studio
-
-1. Open the `llama_mobile-android-java-SDK` directory in Android Studio
-2. **Unit Tests**: 
-   - Navigate to `LlamaMobileUnitTests.java` in the Project view
-   - Right-click and select "Run 'LlamaMobileUnitTests'"
-
-3. **Instrumented Tests**: 
-   - Connect a physical device or start an emulator
-   - Navigate to `LlamaMobileInstrumentedTests.java` in the Project view
-   - Right-click and select "Run 'LlamaMobileInstrumentedTests'"
-
-#### Using Command Line
-
-```bash
-# Navigate to the SDK directory
-cd llama_mobile-android-java-SDK
-
-# Run unit tests
-./gradlew test
-
-# Run instrumented tests (requires connected device/emulator)
-./gradlew connectedAndroidTest
-
-# Run specific unit tests
-./gradlew test --tests "com.llamamobile.LlamaMobileUnitTests"
-
-# Run specific instrumented tests
-./gradlew connectedAndroidTest --tests "com.llamamobile.LlamaMobileInstrumentedTests"
-```
-
-### Test Coverage
-
-The test suite covers all major SDK APIs:
-
-- **Initialization**: Context creation, parameter validation, error handling
-- **Completion Generation**: Text generation, streaming, parameter combinations
-- **Conversation**: Chat API, conversation history, streaming responses
-- **Tokenization**: Text-to-tokens and tokens-to-text conversion
-- **Embeddings**: Generating and validating embeddings
-- **Multimodal**: Vision/audio input processing
-- **TTS**: Text-to-speech functionality
-- **LoRA Adapters**: Loading and managing adapters
-- **Download**: Model downloading with progress tracking
-- **Error Handling**: Graceful handling of invalid inputs and failures
-- **Grammar Constraints**: Constrained text generation
-- **Memory Management**: Resource cleanup and context handling
-
-### Adding New Tests
-
-#### Unit Tests
-
-Add new unit tests to `src/test/java/com/llamamobile/LlamaMobileUnitTests.java`:
-
-```java
-package com.llamamobile;
-
-import org.junit.Test;
-import org.junit.Assert;
-
-public class LlamaMobileUnitTests {
-    
-    @Test
-    public void testMyNewFeature() {
-        // Test implementation
-        LlamaMobile.MyNewClass instance = new LlamaMobile.MyNewClass();
-        Assert.assertEquals(42, instance.getAnswer());
-    }
-}
-```
-
-#### Instrumented Tests
-
-Add new instrumented tests to `src/androidTest/java/com/llamamobile/LlamaMobileInstrumentedTests.java`:
-
-```java
-package com.llamamobile;
-
-import androidx.test.ext.junit.runners.AndroidJUnit4;
-import androidx.test.platform.app.InstrumentationRegistry;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.Assert;
-
-@RunWith(AndroidJUnit4.class)
-public class LlamaMobileInstrumentedTests {
-    
-    @Test
-    public void testMyNewFeatureOnDevice() {
-        android.content.Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
-        Assert.assertNotNull(appContext);
-        
-        // Test implementation with device context
-        LlamaMobile.MyNewClass instance = new LlamaMobile.MyNewClass(appContext);
-        Assert.assertTrue(instance.isDeviceCompatible());
-    }
-}```
-
-## Example App
-
-An example Android app demonstrating how to use the Java SDK can be found in the `examples/androidJavaSDKExample` directory.
-
-## License
-
-MIT License
 
 ## Troubleshooting
 
-### Permission Issues
+- **JDK Configuration Issues**: If you see "Invalid Gradle JDK configuration" errors, use Android Studio's embedded JDK via `File > Project Structure > SDK Location > JDK Location`
+- **Native Library Loading Errors**: Ensure both `.so` files (`libllama_mobile.so` and `libc++_shared.so`) are in the correct `jniLibs` directories for your target ABIs
+- **C++ Standard Library Issues**: The SDK requires `libc++_shared.so` (included in the jniLibs directories) for proper C++ standard library functionality
+- **Missing Dependencies**: Double-check that all required dependencies are added to your app's build.gradle
+- **Model Access Permissions**: Ensure your app has READ_EXTERNAL_STORAGE/WRITE_EXTERNAL_STORAGE permissions if accessing models from external storage
 
-- Ensure the app has the necessary permissions to read the model file:
+## Testing
 
-```xml
-<!-- AndroidManifest.xml -->
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+The SDK includes comprehensive instrumented tests that run on Android devices or emulators:
+
+### Running Tests with Android Studio
+
+#### 1. Prerequisites
+- Android Studio (latest version recommended)
+- Android SDK with API levels 21-34
+- Android device (USB debugging enabled) or emulator
+
+#### 2. Run Instrumented Tests
+1. Connect an Android device (with USB debugging enabled) or start an emulator
+2. In the Project Explorer, navigate to `src/androidTest/java/com/llamamobile/`
+3. Right-click either test file → `Run 'LlamaMobileInstrumentedTests'` or `Run 'LlamaMobileComprehensiveTests'`
+4. Select the target device/emulator when prompted
+5. View results in the "Run" window at the bottom
+
+### Running Tests with Command Line
+
+#### 1. Prerequisites
+- Android SDK with `adb` and `gradle` tools in your PATH
+- Connected Android device/emulator
+
+#### 2. Run Instrumented Tests
+```bash
+# Navigate to SDK directory
+cd llama_mobile-android-java-SDK
+
+# Ensure device/emulator is connected
+adb devices
+
+# Run all instrumented tests
+./gradlew connectedAndroidTest
+
+# Run specific test class
+./gradlew connectedAndroidTest --tests "com.llamamobile.LlamaMobileComprehensiveTests"
+
+# Run specific test method
+./gradlew connectedAndroidTest --tests "com.llamamobile.LlamaMobileComprehensiveTests.testAssetLoading"
 ```
 
-- For Android 13+, use the MediaStore API to access files.
+### Test Configuration
 
-### Memory Issues
+The tests now use internal device storage instead of sdcard, which eliminates permission issues. The tests automatically create the following directory structure:
 
-- Reduce the `nCtx` parameter to use less memory.
-- Set `cacheType` to `CacheType.NONE` to reduce memory usage.
+```
+/storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-java-SDK/files/
+├── models/
+│   ├── SmolLM-360M-Instruct.Q6_K.gguf           # Main model
+│   ├── OuteTTS-0.2-500M-Q6_K.gguf               # TTS model
+│   ├── Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf  # Alternative TTS model
+│   ├── WavTokenizer-Large-75-F16.gguf           # Vocoder model
+│   ├── SmolVLM-256M-Instruct-Q8_0.gguf          # Vision model
+│   ├── mmproj-SmolVLM-256M-Instruct-Q8_0.gguf   # Multimodal projection
+│   ├── embedding/
+│   │   └── Qwen3-Embedding-0.6B-Q8_0.gguf       # Embedding model
+│   ├── lora/
+│   │   └── fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf  # LoRA adapter
+│   └── img/
+│       └── image.jpg                             # Test image
+└── llama_mobile_test/                            # Test output directory
+```
 
-### Performance Issues
+### Placing Model Files for Testing
 
-- Increase the `nThreads` parameter for faster generation (balance with device capabilities).
-- Offload layers to GPU by increasing `nGpuLayers` (if device has sufficient GPU memory).
-- Consider reducing `maxTokens` for faster generation.
+#### Option 1: Use Android Studio Device File Explorer
+1. Connect your device/emulator
+2. Go to `View > Tool Windows > Device File Explorer`
+3. Navigate to either:
+   - **For development tests**: `/storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-java-SDK/files/`
+   - **For unit tests**: `/storage/emulated/0/Android/data/com.llamamobile.test/files/`
+4. Create the `models` directory structure as shown above
+5. Upload your model files to the appropriate locations
 
-## Contributing
+#### Option 2: Use ADB Command Line
+```bash
+# Create directory structure
+adb shell mkdir -p /storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-java-SDK/files/models/embedding
+adb shell mkdir -p /storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-java-SDK/files/models/lora
+adb shell mkdir -p /storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-java-SDK/files/models/img
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+# Upload model files
+adb push ~/Documents/models/SmolLM-360M-Instruct.Q6_K.gguf /storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-java-SDK/files/models/
+adb push ~/Documents/models/Qwen3-Embedding-0.6B-Q8_0.gguf /storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-java-SDK/files/models/embedding/
+# Upload other model files similarly
+```
+
+### Test Model Requirements
+
+To run all tests, you'll need these model files:
+
+| Model Type | Required File | Notes |
+|------------|---------------|-------|
+| Text Generation | `SmolLM-360M-Instruct.Q6_K.gguf` | Main language model |
+| TTS | `OuteTTS-0.2-500M-Q6_K.gguf` | Primary TTS model |
+| Vocoder | `WavTokenizer-Large-75-F16.gguf` | For TTS audio generation |
+| Embeddings | `Qwen3-Embedding-0.6B-Q8_0.gguf` | For text embeddings |
+| Vision | `SmolVLM-256M-Instruct-Q8_0.gguf` | For image processing |
+| Multimodal | `mmproj-SmolVLM-256M-Instruct-Q8_0.gguf` | Projection for vision model |
+
+Note: Tests will skip gracefully if some model files are missing, so you don't need all of them to run basic tests.
+
+### Test Results
+
+- **Instrumented Tests**: Results are in `build/reports/androidTests/connected/index.html`
+
+## Development Environment Setup
+
+### Prerequisites
+
+- **Android Studio** (latest stable version)
+- **Android SDK** with API levels 21-34
+- **Java** (latest version compatible with your Android Studio)
+
+### Setting Up the Project
+
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/your-username/llama_mobile.git
+   cd llama_mobile
+   ```
+
+2. **Build the Android Libraries**
+   ```bash
+   # Build the native libraries
+   ./scripts/build-android.sh
+   
+   # Build the Android SDK
+   ./scripts/build-android-SDK.sh
+   ```
+
+3. **Open in Android Studio**
+   - Launch Android Studio
+   - Select `File > Open` and navigate to the `llama_mobile-android-java-SDK` directory
+   - Click `Open` and wait for the project to sync
+
+4. **Configure Device/Emulator**
+   - Connect an Android device with USB debugging enabled
+   - Or create and start an Android emulator with API level 21 or higher
+
+5. **Upload Model Files to Emulator**
+   To run tests with real models, you need to upload model files to your emulator. There are three primary ways:
+
+   ### Drag and Drop (Easiest)
+   For most files (images, PDFs, or generic data), you can simply drag the file from your computer's file explorer (Finder or Windows Explorer) and drop it directly onto the emulator screen.
+
+   - **Location**: Files are placed in the `/sdcard/Download` folder by default
+   - **Note**: If you drag an APK file, the emulator will attempt to install it instead of just saving the file
+
+   ### Android Studio Device File Explorer (Best for Folders)
+   If you need to put a file into a specific system directory or manage existing folders:
+
+   1. In Android Studio, go to `View > Tool Windows > Device File Explorer`
+   2. Select your running emulator from the dropdown at the top
+   3. Navigate to the destination folder (usually `sdcard/Download` or `storage/emulated/0/`)
+   4. Right-click on the folder and select `Upload...`
+   5. Select the file or folder from your computer
+
+   ### ADB Command Line (Best for Large Files/Automation)
+   For large model files or entire directories:
+
+   ```bash
+   # Push a single file
+   adb push ~/Documents/my_model.bin /sdcard/Download/
+
+   # Push an entire folder
+   adb push ~/Documents/my_folder /sdcard/Download/
+   ```
+
+## API Reference
+
+### Core Classes
+
+#### LlamaMobile
+The main entry point for the SDK, providing static methods for model management and inference.
+
+##### Initialization
+```java
+InitParams initParams = new InitParams();
+initParams.setModelPath("/path/to/model.gguf");
+initParams.setNCtx(4096);
+initParams.setNThreads(4);
+initParams.setSeed(42);
+
+long context = LlamaMobile.initContext(initParams);
+```
+
+##### Text Generation
+```java
+CompletionParams completionParams = new CompletionParams();
+completionParams.setPrompt("Hello, how are you?");
+completionParams.setMaxTokens(50);
+completionParams.setTemperature(0.7f);
+completionParams.setTopP(0.9f);
+
+CompletionResult result = LlamaMobile.generateCompletion(context, completionParams);
+```
+
+##### Embeddings
+```java
+float[] embedding = LlamaMobile.generateEmbedding(context, "This is a test sentence");
+```
+
+##### Text-to-Speech
+```java
+// Initialize vocoder
+LlamaMobile.initVocoder(context, "/path/to/vocoder.gguf");
+
+// Generate audio
+int[] audioData = LlamaMobile.generateAudioFromText(context, "Hello from llama_mobile");
+```
+
+### Data Classes
+
+#### InitParams
+Configuration parameters for initializing a model context.
+
+#### CompletionParams
+Parameters for generating text completions.
+
+#### CompletionResult
+Result of a text generation operation.
+
+#### LoraAdapter
+Configuration for LoRA adapters.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Based on [llama.cpp](https://github.com/ggerganov/llama.cpp) - A port of Facebook's LLaMA model in C/C++
+- Inspired by the need for lightweight, on-device AI solutions for mobile applications

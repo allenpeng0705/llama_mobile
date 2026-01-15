@@ -40,14 +40,20 @@ TEMP_DIR=""
 
 # Kotlin SDK preservation
 TEMP_KOTLIN=""
+TEMP_KOTLIN_JNI_CPP=""
+TEMP_KOTLIN_JNI_CMAKELISTS=""
 TEMP_KOTLIN_UNIT_TESTS=""
 TEMP_KOTLIN_INSTRUMENTED_TESTS=""
+TEMP_KOTLIN_COMPREHENSIVE_TESTS=""
 TEMP_KOTLIN_README=""
 
 # Java SDK preservation
 TEMP_JAVA=""
+TEMP_JAVA_JNI_CPP=""
+TEMP_JAVA_JNI_CMAKELISTS=""
 TEMP_JAVA_UNIT_TESTS=""
 TEMP_JAVA_INSTRUMENTED_TESTS=""
+TEMP_JAVA_COMPREHENSIVE_TESTS=""
 TEMP_JAVA_README=""
 
 # Create temporary directory
@@ -62,6 +68,20 @@ if [ -d "$KOTLIN_SDK_DIR" ]; then
         log_message "INFO" "Preserved existing Kotlin wrapper temporarily"
     fi
     
+    # Preserve JNI implementation
+    if [ -f "$KOTLIN_SDK_DIR/src/main/cpp/llama_mobile_jni.cpp" ]; then
+        TEMP_KOTLIN_JNI_CPP="$TEMP_DIR/kotlin_jni.cpp"
+        cp "$KOTLIN_SDK_DIR/src/main/cpp/llama_mobile_jni.cpp" "$TEMP_KOTLIN_JNI_CPP"
+        log_message "INFO" "Preserved existing Kotlin JNI implementation temporarily"
+    fi
+    
+    # Preserve CMakeLists.txt
+    if [ -f "$KOTLIN_SDK_DIR/src/main/cpp/CMakeLists.txt" ]; then
+        TEMP_KOTLIN_JNI_CMAKELISTS="$TEMP_DIR/kotlin_cmakelists.txt"
+        cp "$KOTLIN_SDK_DIR/src/main/cpp/CMakeLists.txt" "$TEMP_KOTLIN_JNI_CMAKELISTS"
+        log_message "INFO" "Preserved existing Kotlin JNI CMakeLists.txt temporarily"
+    fi
+    
     # Preserve Kotlin unit tests
     if [ -f "$KOTLIN_SDK_DIR/src/test/java/com/llamamobile/LlamaMobileUnitTests.kt" ]; then
         TEMP_KOTLIN_UNIT_TESTS="$TEMP_DIR/LlamaMobileUnitTests.kt"
@@ -74,6 +94,13 @@ if [ -d "$KOTLIN_SDK_DIR" ]; then
         TEMP_KOTLIN_INSTRUMENTED_TESTS="$TEMP_DIR/LlamaMobileInstrumentedTests.kt"
         cp "$KOTLIN_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileInstrumentedTests.kt" "$TEMP_KOTLIN_INSTRUMENTED_TESTS"
         log_message "INFO" "Preserved existing Kotlin instrumented tests temporarily"
+    fi
+    
+    # Preserve Kotlin comprehensive tests
+    if [ -f "$KOTLIN_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileComprehensiveTests.kt" ]; then
+        TEMP_KOTLIN_COMPREHENSIVE_TESTS="$TEMP_DIR/LlamaMobileComprehensiveTests.kt"
+        cp "$KOTLIN_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileComprehensiveTests.kt" "$TEMP_KOTLIN_COMPREHENSIVE_TESTS"
+        log_message "INFO" "Preserved existing Kotlin comprehensive tests temporarily"
     fi
     
     # Preserve Kotlin README.md
@@ -93,6 +120,20 @@ if [ -d "$JAVA_SDK_DIR" ]; then
         log_message "INFO" "Preserved existing Java wrapper temporarily"
     fi
     
+    # Preserve JNI implementation
+    if [ -f "$JAVA_SDK_DIR/src/main/cpp/llama_mobile_jni.cpp" ]; then
+        TEMP_JAVA_JNI_CPP="$TEMP_DIR/java_jni.cpp"
+        cp "$JAVA_SDK_DIR/src/main/cpp/llama_mobile_jni.cpp" "$TEMP_JAVA_JNI_CPP"
+        log_message "INFO" "Preserved existing Java JNI implementation temporarily"
+    fi
+    
+    # Preserve CMakeLists.txt
+    if [ -f "$JAVA_SDK_DIR/src/main/cpp/CMakeLists.txt" ]; then
+        TEMP_JAVA_JNI_CMAKELISTS="$TEMP_DIR/java_cmakelists.txt"
+        cp "$JAVA_SDK_DIR/src/main/cpp/CMakeLists.txt" "$TEMP_JAVA_JNI_CMAKELISTS"
+        log_message "INFO" "Preserved existing Java JNI CMakeLists.txt temporarily"
+    fi
+    
     # Preserve Java unit tests
     if [ -f "$JAVA_SDK_DIR/src/test/java/com/llamamobile/LlamaMobileUnitTests.java" ]; then
         TEMP_JAVA_UNIT_TESTS="$TEMP_DIR/LlamaMobileUnitTests.java"
@@ -107,6 +148,13 @@ if [ -d "$JAVA_SDK_DIR" ]; then
         log_message "INFO" "Preserved existing Java instrumented tests temporarily"
     fi
     
+    # Preserve Java comprehensive tests if they exist
+    if [ -f "$JAVA_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileComprehensiveTests.java" ]; then
+        TEMP_JAVA_COMPREHENSIVE_TESTS="$TEMP_DIR/LlamaMobileComprehensiveTests.java"
+        cp "$JAVA_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileComprehensiveTests.java" "$TEMP_JAVA_COMPREHENSIVE_TESTS"
+        log_message "INFO" "Preserved existing Java comprehensive tests temporarily"
+    fi
+    
     # Preserve Java README.md
     if [ -f "$JAVA_SDK_DIR/README.md" ]; then
         TEMP_JAVA_README="$TEMP_DIR/JavaREADME.md"
@@ -115,35 +163,34 @@ if [ -d "$JAVA_SDK_DIR" ]; then
     fi
 fi
 
-# By default, we don't create backups to avoid clutter
-# To enable backups, set the BACKUP environment variable to "true"
+# Preserve README.md files if they exist
+PRESERVED_KOTLIN_README=""
+PRESERVED_JAVA_README=""
+
+if [ -f "$KOTLIN_SDK_DIR/README.md" ]; then
+    PRESERVED_KOTLIN_README="$TEMP_DIR/KotlinREADME.md"
+    cp "$KOTLIN_SDK_DIR/README.md" "$PRESERVED_KOTLIN_README"
+    log_message "INFO" "Preserved existing Kotlin README.md"
+fi
+
+if [ -f "$JAVA_SDK_DIR/README.md" ]; then
+    PRESERVED_JAVA_README="$TEMP_DIR/JavaREADME.md"
+    cp "$JAVA_SDK_DIR/README.md" "$PRESERVED_JAVA_README"
+    log_message "INFO" "Preserved existing Java README.md"
+fi
 
 # Handle Kotlin SDK cleanup
 if [ -d "$KOTLIN_SDK_DIR" ]; then
-    if [ "$BACKUP" = "true" ]; then
-        timestamp=$(date '+%Y%m%d_%H%M%S')
-        KOTLIN_BACKUP_DIR="${KOTLIN_SDK_DIR}_$timestamp"
-        log_message "INFO" "Backing up existing Kotlin SDK to $KOTLIN_BACKUP_DIR"
-        mv "$KOTLIN_SDK_DIR" "$KOTLIN_BACKUP_DIR"
-    else
-        # Clean up existing Kotlin SDK directory without backup
-        log_message "INFO" "Removing existing Kotlin SDK directory (no backup)"
-        rm -rf "$KOTLIN_SDK_DIR"
-    fi
+    # Clean up existing Kotlin SDK directory without backup
+    log_message "INFO" "Removing existing Kotlin SDK directory"
+    rm -rf "$KOTLIN_SDK_DIR"
 fi
 
 # Handle Java SDK cleanup
 if [ -d "$JAVA_SDK_DIR" ]; then
-    if [ "$BACKUP" = "true" ]; then
-        timestamp=$(date '+%Y%m%d_%H%M%S')
-        JAVA_BACKUP_DIR="${JAVA_SDK_DIR}_$timestamp"
-        log_message "INFO" "Backing up existing Java SDK to $JAVA_BACKUP_DIR"
-        mv "$JAVA_SDK_DIR" "$JAVA_BACKUP_DIR"
-    else
-        # Clean up existing Java SDK directory without backup
-        log_message "INFO" "Removing existing Java SDK directory (no backup)"
-        rm -rf "$JAVA_SDK_DIR"
-    fi
+    # Clean up existing Java SDK directory without backup
+    log_message "INFO" "Removing existing Java SDK directory"
+    rm -rf "$JAVA_SDK_DIR"
 fi
 
 # Create clean SDK directory structures for both Kotlin and Java
@@ -155,7 +202,7 @@ mkdir -p "$KOTLIN_SDK_DIR/src/main/jniLibs/arm64-v8a"
 mkdir -p "$KOTLIN_SDK_DIR/src/main/jniLibs/x86_64"
 mkdir -p "$KOTLIN_SDK_DIR/src/main/assets/grammars"
 mkdir -p "$KOTLIN_SDK_DIR/src/main/java/com/llamamobile"
-mkdir -p "$KOTLIN_SDK_DIR/src/test/java/com/llamamobile"
+mkdir -p "$KOTLIN_SDK_DIR/src/main/cpp"
 mkdir -p "$KOTLIN_SDK_DIR/src/androidTest/java/com/llamamobile"
 mkdir -p "$KOTLIN_SDK_DIR/libs"
 
@@ -165,14 +212,71 @@ mkdir -p "$JAVA_SDK_DIR/src/main/jniLibs/arm64-v8a"
 mkdir -p "$JAVA_SDK_DIR/src/main/jniLibs/x86_64"
 mkdir -p "$JAVA_SDK_DIR/src/main/assets/grammars"
 mkdir -p "$JAVA_SDK_DIR/src/main/java/com/llamamobile"
+mkdir -p "$JAVA_SDK_DIR/src/main/cpp"
 mkdir -p "$JAVA_SDK_DIR/src/test/java/com/llamamobile"
 mkdir -p "$JAVA_SDK_DIR/src/androidTest/java/com/llamamobile"
 mkdir -p "$JAVA_SDK_DIR/libs"
+
+# Function to find libc++_shared.so in NDK
+find_libcpp_shared() {
+    local abi="$1"
+    local ndk_abi_map=("arm64-v8a"="aarch64-linux-android" "x86_64"="x86_64-linux-android")
+    local linux_abi="${ndk_abi_map[$abi]}"
+    
+    if [ -z "$linux_abi" ]; then
+        log_message "ERROR" "Unsupported ABI: $abi"
+        return 1
+    fi
+    
+    # Explicitly try the newest NDK version first (29.0.14206865)
+    local newest_ndk="$HOME/Library/Android/sdk/ndk/29.0.14206865"
+    if [ -d "$newest_ndk" ]; then
+        # Try the newer NDK path structure first (NDK 25+)
+        local libcpp_path_new="$newest_ndk/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/lib/$linux_abi/libc++_shared.so"
+        if [ -f "$libcpp_path_new" ]; then
+            echo "$libcpp_path_new"
+            return 0
+        fi
+    fi
+    
+    # Find the latest NDK version
+    local ndk_base="$HOME/Library/Android/sdk/ndk"
+    if [ -d "$ndk_base" ]; then
+        local latest_ndk=$(ls -d "$ndk_base"/* | sort -r | head -1)
+        
+        if [ -n "$latest_ndk" ]; then
+            # Try the newer NDK path structure first (NDK 25+)
+            local libcpp_path_new="$latest_ndk/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/lib/$linux_abi/libc++_shared.so"
+            if [ -f "$libcpp_path_new" ]; then
+                echo "$libcpp_path_new"
+                return 0
+            fi
+            
+            # Try the older NDK path structure (NDK 23 and below)
+            local libcpp_path_old="$latest_ndk/sources/cxx-stl/llvm-libc++/libs/$abi/libc++_shared.so"
+            if [ -f "$libcpp_path_old" ]; then
+                echo "$libcpp_path_old"
+                return 0
+            fi
+        fi
+    fi
+    
+    # Fallback: search all NDK versions - make sure we match the actual ABI directory, not just any occurrence
+    local libcpp_path=$(find "$HOME/Library/Android/sdk/ndk" -name "libc++_shared.so" -type f | grep -E "/($abi|$linux_abi)/libc\+\+_shared.so$" | sort -r | head -1)
+    if [ -n "$libcpp_path" ]; then
+        echo "$libcpp_path"
+        return 0
+    fi
+    
+    log_message "WARNING" "Could not find libc++_shared.so for $abi"
+    return 1
+}
 
 # Copy pre-built libraries to both SDKs
 log_message "INFO" "Copying pre-built libraries..."
 
 for ABI in "arm64-v8a" "x86_64"; do
+    # Copy libllama_mobile.so
     SOURCE_LIB="$PREBUILT_DIR/libs/$ABI/libllama_mobile.so"
     if [ ! -f "$SOURCE_LIB" ]; then
         log_message "ERROR" "Library not found for ABI $ABI at $SOURCE_LIB"
@@ -188,6 +292,30 @@ for ABI in "arm64-v8a" "x86_64"; do
     JAVA_DEST_LIB="$JAVA_SDK_DIR/src/main/jniLibs/$ABI/libllama_mobile.so"
     cp -f "$SOURCE_LIB" "$JAVA_DEST_LIB"
     log_message "INFO" "Copied $ABI library to Java SDK at $JAVA_DEST_LIB"
+    
+    # Copy libc++_shared.so (required for C++ Standard Library functionality)
+    SOURCE_CPP_SHARED="$PREBUILT_DIR/libs/$ABI/libc++_shared.so"
+    
+    # If not found in prebuilt, try to find in NDK
+    if [ ! -f "$SOURCE_CPP_SHARED" ]; then
+        log_message "INFO" "libc++_shared.so not found in prebuilt directory, trying to find in NDK..."
+        SOURCE_CPP_SHARED="$(find_libcpp_shared "$ABI")"
+        if [ $? -ne 0 ]; then
+            log_message "WARNING" "Could not find libc++_shared.so for ABI $ABI. App may crash on device."
+            continue
+        fi
+        log_message "INFO" "Found libc++_shared.so for ABI $ABI at $SOURCE_CPP_SHARED"
+    fi
+    
+    # Copy to Kotlin SDK
+    KOTLIN_DEST_CPP_SHARED="$KOTLIN_SDK_DIR/src/main/jniLibs/$ABI/libc++_shared.so"
+    cp -f "$SOURCE_CPP_SHARED" "$KOTLIN_DEST_CPP_SHARED"
+    log_message "INFO" "Copied $ABI libc++_shared.so to Kotlin SDK at $KOTLIN_DEST_CPP_SHARED"
+    
+    # Copy to Java SDK
+    JAVA_DEST_CPP_SHARED="$JAVA_SDK_DIR/src/main/jniLibs/$ABI/libc++_shared.so"
+    cp -f "$SOURCE_CPP_SHARED" "$JAVA_DEST_CPP_SHARED"
+    log_message "INFO" "Copied $ABI libc++_shared.so to Java SDK at $JAVA_DEST_CPP_SHARED"
 done
 
 # Copy grammar files if they exist
@@ -230,7 +358,23 @@ fi
 if [ -n "$KOTLIN_SOURCE" ]; then
     cp -f "$KOTLIN_SOURCE" "$KOTLIN_SDK_DIR/src/main/java/com/llamamobile/"
     log_message "INFO" "Copied Kotlin wrapper to $KOTLIN_SDK_DIR/src/main/java/com/llamamobile/LlamaMobile.kt"
-else
+fi
+
+# Restore Kotlin JNI implementation if preserved
+if [ -f "$TEMP_KOTLIN_JNI_CPP" ]; then
+    mkdir -p "$KOTLIN_SDK_DIR/src/main/cpp"
+    cp -f "$TEMP_KOTLIN_JNI_CPP" "$KOTLIN_SDK_DIR/src/main/cpp/llama_mobile_jni.cpp"
+    log_message "INFO" "Restored Kotlin JNI implementation from temporary storage"
+fi
+
+# Restore Kotlin CMakeLists.txt if preserved
+if [ -f "$TEMP_KOTLIN_JNI_CMAKELISTS" ]; then
+    mkdir -p "$KOTLIN_SDK_DIR/src/main/cpp"
+    cp -f "$TEMP_KOTLIN_JNI_CMAKELISTS" "$KOTLIN_SDK_DIR/src/main/cpp/CMakeLists.txt"
+    log_message "INFO" "Restored Kotlin CMakeLists.txt from temporary storage"
+fi
+
+if [ -z "$KOTLIN_SOURCE" ]; then
     # If no Kotlin wrapper found, create a basic one
     log_message "WARN" "No existing Kotlin wrapper found. Creating a basic wrapper."
     
@@ -270,7 +414,23 @@ fi
 if [ -n "$JAVA_SOURCE" ]; then
     cp -f "$JAVA_SOURCE" "$JAVA_SDK_DIR/src/main/java/com/llamamobile/"
     log_message "INFO" "Copied Java wrapper to $JAVA_SDK_DIR/src/main/java/com/llamamobile/LlamaMobile.java"
-else
+fi
+
+# Restore Java JNI implementation if preserved
+if [ -f "$TEMP_JAVA_JNI_CPP" ]; then
+    mkdir -p "$JAVA_SDK_DIR/src/main/cpp"
+    cp -f "$TEMP_JAVA_JNI_CPP" "$JAVA_SDK_DIR/src/main/cpp/llama_mobile_jni.cpp"
+    log_message "INFO" "Restored Java JNI implementation from temporary storage"
+fi
+
+# Restore Java CMakeLists.txt if preserved
+if [ -f "$TEMP_JAVA_JNI_CMAKELISTS" ]; then
+    mkdir -p "$JAVA_SDK_DIR/src/main/cpp"
+    cp -f "$TEMP_JAVA_JNI_CMAKELISTS" "$JAVA_SDK_DIR/src/main/cpp/CMakeLists.txt"
+    log_message "INFO" "Restored Java CMakeLists.txt from temporary storage"
+fi
+
+if [ -z "$JAVA_SOURCE" ]; then
     # If no Java wrapper found, create a complete one
     log_message "INFO" "Creating complete Java wrapper..."
     
@@ -819,9 +979,21 @@ if [ -f "$TEMP_KOTLIN_INSTRUMENTED_TESTS" ]; then
     log_message "INFO" "Copied Kotlin instrumented tests to $KOTLIN_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileInstrumentedTests.kt"
 fi
 
+# Handle Kotlin comprehensive tests
+log_message "INFO" "Copying Kotlin comprehensive tests..."
+if [ -f "$TEMP_KOTLIN_COMPREHENSIVE_TESTS" ]; then
+    cp -f "$TEMP_KOTLIN_COMPREHENSIVE_TESTS" "$KOTLIN_SDK_DIR/src/androidTest/java/com/llamamobile/"
+    log_message "INFO" "Copied Kotlin comprehensive tests to $KOTLIN_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileComprehensiveTests.kt"
+fi
+
 # Handle Java instrumented tests
-log_message "INFO" "Creating Java instrumented tests..."
-cat > "$JAVA_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileInstrumentedTests.java" << 'EOF'
+log_message "INFO" "Processing Java instrumented tests..."
+if [ -f "$TEMP_JAVA_INSTRUMENTED_TESTS" ]; then
+    cp -f "$TEMP_JAVA_INSTRUMENTED_TESTS" "$JAVA_SDK_DIR/src/androidTest/java/com/llamamobile/"
+    log_message "INFO" "Restored Java instrumented tests from temporary storage"
+else
+    log_message "INFO" "Creating Java instrumented tests..."
+    cat > "$JAVA_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileInstrumentedTests.java" << 'EOF'
 package com.llamamobile;
 
 import android.content.Context;
@@ -981,45 +1153,84 @@ public class LlamaMobileInstrumentedTests {
 EOF
 
 log_message "INFO" "Created Java instrumented tests at $JAVA_SDK_DIR/src/androidTest/java/com/llamamobile/LlamaMobileInstrumentedTests.java"
+fi
+
+# Restore Java comprehensive tests if they exist
+if [ -f "$TEMP_JAVA_COMPREHENSIVE_TESTS" ]; then
+    cp -f "$TEMP_JAVA_COMPREHENSIVE_TESTS" "$JAVA_SDK_DIR/src/androidTest/java/com/llamamobile/"
+    log_message "INFO" "Restored Java comprehensive tests from temporary storage"
+fi
 
 # Create/update AndroidManifest.xml for both SDKs
 log_message "INFO" "Creating AndroidManifest.xml files..."
 
-MANIFEST_CONTENT="<?xml version=\"1.0\" encoding=\"utf-8\"?>
-<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" 
-    package=\"com.llamamobile\">
+# Create for Kotlin SDK
+cat > "$KOTLIN_SDK_DIR/src/main/AndroidManifest.xml" << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" 
+    package="com.llamamobile">
 
     <uses-sdk
-        android:minSdkVersion=\"21\" 
-        android:targetSdkVersion=\"34\" />
-</manifest>"
+        android:minSdkVersion="21" 
+        android:targetSdkVersion="34" />
 
-# Create for Kotlin SDK
-echo "$MANIFEST_CONTENT" > "$KOTLIN_SDK_DIR/src/main/AndroidManifest.xml"
+    <!-- Permissions for accessing external storage -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="33" />
+    
+    <!-- For Android 14+, we need to handle files differently -->
+    <!-- This is a general permission for non-media files -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+</manifest>
+EOF
 log_message "INFO" "Created AndroidManifest.xml for Kotlin SDK"
 
 # Create for Java SDK
-echo "$MANIFEST_CONTENT" > "$JAVA_SDK_DIR/src/main/AndroidManifest.xml"
+cat > "$JAVA_SDK_DIR/src/main/AndroidManifest.xml" << 'EOF'
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" 
+    package="com.llamamobile">
+
+    <uses-sdk
+        android:minSdkVersion="21" 
+        android:targetSdkVersion="34" />
+
+    <!-- Permissions for accessing external storage -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="33" />
+    
+    <!-- For Android 14+, we need to handle files differently -->
+    <!-- This is a general permission for non-media files -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+</manifest>
+EOF
 log_message "INFO" "Created AndroidManifest.xml for Java SDK"
 
-# Create/update build.gradle
-log_message "INFO" "Creating build.gradle..."
+# Create/update build.gradle files for both SDKs
+log_message "INFO" "Creating build.gradle files..."
 
-BUILD_GRADLE_CONTENT="plugins {
+# Create Kotlin SDK build.gradle
+cat > "$KOTLIN_SDK_DIR/build.gradle" << 'EOF'
+plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
 }
 
 android {
     namespace 'com.llamamobile'
-    compileSdk 34
+    compileSdk 36
+    buildToolsVersion "36.1.0"
 
     defaultConfig {
         minSdk 21
-        targetSdk 34
+        targetSdk 36
 
-        testInstrumentationRunner \"androidx.test.runner.AndroidJUnitRunner\"
-        consumerProguardFiles \"consumer-rules.pro\"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles "consumer-rules.pro"
+        
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+            stl "c++_shared"
+            version "29.0.14206865"
+        }
     }
 
     buildTypes {
@@ -1035,6 +1246,13 @@ android {
     kotlinOptions {
         jvmTarget = '1.8'
     }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
 }
 
 dependencies {
@@ -1043,19 +1261,74 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
-}"
+}
+EOF
+log_message "INFO" "Created build.gradle for Kotlin SDK"
 
-echo "$BUILD_GRADLE_CONTENT" > "$SDK_DIR/build.gradle"
-log_message "INFO" "Created build.gradle"
+# Create Java SDK build.gradle
+cat > "$JAVA_SDK_DIR/build.gradle" << 'EOF'
+plugins {
+    id 'com.android.library'
+}
 
-# Create/update settings.gradle
-log_message "INFO" "Creating settings.gradle..."
+android {
+    namespace 'com.llamamobile'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 21
+        targetSdk 34
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        consumerProguardFiles "consumer-rules.pro"
+        
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+            stl "c++_shared"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.18.1"
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.core:core:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}
+EOF
+log_message "INFO" "Created build.gradle for Java SDK"
+
+# Create/update settings.gradle files for both SDKs
+log_message "INFO" "Creating settings.gradle files..."
 
 SETTINGS_GRADLE_CONTENT="pluginManagement {
     repositories {
         google()
         mavenCentral()
         gradlePluginPortal()
+    }
+    plugins {
+        id 'com.android.library' version '8.5.0'
+        id 'org.jetbrains.kotlin.android' version '1.9.20'
     }
 }
 dependencyResolutionManagement {
@@ -1067,11 +1340,37 @@ dependencyResolutionManagement {
 }
 rootProject.name = \"llama_mobile\""
 
-echo "$SETTINGS_GRADLE_CONTENT" > "$SDK_DIR/settings.gradle"
-log_message "INFO" "Created settings.gradle"
+# Create for Kotlin SDK
+echo "$SETTINGS_GRADLE_CONTENT" > "$KOTLIN_SDK_DIR/settings.gradle"
+log_message "INFO" "Created settings.gradle for Kotlin SDK"
 
-# Create consumer-rules.pro
-log_message "INFO" "Creating consumer-rules.pro..."
+# Create for Java SDK
+echo "$SETTINGS_GRADLE_CONTENT" > "$JAVA_SDK_DIR/settings.gradle"
+log_message "INFO" "Created settings.gradle for Java SDK"
+
+# Create/update gradle.properties files for both SDKs
+log_message "INFO" "Creating gradle.properties files..."
+
+GRADLE_PROPERTIES_CONTENT="# AndroidX properties
+android.useAndroidX=true
+# Kotlin code style for this project: \"official\" or \"obsolete\":
+kotlin.code.style=official
+
+# SDK compatibility settings
+android.builder.sdkInstallPath=/Users/shileipeng/Library/Android/sdk
+android.suppressUnsupportedCompileSdk=36
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8"
+
+# Create for Kotlin SDK
+echo "$GRADLE_PROPERTIES_CONTENT" > "$KOTLIN_SDK_DIR/gradle.properties"
+log_message "INFO" "Created gradle.properties for Kotlin SDK"
+
+# Create for Java SDK
+echo "$GRADLE_PROPERTIES_CONTENT" > "$JAVA_SDK_DIR/gradle.properties"
+log_message "INFO" "Created gradle.properties for Java SDK"
+
+# Create consumer-rules.pro files for both SDKs
+log_message "INFO" "Creating consumer-rules.pro files..."
 
 CONSUMER_RULES_CONTENT="# Consumer rules for llama_mobile Android SDK
 # Keep all public classes and methods in the SDK
@@ -1079,11 +1378,16 @@ dontwarn com.llamamobile.**
 -keep class com.llamamobile.** { *; }
 "
 
-echo "$CONSUMER_RULES_CONTENT" > "$SDK_DIR/consumer-rules.pro"
-log_message "INFO" "Created consumer-rules.pro"
+# Create for Kotlin SDK
+echo "$CONSUMER_RULES_CONTENT" > "$KOTLIN_SDK_DIR/consumer-rules.pro"
+log_message "INFO" "Created consumer-rules.pro for Kotlin SDK"
 
-# Create proguard-rules.pro
-log_message "INFO" "Creating proguard-rules.pro..."
+# Create for Java SDK
+echo "$CONSUMER_RULES_CONTENT" > "$JAVA_SDK_DIR/consumer-rules.pro"
+log_message "INFO" "Created consumer-rules.pro for Java SDK"
+
+# Create proguard-rules.pro files for both SDKs
+log_message "INFO" "Creating proguard-rules.pro files..."
 
 PROGUARD_RULES_CONTENT="# ProGuard rules for llama_mobile Android SDK
 # Add project specific ProGuard rules here.
@@ -1100,43 +1404,47 @@ dontwarn com.llamamobile.**
 -keep class com.llamamobile.** { *; }
 "
 
-echo "$PROGUARD_RULES_CONTENT" > "$SDK_DIR/proguard-rules.pro"
-log_message "INFO" "Created proguard-rules.pro"
+# Create for Kotlin SDK
+echo "$PROGUARD_RULES_CONTENT" > "$KOTLIN_SDK_DIR/proguard-rules.pro"
+log_message "INFO" "Created proguard-rules.pro for Kotlin SDK"
 
-# Handle README.md
-log_message "INFO" "Checking README.md..."
+# Create for Java SDK
+echo "$PROGUARD_RULES_CONTENT" > "$JAVA_SDK_DIR/proguard-rules.pro"
+log_message "INFO" "Created proguard-rules.pro for Java SDK"
 
-# First check if we have a temporary copy from the previous SDK
-README_SOURCE=""
-if [ -f "$TEMP_DIR/README.md" ]; then
-    README_SOURCE="$TEMP_DIR/README.md"
-# Then check if backups are enabled and we have a backup copy
-elif [ -n "$BACKUP_DIR" ] && [ -d "$BACKUP_DIR" ] && [ -f "$BACKUP_DIR/README.md" ]; then
-    README_SOURCE="$BACKUP_DIR/README.md"
+# Handle README.md files for both SDKs
+log_message "INFO" "Checking README.md files..."
+
+# Handle Kotlin SDK README.md
+log_message "INFO" "Handling Kotlin SDK README.md..."
+if [ -f "$PRESERVED_KOTLIN_README" ]; then
+    # Restore the preserved Kotlin README
+    cp -f "$PRESERVED_KOTLIN_README" "$KOTLIN_SDK_DIR/README.md"
+    log_message "INFO" "Restored existing Kotlin README.md"
 fi
 
-if [ -n "$README_SOURCE" ]; then
-    # Use the preserved README
-    cp -f "$README_SOURCE" "$SDK_DIR/"
-    log_message "INFO" "Preserved existing README.md"
-else
-    # Create a basic README only if none exists
-    if [ ! -f "$SDK_DIR/README.md" ]; then
-        log_message "INFO" "Creating basic README.md..."
-        echo "# llama_mobile Android SDK" > "$SDK_DIR/README.md"
-    else
-        log_message "INFO" "Using existing README.md"
-    fi
+# Handle Java SDK README.md
+log_message "INFO" "Handling Java SDK README.md..."
+if [ -f "$PRESERVED_JAVA_README" ]; then
+    # Restore the preserved Java README
+    cp -f "$PRESERVED_JAVA_README" "$JAVA_SDK_DIR/README.md"
+    log_message "INFO" "Restored existing Java README.md"
 fi
+
+
 
 # Make the script executable
 chmod +x "$0"
 log_message "INFO" "Made build script executable"
 
-# Create Gradle wrapper if it doesn't exist
-if [ ! -f "$SDK_DIR/gradlew" ]; then
-    log_message "INFO" "Creating Gradle wrapper..."
-    cat > "$SDK_DIR/gradlew" << 'EOF'
+# Create Gradle wrapper for both SDKs
+create_gradle_wrapper() {
+    local sdk_dir="$1"
+    local sdk_type="$2"
+    
+    if [ ! -f "$sdk_dir/gradlew" ]; then
+        log_message "INFO" "Creating Gradle wrapper for $sdk_type SDK..."
+    cat > "$sdk_dir/gradlew" << 'EOF'
 #!/bin/bash
 
 # Copyright 2015 the original author or authors.
@@ -1317,12 +1625,12 @@ eval set -- $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "-Dorg.gradle.appname=$APP
 printf '%s\0' "$saved_args" | xargs -0 java $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "-Dorg.gradle.appname=$APP_BASE_NAME" -classpath "$CLASSPATH" org.gradle.wrapper.GradleWrapperMain
 EOF
     
-    chmod +x "$SDK_DIR/gradlew"
+    chmod +x "$sdk_dir/gradlew"
     
     # Create gradle wrapper directory and properties
-    mkdir -p "$SDK_DIR/gradle/wrapper"
+    mkdir -p "$sdk_dir/gradle/wrapper"
     
-    cat > "$SDK_DIR/gradle/wrapper/gradle-wrapper.properties" << 'EOF'
+    cat > "$sdk_dir/gradle/wrapper/gradle-wrapper.properties" << 'EOF'
 distributionBase=GRADLE_USER_HOME
 distributionPath=wrapper/dists
 distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-all.zip
@@ -1330,42 +1638,78 @@ zipStoreBase=GRADLE_USER_HOME
 zipStorePath=wrapper/dists
 EOF
     
-    log_message "INFO" "Created Gradle wrapper"
-fi
+        log_message "INFO" "Created Gradle wrapper for $sdk_type SDK"
+    fi
+}
 
-# Verify the SDK structure
-log_message "INFO" "Verifying SDK structure..."
+# Note: Gradle wrapper generation has been removed.
+# Users should have Gradle installed globally or added to their PATH.
+
+# Verify both SDK structures
+log_message "INFO" "Verifying SDK structures..."
 
 all_valid=true
 
-# Check for required directories and files
+# Common directories required for both SDKs
 required_dirs=("src/main/jniLibs/arm64-v8a" "src/main/jniLibs/x86_64" "src/main/assets/grammars" "src/main/java/com/llamamobile")
-required_files=("src/main/java/com/llamamobile/LlamaMobile.kt" "build.gradle" "settings.gradle" "README.md")
+
+# Verify Kotlin SDK
+log_message "INFO" "Verifying Kotlin SDK structure..."
+kotlin_required_files=("src/main/java/com/llamamobile/LlamaMobile.kt" "build.gradle" "settings.gradle" "gradle.properties" "README.md")
 
 for dir in "${required_dirs[@]}"; do
-    if [ -d "$SDK_DIR/$dir" ]; then
-        log_message "SUCCESS" "Found directory: $dir"
+    if [ -d "$KOTLIN_SDK_DIR/$dir" ]; then
+        log_message "SUCCESS" "Kotlin SDK: Found directory: $dir"
     else
-        log_message "ERROR" "Missing directory: $dir"
+        log_message "ERROR" "Kotlin SDK: Missing directory: $dir"
         all_valid=false
     fi
 done
 
-for file in "${required_files[@]}"; do
-    if [ -f "$SDK_DIR/$file" ]; then
-        log_message "SUCCESS" "Found file: $file"
+for file in "${kotlin_required_files[@]}"; do
+    if [ -f "$KOTLIN_SDK_DIR/$file" ]; then
+        log_message "SUCCESS" "Kotlin SDK: Found file: $file"
     else
-        log_message "ERROR" "Missing file: $file"
+        log_message "ERROR" "Kotlin SDK: Missing file: $file"
         all_valid=false
     fi
 done
 
-# Check for libraries
+# Verify Java SDK
+log_message "INFO" "Verifying Java SDK structure..."
+java_required_files=("src/main/java/com/llamamobile/LlamaMobile.java" "build.gradle" "settings.gradle" "gradle.properties" "README.md")
+
+for dir in "${required_dirs[@]}"; do
+    if [ -d "$JAVA_SDK_DIR/$dir" ]; then
+        log_message "SUCCESS" "Java SDK: Found directory: $dir"
+    else
+        log_message "ERROR" "Java SDK: Missing directory: $dir"
+        all_valid=false
+    fi
+done
+
+for file in "${java_required_files[@]}"; do
+    if [ -f "$JAVA_SDK_DIR/$file" ]; then
+        log_message "SUCCESS" "Java SDK: Found file: $file"
+    else
+        log_message "ERROR" "Java SDK: Missing file: $file"
+        all_valid=false
+    fi
+done
+
+# Check for libraries in both SDKs
 for ABI in "arm64-v8a" "x86_64"; do
-    if [ -f "$SDK_DIR/src/main/jniLibs/$ABI/libllama_mobile.so" ]; then
-        log_message "SUCCESS" "Found $ABI library"
+    if [ -f "$KOTLIN_SDK_DIR/src/main/jniLibs/$ABI/libllama_mobile.so" ]; then
+        log_message "SUCCESS" "Kotlin SDK: Found $ABI library"
     else
-        log_message "ERROR" "Missing $ABI library"
+        log_message "ERROR" "Kotlin SDK: Missing $ABI library"
+        all_valid=false
+    fi
+    
+    if [ -f "$JAVA_SDK_DIR/src/main/jniLibs/$ABI/libllama_mobile.so" ]; then
+        log_message "SUCCESS" "Java SDK: Found $ABI library"
+    else
+        log_message "ERROR" "Java SDK: Missing $ABI library"
         all_valid=false
     fi
 done
@@ -1376,14 +1720,29 @@ if [ -n "$TEMP_DIR" ] && [ -d "$TEMP_DIR" ]; then
     log_message "INFO" "Cleaned up temporary files"
 fi
 
+# Create gradle config files for both SDKs to avoid Android Studio JDK configuration errors
+log_message "INFO" "Creating Gradle configuration files..."
+
+# Get current Java home path
+JAVA_HOME_PATH=$(java -XshowSettings:properties -version 2>&1 | grep 'java.home' | awk '{print $3}')
+
+# Create gradle config for Kotlin SDK
+mkdir -p "$KOTLIN_SDK_DIR/gradle"
+echo "java.home=$JAVA_HOME_PATH" > "$KOTLIN_SDK_DIR/gradle/config.properties"
+
+# Create gradle config for Java SDK
+mkdir -p "$JAVA_SDK_DIR/gradle"
+echo "java.home=$JAVA_HOME_PATH" > "$JAVA_SDK_DIR/gradle/config.properties"
+
 if [ "$all_valid" = true ]; then
-    log_message "INFO" "Android SDK build completed successfully!"
+    log_message "INFO" "Both Android SDKs built completed successfully!"
     log_message "INFO" ""
-    log_message "INFO" "SDK Location: $SDK_DIR"
+    log_message "INFO" "Kotlin SDK Location: $KOTLIN_SDK_DIR"
+    log_message "INFO" "Java SDK Location: $JAVA_SDK_DIR"
     log_message "INFO" ""
-    log_message "INFO" "To use the SDK:"
-    log_message "INFO" "1. Import the module into your Android Studio project"
-    log_message "INFO" "2. Add implementation project(':llama_mobile') to your app's build.gradle"
+    log_message "INFO" "To use the SDKs:"
+    log_message "INFO" "1. Import the desired module (Kotlin or Java) into your Android Studio project"
+    log_message "INFO" "2. Add implementation project(':llama_mobile-android-SDK') or implementation project(':llama_mobile-android-java-SDK') to your app's build.gradle"
     log_message "INFO" "3. Follow the usage examples in the README.md"
 else
     log_message "ERROR" "SDK build failed with validation errors!"

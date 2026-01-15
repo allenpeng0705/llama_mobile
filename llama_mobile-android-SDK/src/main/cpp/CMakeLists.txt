@@ -1,4 +1,4 @@
-# CMakeLists.txt for llama_mobile JNI implementation for Java SDK
+# CMakeLists.txt for llama_mobile JNI implementation
 
 cmake_minimum_required(VERSION 3.22.1)
 

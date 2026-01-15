@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace 'com.llamamobile.sdk'
+    namespace 'com.llamamobile'
     compileSdk 34
 
     defaultConfig {
@@ -12,6 +12,11 @@ android {
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"
+        
+        ndk {
+            abiFilters 'arm64-v8a', 'x86_64'
+            stl "c++_shared"
+        }
     }
 
     buildTypes {
@@ -24,10 +29,11 @@ android {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
+
     externalNativeBuild {
         cmake {
             path "src/main/cpp/CMakeLists.txt"
-            version "3.22.1"
+            version "3.18.1"
         }
     }
 }
@@ -35,7 +41,6 @@ android {
 dependencies {
     implementation 'androidx.core:core:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'

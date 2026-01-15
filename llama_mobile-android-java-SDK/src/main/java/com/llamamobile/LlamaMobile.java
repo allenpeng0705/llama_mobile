@@ -369,8 +369,24 @@ public class LlamaMobile {
      * Loads the native libraries
      */
     static {
-        System.loadLibrary("llama_mobile");
-        System.loadLibrary("llama_mobile_jni");
+        // Load C++ shared library first - explicitly handle potential errors
+        try {
+            System.loadLibrary("c++_shared");
+            // Then load our native libraries
+            System.loadLibrary("llama_mobile");
+            System.loadLibrary("llama_mobile_jni");
+        } catch (UnsatisfiedLinkError e) {
+            e.printStackTrace();
+            // Try alternative loading approach if primary fails
+            try {
+                System.loadLibrary("c++_shared");
+                System.loadLibrary("llama_mobile");
+                System.loadLibrary("llama_mobile_jni");
+            } catch (UnsatisfiedLinkError e2) {
+                e2.printStackTrace();
+                throw e2;
+            }
+        }
     }
 
     /**

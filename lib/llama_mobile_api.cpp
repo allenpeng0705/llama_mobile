@@ -10,6 +10,7 @@ static llama_mobile_init_params_c_t convert_init_params(const llama_mobile_init_
     if (api_params) {
         ffi_params.model_path = api_params->model_path;
         ffi_params.chat_template = api_params->chat_template;
+        ffi_params.system_prompt = api_params->system_prompt;
         ffi_params.n_ctx = api_params->n_ctx;
         ffi_params.n_batch = api_params->n_batch;
         ffi_params.n_ubatch = (api_params->n_batch > 0) ? api_params->n_batch : 512; // Set n_ubatch to match n_batch or default
@@ -18,6 +19,9 @@ static llama_mobile_init_params_c_t convert_init_params(const llama_mobile_init_
         ffi_params.use_mmap = api_params->use_mmap;
         ffi_params.use_mlock = api_params->use_mlock;
         ffi_params.embedding = api_params->embedding;
+        ffi_params.pooling_type = api_params->pooling_type;
+        ffi_params.embd_normalize = api_params->embd_normalize;
+        ffi_params.flash_attn = api_params->flash_attn;
         ffi_params.progress_callback = api_params->progress_callback;
         ffi_params.cache_type_k = api_params->cache_type_k;
         ffi_params.cache_type_v = api_params->cache_type_v;
@@ -37,7 +41,15 @@ static llama_mobile_completion_params_c_t convert_completion_params(const llama_
         ffi_params.top_k = api_params->top_k;
         ffi_params.top_p = api_params->top_p;
         ffi_params.min_p = api_params->min_p;
+        ffi_params.typical_p = api_params->typical_p;
+        ffi_params.penalty_last_n = api_params->penalty_last_n;
         ffi_params.penalty_repeat = api_params->penalty_repeat;
+        ffi_params.penalty_freq = api_params->penalty_freq;
+        ffi_params.penalty_present = api_params->penalty_present;
+        ffi_params.mirostat = api_params->mirostat;
+        ffi_params.mirostat_tau = api_params->mirostat_tau;
+        ffi_params.mirostat_eta = api_params->mirostat_eta;
+        ffi_params.ignore_eos = api_params->ignore_eos;
         ffi_params.stop_sequences = api_params->stop_sequences;
         ffi_params.stop_sequence_count = api_params->stop_sequence_count;
         ffi_params.grammar = api_params->grammar;
