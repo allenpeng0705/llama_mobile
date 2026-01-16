@@ -191,6 +191,7 @@ struct llama_mobile_context {
     std::string getFormattedAudioCompletion(const std::string &speaker_json_str, const std::string &text_to_speak);
     std::vector<llama_token> getAudioCompletionGuideTokens(const std::string &text_to_speak);
     std::vector<float> decodeAudioTokens(const std::vector<llama_token> &tokens);
+    bool saveAudioToWav(const std::string &file_path, const std::vector<float> &audio_data, int sample_rate = 24000);
     void releaseVocoder();
 
     // High-level conversation management API

@@ -794,13 +794,19 @@ public class LlamaMobile {
         
         return text.withCString { textC in
             let cResult = llama_mobile_embedding_c(context, textC)
-            defer { llama_mobile_free_float_array_c(cResult) }
             
             guard let values = cResult.values else {
+                llama_mobile_free_float_array_c(cResult)
                 return nil
             }
             
-            return Array(UnsafeBufferPointer(start: values, count: Int(cResult.count)))
+            // Copy the embedding values before freeing the memory
+            let embeddingArray = Array(UnsafeBufferPointer(start: values, count: Int(cResult.count)))
+            
+            // Now free the memory
+            llama_mobile_free_float_array_c(cResult)
+            
+            return embeddingArray
         }
     }
     

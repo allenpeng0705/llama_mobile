@@ -786,6 +786,7 @@ struct EmbeddingTestView: View {
     @State private var text = ""
     @State private var embeddingResult = ""
     @State private var isGenerating = false
+    @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
         Form {
@@ -793,9 +794,9 @@ struct EmbeddingTestView: View {
                 TextField("Enter text to generate embedding...", text: $text, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(5...10)
-                    .disabled(!appState.enableEmbedding || !appState.isModelLoaded || isGenerating)
+                    .disabled(isGenerating)
+                    .focused($isTextFieldFocused)
             }
-            
             Section {
                 Button(action: generateEmbedding) {
                     HStack {
@@ -818,6 +819,9 @@ struct EmbeddingTestView: View {
             }
         }
         .navigationTitle("Embedding Test")
+        .onTapGesture {
+            isTextFieldFocused = false
+        }
     }
     
     func generateEmbedding() {
@@ -965,50 +969,124 @@ struct TTSTestView: View {
     func performTTS(for text: String) async {
         defer { DispatchQueue.main.async { self.isGenerating = false } }
         
-        do {
+        DispatchQueue.main.async {
+            self.ttsResult = "Generating audio from text..."
+        }
+        
+        // Get the llama mobile instance
+        guard let llamaMobile = appState.llamaMobile else {
             DispatchQueue.main.async {
-                self.ttsResult = "Generating audio from text..."
+                self.ttsResult = "❌ LlamaMobile instance not available"
+            }
+            return
+        }
+        
+        // Debug step 0: Check TTS model type and vocoder status
+        DispatchQueue.main.async {
+            let ttsType = llamaMobile.getTTSType()
+            let vocoderEnabled = llamaMobile.isVocoderEnabled()
+            self.ttsResult = "Step 0: TTS Type - \(ttsType), Vocoder Enabled - \(vocoderEnabled)"
+        }
+        
+        // Check if vocoder is enabled
+        guard llamaMobile.isVocoderEnabled() else {
+            DispatchQueue.main.async {
+                self.ttsResult = "❌ Vocoder is not enabled. Please check the vocoder model path."
+            }
+            return
+        }
+        
+        // Check TTS model type
+        let ttsType = llamaMobile.getTTSType()
+        let isKnownTTSModel = ttsType != .unknown
+        
+        DispatchQueue.main.async {
+            self.ttsResult = "TTS Model Info: Type - \(ttsType), Known - \(isKnownTTSModel)"
+        }
+        
+        // Debug step 1: Try using the built-in generateAudioFromText method if we have a proper TTS model
+        if isKnownTTSModel {
+            DispatchQueue.main.async {
+                self.ttsResult = "Step 1: Using built-in generateAudioFromText method..."
             }
             
-            // Get the llama mobile instance
-            guard let llamaMobile = appState.llamaMobile else {
-                DispatchQueue.main.async {
-                    self.ttsResult = "LlamaMobile instance not available"
-                }
-                return
-            }
-            
-            // Format text for TTS
-            guard let formattedText = llamaMobile.getFormattedAudioCompletion(speakerJson: "{\"speaker\": \"default\"}", textToSpeak: text) else {
-                DispatchQueue.main.async {
-                    self.ttsResult = "Failed to format text for TTS"
-                }
-                return
-            }
-            
-            // Use the main model's tokenizer instead of vocoder tokenizer
-            guard let tokens = llamaMobile.tokenize(text: formattedText) else {
-                DispatchQueue.main.async {
-                    self.ttsResult = "Failed to tokenize text"
-                }
-                return
-            }
-            
-            // Decode tokens to audio samples
-            if let samples = llamaMobile.decodeAudioTokens(tokens: tokens) {
+            // Try the built-in TTS method first
+            if let samples = llamaMobile.generateAudioFromText(text: text) {
                 DispatchQueue.main.async {
                     self.audioSamples = samples
-                    self.ttsResult = "TTS generation completed successfully. Generated \(samples.count) audio samples."
+                    self.ttsResult = "✅ TTS generation completed successfully. Generated \(samples.count) audio samples at \(sampleRate) Hz."
                 }
-            } else {
-                DispatchQueue.main.async {
-                    self.ttsResult = "Failed to decode audio tokens"
-                }
+                return
             }
-        } catch {
+        }
+        
+        // If built-in method fails or we don't have a proper TTS model, implement custom workflow
+        DispatchQueue.main.async {
+            self.ttsResult = "Using custom TTS workflow: formatting + completion + audio decoding..."
+        }
+        
+        // Debug step 2: Try to format text for TTS
+        DispatchQueue.main.async {
+            self.ttsResult = "Step 2: Formatting text for TTS..."
+        }
+        
+        guard let formattedPrompt = llamaMobile.getFormattedAudioCompletion(speakerJson: "{\"speaker\": \"default\"}", textToSpeak: text) else {
             DispatchQueue.main.async {
-                self.ttsResult = "Error: \(error.localizedDescription)"
+                self.ttsResult = "❌ Failed at Step 2: Cannot format text for TTS. Check if your model supports TTS formatting."
             }
+            return
+        }
+        
+        // Debug step 3: Generate audio content using text completion
+        DispatchQueue.main.async {
+            self.ttsResult = "Step 3: Generating audio content using text completion..."
+        }
+        
+        // Generate audio content using text completion
+        var completionParams = LlamaMobile.CompletionParams(prompt: formattedPrompt)
+        completionParams.maxTokens = 200 // Generate appropriate audio content
+        completionParams.temperature = 0.0 // Deterministic output
+        completionParams.ignoreEos = true // Don't stop at end-of-sequence
+        
+        guard let completionResult = llamaMobile.generateCompletion(with: completionParams) else {
+            DispatchQueue.main.async {
+                self.ttsResult = "❌ Failed at Step 3: Cannot generate audio content via text completion."
+            }
+            return
+        }
+        
+        // Combine prompt and completion for full audio tokens
+        let fullAudioContent = formattedPrompt + completionResult.text
+        
+        // Debug step 4: Tokenize the full audio content
+        DispatchQueue.main.async {
+            self.ttsResult = "Step 4: Tokenizing audio content..."
+        }
+        
+        // Tokenize the full audio content
+        guard let audioTokens = llamaMobile.tokenize(text: fullAudioContent) else {
+            DispatchQueue.main.async {
+                self.ttsResult = "❌ Failed at Step 4: Cannot tokenize audio content."
+            }
+            return
+        }
+        
+        // Debug step 5: Try to decode audio tokens
+        DispatchQueue.main.async {
+            self.ttsResult = "Step 5: Decoding audio tokens to samples..."
+        }
+        
+        guard let samples = llamaMobile.decodeAudioTokens(tokens: audioTokens) else {
+            DispatchQueue.main.async {
+                self.ttsResult = "❌ Failed at Step 5: Cannot decode audio tokens. Check vocoder model."
+            }
+            return
+        }
+        
+        // Success! All steps completed
+        DispatchQueue.main.async {
+            self.audioSamples = samples
+            self.ttsResult = "✅ TTS generation completed successfully. Generated \(samples.count) audio samples at \(sampleRate) Hz."
         }
     }
     
@@ -1017,11 +1095,70 @@ struct TTSTestView: View {
         
         isPlaying = true
         
-        // For demonstration purposes, we'll just show a completion message
-        // In a real app, you would use AVAudioEngine to play back the audio samples
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            self.isPlaying = false
-            self.ttsResult += "\n\nAudio playback simulation completed. In a real app, this would play the generated audio using AVAudioEngine."
+        Task {
+            do {
+                // Set up audio session
+                let audioSession = AVAudioSession.sharedInstance()
+                try audioSession.setCategory(.playback, mode: .default, options: [])
+                try audioSession.setActive(true)
+                
+                // Configure audio format
+                let audioFormat = AVAudioFormat(standardFormatWithSampleRate: Double(sampleRate), channels: 1)!
+                
+                // Create buffer
+                let buffer = AVAudioPCMBuffer(pcmFormat: audioFormat, frameCapacity: AVAudioFrameCount(samples.count))!
+                buffer.frameLength = buffer.frameCapacity
+                
+                // Copy samples to buffer
+                if let floatBuffer = buffer.floatChannelData?[0] {
+                    for (index, sample) in samples.enumerated() {
+                        floatBuffer[index] = sample
+                    }
+                } else {
+                    throw NSError(domain: "TTSError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create audio buffer"])
+                }
+                
+                // Configure audio engine
+                let audioEngine = AVAudioEngine()
+                let playerNode = AVAudioPlayerNode()
+                
+                // Attach player node to engine
+                audioEngine.attach(playerNode)
+                audioEngine.connect(playerNode, to: audioEngine.mainMixerNode, format: audioFormat)
+                
+                // Start engine
+                try audioEngine.start()
+                
+                // Play the audio
+                playerNode.play()
+                playerNode.scheduleBuffer(buffer) { 
+                    DispatchQueue.main.async {
+                        self.isPlaying = false
+                        self.ttsResult += "\n✅ Audio playback completed."
+                    }
+                    
+                    // Clean up
+                    audioEngine.stop()
+                    do {
+                        try audioSession.setActive(false)
+                    } catch {
+                        print("Error deactivating audio session: \(error)")
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.isPlaying = false
+                    self.ttsResult += "\n❌ Error playing audio: \(error.localizedDescription)"
+                }
+                
+                // Clean up
+                do {
+                    let audioSession = AVAudioSession.sharedInstance()
+                    try audioSession.setActive(false)
+                } catch {
+                    print("Error deactivating audio session: \(error)")
+                }
+            }
         }
     }
 }
@@ -1033,6 +1170,7 @@ struct TokenizationTestView: View {
     @State private var tokens: [Int32] = []
     @State private var detokenizedText = ""
     @State private var isProcessing = false
+    @FocusState private var isTextFieldFocused: Bool
     
     var body: some View {
         Form {
@@ -1041,8 +1179,8 @@ struct TokenizationTestView: View {
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(2...4)
                     .disabled(!appState.isModelLoaded || isProcessing)
+                    .focused($isTextFieldFocused)
             }
-            
             Section(header: Text("Tokenization")) {
                 Button(action: tokenizeText) {
                     HStack {
@@ -1087,6 +1225,9 @@ struct TokenizationTestView: View {
             }
         }
         .navigationTitle("Tokenization Test")
+        .onTapGesture {
+            isTextFieldFocused = false
+        }
     }
     
     func tokenizeText() {

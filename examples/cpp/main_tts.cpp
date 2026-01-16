@@ -10,51 +10,6 @@
 #include "utils.h"
 #include "../../lib/llama_mobile.h"
 
-void writeWavFile(const std::string& filename, const std::vector<float>& audio_data, int sample_rate = 24000) {
-    std::ofstream file(filename, std::ios::binary);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open file for writing: " << filename << std::endl;
-        return;
-    }
-
-    int num_samples = audio_data.size();
-    int byte_rate = sample_rate * 2; // 16-bit mono
-    int data_size = num_samples * 2;
-    int file_size = 36 + data_size;
-
-    // WAV header
-    file.write("RIFF", 4);
-    file.write(reinterpret_cast<const char*>(&file_size), 4);
-    file.write("WAVE", 4);
-    file.write("fmt ", 4);
-    
-    int fmt_size = 16;
-    short audio_format = 1; // PCM
-    short num_channels = 1; // Mono
-    short bits_per_sample = 16;
-    short block_align = num_channels * bits_per_sample / 8;
-    
-    file.write(reinterpret_cast<const char*>(&fmt_size), 4);
-    file.write(reinterpret_cast<const char*>(&audio_format), 2);
-    file.write(reinterpret_cast<const char*>(&num_channels), 2);
-    file.write(reinterpret_cast<const char*>(&sample_rate), 4);
-    file.write(reinterpret_cast<const char*>(&byte_rate), 4);
-    file.write(reinterpret_cast<const char*>(&block_align), 2);
-    file.write(reinterpret_cast<const char*>(&bits_per_sample), 2);
-    
-    file.write("data", 4);
-    file.write(reinterpret_cast<const char*>(&data_size), 4);
-    
-    // Convert float audio data to 16-bit PCM
-    for (float sample : audio_data) {
-        short pcm_sample = static_cast<short>(std::max(-32768.0f, std::min(32767.0f, sample * 32767.0f)));
-        file.write(reinterpret_cast<const char*>(&pcm_sample), 2);
-    }
-    
-    file.close();
-    std::cout << "Audio saved to " << filename << std::endl;
-}
-
 int main(int argc, char **argv) {
     // Local TTS models from top-level models directory
     const std::string local_model_path = "../../models/OuteTTS-0.2-500M-Q6_K.gguf";
@@ -210,11 +165,15 @@ int main(int argc, char **argv) {
         }
 
         std::cout << "Generated " << audio_data.size() << " audio samples" << std::endl;
+        std::cout << "TTS Type detected: " << (context.getTTSType() == llama_mobile::TTS_OUTETTS_V0_3 ? "OUTETTS_V0_3" : "OUTETTS_V0_2") << std::endl;
         
         std::string output_filename = "../files/output.wav";
-        writeWavFile(output_filename, audio_data);
-        
-        std::cout << "TTS generation complete! Audio saved to " << output_filename << std::endl;
+        if (context.saveAudioToWav(output_filename, audio_data)) {
+            std::cout << "TTS generation complete! Audio saved to " << output_filename << std::endl;
+        } else {
+            std::cerr << "Failed to save audio to WAV file!" << std::endl;
+            return 1;
+        }
         std::cout << "You can play it with: aplay " << output_filename << " (Linux) or open " << output_filename << " (macOS)" << std::endl;
 
     } catch (const std::exception& e) {
