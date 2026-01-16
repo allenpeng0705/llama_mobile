@@ -6,7 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
-import com.llamamobile.sdk.LlamaMobileSdk
+import com.llamamobile.LlamaMobile
 import com.llamamobile.sdkexample.databinding.FragmentEmbeddingsBinding
 
 class EmbeddingsFragment : Fragment() {
@@ -21,23 +21,34 @@ class EmbeddingsFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         binding = FragmentEmbeddingsBinding.inflate(inflater, container, false)
-        appState = (activity as MainActivity).appState
+        // Access appState safely during fragment creation
+        try {
+            appState = (activity as MainActivity).appState
+        } catch (e: Exception) {
+            // Log but don't crash - appState will be set later in onViewCreated if needed
+            e.printStackTrace()
+        }
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // Set default text
-        binding.embedEditText.setText("This is a test sentence")
+        try {
+            // Set default text
+            binding.embedEditText.setText("This is a test sentence")
 
-        // Set up generate embeddings button click listener
-        binding.generateEmbeddingsButton.setOnClickListener {
-            handleGenerateEmbeddings()
+            // Set up generate embeddings button click listener
+            binding.generateEmbeddingsButton.setOnClickListener {
+                handleGenerateEmbeddings()
+            }
+
+            // Update UI based on model loading status
+            updateModelLoadedUI()
+        } catch (e: Exception) {
+            // Log but don't crash if there's an issue with embeddings fragment initialization
+            e.printStackTrace()
         }
-
-        // Update UI based on model loading status
-        updateModelLoadedUI()
     }
 
     override fun onResume() {
@@ -65,20 +76,31 @@ class EmbeddingsFragment : Fragment() {
         isProcessing = true
         updateProcessingUI()
 
-        // Generate embeddings
-        appState.llamaMobileSdk.generateEmbeddings(text, object : LlamaMobileSdk.ResultCallback<List<Float>> {
-            override fun onSuccess(result: List<Float>) {
-                isProcessing = false
-                updateProcessingUI()
-                binding.embeddingsTextView.text = formatEmbeddings(result)
+        // Generate embeddings in a background thread
+        Thread {
+            try {
+                // Call the new LlamaMobile generateEmbeddings method
+                val embeddingsArray = LlamaMobile.generateEmbeddings(appState.contextHandle, text)
+                
+                requireActivity().runOnUiThread {
+                    isProcessing = false
+                    updateProcessingUI()
+                    
+                    if (embeddingsArray != null) {
+                        val embeddingsList = embeddingsArray.toList()
+                        binding.embeddingsTextView.text = formatEmbeddings(embeddingsList)
+                    } else {
+                        Toast.makeText(requireContext(), "Embeddings generation failed: null result", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                requireActivity().runOnUiThread {
+                    isProcessing = false
+                    updateProcessingUI()
+                    Toast.makeText(requireContext(), "Embeddings error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                }
             }
-
-            override fun onError(error: String) {
-                isProcessing = false
-                updateProcessingUI()
-                Toast.makeText(requireContext(), "Embeddings error: $error", Toast.LENGTH_SHORT).show()
-            }
-        })
+        }.start()
     }
 
     private fun formatEmbeddings(embeddings: List<Float>): String {

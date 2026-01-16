@@ -26,13 +26,14 @@ llama_mobile-android-java-SDK/
 │   │   ├── java/                 # Java source code
 │   │   │   └── com/llamamobile/
 │   │   │       └── LlamaMobile.java # Java wrapper API
-│   │   ├── jniLibs/              # Pre-built native libraries
+│   │   ├── jniLibs/              # Required C++ standard library
 │   │   │   ├── arm64-v8a/        # 64-bit ARM devices
-│   │   │   │   ├── libllama_mobile.so
 │   │   │   │   └── libc++_shared.so
 │   │   │   └── x86_64/           # x86_64 emulators
-│   │   │       ├── libllama_mobile.so
 │   │   │       └── libc++_shared.so
+│   │   ├── cpp/                  # JNI implementation and CMake config
+│   │   │   ├── CMakeLists.txt    # Build configuration for native libraries
+│   │   │   └── llama_mobile_jni.cpp # JNI bridge code
 │   │   └── AndroidManifest.xml   # Android manifest file
 │   └── androidTest/              # Comprehensive instrumented tests
 │       └── java/com/llamamobile/

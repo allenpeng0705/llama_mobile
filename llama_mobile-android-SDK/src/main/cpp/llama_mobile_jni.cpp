@@ -286,7 +286,7 @@ static jobject createCompletionResult(JNIEnv* env, const llama_mobile_completion
     jstring text = env->NewStringUTF(result.text);
     jobject completionResult = env->NewObject(resultClass, constructor,
         text,
-        (jint)result.tokens_generated,
+        (jint)result.tokens_predicted,
         (jint)result.tokens_evaluated,
         (jboolean)result.truncated,
         (jboolean)result.stopped_eos,

@@ -14,6 +14,9 @@ class SettingsFragment : Fragment() {
     private lateinit var binding: FragmentSettingsBinding
     private lateinit var appState: AppState
     private lateinit var modelAdapter: ArrayAdapter<String>
+    private lateinit var mmprojModelAdapter: ArrayAdapter<String>
+    private lateinit var vocoderModelAdapter: ArrayAdapter<String>
+    private lateinit var loraModelAdapter: ArrayAdapter<String>
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -21,7 +24,13 @@ class SettingsFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         binding = FragmentSettingsBinding.inflate(inflater, container, false)
-        appState = (activity as MainActivity).appState
+        // Access appState safely during fragment creation
+        try {
+            appState = (activity as MainActivity).appState
+        } catch (e: Exception) {
+            // Log but don't crash - appState will be set later in onViewCreated if needed
+            e.printStackTrace()
+        }
         return binding.root
     }
 
@@ -30,26 +39,37 @@ class SettingsFragment : Fragment() {
         // Refresh model list when fragment resumes
         (activity as MainActivity).appState.extractModelsFromAssets(requireContext())
         setupModelSpinner()
+        setupMmprojModelSpinner()
+        setupVocoderModelSpinner()
+        setupLoRAModelSpinner()
         updateUI()
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // Initialize model spinner
-        setupModelSpinner()
+        try {
+            // Initialize model spinners
+            setupModelSpinner()
+            setupMmprojModelSpinner()
+            setupVocoderModelSpinner()
+            setupLoRAModelSpinner()
 
-        // Set up parameter controls
-        setupParameterControls()
+            // Set up parameter controls
+            setupParameterControls()
 
-        // Set up model action buttons
-        setupModelActionButtons()
+            // Set up model action buttons
+            setupModelActionButtons()
 
-        // Set up system prompt
-        setupSystemPrompt()
+            // Set up system prompt
+            setupSystemPrompt()
 
-        // Update UI based on current state
-        updateUI()
+            // Update UI based on current state
+            updateUI()
+        } catch (e: Exception) {
+            // Log but don't crash if there's an issue with settings initialization
+            e.printStackTrace()
+        }
     }
 
     private fun setupModelSpinner() {
@@ -79,6 +99,114 @@ class SettingsFragment : Fragment() {
             override fun onItemSelected(parent: android.widget.AdapterView<*>, view: View?, position: Int, id: Long) {
                 if (appState.availableModels.isNotEmpty()) {
                     appState.modelPath = appState.availableModels[position].second
+                }
+            }
+
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>) {
+                // Do nothing
+            }
+        }
+    }
+    
+    private fun setupMmprojModelSpinner() {
+        val mmprojModelNames = if (appState.availableMmprojModels.isNotEmpty()) {
+            appState.availableMmprojModels.map { it.first }
+        } else {
+            listOf(getString(R.string.no_models_available))
+        }
+
+        mmprojModelAdapter = ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_spinner_item,
+            mmprojModelNames
+        )
+
+        mmprojModelAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.mmprojModelSpinner.adapter = mmprojModelAdapter
+
+        // Select the current mmproj model if it's available
+        val currentMmprojModelIndex = appState.availableMmprojModels.indexOfFirst { it.second == appState.mmprojModelPath }
+        if (currentMmprojModelIndex >= 0) {
+            binding.mmprojModelSpinner.setSelection(currentMmprojModelIndex)
+        }
+
+        // Handle mmproj model selection
+        binding.mmprojModelSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>, view: View?, position: Int, id: Long) {
+                if (appState.availableMmprojModels.isNotEmpty()) {
+                    appState.mmprojModelPath = appState.availableMmprojModels[position].second
+                }
+            }
+
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>) {
+                // Do nothing
+            }
+        }
+    }
+    
+    private fun setupVocoderModelSpinner() {
+        val vocoderModelNames = if (appState.availableVocoderModels.isNotEmpty()) {
+            appState.availableVocoderModels.map { it.first }
+        } else {
+            listOf(getString(R.string.no_models_available))
+        }
+
+        vocoderModelAdapter = ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_spinner_item,
+            vocoderModelNames
+        )
+
+        vocoderModelAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.vocoderModelSpinner.adapter = vocoderModelAdapter
+
+        // Select the current vocoder model if it's available
+        val currentVocoderModelIndex = appState.availableVocoderModels.indexOfFirst { it.second == appState.vocoderModelPath }
+        if (currentVocoderModelIndex >= 0) {
+            binding.vocoderModelSpinner.setSelection(currentVocoderModelIndex)
+        }
+
+        // Handle vocoder model selection
+        binding.vocoderModelSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>, view: View?, position: Int, id: Long) {
+                if (appState.availableVocoderModels.isNotEmpty()) {
+                    appState.vocoderModelPath = appState.availableVocoderModels[position].second
+                }
+            }
+
+            override fun onNothingSelected(parent: android.widget.AdapterView<*>) {
+                // Do nothing
+            }
+        }
+    }
+    
+    private fun setupLoRAModelSpinner() {
+        val loraModelNames = if (appState.availableLoRAModels.isNotEmpty()) {
+            appState.availableLoRAModels.map { it.first }
+        } else {
+            listOf(getString(R.string.no_models_available))
+        }
+
+        loraModelAdapter = ArrayAdapter(
+            requireContext(),
+            android.R.layout.simple_spinner_item,
+            loraModelNames
+        )
+
+        loraModelAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.loraModelSpinner.adapter = loraModelAdapter
+
+        // Select the current LoRA model if it's available
+        val currentLoRAModelIndex = appState.availableLoRAModels.indexOfFirst { it.second == appState.loraModelPath }
+        if (currentLoRAModelIndex >= 0) {
+            binding.loraModelSpinner.setSelection(currentLoRAModelIndex)
+        }
+
+        // Handle LoRA model selection
+        binding.loraModelSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: android.widget.AdapterView<*>, view: View?, position: Int, id: Long) {
+                if (appState.availableLoRAModels.isNotEmpty()) {
+                    appState.loraModelPath = appState.availableLoRAModels[position].second
                 }
             }
 
@@ -227,12 +355,5 @@ class SettingsFragment : Fragment() {
 
     private fun hideError() {
         binding.errorLayout.visibility = View.GONE
-    }
-
-    override fun onResume() {
-        super.onResume()
-        // Refresh model list in case it changed
-        setupModelSpinner()
-        updateUI()
     }
 }

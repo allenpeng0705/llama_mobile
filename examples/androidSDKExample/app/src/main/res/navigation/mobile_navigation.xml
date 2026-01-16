@@ -24,6 +24,18 @@
         tools:layout="@layout/fragment_embeddings" />
 
     <fragment
+        android:id="@+id/nav_multimodal"
+        android:name="com.llamamobile.sdkexample.MultimodalTestFragment"
+        android:label="Multimodal"
+        tools:layout="@layout/fragment_multimodal_test" />
+
+    <fragment
+        android:id="@+id/nav_tts"
+        android:name="com.llamamobile.sdkexample.TTSTestFragment"
+        android:label="TTS"
+        tools:layout="@layout/fragment_tts_test" />
+
+    <fragment
         android:id="@+id/nav_lora"
         android:name="com.llamamobile.sdkexample.LoRAFragment"
         android:label="LoRA"

@@ -1,9 +1,9 @@
 //
 //  ContentView.swift
 //  iOSSDKExample
-//
 
 import SwiftUI
+import AVFoundation
 
 // Main application state
 class AppState: ObservableObject {
@@ -12,11 +12,19 @@ class AppState: ObservableObject {
     @Published var availableModels: [(name: String, path: String)] = []
     @Published var errorMessage: String?
     
+    // Additional model paths for multimodal and TTS
+    @Published var mmprojModelPath = ""
+    @Published var availableMmprojModels: [(name: String, path: String)] = []
+    
+    @Published var vocoderModelPath = ""
+    @Published var availableVocoderModels: [(name: String, path: String)] = []
+    
+    // LoRA model support
+    @Published var loraModelPath = ""
+    @Published var availableLoRAModels: [(name: String, path: String)] = []
+    
     // Feature flags
-    @Published var enableChatting = true
     @Published var enableEmbedding = false
-    @Published var enableMultimodal = false
-    @Published var enableTTS = false
     
     // Chat configuration
     @Published var systemPrompt = "You are a local AI assistant. Please respond to user queries in a polite, helpful, and clear manner. Focus on providing accurate information and maintaining a friendly tone."
@@ -103,13 +111,13 @@ struct ContentView: View {
             .ignoresSafeArea(edges: [.top, .bottom])
         }
         .onAppear {
-            // Scan all .gguf files in the models folder and populate availableModels
+            // Scan all model files in the models folder
             if let modelsPath = Bundle.main.path(forResource: "models", ofType: nil) {
                 do {
                     let files = try FileManager.default.contentsOfDirectory(atPath: modelsPath)
-                    let ggufFiles = files.filter { $0.hasSuffix(".gguf") }
                     
-                    // Populate availableModels with name and full path
+                    // Populate main models (GGUF format)
+                    let ggufFiles = files.filter { $0.hasSuffix(".gguf") }
                     appState.availableModels = ggufFiles.map { fileName in
                         (name: fileName, path: modelsPath + "/" + fileName)
                     }
@@ -118,6 +126,31 @@ struct ContentView: View {
                     if let firstModel = appState.availableModels.first {
                         appState.modelPath = firstModel.path
                     }
+                    
+                    // Populate mmproj models (for multimodal) - show all models
+                    appState.availableMmprojModels = appState.availableModels
+                    
+                    // Set default mmproj model path if any are found
+                    if let firstMmprojModel = appState.availableMmprojModels.first {
+                        appState.mmprojModelPath = firstMmprojModel.path
+                    }
+                    
+                    // Populate vocoder models (for TTS) - show all models
+                    appState.availableVocoderModels = appState.availableModels
+                    
+                    // Set default vocoder model path if any are found
+                    if let firstVocoderModel = appState.availableVocoderModels.first {
+                        appState.vocoderModelPath = firstVocoderModel.path
+                    }
+                    
+                    // Populate LoRA models - show all models
+                    appState.availableLoRAModels = appState.availableModels
+                    
+                    // Set default LoRA model path if any are found
+                    if let firstLoRAModel = appState.availableLoRAModels.first {
+                        appState.loraModelPath = firstLoRAModel.path
+                    }
+                    
                 } catch {
                     print("Error listing models: \(error)")
                 }
@@ -524,8 +557,56 @@ struct SettingsView: View {
                             .foregroundColor(.gray)
                             .font(.caption)
                     } else {
-                        Picker("Select Model", selection: $appState.modelPath) {
+                        Picker("Select Main Model", selection: $appState.modelPath) {
                             ForEach(appState.availableModels, id: \.path) {
+                                Text($0.name)
+                                    .tag($0.path)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .disabled(appState.isModelLoaded)
+                    }
+                    
+                    // Multimodal (mmproj) model picker
+                    if appState.availableMmprojModels.isEmpty {
+                        Text("No mmproj models found for multimodal")
+                            .foregroundColor(.gray)
+                            .font(.caption)
+                    } else {
+                        Picker("Select MMProj Model", selection: $appState.mmprojModelPath) {
+                            ForEach(appState.availableMmprojModels, id: \.path) {
+                                Text($0.name)
+                                    .tag($0.path)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .disabled(appState.isModelLoaded)
+                    }
+                    
+                    // TTS (vocoder) model picker
+                    if appState.availableVocoderModels.isEmpty {
+                        Text("No vocoder models found for TTS")
+                            .foregroundColor(.gray)
+                            .font(.caption)
+                    } else {
+                        Picker("Select Vocoder Model", selection: $appState.vocoderModelPath) {
+                            ForEach(appState.availableVocoderModels, id: \.path) {
+                                Text($0.name)
+                                    .tag($0.path)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .disabled(appState.isModelLoaded)
+                    }
+                    
+                    // LoRA model picker
+                    if appState.availableLoRAModels.isEmpty {
+                        Text("No LoRA models found")
+                            .foregroundColor(.gray)
+                            .font(.caption)
+                    } else {
+                        Picker("Select LoRA Model", selection: $appState.loraModelPath) {
+                            ForEach(appState.availableLoRAModels, id: \.path) {
                                 Text($0.name)
                                     .tag($0.path)
                             }
@@ -592,10 +673,7 @@ struct SettingsView: View {
                 }
                 
                 Section(header: Text("Feature Configuration")) {
-                    Toggle("Enable Chatting", isOn: $appState.enableChatting)
                     Toggle("Enable Embedding", isOn: $appState.enableEmbedding)
-                    Toggle("Enable Multimodal", isOn: $appState.enableMultimodal)
-                    Toggle("Enable TTS", isOn: $appState.enableTTS)
                 }
                 
                 Section(header: Text("Chat Configuration")) {
@@ -659,15 +737,30 @@ struct SettingsView: View {
         
         appState.errorMessage = nil
         
-        // Use the public initializer instead of private initialize method
-        appState.llamaMobile = LlamaMobile(
-            modelPath: appState.modelPath,
-            nCtx: Int32(nCtx),
-            nGpuLayers: Int32(nGpuLayers),
-            nThreads: Int32(nThreads)
-        )
+        // Configure model with proper embedding support
+        var initParams = LlamaMobile.InitParams(modelPath: appState.modelPath)
+        initParams.nCtx = Int32(nCtx)
+        initParams.nGpuLayers = Int32(nGpuLayers)
+        initParams.nThreads = Int32(nThreads)
+        initParams.embedding = appState.enableEmbedding
+        initParams.poolingType = 0 // Mean pooling
+        initParams.embdNormalize = 1 // Normalize embeddings
+        
+        appState.llamaMobile = LlamaMobile(with: initParams)
         
         if appState.llamaMobile != nil {
+            // Initialize multimodal if mmproj path is provided
+            if !appState.mmprojModelPath.isEmpty && FileManager.default.fileExists(atPath: appState.mmprojModelPath) {
+                let success = appState.llamaMobile?.initMultimodal(mmprojPath: appState.mmprojModelPath, useGpu: nGpuLayers > 0)
+                print("Multimodal initialization: \(success ?? false)")
+            }
+            
+            // Initialize vocoder if vocoder path is provided
+            if !appState.vocoderModelPath.isEmpty && FileManager.default.fileExists(atPath: appState.vocoderModelPath) {
+                let success = appState.llamaMobile?.initVocoder(vocoderModelPath: appState.vocoderModelPath)
+                print("Vocoder initialization: \(success ?? false)")
+            }
+            
             DispatchQueue.main.async {
                 self.appState.isModelLoaded = true
                 self.appState.errorMessage = nil
@@ -780,8 +873,6 @@ struct EmbeddingTestView: View {
 struct TTSTestView: View {
     @ObservedObject var appState: AppState
     @State private var text = ""
-    @State private var vocoderPath: String? = nil
-    @State private var availableVocoderFiles: [(name: String, path: String)] = []
     @State private var isGenerating = false
     @State private var isPlaying = false
     @State private var ttsResult = ""
@@ -794,23 +885,29 @@ struct TTSTestView: View {
                 TextField("Enter text to convert to speech...", text: $text, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(3...8)
-                    .disabled(!appState.enableTTS || !appState.isModelLoaded || isGenerating)
+                    .disabled(!appState.isModelLoaded || isGenerating)
             }
             
             Section(header: Text("Vocoder Model")) {
-                if availableVocoderFiles.isEmpty {
-                    Text("No vocoder files found in models folder")
+                if appState.availableVocoderModels.isEmpty {
+                    Text("No vocoder files found for TTS")
                         .foregroundColor(.gray)
                         .font(.caption)
                 } else {
-                    Picker("Select Vocoder", selection: $vocoderPath) {
-                        ForEach(availableVocoderFiles, id: \.path) {
-                            Text($0.name)
-                                .tag(Optional($0.path))
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .disabled(!appState.enableTTS || !appState.isModelLoaded)
+                    Text("Vocoder model loaded: \((appState.vocoderModelPath as NSString).lastPathComponent)")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+                
+                // Show whether vocoder is enabled
+                if appState.llamaMobile?.isVocoderEnabled() == true {
+                    Text("Vocoder enabled")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                } else {
+                    Text("Vocoder not enabled")
+                        .font(.caption)
+                        .foregroundColor(.red)
                 }
             }
             
@@ -825,8 +922,7 @@ struct TTSTestView: View {
                 }
                 .disabled(
                     text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || 
-                    vocoderPath == nil || 
-                    !appState.enableTTS || 
+                    appState.llamaMobile?.isVocoderEnabled() == false || 
                     !appState.isModelLoaded || 
                     isGenerating
                 )
@@ -853,88 +949,60 @@ struct TTSTestView: View {
             }
         }
         .navigationTitle("TTS Test")
-        .onAppear {
-            scanVocoderFiles()
-        }
-    }
-    
-    func scanVocoderFiles() {
-        if let modelsPath = Bundle.main.path(forResource: "models", ofType: nil) {
-            do {
-                let files = try FileManager.default.contentsOfDirectory(atPath: modelsPath)
-                let vocoderFiles = files.filter { $0.hasSuffix(".bin") }
-                
-                availableVocoderFiles = vocoderFiles.map { fileName in
-                    (name: fileName, path: modelsPath + "/" + fileName)
-                }
-                
-                // Set default vocoder path if any files are found
-                if let firstVocoder = availableVocoderFiles.first {
-                    vocoderPath = firstVocoder.path
-                }
-            } catch {
-                print("Error listing vocoder files: \(error)")
-            }
-        }
     }
     
     func generateSpeech() {
-        guard !text.isEmpty, let vocoderPath = vocoderPath else { return }
+        guard !text.isEmpty, appState.llamaMobile?.isVocoderEnabled() == true else { return }
         
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         isGenerating = true
         
         Task {
-            await performTTS(for: trimmedText, vocoderPath: vocoderPath)
+            await performTTS(for: trimmedText)
         }
     }
     
-    func performTTS(for text: String, vocoderPath: String) async {
+    func performTTS(for text: String) async {
         defer { DispatchQueue.main.async { self.isGenerating = false } }
         
         do {
-            // Vocoder checks removed - methods no longer exist
+            DispatchQueue.main.async {
+                self.ttsResult = "Generating audio from text..."
+            }
+            
+            // Get the llama mobile instance
+            guard let llamaMobile = appState.llamaMobile else {
+                DispatchQueue.main.async {
+                    self.ttsResult = "LlamaMobile instance not available"
+                }
+                return
+            }
             
             // Format text for TTS
-            guard let formattedText = appState.llamaMobile?.getFormattedAudioCompletion(speakerJson: "{}", textToSpeak: text) else {
+            guard let formattedText = llamaMobile.getFormattedAudioCompletion(speakerJson: "{\"speaker\": \"default\"}", textToSpeak: text) else {
                 DispatchQueue.main.async {
                     self.ttsResult = "Failed to format text for TTS"
                 }
                 return
             }
             
-            // Generate completion with formatted text
-            let params = LlamaMobile.CompletionParams(
-                prompt: formattedText,
-                maxTokens: 500, // Longer for TTS tokens
-                temperature: 0.0, // Low temperature for TTS
-                topK: 0,
-                topP: 0.0
-            )
-            
-            if let result = appState.llamaMobile?.generateCompletion(with: params) {
-                // Extract audio tokens from the result
-                // Note: The actual implementation might need to parse the result differently
-                // depending on the model's output format
-                
-                // For simplicity, we'll just show the result for now
+            // Use the main model's tokenizer instead of vocoder tokenizer
+            guard let tokens = llamaMobile.tokenize(text: formattedText) else {
                 DispatchQueue.main.async {
-                    self.ttsResult = "TTS generation completed successfully"
+                    self.ttsResult = "Failed to tokenize text"
                 }
-                
-                // In a real implementation, you would:
-                // 1. Extract the audio tokens from the result
-                // 2. Decode them with decodeAudioTokens
-                // 3. Store the samples for playback
-                
-                // For demonstration purposes, we'll simulate this step
+                return
+            }
+            
+            // Decode tokens to audio samples
+            if let samples = llamaMobile.decodeAudioTokens(tokens: tokens) {
                 DispatchQueue.main.async {
-                    self.audioSamples = Array(repeating: 0.0, count: 10000) // Empty samples array
-                    self.ttsResult += "\n\nNote: Audio token extraction and decoding would happen here."
+                    self.audioSamples = samples
+                    self.ttsResult = "TTS generation completed successfully. Generated \(samples.count) audio samples."
                 }
             } else {
                 DispatchQueue.main.async {
-                    self.ttsResult = "Failed to generate TTS tokens"
+                    self.ttsResult = "Failed to decode audio tokens"
                 }
             }
         } catch {
@@ -949,11 +1017,11 @@ struct TTSTestView: View {
         
         isPlaying = true
         
-        // In a real implementation, you would use AVAudioEngine to play back the audio samples
-        // For demonstration purposes, we'll just simulate playback
+        // For demonstration purposes, we'll just show a completion message
+        // In a real app, you would use AVAudioEngine to play back the audio samples
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             self.isPlaying = false
-            self.ttsResult += "\n\nNote: Audio playback would happen here with AVAudioEngine."
+            self.ttsResult += "\n\nAudio playback simulation completed. In a real app, this would play the generated audio using AVAudioEngine."
         }
     }
 }
@@ -1099,7 +1167,6 @@ struct TokenizationTestView: View {
 // LoRA Adapters Test View
 struct LoRATestView: View {
     @ObservedObject var appState: AppState
-    @State private var loraPath = ""
     @State private var scale: Float = 1.0
     @State private var isProcessing = false
     @State private var loraApplied = false
@@ -1107,9 +1174,12 @@ struct LoRATestView: View {
     var body: some View {
         Form {
             Section(header: Text("LoRA Adapter Configuration")) {
-                TextField("LoRA Adapter Path", text: $loraPath)
+                TextField("LoRA Adapter Path", text: Binding( 
+                    get: { appState.loraModelPath },
+                    set: { _ in } // Read-only since we select from settings
+                ))
                     .textFieldStyle(.roundedBorder)
-                    .disabled(!appState.isModelLoaded || isProcessing)
+                    .disabled(true) // Always disabled, select from Settings
                 
                 TextField("LoRA Scale", value: $scale, formatter: NumberFormatter())
                     .textFieldStyle(.roundedBorder)
@@ -1126,7 +1196,7 @@ struct LoRATestView: View {
                         Spacer()
                     }
                 }
-                .disabled(loraPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !appState.isModelLoaded || isProcessing)
+                .disabled(appState.loraModelPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !appState.isModelLoaded || isProcessing)
                 .buttonStyle(.borderedProminent)
                 .tint(.blue)
                 
@@ -1153,9 +1223,9 @@ struct LoRATestView: View {
     }
     
     func applyLoRA() {
-        guard !loraPath.isEmpty else { return }
+        guard !appState.loraModelPath.isEmpty else { return }
         
-        let trimmedPath = loraPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPath = appState.loraModelPath.trimmingCharacters(in: .whitespacesAndNewlines)
         isProcessing = true
         
         Task {
@@ -1342,11 +1412,8 @@ struct MultimodalTestView: View {
     @State private var selectedImage: UIImage? = nil
     @State private var selectedImagePath: String? = nil
     @State private var isImagePickerPresented = false
-    @State private var mmprojPath: String? = nil
-    @State private var availableMmprojFiles: [(name: String, path: String)] = []
     @State private var completionResult = ""
     @State private var isGenerating = false
-    @State private var isMultimodalInitialized = false
     
     var body: some View {
         Form {
@@ -1367,23 +1434,29 @@ struct MultimodalTestView: View {
                         Spacer()
                     }
                 }
-                .disabled(!appState.enableMultimodal || !appState.isModelLoaded)
+                .disabled(!appState.isModelLoaded)
             }
             
-            Section(header: Text("MMProj File")) {
-                if availableMmprojFiles.isEmpty {
-                    Text("No mmproj files found in models folder")
+            Section(header: Text("MMProj Model")) {
+                if appState.availableMmprojModels.isEmpty {
+                    Text("No mmproj models found for multimodal")
                         .foregroundColor(.gray)
                         .font(.caption)
                 } else {
-                    Picker("Select MMProj", selection: $mmprojPath) {
-                        ForEach(availableMmprojFiles, id: \.path) {
-                            Text($0.name)
-                                .tag(Optional($0.path))
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .disabled(!appState.enableMultimodal || !appState.isModelLoaded)
+                    Text("MMProj model loaded: \((appState.mmprojModelPath as NSString).lastPathComponent)")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+                
+                // Show whether multimodal is enabled
+                if appState.llamaMobile?.isMultimodalEnabled() == true {
+                    Text("Multimodal enabled")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                } else {
+                    Text("Multimodal not enabled")
+                        .font(.caption)
+                        .foregroundColor(.red)
                 }
             }
             
@@ -1391,7 +1464,7 @@ struct MultimodalTestView: View {
                 TextField("Enter text prompt...", text: $text, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(5...10)
-                    .disabled(!appState.enableMultimodal || !appState.isModelLoaded || isGenerating)
+                    .disabled(!appState.isModelLoaded || isGenerating)
             }
             
             Section {
@@ -1406,8 +1479,7 @@ struct MultimodalTestView: View {
                 .disabled(
                     text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || 
                     selectedImagePath == nil || 
-                    mmprojPath == nil || 
-                    !appState.enableMultimodal || 
+                    appState.llamaMobile?.isMultimodalEnabled() == false || 
                     !appState.isModelLoaded || 
                     isGenerating
                 )
@@ -1422,31 +1494,8 @@ struct MultimodalTestView: View {
             }
         }
         .navigationTitle("Multimodal Test")
-        .onAppear {
-            scanMmprojFiles()
-        }
         .sheet(isPresented: $isImagePickerPresented) {
             ImagePicker(selectedImage: $selectedImage, selectedImagePath: $selectedImagePath)
-        }
-    }
-    
-    func scanMmprojFiles() {
-        if let modelsPath = Bundle.main.path(forResource: "models", ofType: nil) {
-            do {
-                let files = try FileManager.default.contentsOfDirectory(atPath: modelsPath)
-                let mmprojFiles = files.filter { $0.hasSuffix(".mmproj") }
-                
-                availableMmprojFiles = mmprojFiles.map { fileName in
-                    (name: fileName, path: modelsPath + "/" + fileName)
-                }
-                
-                // Set default mmproj path if any files are found
-                if let firstMmproj = availableMmprojFiles.first {
-                    mmprojPath = firstMmproj.path
-                }
-            } catch {
-                print("Error listing mmproj files: \(error)")
-            }
         }
     }
     
@@ -1455,17 +1504,17 @@ struct MultimodalTestView: View {
     }
     
     func generateCompletion() {
-        guard !text.isEmpty, let imagePath = selectedImagePath, let mmprojPath = mmprojPath else { return }
+        guard !text.isEmpty, let imagePath = selectedImagePath, appState.llamaMobile?.isMultimodalEnabled() == true else { return }
         
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         isGenerating = true
         
         Task {
-            await performMultimodalCompletion(for: trimmedText, imagePath: imagePath, mmprojPath: mmprojPath)
+            await performMultimodalCompletion(for: trimmedText, imagePath: imagePath)
         }
     }
     
-    func performMultimodalCompletion(for text: String, imagePath: String, mmprojPath: String) async {
+    func performMultimodalCompletion(for text: String, imagePath: String) async {
         defer {
             DispatchQueue.main.async {
                 self.isGenerating = false
@@ -1473,16 +1522,6 @@ struct MultimodalTestView: View {
         }
         
         do {
-            // Initialize multimodal if not already initialized
-            if let llamaMobile = appState.llamaMobile, !llamaMobile.isMultimodalEnabled() {
-                let success = llamaMobile.initMultimodal(mmprojPath: mmprojPath, useGpu: true)
-                if !success {
-                    DispatchQueue.main.async {
-                        self.completionResult = "Failed to initialize multimodal"
-                    }
-                    return
-                }
-            }
             
             var params = LlamaMobile.CompletionParams(
                 prompt: text,

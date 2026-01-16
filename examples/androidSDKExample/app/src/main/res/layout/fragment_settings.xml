@@ -51,6 +51,57 @@
                 android:background="@android:drawable/btn_dropdown"
                 android:padding="8dp" />
 
+            <!-- MMProj Model Selection -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Select MMProj Model:" 
+                android:textSize="14sp"
+                android:layout_marginBottom="8dp" />
+
+            <Spinner
+                android:id="@+id/mmprojModelSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:entries="@array/no_models"
+                android:background="@android:drawable/btn_dropdown"
+                android:padding="8dp" />
+
+            <!-- Vocoder Model Selection -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Select Vocoder Model:" 
+                android:textSize="14sp"
+                android:layout_marginBottom="8dp" />
+
+            <Spinner
+                android:id="@+id/vocoderModelSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:entries="@array/no_models"
+                android:background="@android:drawable/btn_dropdown"
+                android:padding="8dp" />
+
+            <!-- LoRA Model Selection -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Select LoRA Model:"
+                android:textSize="14sp"
+                android:layout_marginBottom="8dp" />
+
+            <Spinner
+                android:id="@+id/loraModelSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:entries="@array/no_models"
+                android:background="@android:drawable/btn_dropdown"
+                android:padding="8dp" />
+
             <!-- GPU Layers -->
             <LinearLayout
                 android:layout_width="match_parent"

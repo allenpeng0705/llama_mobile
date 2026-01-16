@@ -26,13 +26,14 @@ llama_mobile-android-SDK/
 │   │   ├── java/                 # Kotlin source code
 │   │   │   └── com/llamamobile/
 │   │   │       └── LlamaMobile.kt # Kotlin wrapper API
-│   │   ├── jniLibs/              # Pre-built native libraries
+│   │   ├── jniLibs/              # Required C++ standard library
 │   │   │   ├── arm64-v8a/        # 64-bit ARM devices
-│   │   │   │   ├── libllama_mobile.so
 │   │   │   │   └── libc++_shared.so
 │   │   │   └── x86_64/           # x86_64 emulators
-│   │   │       ├── libllama_mobile.so
 │   │   │       └── libc++_shared.so
+│   │   ├── cpp/                  # JNI implementation and CMake config
+│   │   │   ├── CMakeLists.txt    # Build configuration for native libraries
+│   │   │   └── llama_mobile_jni.cpp # JNI bridge code
 │   │   └── AndroidManifest.xml   # Android manifest file
 │   └── androidTest/              # Comprehensive instrumented tests
 │       └── java/com/llamamobile/
@@ -97,6 +98,16 @@ There are two primary ways to use the llama_mobile-android-SDK in your project:
    - Select `File > New > Import Module`
    - Navigate to the `llama_mobile-android-SDK` directory
    - Click `Finish` to import
+   - Sometime you cannot import the module because some conflicts. you can import it manually. 
+   in settings.gradle add something like
+
+   rootProject.name = "androidSDKExample"
+   include ':app'
+   // Add the followings using the correct SDK path.
+   include ':llama_mobile-android-SDK'
+   project(':llama_mobile-android-SDK').projectDir = new File('../../llama_mobile-android-SDK')
+
+
 3. **Add the dependency**:
    - Open your app's `build.gradle` file
    - In the `dependencies` block, add:
@@ -208,6 +219,19 @@ if (LlamaMobile.isContextValid(context)) {
 - **C++ Standard Library Issues**: The SDK requires `libc++_shared.so` (included in the jniLibs directories) for proper C++ standard library functionality
 - **Missing Dependencies**: Double-check that all required dependencies are added to your app's build.gradle
 - **Model Access Permissions**: Ensure your app has READ_EXTERNAL_STORAGE/WRITE_EXTERNAL_STORAGE permissions if accessing models from external storage
+- **Module Import Issues**: If Android Studio's import wizard fails to recognize the SDK as a module:
+  - **Root Cause**: Android Gradle Plugin (AGP) version mismatch between the SDK (8.5.0) and your project
+  - **Solution**: Manually add the module reference:
+    1. Open `settings.gradle` and add:
+       ```gradle
+       include ':llama_mobile-android-SDK'
+       project(':llama_mobile-android-SDK').projectDir = new File('../llama_mobile-android-SDK')
+       ```
+    2. Open `app/build.gradle` and add:
+       ```gradle
+       implementation project(':llama_mobile-android-SDK')
+       ```
+    3. Sync Gradle - this should work despite the AGP version difference
 
 ## Testing
 

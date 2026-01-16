@@ -6,7 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
-import com.llamamobile.sdk.LlamaMobileSdk
+import com.llamamobile.LlamaMobile
 import com.llamamobile.sdkexample.databinding.FragmentTokenizationBinding
 
 class TokenizationFragment : Fragment() {
@@ -21,28 +21,39 @@ class TokenizationFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         binding = FragmentTokenizationBinding.inflate(inflater, container, false)
-        appState = (activity as MainActivity).appState
+        // Access appState safely during fragment creation
+        try {
+            appState = (activity as MainActivity).appState
+        } catch (e: Exception) {
+            // Log but don't crash - appState will be set later in onViewCreated if needed
+            e.printStackTrace()
+        }
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // Set default text
-        binding.tokenizeEditText.setText("Hello world")
+        try {
+            // Set default text
+            binding.tokenizeEditText.setText("Hello world")
 
-        // Set up tokenize button click listener
-        binding.tokenizeButton.setOnClickListener {
-            handleTokenize()
+            // Set up tokenize button click listener
+            binding.tokenizeButton.setOnClickListener {
+                handleTokenize()
+            }
+
+            // Set up detokenize button click listener
+            binding.detokenizeButton.setOnClickListener {
+                handleDetokenize()
+            }
+
+            // Update UI based on model loading status
+            updateModelLoadedUI()
+        } catch (e: Exception) {
+            // Log but don't crash if there's an issue with tokenization fragment initialization
+            e.printStackTrace()
         }
-
-        // Set up detokenize button click listener
-        binding.detokenizeButton.setOnClickListener {
-            handleDetokenize()
-        }
-
-        // Update UI based on model loading status
-        updateModelLoadedUI()
     }
 
     override fun onResume() {
@@ -65,21 +76,32 @@ class TokenizationFragment : Fragment() {
         isProcessing = true
         updateProcessingUI()
 
-        // Tokenize the text
-        appState.llamaMobileSdk.tokenize(text, false, false, object : LlamaMobileSdk.ResultCallback<List<Int>> {
-            override fun onSuccess(result: List<Int>) {
-                isProcessing = false
-                updateProcessingUI()
-                binding.tokensTextView.text = formatTokens(result)
-                binding.detokenizeResultTextView.text = ""
+        // Tokenize the text in a background thread
+        Thread {
+            try {
+                // Call the new LlamaMobile tokenize method
+                val tokensArray = LlamaMobile.tokenize(appState.contextHandle, text)
+                
+                requireActivity().runOnUiThread {
+                    isProcessing = false
+                    updateProcessingUI()
+                    
+                    if (tokensArray != null) {
+                        val tokensList = tokensArray.toList()
+                        binding.tokensTextView.text = formatTokens(tokensList)
+                        binding.detokenizeResultTextView.text = ""
+                    } else {
+                        Toast.makeText(requireContext(), "Tokenization failed: null result", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                requireActivity().runOnUiThread {
+                    isProcessing = false
+                    updateProcessingUI()
+                    Toast.makeText(requireContext(), "Tokenization error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                }
             }
-
-            override fun onError(error: String) {
-                isProcessing = false
-                updateProcessingUI()
-                Toast.makeText(requireContext(), "Tokenization error: $error", Toast.LENGTH_SHORT).show()
-            }
-        })
+        }.start()
     }
 
     private fun handleDetokenize() {
@@ -105,20 +127,33 @@ class TokenizationFragment : Fragment() {
             return
         }
 
-        // Detokenize the tokens
-        appState.llamaMobileSdk.detokenize(tokens, false, object : LlamaMobileSdk.ResultCallback<String> {
-            override fun onSuccess(result: String) {
-                isProcessing = false
-                updateProcessingUI()
-                binding.detokenizeResultTextView.text = result
+        // Detokenize the tokens in a background thread
+        Thread {
+            try {
+                // Convert list to array
+                val tokensArray = tokens.toIntArray()
+                
+                // Call the new LlamaMobile detokenize method
+                val result = LlamaMobile.detokenize(appState.contextHandle, tokensArray)
+                
+                requireActivity().runOnUiThread {
+                    isProcessing = false
+                    updateProcessingUI()
+                    
+                    if (result != null) {
+                        binding.detokenizeResultTextView.text = result
+                    } else {
+                        Toast.makeText(requireContext(), "Detokenization failed: null result", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                requireActivity().runOnUiThread {
+                    isProcessing = false
+                    updateProcessingUI()
+                    Toast.makeText(requireContext(), "Detokenization error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                }
             }
-
-            override fun onError(error: String) {
-                isProcessing = false
-                updateProcessingUI()
-                Toast.makeText(requireContext(), "Detokenization error: $error", Toast.LENGTH_SHORT).show()
-            }
-        })
+        }.start()
     }
 
     private fun formatTokens(tokens: List<Int>): String {

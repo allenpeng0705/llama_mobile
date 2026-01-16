@@ -1,6 +1,8 @@
 package com.llamamobile.sdkexample
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
 import androidx.navigation.findNavController
 import androidx.navigation.ui.setupWithNavController
@@ -17,14 +19,30 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Initialize app state
+        // Initialize app state first (now runs in background thread)
         appState = AppState()
         appState.init(this)
 
+        // Set up navigation with delayed navGraph setup
+        setupNavigation()
+    }
+
+    private fun setupNavigation() {
+        // Get the NavHostFragment
+        val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment_activity_main)
+            as androidx.navigation.fragment.NavHostFragment
+        
+        // Get the navigation controller
+        val navController = navHostFragment.navController
+        
         // Set up bottom navigation
         val navView: BottomNavigationView = binding.navView
-        val navController = findNavController(R.id.nav_host_fragment_activity_main)
         navView.setupWithNavController(navController)
+        
+        // Set the navigation graph after a short delay to avoid race conditions
+        Handler(Looper.getMainLooper()).postDelayed({
+            navController.setGraph(R.navigation.mobile_navigation)
+        }, 100)
     }
 
     override fun onDestroy() {

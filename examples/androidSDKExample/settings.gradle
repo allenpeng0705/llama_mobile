@@ -16,8 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "androidSDKExample"
 include ':app'
-include ':llama_mobile'
-include ':llama_mobile_sdk'
-
-project(':llama_mobile').projectDir = new File(rootProject.projectDir, '../../llama_mobile-android')
-project(':llama_mobile_sdk').projectDir = new File(rootProject.projectDir, '../../llama_mobile-android-SDK')
+include ':llama_mobile-android-SDK'
+project(':llama_mobile-android-SDK').projectDir = new File('../../llama_mobile-android-SDK')

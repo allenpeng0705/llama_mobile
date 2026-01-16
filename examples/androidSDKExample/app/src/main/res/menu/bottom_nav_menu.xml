@@ -20,6 +20,18 @@
         android:orderInCategory="175" />
 
     <item
+        android:id="@+id/nav_multimodal"
+        android:icon="@android:drawable/ic_menu_gallery"
+        android:title="Multimodal"
+        android:orderInCategory="180" />
+
+    <item
+        android:id="@+id/nav_tts"
+        android:icon="@android:drawable/ic_btn_speak_now"
+        android:title="TTS"
+        android:orderInCategory="185" />
+
+    <item
         android:id="@+id/nav_lora"
         android:icon="@android:drawable/ic_menu_edit"
         android:title="LoRA"

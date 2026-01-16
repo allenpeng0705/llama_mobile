@@ -28,6 +28,12 @@ add_library(llama_mobile_jni SHARED
 find_library(log-lib log)
 find_library(android-lib android)
 
+# Add linker flags for 16 KB page alignment
+target_link_options(llama_mobile_jni PRIVATE
+    -Wl,-z,max-page-size=16384
+    -Wl,-z,common-page-size=16384
+)
+
 # Link the libraries
 target_link_libraries(
     llama_mobile_jni

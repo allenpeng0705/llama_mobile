@@ -1,19 +1,31 @@
+// Modified for module import compatibility
 pluginManagement {
     repositories {
         google()
         mavenCentral()
         gradlePluginPortal()
     }
+  
     plugins {
         id 'com.android.library' version '8.5.0'
         id 'org.jetbrains.kotlin.android' version '1.9.20'
     }
+       
 }
+
+// Let the parent project handle dependency resolution to avoid conflicts
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
+    //uncomment it for running tests.
+    //repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google()
         mavenCentral()
     }
 }
-rootProject.name = "llama_mobile"
+
+rootProject.name = "llama_mobile-android-SDK"
+//uncomment it for running tests.
+//rootProject.name = "llama_mobile"
+
+

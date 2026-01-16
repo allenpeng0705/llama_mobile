@@ -6,7 +6,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.Fragment
-import com.llamamobile.sdk.LlamaMobileSdk
+import com.llamamobile.LlamaMobile
+import com.llamamobile.LlamaMobile.LoraAdapter
 import com.llamamobile.sdkexample.databinding.FragmentLoraBinding
 
 class LoRAFragment : Fragment() {
@@ -22,29 +23,41 @@ class LoRAFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         binding = FragmentLoraBinding.inflate(inflater, container, false)
-        appState = (activity as MainActivity).appState
+        // Access appState safely during fragment creation
+        try {
+            appState = (activity as MainActivity).appState
+        } catch (e: Exception) {
+            // Log but don't crash - appState will be set later in onViewCreated if needed
+            e.printStackTrace()
+        }
         return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        // Set default values
-        binding.loraPathEditText.setText("/path/to/your/lora.adapter")
-        binding.loraScaleEditText.setText("1.0")
+        try {
+            // Set default values from AppState
+            binding.loraPathEditText.setText(appState.loraModelPath)
+            binding.loraPathEditText.isEnabled = false // Read-only since we select from settings
+            binding.loraScaleEditText.setText("1.0")
 
-        // Set up button click listeners
-        binding.applyLoraButton.setOnClickListener {
-            handleApplyLora()
+            // Set up button click listeners
+            binding.applyLoraButton.setOnClickListener {
+                handleApplyLora()
+            }
+
+            binding.removeLoraButton.setOnClickListener {
+                handleRemoveLora()
+            }
+
+            // Update UI based on model loading status
+            updateModelLoadedUI()
+            updateLoraStatusUI()
+        } catch (e: Exception) {
+            // Log but don't crash if there's an issue with LoRA fragment initialization
+            e.printStackTrace()
         }
-
-        binding.removeLoraButton.setOnClickListener {
-            handleRemoveLora()
-        }
-
-        // Update UI based on model loading status
-        updateModelLoadedUI()
-        updateLoraStatusUI()
     }
 
     override fun onResume() {
@@ -55,7 +68,7 @@ class LoRAFragment : Fragment() {
     }
 
     private fun handleApplyLora() {
-        val loraPath = binding.loraPathEditText.text.toString().trim()
+        val loraPath = appState.loraModelPath.trim()
         val loraScaleText = binding.loraScaleEditText.text.toString().trim()
         
         if (loraPath.isEmpty() || loraScaleText.isEmpty() || isProcessing) {
@@ -64,11 +77,6 @@ class LoRAFragment : Fragment() {
 
         if (!appState.isModelLoaded) {
             Toast.makeText(requireContext(), "Please load a model first", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        if (!appState.enableLoRA) {
-            Toast.makeText(requireContext(), "LoRA is not enabled. Please enable it in Settings.", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -82,26 +90,34 @@ class LoRAFragment : Fragment() {
         isProcessing = true
         updateProcessingUI()
 
-        // Apply LoRA adapter
-        appState.llamaMobileSdk.applyLoRA(loraPath, loraScale, object : LlamaMobileSdk.ResultCallback<Boolean> {
-            override fun onSuccess(result: Boolean) {
-                isProcessing = false
-                updateProcessingUI()
-                if (result) {
-                    isLoraApplied = true
-                    updateLoraStatusUI()
-                    Toast.makeText(requireContext(), "LoRA adapter applied successfully", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(requireContext(), "Failed to apply LoRA adapter", Toast.LENGTH_SHORT).show()
+        // Apply LoRA adapter in a background thread
+        Thread {
+            try {
+                // Create LoRA adapter
+                val loraAdapter = LoraAdapter(path = loraPath, scale = loraScale)
+                
+                // Call the new LlamaMobile applyLoRAAdapters method
+                val result = LlamaMobile.applyLoraAdapters(appState.contextHandle, arrayOf(loraAdapter))
+                
+                requireActivity().runOnUiThread {
+                    isProcessing = false
+                    updateProcessingUI()
+                    if (result) {
+                        isLoraApplied = true
+                        updateLoraStatusUI()
+                        Toast.makeText(requireContext(), "LoRA adapter applied successfully", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(requireContext(), "Failed to apply LoRA adapter", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                requireActivity().runOnUiThread {
+                    isProcessing = false
+                    updateProcessingUI()
+                    Toast.makeText(requireContext(), "LoRA error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
                 }
             }
-
-            override fun onError(error: String) {
-                isProcessing = false
-                updateProcessingUI()
-                Toast.makeText(requireContext(), "LoRA error: $error", Toast.LENGTH_SHORT).show()
-            }
-        })
+        }.start()
     }
 
     private fun handleRemoveLora() {
@@ -112,41 +128,39 @@ class LoRAFragment : Fragment() {
         isProcessing = true
         updateProcessingUI()
 
-        // Remove LoRA adapter
-        appState.llamaMobileSdk.removeLoRA(object : LlamaMobileSdk.ResultCallback<Boolean> {
-            override fun onSuccess(result: Boolean) {
-                isProcessing = false
-                updateProcessingUI()
-                if (result) {
+        // Remove LoRA adapter in a background thread
+        Thread {
+            try {
+                // Call the new LlamaMobile removeLoraAdapters method
+                LlamaMobile.removeLoraAdapters(appState.contextHandle)
+                
+                requireActivity().runOnUiThread {
+                    isProcessing = false
+                    updateProcessingUI()
                     isLoraApplied = false
                     updateLoraStatusUI()
                     Toast.makeText(requireContext(), "LoRA adapter removed successfully", Toast.LENGTH_SHORT).show()
-                } else {
-                    Toast.makeText(requireContext(), "Failed to remove LoRA adapter", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                requireActivity().runOnUiThread {
+                    isProcessing = false
+                    updateProcessingUI()
+                    Toast.makeText(requireContext(), "LoRA removal error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
                 }
             }
-
-            override fun onError(error: String) {
-                isProcessing = false
-                updateProcessingUI()
-                Toast.makeText(requireContext(), "LoRA removal error: $error", Toast.LENGTH_SHORT).show()
-            }
-        })
+        }.start()
     }
 
     private fun updateModelLoadedUI() {
         val modelLoaded = appState.isModelLoaded
-        binding.applyLoraButton.isEnabled = modelLoaded && !isProcessing && appState.enableLoRA
+        binding.applyLoraButton.isEnabled = modelLoaded && !isProcessing
         binding.removeLoraButton.isEnabled = modelLoaded && !isProcessing && isLoraApplied
 
         if (!modelLoaded) {
             binding.statusTextView.text = "Model not loaded"
             binding.statusTextView.setTextColor(android.graphics.Color.RED)
-        } else if (!appState.enableLoRA) {
-            binding.statusTextView.text = "LoRA is disabled. Enable in Settings."
-            binding.statusTextView.setTextColor(android.graphics.Color.YELLOW)
         } else {
-            binding.statusTextView.text = "Model loaded and LoRA enabled"
+            binding.statusTextView.text = "Model loaded and LoRA ready"
             binding.statusTextView.setTextColor(android.graphics.Color.GREEN)
         }
     }
@@ -162,7 +176,7 @@ class LoRAFragment : Fragment() {
     }
 
     private fun updateProcessingUI() {
-        binding.applyLoraButton.isEnabled = appState.isModelLoaded && !isProcessing && appState.enableLoRA
+        binding.applyLoraButton.isEnabled = appState.isModelLoaded && !isProcessing
         binding.removeLoraButton.isEnabled = appState.isModelLoaded && !isProcessing && isLoraApplied
         binding.progressBar.visibility = if (isProcessing) View.VISIBLE else View.GONE
     }

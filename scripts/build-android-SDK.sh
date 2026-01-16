@@ -262,22 +262,14 @@ find_libcpp_shared() {
 log_message "INFO" "Copying pre-built libraries..."
 
 for ABI in "arm64-v8a" "x86_64"; do
-    # Copy libllama_mobile.so
+    # Verify libllama_mobile.so exists (but don't copy to jniLibs - it's imported via CMake)
     SOURCE_LIB="$PREBUILT_DIR/libs/$ABI/libllama_mobile.so"
     if [ ! -f "$SOURCE_LIB" ]; then
         log_message "ERROR" "Library not found for ABI $ABI at $SOURCE_LIB"
         exit 1
     fi
     
-    # Copy to Kotlin SDK
-    KOTLIN_DEST_LIB="$KOTLIN_SDK_DIR/src/main/jniLibs/$ABI/libllama_mobile.so"
-    cp -f "$SOURCE_LIB" "$KOTLIN_DEST_LIB"
-    log_message "INFO" "Copied $ABI library to Kotlin SDK at $KOTLIN_DEST_LIB"
-    
-    # Copy to Java SDK
-    JAVA_DEST_LIB="$JAVA_SDK_DIR/src/main/jniLibs/$ABI/libllama_mobile.so"
-    cp -f "$SOURCE_LIB" "$JAVA_DEST_LIB"
-    log_message "INFO" "Copied $ABI library to Java SDK at $JAVA_DEST_LIB"
+    log_message "INFO" "Verified $ABI library exists at $SOURCE_LIB"
     
     # Copy libc++_shared.so (required for C++ Standard Library functionality)
     SOURCE_CPP_SHARED="$PREBUILT_DIR/libs/$ABI/libc++_shared.so"

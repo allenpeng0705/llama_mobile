@@ -85,3 +85,4 @@ llama_mobile-ios/llama_mobile.xcframework/ios-arm64/llama_mobile.framework/llama
 /examples/androidSDKExample/.idea
 examples/iOSSDKExample/iOSSDKExample.xcodeproj/project.xcworkspace/xcuserdata/shileipeng.xcuserdatad/UserInterfaceState.xcuserstate
 examples/iOSSDKExample/iOSSDKExample.xcodeproj/project.xcworkspace/xcuserdata/shileipeng.xcuserdatad/UserInterfaceState.xcuserstate
+/examples/androidSDKExample/app/build

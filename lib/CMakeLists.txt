@@ -457,6 +457,16 @@ if(ANDROID)
     target_compile_definitions(llama_mobile_core_lib PUBLIC GGML_NO_POSIX_MADVISE)
     target_compile_definitions(llama_mobile_core_static PUBLIC GGML_NO_POSIX_MADVISE)
     target_compile_definitions(llama_mobile_core_shared PUBLIC GGML_NO_POSIX_MADVISE)
+    
+    # Add linker flags for 16 KB page alignment required for Android 15+
+    target_link_options(llama_mobile_core_static PUBLIC
+        -Wl,-z,max-page-size=16384
+        -Wl,-z,common-page-size=16384
+    )
+    target_link_options(llama_mobile_core_shared PUBLIC
+        -Wl,-z,max-page-size=16384
+        -Wl,-z,common-page-size=16384
+    )
 endif()
 
 # Copy headers to include directory

@@ -5,10 +5,12 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.llamamobile.sdk.LlamaMobileSdk
+import android.widget.LinearLayout
+import com.llamamobile.LlamaMobile
 import com.llamamobile.sdkexample.databinding.FragmentChatBinding
 
 class ChatFragment : Fragment() {
@@ -25,7 +27,13 @@ class ChatFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         binding = FragmentChatBinding.inflate(inflater, container, false)
-        appState = (activity as MainActivity).appState
+        // Access appState safely during fragment creation
+        try {
+            appState = (activity as MainActivity).appState
+        } catch (e: Exception) {
+            // Log but don't crash - appState will be set later in onViewCreated if needed
+            e.printStackTrace()
+        }
         return binding.root
     }
 
@@ -65,16 +73,28 @@ class ChatFragment : Fragment() {
         }
 
         // Add JSON grammar toggle if grammar is available
-        if (appState.jsonGrammar != null) {
-            // Create a toggle for JSON grammar support
-            val grammarToggle = android.widget.Switch(requireContext())
-            grammarToggle.text = "JSON Response"
-            grammarToggle.setOnCheckedChangeListener { _, isChecked ->
-                useJsonGrammar = isChecked
-            }
+        // Use defensive check to prevent crashes if appState.jsonGrammar is not yet initialized
+        try {
+            if (appState.jsonGrammar != null) {
+                // Create a toggle for JSON grammar support
+                val grammarToggle = android.widget.Switch(requireContext())
+                grammarToggle.text = "JSON Response"
+                grammarToggle.setOnCheckedChangeListener { _, isChecked ->
+                    useJsonGrammar = isChecked
+                }
 
-            // Add to input area layout
-            (binding.promptEditText.parent as ViewGroup).addView(grammarToggle)
+                // Add to input area layout with proper layout parameters
+                val layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                layoutParams.setMargins(0, 8, 0, 8)
+                grammarToggle.layoutParams = layoutParams
+                (binding.promptEditText.parent as ViewGroup).addView(grammarToggle)
+            }
+        } catch (e: Exception) {
+            // Log but don't crash if there's an issue with JSON grammar toggle
+            e.printStackTrace()
         }
     }
 
@@ -118,52 +138,52 @@ class ChatFragment : Fragment() {
         isGenerating = true
         binding.sendButton.isEnabled = false
         binding.statusTextView.text = "Generating response..."
-        binding.statusTextView.setTextColor(resources.getColor(android.R.color.darker_gray, requireContext().theme))
+        binding.statusTextView.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.darker_gray))
         binding.statusTextView.visibility = View.VISIBLE
 
-        val config = LlamaMobileSdk.GenerationConfig(
-            prompt = prompt,
-            maxTokens = 1024,
-            temperature = 0.7f,
-            topP = 0.9f,
-            useGrammar = useJsonGrammar,
-            grammar = if (useJsonGrammar) appState.jsonGrammar else null
-        )
+        // Run generation in a background thread
+        Thread {
+            try {
+                val params = LlamaMobile.CompletionParams(
+                    prompt = prompt,
+                    maxTokens = 1024,
+                    temperature = 0.7f,
+                    topP = 0.9f,
+                    grammar = if (useJsonGrammar) appState.jsonGrammar else null
+                )
 
-        appState.llamaMobileSdk.generate(config, object : LlamaMobileSdk.GenerationListener {
-            override fun onGenerationStart(prompt: String) {
-                requireActivity().runOnUiThread {
-                    binding.statusTextView.text = "Generating response..."
-                    binding.statusTextView.visibility = View.VISIBLE
-                }
-            }
+                // Generate the completion
+                val result = LlamaMobile.generateCompletion(appState.contextHandle, params)
 
-            override fun onTokenGenerated(token: String) {
                 requireActivity().runOnUiThread {
-                    // Update the last message with the new token
-                    if (messages.isNotEmpty() && messages.last().role == Message.ROLE_ASSISTANT) {
-                        val updatedMessage = messages.last().copy(text = messages.last().text + token)
-                        messages[messages.size - 1] = updatedMessage
-                        chatAdapter.notifyItemChanged(messages.size - 1)
-                        scrollToBottom()
+                    if (result != null) {
+                        // Update the assistant message with the complete response
+                        if (messages.isNotEmpty() && messages.last().role == Message.ROLE_ASSISTANT) {
+                            val updatedMessage = messages.last().copy(text = result)
+                            messages[messages.size - 1] = updatedMessage
+                            chatAdapter.notifyItemChanged(messages.size - 1)
+                            scrollToBottom()
+                        }
+                    } else {
+                        // Handle empty result
+                        Toast.makeText(requireContext(), "Generation failed: empty result", Toast.LENGTH_SHORT).show()
+                        // Remove the empty assistant message
+                        if (messages.isNotEmpty() && messages.last().role == Message.ROLE_ASSISTANT && messages.last().text.isEmpty()) {
+                            messages.removeAt(messages.size - 1)
+                            chatAdapter.notifyItemRemoved(messages.size)
+                        }
                     }
-                }
-            }
 
-            override fun onGenerationComplete(result: String) {
-                requireActivity().runOnUiThread {
                     isGenerating = false
                     binding.sendButton.isEnabled = appState.isModelLoaded
                     binding.statusTextView.visibility = View.GONE
                 }
-            }
-
-            override fun onError(error: Throwable) {
+            } catch (e: Exception) {
                 requireActivity().runOnUiThread {
                     isGenerating = false
                     binding.sendButton.isEnabled = appState.isModelLoaded
-                    binding.statusTextView.text = "Error: ${error.message}"
-                    binding.statusTextView.setTextColor(resources.getColor(android.R.color.holo_red_dark, requireContext().theme))
+                    binding.statusTextView.text = "Error: ${e.message}"
+                    binding.statusTextView.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark))
                     // Remove the empty assistant message
                     if (messages.isNotEmpty() && messages.last().role == Message.ROLE_ASSISTANT && messages.last().text.isEmpty()) {
                         messages.removeAt(messages.size - 1)
@@ -171,7 +191,7 @@ class ChatFragment : Fragment() {
                     }
                 }
             }
-        })
+        }.start()
     }
 
     private fun updateModelLoadedUI() {
