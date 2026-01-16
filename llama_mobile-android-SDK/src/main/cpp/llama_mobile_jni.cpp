@@ -798,6 +798,78 @@ JNIEXPORT jfloatArray JNICALL Java_com_llamamobile_LlamaMobile_decodeAudioTokens
     return result;
 }
 
+// Sets guide tokens for audio generation
+JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_setGuideTokens(JNIEnv* env, jobject obj, jlong contextHandle, jintArray tokens) {
+    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    
+    if (context == nullptr || tokens == nullptr) {
+        return;
+    }
+    
+    // Get the tokens array
+    jsize tokenCount = env->GetArrayLength(tokens);
+    jint* tokenValues = env->GetIntArrayElements(tokens, nullptr);
+    
+    if (tokenValues == nullptr) {
+        return;
+    }
+    
+    // Create a vector of tokens
+    std::vector<llama_mobile_token_c_t> tokenVector;
+    tokenVector.reserve(tokenCount);
+    
+    for (jsize i = 0; i < tokenCount; i++) {
+        tokenVector.push_back(static_cast<llama_mobile_token_c_t>(tokenValues[i]));
+    }
+    
+    // Call the FFI set guide tokens function
+    llama_mobile_set_guide_tokens_c(context, tokenVector.data(), tokenVector.size());
+    
+    // Release the tokens array
+    env->ReleaseIntArrayElements(tokens, tokenValues, JNI_ABORT);
+}
+
+// Saves audio samples to WAV file
+JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_saveAudioToWav(JNIEnv* env, jobject obj, jlong contextHandle, jstring filePath, jfloatArray audioData, jint sampleRate) {
+    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
+    
+    if (context == nullptr || filePath == nullptr || audioData == nullptr) {
+        return JNI_FALSE;
+    }
+    
+    // Get the file path
+    const char* cFilePath = getStringUTFChars(env, filePath);
+    if (cFilePath == nullptr) {
+        return JNI_FALSE;
+    }
+    
+    // Get the audio data
+    jsize dataCount = env->GetArrayLength(audioData);
+    jfloat* dataValues = env->GetFloatArrayElements(audioData, nullptr);
+    
+    if (dataValues == nullptr) {
+        releaseStringUTFChars(env, filePath, cFilePath);
+        return JNI_FALSE;
+    }
+    
+    // Create a vector of audio data
+    std::vector<float> audioVector;
+    audioVector.reserve(dataCount);
+    
+    for (jsize i = 0; i < dataCount; i++) {
+        audioVector.push_back(static_cast<float>(dataValues[i]));
+    }
+    
+    // Call the FFI save audio to WAV function
+    bool result = llama_mobile_save_audio_to_wav_c(context, cFilePath, audioVector.data(), audioVector.size(), sampleRate);
+    
+    // Release resources
+    env->ReleaseFloatArrayElements(audioData, dataValues, JNI_ABORT);
+    releaseStringUTFChars(env, filePath, cFilePath);
+    
+    return result ? JNI_TRUE : JNI_FALSE;
+}
+
 // Releases vocoder resources
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_releaseVocoder(JNIEnv* env, jobject obj, jlong contextHandle) {
     llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);

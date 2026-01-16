@@ -376,6 +376,15 @@ llama_mobile_float_array_t llama_mobile_decode_audio_tokens(llama_mobile_context
     return convert_float_array(ffi_result);
 }
 
+bool llama_mobile_save_audio_to_wav(llama_mobile_context_t ctx, const char* file_path, const float* audio_data, int32_t count, int32_t sample_rate) {
+    return llama_mobile_save_audio_to_wav_c(
+        (llama_mobile_context_handle_t) ctx,
+        file_path,
+        audio_data,
+        count,
+        sample_rate);
+}
+
 void llama_mobile_release_vocoder(llama_mobile_context_t ctx) {
     llama_mobile_release_vocoder_c((llama_mobile_context_handle_t) ctx);
 }

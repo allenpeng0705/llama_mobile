@@ -181,6 +181,8 @@ LLAMA_MOBILE_FFI_EXPORT llama_mobile_token_array_c_t llama_mobile_get_audio_guid
 
 LLAMA_MOBILE_FFI_EXPORT llama_mobile_float_array_c_t llama_mobile_decode_audio_tokens_c(llama_mobile_context_handle_t handle, const int32_t* tokens, int32_t count);
 
+LLAMA_MOBILE_FFI_EXPORT bool llama_mobile_save_audio_to_wav_c(llama_mobile_context_handle_t handle, const char* file_path, const float* audio_data, int32_t count, int32_t sample_rate);
+
 LLAMA_MOBILE_FFI_EXPORT void llama_mobile_release_vocoder_c(llama_mobile_context_handle_t handle);
 
 // **HIGH PRIORITY ADDITIONS**

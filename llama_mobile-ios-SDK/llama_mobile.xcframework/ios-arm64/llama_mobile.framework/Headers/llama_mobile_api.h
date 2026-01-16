@@ -520,6 +520,18 @@ LLAMA_MOBILE_API llama_mobile_token_array_t llama_mobile_get_audio_guide_tokens(
 LLAMA_MOBILE_API llama_mobile_float_array_t llama_mobile_decode_audio_tokens(llama_mobile_context_t ctx, const int32_t* tokens, int32_t count);
 
 /**
+ * @brief Save audio data to a WAV file.
+ * 
+ * @param ctx Context handle obtained from llama_mobile_init() or llama_mobile_init_simple().
+ * @param file_path Path to the output WAV file.
+ * @param audio_data Array of float audio samples.
+ * @param count Number of samples in the audio_data array.
+ * @param sample_rate Audio sampling rate (default is 24000 Hz).
+ * @return True on success, false on failure.
+ */
+LLAMA_MOBILE_API bool llama_mobile_save_audio_to_wav(llama_mobile_context_t ctx, const char* file_path, const float* audio_data, int32_t count, int32_t sample_rate);
+
+/**
  * @brief Release the TTS vocoder resources.
  * 
  * @param ctx Context handle obtained from llama_mobile_init() or llama_mobile_init_simple().

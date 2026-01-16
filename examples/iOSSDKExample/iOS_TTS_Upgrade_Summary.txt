@@ -1,0 +1,82 @@
+# iOS TTS API Upgrade Summary
+
+## Completed Tasks
+
+1. **Added TTS WAV Saving API**
+   - Added `saveAudioToWav` method to Swift wrapper in both iOS SDK and iOS Example
+   - Method signature: `public func saveAudioToWav(filePath: String, audioData: [Float], sampleRate: Int32 = 24000) -> Bool`
+   - Properly handles Swift to C FFI conversion with memory safety
+
+2. **Updated iOS Framework**
+   - Rebuilt iOS framework to include the new TTS API
+   - Ensured FFI wrapper `llama_mobile_save_audio_to_wav_c` is properly exposed
+   - Framework now includes all necessary TTS functionality
+
+3. **Modified TTSTestView**
+   - Updated audio generation flow to automatically save to WAV files
+   - Audio is saved in temporary directory with timestamped filename
+   - User can play the generated audio repeatedly
+   - Status messages show saving progress and results
+
+## Implementation Details
+
+### Swift Wrapper Implementation
+```swift
+public func saveAudioToWav(filePath: String, audioData: [Float], sampleRate: Int32 = 24000) -> Bool {
+    guard let context = context else {
+        return false
+    }
+    
+    return audioData.withUnsafeBufferPointer { buffer in
+        filePath.withCString { filePathC in
+            llama_mobile_save_audio_to_wav_c(context, filePathC, buffer.baseAddress, Int32(buffer.count), sampleRate)
+        }
+    }
+}
+```
+
+### TTS Generation Flow
+1. **Text Input**: User enters text to convert to speech
+2. **Audio Generation**: System generates audio samples using TTS model
+3. **Automatic Saving**: Generated audio is saved to WAV file in temporary directory
+4. **Playback**: User can play the saved audio repeatedly
+
+### WAV File Handling
+- Files saved in: `/tmp/tts_output_TIMESTAMP.wav`
+- Automatically timestamped to prevent overwriting
+- Proper WAV format with specified sample rate (24000 Hz)
+
+## Files Modified
+
+1. **iOS SDK Swift Wrapper**
+   - `/Users/shileipeng/Documents/mygithub/llama_mobile/llama_mobile-ios-SDK/Sources/LlamaMobile/LlamaMobile.swift`
+   - Added new `saveAudioToWav` method
+
+2. **iOS Example Swift Wrapper**
+   - `/Users/shileipeng/Documents/mygithub/llama_mobile/examples/iOSSDKExample/iOSSDKExample/LlamaMobile.swift`
+   - Added new `saveAudioToWav` method
+
+3. **iOS Example TTS View**
+   - `/Users/shileipeng/Documents/mygithub/llama_mobile/examples/iOSSDKExample/iOSSDKExample/ContentView.swift`
+   - Modified TTSTestView to automatically save audio to WAV
+
+## Verification
+
+- ✅ Swift wrapper properly imports and calls C FFI function
+- ✅ Framework headers include the new `llama_mobile_save_audio_to_wav` function
+- ✅ FFI wrapper `llama_mobile_save_audio_to_wav_c` is properly declared
+- ✅ All tests pass successfully
+- ✅ iOS Example app automatically saves audio to WAV files
+
+## Usage
+
+```swift
+// Generate speech and automatically save to WAV
+let audioSamples = llamaMobile.generateAudioFromText(text: "Hello world")
+// Audio is automatically saved to WAV file in temporary directory
+
+// Play the saved audio repeatedly
+playAudio()
+```
+
+The iOS TTS API upgrade is now complete. The iOS Example app automatically saves generated speech to WAV files and allows users to play the audio repeatedly as requested.

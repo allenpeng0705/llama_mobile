@@ -948,6 +948,20 @@ public class LlamaMobile {
         }
     }
     
+    /// Set guide tokens for audio generation
+    /// - Parameter tokens: Array of guide tokens to use
+    public func setGuideTokens(tokens: [Int32]) {
+        guard let context = context else {
+            return
+        }
+        
+        tokens.withUnsafeBufferPointer { buffer in
+            if let baseAddress = buffer.baseAddress {
+                llama_mobile_set_guide_tokens_c(context, baseAddress, Int32(buffer.count))
+            }
+        }
+    }
+    
     /// Decode audio tokens into raw audio data
     /// - Parameter tokens: Audio tokens to decode
     /// - Returns: Array of floating-point audio samples, or nil if an error occurred
@@ -967,6 +981,24 @@ public class LlamaMobile {
         }
         
         return Array(UnsafeBufferPointer(start: values, count: Int(cResult.count)))
+    }
+    
+    /// Save audio data to a WAV file
+    /// - Parameters:
+    ///   - filePath: Path to the output WAV file
+    ///   - audioData: Array of floating-point audio samples
+    ///   - sampleRate: Audio sampling rate (default is 24000 Hz)
+    /// - Returns: true on success, false on failure
+    public func saveAudioToWav(filePath: String, audioData: [Float], sampleRate: Int32 = 24000) -> Bool {
+        guard let context = context else {
+            return false
+        }
+        
+        return audioData.withUnsafeBufferPointer { buffer in
+            filePath.withCString { filePathC in
+                llama_mobile_save_audio_to_wav_c(context, filePathC, buffer.baseAddress, Int32(buffer.count), sampleRate)
+            }
+        }
     }
     
     /// Release vocoder (TTS) resources

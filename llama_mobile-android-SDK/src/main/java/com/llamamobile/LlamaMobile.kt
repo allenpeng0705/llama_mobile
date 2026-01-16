@@ -471,6 +471,25 @@ object LlamaMobile {
     external fun decodeAudioTokens(contextHandle: Long, tokens: IntArray): FloatArray?
     
     /**
+     * Sets guide tokens for audio generation
+     * 
+     * @param contextHandle Context handle obtained from initContext
+     * @param tokens Guide tokens to set for audio generation
+     */
+    external fun setGuideTokens(contextHandle: Long, tokens: IntArray)
+    
+    /**
+     * Saves audio samples to WAV file
+     * 
+     * @param contextHandle Context handle obtained from initContext
+     * @param filePath Path to save the WAV file
+     * @param audioData Array of floating-point audio samples
+     * @param sampleRate Sample rate for the audio (e.g., 48000)
+     * @return true on success, false on failure
+     */
+    external fun saveAudioToWav(contextHandle: Long, filePath: String, audioData: FloatArray, sampleRate: Int): Boolean
+    
+    /**
      * Releases vocoder (TTS) resources
      * 
      * @param contextHandle Context handle obtained from initContext

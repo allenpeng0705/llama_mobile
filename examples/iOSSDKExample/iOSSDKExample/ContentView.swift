@@ -746,6 +746,10 @@ struct SettingsView: View {
         initParams.poolingType = 0 // Mean pooling
         initParams.embdNormalize = 1 // Normalize embeddings
         
+        // Increase batch sizes for TTS support (to handle large audio token batches)
+        initParams.nBatch = 1024 // Increase from default 512
+        initParams.nUBatch = 1024 // Increase from default 512 - must be >= number of audio tokens
+        
         appState.llamaMobile = LlamaMobile(with: initParams)
         
         if appState.llamaMobile != nil {
@@ -1013,8 +1017,24 @@ struct TTSTestView: View {
             // Try the built-in TTS method first
             if let samples = llamaMobile.generateAudioFromText(text: text) {
                 DispatchQueue.main.async {
+                    // Save audio to WAV file automatically (fixed name for overwriting)
+                    let tempDir = NSTemporaryDirectory()
+                    let tempFileName = "tts_output_latest.wav"
+                    let tempFilePath = tempDir.appending(tempFileName)
+                    
+                    // Save using the new API
+                    let saveSuccess = llamaMobile.saveAudioToWav(filePath: tempFilePath, audioData: samples, sampleRate: Int32(sampleRate))
+                    
                     self.audioSamples = samples
-                    self.ttsResult = "✅ TTS generation completed successfully. Generated \(samples.count) audio samples at \(sampleRate) Hz."
+                    
+                    if saveSuccess {
+                        self.ttsResult = "✅ TTS generation completed successfully.\n"
+                        self.ttsResult += "   - Generated \(samples.count) audio samples at \(sampleRate) Hz\n"
+                        self.ttsResult += "   - Audio saved to: \(tempFilePath)"
+                    } else {
+                        self.ttsResult = "⚠️ TTS generation completed but failed to save audio to file.\n"
+                        self.ttsResult += "   - Generated \(samples.count) audio samples at \(sampleRate) Hz"
+                    }
                 }
                 return
             }
@@ -1037,9 +1057,27 @@ struct TTSTestView: View {
             return
         }
         
+        // Debug: Check what's in the formatted prompt
+        print("[DEBUG] Formatted Prompt: \(formattedPrompt)")
+        print("[DEBUG] Formatted Prompt Length: \(formattedPrompt.count)")
+        
+        // If formatted prompt contains audio template markers, we should only tokenize the completion result
+        // This prevents generating audio from the template content
+        let useOnlyCompletion = formattedPrompt.contains("<|audio_start|") || formattedPrompt.contains("<|text_start|")
+        print("[DEBUG] useOnlyCompletion: \(useOnlyCompletion)")
+        
         // Debug step 3: Generate audio content using text completion
         DispatchQueue.main.async {
             self.ttsResult = "Step 3: Generating audio content using text completion..."
+        }
+        
+        // Get guide tokens - note: the built-in method passes formattedPrompt, not original text
+        print("[DEBUG] Getting audio guide tokens using formatted prompt...")
+        if let guideTokens = llamaMobile.getAudioGuideTokens(textToSpeak: formattedPrompt) {
+            print("[DEBUG] Setting guide tokens: \(guideTokens.count) tokens")
+            llamaMobile.setGuideTokens(tokens: guideTokens)
+        } else {
+            print("[DEBUG] Failed to get guide tokens, proceeding without...")
         }
         
         // Generate audio content using text completion
@@ -1055,18 +1093,84 @@ struct TTSTestView: View {
             return
         }
         
-        // Combine prompt and completion for full audio tokens
-        let fullAudioContent = formattedPrompt + completionResult.text
+        // Debug: Print actual text content
+        print("[DEBUG] Formatted Prompt Content:")
+        print("\"\(formattedPrompt)\"")
+        print("[DEBUG] Completion Result Content:")
+        print("\"\(completionResult.text)\"")
         
-        // Debug step 4: Tokenize the full audio content
+        // Combine prompt and completion for full audio tokens - or just use completion if prompt contains template markers
+        let contentToTokenize: String
+        if useOnlyCompletion {
+            // If prompt contains template markers, only use the completion result (prevents audio from template)
+            contentToTokenize = completionResult.text
+            print("[DEBUG] Using only completion result for tokenization (skipping template)")
+        } else {
+            // Otherwise combine both
+            contentToTokenize = formattedPrompt + completionResult.text
+            print("[DEBUG] Combining prompt and completion for tokenization")
+        }
+        
+        print("[DEBUG] Final Content to Tokenize:")
+        print("\"\(contentToTokenize)\"")
+        
+        // Debug step 4: Tokenize the audio content
         DispatchQueue.main.async {
             self.ttsResult = "Step 4: Tokenizing audio content..."
         }
         
-        // Tokenize the full audio content
-        guard let audioTokens = llamaMobile.tokenize(text: fullAudioContent) else {
+        // Tokenize the audio content
+        guard let tokens = llamaMobile.tokenize(text: contentToTokenize) else {
             DispatchQueue.main.async {
                 self.ttsResult = "❌ Failed at Step 4: Cannot tokenize audio content."
+            }
+            return
+        }
+        
+        // Debug: Show first few tokens and their values
+        print("[DEBUG] Total tokens generated: \(tokens.count)")
+        print("[DEBUG] First 10 tokens: \(tokens.prefix(10))")
+        print("[DEBUG] Last 10 tokens: \(tokens.suffix(10))")
+        
+        // Check if formatted prompt itself contains audio tokens
+        if let promptTokens = llamaMobile.tokenize(text: formattedPrompt) {
+            print("[DEBUG] Prompt tokens count: \(promptTokens.count)")
+            print("[DEBUG] Prompt first 10 tokens: \(promptTokens.prefix(10))")
+        }
+        
+        // Debug step 4.5: Filter audio tokens (following C++ example)
+        DispatchQueue.main.async {
+            self.ttsResult = "Step 4.5: Filtering audio tokens..."
+        }
+        
+        // Filter tokens to only include audio tokens (151672-155772) and look for end token
+        var audioTokens: [Int32] = []
+        let audioStartToken = 151672
+        let audioEndToken = 151668 // <|audio_end|>
+        
+        // Debug: Track token filtering
+        var nonAudioTokens = 0
+        
+        for token in tokens {
+            // Check if token is in audio range
+            if token >= 151672 && token <= 155772 {
+                audioTokens.append(token)
+            } else {
+                nonAudioTokens += 1
+            }
+            
+            // Check for end token
+            if token == audioEndToken {
+                print("Found audio end token")
+                break
+            }
+        }
+        
+        print("[DEBUG] Generated \(audioTokens.count) audio tokens (skipped non-audio: \(nonAudioTokens))")
+        
+        if audioTokens.isEmpty {
+            DispatchQueue.main.async {
+                self.ttsResult = "❌ No audio tokens found in the generated content."
             }
             return
         }
@@ -1085,8 +1189,24 @@ struct TTSTestView: View {
         
         // Success! All steps completed
         DispatchQueue.main.async {
+            // Save audio to WAV file automatically (fixed name for overwriting)
+            let tempDir = NSTemporaryDirectory()
+            let tempFileName = "tts_output_latest.wav"
+            let tempFilePath = tempDir.appending(tempFileName)
+            
+            // Save using the new API
+            let saveSuccess = llamaMobile.saveAudioToWav(filePath: tempFilePath, audioData: samples, sampleRate: Int32(sampleRate))
+            
             self.audioSamples = samples
-            self.ttsResult = "✅ TTS generation completed successfully. Generated \(samples.count) audio samples at \(sampleRate) Hz."
+            
+            if saveSuccess {
+                self.ttsResult = "✅ TTS generation completed successfully.\n"
+                self.ttsResult += "   - Generated \(samples.count) audio samples at \(sampleRate) Hz\n"
+                self.ttsResult += "   - Audio saved to: \(tempFilePath)"
+            } else {
+                self.ttsResult = "⚠️ TTS generation completed but failed to save audio to file.\n"
+                self.ttsResult += "   - Generated \(samples.count) audio samples at \(sampleRate) Hz"
+            }
         }
     }
     

@@ -31,6 +31,153 @@ A lightweight, high-performance framework for running AI models on mobile device
 
 llama_mobile is a mobile-first AI framework that brings the power of llama.cpp to various mobile platforms and development frameworks. The project focuses on providing native SDKs and plugins for seamless integration of large language models (LLMs) into mobile and web applications.
 
+## Text-to-Speech (TTS) Support
+
+llama_mobile provides comprehensive TTS capabilities for generating speech from text. Here's how to use the TTS APIs effectively:
+
+### Basic TTS Workflow
+
+1. **Load Models**: Load both the main TTS model and the vocoder model
+2. **Text Formatting**: Format your text for TTS generation
+3. **Token Generation**: Generate tokens from the formatted text
+4. **Token Filtering**: **Important!** Filter to include only audio tokens
+5. **Audio Decoding**: Decode the audio tokens to raw audio samples
+6. **Save/Play Audio**: Save the audio to a WAV file or play it directly
+
+### Important: Token Filtering
+
+A critical step in the TTS workflow that's easy to overlook: **only send audio tokens to the decoder**.
+
+**Audio Token Range**: 151672-155772
+**Audio End Token**: 151668 `<|audio_end|>`
+
+```cpp
+// Example token filtering (from C++ example)
+for (token in generated_tokens) {
+    // Check if token is in audio range
+    if (token >= 151672 && token <= 155772) {
+        audio_tokens.push_back(token);
+    }
+    
+    // Check for end token
+    if (token == 151668) {
+        break; // Found audio end token
+    }
+}
+```
+
+**Why this matters**: Sending non-audio tokens to the decoder will cause crashes or invalid audio output.
+
+### Important: Batch Size Configuration
+
+When working with TTS, you may encounter this error:
+```
+LM_GGML_ASSERT(cparams.n_ubatch >= n_tokens && "encoder requires n_ubatch >= n_tokens")
+```
+
+**Solution**: Increase the `nUBatch` parameter when initializing the model:
+
+```swift
+// iOS example
+var initParams = LlamaMobile.InitParams(modelPath: modelPath)
+initParams.nUBatch = 1024 // Increase to handle large audio token batches
+```
+
+**Why this matters**: TTS models often generate large batches of audio tokens (500-1000+), and the unbounded batch size (`nUBatch`) must be larger than or equal to the number of generated audio tokens.
+
+### Example Implementations
+
+- **C++**: `examples/cpp/main_tts.cpp` - Full TTS workflow with token filtering
+- **iOS**: `examples/iOSSDKExample` - Swift implementation with token filtering
+
+### Key TTS Functions
+
+- `generateAudioFromText()`: Single-call TTS generation (handles all steps internally)
+- `formatTextForAudioCompletion()`: Format text for TTS
+- `getAudioCompletionGuideTokens()`: Get guide tokens for better TTS quality
+- `decodeAudioTokens()`: Decode audio tokens to samples (requires filtered tokens)
+- `saveAudioToWav()`: Save audio samples to WAV file
+
+### Important: Guide Tokens
+
+Guide tokens are a critical feature for improving TTS quality and preventing unexpected audio output. They help the model focus on generating audio for your actual text rather than template content.
+
+**What are guide tokens?**
+- Special tokens that guide the TTS model to focus on your input text
+- Prevent the model from speaking template/example content
+- Available through `getAudioCompletionGuideTokens()` function
+
+**How to use guide tokens (C++ example):**
+```cpp
+// Get guide tokens for your text
+std::vector<llama_token> guide_tokens = context.getAudioCompletionGuideTokens(text_to_speak);
+// Set guide tokens before generation
+context.setGuideTokens(guide_tokens);
+```
+
+**How to use guide tokens (iOS example):**
+```swift
+// Get guide tokens for your text
+guard let guideTokens = llamaMobile.getAudioGuideTokens(textToSpeak: text) else {
+    print("Failed to get guide tokens")
+}
+// Set guide tokens before generation
+if let guideTokens = guideTokens {
+    llamaMobile.setGuideTokens(tokens: guideTokens)
+}
+```
+
+**Why guide tokens matter:** Without guide tokens, the model may generate audio for template content (example text included in the model) before your actual input text, resulting in "weird words" at the beginning of the audio output.
+
+### Template-Based TTS Generation
+
+llama_mobile uses template data to format prompts for the TTS model. These templates provide examples of how text and audio should be structured:
+
+#### Template Components
+
+- **`default_audio_text`**: Example text sequence with special tokens
+  - Format: `<|text_start|>word1<|text_sep|>word2<|text_sep|>...<|text_sep|>`
+  - Purpose: Shows the model how to structure text with separators
+
+- **`default_audio_data`**: Example audio data with timestamps and code tokens
+  - Format: `word<|t_0.08|><|code_start|>audio_token1<|audio_token2|>...<|code_end|>`
+  - Purpose: Demonstrates the expected audio output format with timing and code tokens
+
+#### Template Usage in Prompt Construction
+
+The `getFormattedAudioCompletion()` function constructs prompts by:
+1. Starting with the template text
+2. Inserting your processed text in the appropriate position
+3. Appending the template audio data
+4. Adjusting format based on TTS version (V0_2 vs V0_3)
+
+**Example formatted prompt:**
+```
+<|im_start|>
+<|text_start|>example<|text_sep|>template<|text_sep|>YOUR_PROCESSED_TEXT<|text_sep|><|text_end|>
+example<|t_0.08|><|code_start|><|257|><|740|>...<|code_end|>
+```
+
+#### Avoiding Template Audio in Output
+
+**Critical issue**: Without proper handling, the model may generate audio for the template content too.
+
+**Solutions:**
+1. **Use guide tokens**: Guide the model to focus only on your text
+2. **Only tokenize completion**: When templates are present, tokenize only the completion result
+3. **Token filtering**: Only decode audio tokens (151672-155772) and skip template-related tokens
+
+**Example implementation (iOS):**
+```swift
+// Check if prompt contains template markers
+let useOnlyCompletion = formattedPrompt.contains("<|audio_start|") || formattedPrompt.contains("<|text_start|")
+
+// Only tokenize completion result when templates are present
+let contentToTokenize = useOnlyCompletion ? completionResult.text : formattedPrompt + completionResult.text
+```
+
+This ensures you only get audio for your actual text, not the template content.
+
 ## Plugins and SDKs
 
 llama_mobile provides dedicated SDKs and plugins for various development platforms to simplify integration of AI models into your applications. Below is a comprehensive list of all available SDKs and plugins:

@@ -707,6 +707,31 @@ final class LlamaMobileTests: XCTestCase {
             XCTAssertNotEqual(ttsType, .unknown, "TTS type should not be unknown")
         }
     }
+    
+    func testSaveAudioToWav() {
+        // Create a simple test audio array
+        let testAudio: [Float] = [0.1, 0.2, 0.3, 0.4, 0.5]
+        let tempFilePath = "/tmp/test_audio.wav"
+        
+        // Clean up any existing file
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: tempFilePath) {
+            try? fileManager.removeItem(atPath: tempFilePath)
+        }
+        
+        // Initialize with any model to get a valid context
+        if let llama = LlamaMobile(modelPath: LlamaMobile.TestPaths.modelPath) {
+            // Test the saveAudioToWav function
+            let success = llama.saveAudioToWav(filePath: tempFilePath, audioData: testAudio, sampleRate: 24000)
+            XCTAssertTrue(success, "Should save audio to WAV file successfully")
+            
+            // Verify the file was created
+            XCTAssertTrue(fileManager.fileExists(atPath: tempFilePath), "WAV file should exist after saving")
+            
+            // Clean up
+            try? fileManager.removeItem(atPath: tempFilePath)
+        }
+    }
 }
 
 // MARK: - Convenience Initializer for Testing
