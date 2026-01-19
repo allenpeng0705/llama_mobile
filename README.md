@@ -178,6 +178,179 @@ let contentToTokenize = useOnlyCompletion ? completionResult.text : formattedPro
 
 This ensures you only get audio for your actual text, not the template content.
 
+## JSON Output Support
+
+llama_mobile supports returning responses in an OpenAI-like JSON format. This feature is **disabled by default** for backward compatibility but can be easily enabled.
+
+### C++ API
+
+#### Enable JSON Output
+
+In the C++ API, set the `use_json_response` parameter to `true` in the `llama_mobile_completion_params_t` struct:
+
+```cpp
+#include "llama_mobile_api.h"
+
+// Initialize completion parameters
+llama_mobile_completion_params_t params;
+memset(&params, 0, sizeof(params));
+
+// Set basic parameters
+params.prompt = "Hello, who are you?";
+params.max_tokens = 128;
+params.temperature = 0.7;
+
+// Enable JSON response format
+params.use_json_response = true;
+
+// Call the completion API
+llama_mobile_completion_result_t result;
+int status = llama_mobile_completion(ctx, &params, &result);
+
+if (status == 0 && result.text) {
+    // result.text contains JSON output
+    printf("JSON Response: %s\n", result.text);
+    llama_mobile_free_string(result.text);
+}
+```
+
+#### Disable JSON Output
+
+To disable JSON output (default behavior), set the parameter to `false`:
+
+```cpp
+params.use_json_response = false;
+```
+
+### iOS SDK
+
+#### Objective-C
+
+```objective-c
+// Create completion parameters
+LlamaMobileCompletionParams *params = [[LlamaMobileCompletionParams alloc] init];
+params.prompt = @"Hello, who are you?";
+params.maxTokens = 128;
+params.temperature = 0.7;
+
+// Enable JSON output
+params.useJsonResponse = YES;
+
+// Call completion API
+[llamaMobile completionWithContext:ctx params:params completion:^(LlamaMobileCompletionResult *result, NSError *error) {
+    if (result && result.text) {
+        // result.text contains JSON output
+        NSLog(@"JSON Response: %@", result.text);
+    }
+}];
+```
+
+#### Swift
+
+```swift
+// Create completion parameters
+var params = LlamaMobileCompletionParams()
+params.prompt = "Hello, who are you?"
+params.maxTokens = 128
+params.temperature = 0.7
+
+// Enable JSON output
+params.useJsonResponse = true
+
+// Call completion API
+llamaMobile.completion(with: ctx, params: params) { result, error in
+    if let result = result, let text = result.text {
+        // text contains JSON output
+        print("JSON Response: \(text)")
+    }
+}
+```
+
+### Android SDK
+
+```java
+// Create completion parameters
+CompletionParams params = new CompletionParams.Builder()
+    .setPrompt("Hello, who are you?")
+    .setMaxTokens(128)
+    .setTemperature(0.7f)
+    .setUseJsonResponse(true)  // Enable JSON output
+    .build();
+
+// Call completion API
+try {
+    CompletionResult result = llamaMobile.completion(ctx, params);
+    if (result.getText() != null) {
+        // result.getText() contains JSON output
+        Log.d("LlamaMobile", "JSON Response: " + result.getText());
+    }
+} catch (LlamaMobileException e) {
+    e.printStackTrace();
+}
+```
+
+### JSON Output Format
+
+When enabled, the API returns responses in this format:
+
+```json
+{
+  "id": "cmpl-1234567890abcdef",
+  "object": "text_completion",
+  "created": 1620000000,
+  "model": "your-model-name",
+  "choices": [
+    {
+      "text": "Hello! I'm a helpful assistant...",
+      "index": 0,
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 5,
+    "completion_tokens": 15,
+    "total_tokens": 20
+  }
+}
+```
+
+### Backward Compatibility
+
+- **Default behavior**: JSON output is disabled by default
+- **Existing code**: All existing code will continue to work without changes
+- **Explicit control**: Users can enable/disable JSON output on a per-request basis
+- **Performance**: JSON output has minimal performance impact
+
+### Troubleshooting
+
+#### JSON output is not working
+
+1. **Check parameter spelling**: Ensure you're using `use_json_response` (C++), `useJsonResponse` (Swift/Objective-C), or `setUseJsonResponse()` (Java)
+
+2. **Verify parameter is set**: Double-check that the parameter is being set before calling the completion API
+
+3. **Check API version**: Ensure you're using a version of the API that supports JSON output (latest version)
+
+4. **Inspect response**: If JSON output is enabled, the response should contain `{"id":"cmpl-` at the beginning
+
+#### Want to enable JSON by default in your application
+
+To enable JSON output by default in your application, simply set the parameter to `true` whenever you create completion parameters:
+
+```cpp
+// Create a helper function to create default parameters
+llama_mobile_completion_params_t create_default_params(const char* prompt) {
+    llama_mobile_completion_params_t params;
+    memset(&params, 0, sizeof(params));
+    params.prompt = prompt;
+    params.max_tokens = 128;
+    params.temperature = 0.7;
+    params.use_json_response = true; // Enable JSON by default
+    return params;
+}
+```
+
 ## Plugins and SDKs
 
 llama_mobile provides dedicated SDKs and plugins for various development platforms to simplify integration of AI models into your applications. Below is a comprehensive list of all available SDKs and plugins:

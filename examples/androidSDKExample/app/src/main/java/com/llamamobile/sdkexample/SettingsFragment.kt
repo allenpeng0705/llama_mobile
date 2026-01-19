@@ -1,48 +1,98 @@
 package com.llamamobile.sdkexample
 
+import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import com.llamamobile.sdkexample.databinding.FragmentSettingsBinding
+import android.content.DialogInterface
 
 class SettingsFragment : Fragment() {
 
-    private lateinit var binding: FragmentSettingsBinding
-    private lateinit var appState: AppState
+    private var _binding: FragmentSettingsBinding? = null
+    private val binding get() = _binding!!
+    private var appState: AppState? = null
     private lateinit var modelAdapter: ArrayAdapter<String>
     private lateinit var mmprojModelAdapter: ArrayAdapter<String>
     private lateinit var vocoderModelAdapter: ArrayAdapter<String>
     private lateinit var loraModelAdapter: ArrayAdapter<String>
+
+    override fun onAttach(context: Context) {
+        super.onAttach(context)
+        // Access appState when the fragment is properly attached to the activity
+        android.util.Log.d("SettingsFragment", "onAttach() called with context: $context")
+        appState = (context as? MainActivity)?.appState
+        android.util.Log.d("SettingsFragment", "appState set to: $appState")
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        binding = FragmentSettingsBinding.inflate(inflater, container, false)
-        // Access appState safely during fragment creation
-        try {
-            appState = (activity as MainActivity).appState
-        } catch (e: Exception) {
-            // Log but don't crash - appState will be set later in onViewCreated if needed
-            e.printStackTrace()
-        }
-        return binding.root
+        _binding = FragmentSettingsBinding.inflate(inflater, container, false)
+        return _binding!!.root
     }
 
     override fun onResume() {
         super.onResume()
         // Refresh model list when fragment resumes
-        (activity as MainActivity).appState.extractModelsFromAssets(requireContext())
-        setupModelSpinner()
-        setupMmprojModelSpinner()
-        setupVocoderModelSpinner()
-        setupLoRAModelSpinner()
-        updateUI()
+        if (activity is MainActivity) {
+            val mainActivity = activity as MainActivity
+            mainActivity.appState.extractModelsFromAssets(mainActivity)
+            setupModelSpinner()
+            setupMmprojModelSpinner()
+            setupVocoderModelSpinner()
+            setupLoRAModelSpinner()
+            updateUI()
+        }
+    }
+    
+    private fun showGrammarSelection() {
+        // Get available grammar files from assets
+        val grammarFiles = listOf(
+            "arithmetic.gbnf",
+            "c.gbnf",
+            "chess.gbnf",
+            "english.gbnf",
+            "japanese.gbnf",
+            "json.gbnf",
+            "json_arr.gbnf",
+            "list.gbnf"
+        )
+
+        activity?.let { activity ->
+            // Show alert dialog with grammar file options
+            AlertDialog.Builder(activity)
+                .setTitle("Select Grammar File")
+                .setItems(grammarFiles.toTypedArray()) { dialog: DialogInterface, which: Int ->
+                    val selectedGrammarFile = grammarFiles[which]
+                    val grammarContent = appState?.loadGrammarFromAssets(activity, selectedGrammarFile)
+                    
+                    if (grammarContent != null) {
+                        // Set the selected grammar in app state
+                        appState?.selectedGrammar = grammarContent
+                        appState?.selectedGrammarFile = selectedGrammarFile
+                        
+                        // Show success message
+                        Toast.makeText(activity, "Grammar '$selectedGrammarFile' selected", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(activity, "Failed to load grammar file", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -64,6 +114,9 @@ class SettingsFragment : Fragment() {
             // Set up system prompt
             setupSystemPrompt()
 
+            // Set up feature buttons
+            setupFeatureButtons()
+
             // Update UI based on current state
             updateUI()
         } catch (e: Exception) {
@@ -72,7 +125,69 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    private fun setupFeatureButtons() {
+        // Embedding toggle
+        binding.embeddingToggle.setOnCheckedChangeListener {
+            _, isChecked ->
+            appState?.let {
+                it.enableEmbedding = isChecked
+            }
+        }
+
+        // Multimodal feature button
+        binding.multimodalButton.setOnClickListener {
+            try {
+                // Access NavController through activity's NavHostFragment
+                activity?.let { activity ->
+                    val navHostFragment = activity.supportFragmentManager.findFragmentById(R.id.nav_host_fragment_activity_main)
+                        as? androidx.navigation.fragment.NavHostFragment
+                    navHostFragment?.let {
+                        val navController = it.navController
+                        navController.navigate(R.id.nav_multimodal)
+                    } ?: run {
+                        android.util.Log.e("SettingsFragment", "NavHostFragment not found")
+                        Toast.makeText(activity, "Navigation error: NavHostFragment not found", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                // Log and show error if navigation fails
+                android.util.Log.e("SettingsFragment", "Navigation error: ${e.message}")
+                activity?.let { Toast.makeText(it, "Navigation error: ${e.message}", Toast.LENGTH_SHORT).show()}
+            }
+        }
+
+        // Grammar feature button
+        binding.grammarButton.setOnClickListener {
+            // Handle grammar feature - show grammar selection
+            showGrammarSelection()
+        }
+
+        // TTS feature button
+        binding.ttsButton.setOnClickListener {
+            try {
+                // Access NavController through activity's NavHostFragment
+                activity?.let { activity ->
+                    val navHostFragment = activity.supportFragmentManager.findFragmentById(R.id.nav_host_fragment_activity_main)
+                        as? androidx.navigation.fragment.NavHostFragment
+                    navHostFragment?.let {
+                        val navController = it.navController
+                        navController.navigate(R.id.nav_tts)
+                    } ?: run {
+                        android.util.Log.e("SettingsFragment", "NavHostFragment not found")
+                        Toast.makeText(activity, "Navigation error: NavHostFragment not found", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                // Log and show error if navigation fails
+                android.util.Log.e("SettingsFragment", "Navigation error: ${e.message}")
+                activity?.let { Toast.makeText(it, "Navigation error: ${e.message}", Toast.LENGTH_SHORT).show()}
+            }
+        }
+    }
+
     private fun setupModelSpinner() {
+        val appState = this.appState ?: return
+        
         val modelNames = if (appState.availableModels.isNotEmpty()) {
             appState.availableModels.map { it.first }
         } else {
@@ -109,10 +224,13 @@ class SettingsFragment : Fragment() {
     }
     
     private fun setupMmprojModelSpinner() {
+        val appState = this.appState ?: return
+        
         val mmprojModelNames = if (appState.availableMmprojModels.isNotEmpty()) {
-            appState.availableMmprojModels.map { it.first }
+            // Add "Empty" option at the beginning
+            mutableListOf(getString(R.string.empty_option)) + appState.availableMmprojModels.map { it.first }
         } else {
-            listOf(getString(R.string.no_models_available))
+            listOf(getString(R.string.empty_option))
         }
 
         mmprojModelAdapter = ArrayAdapter(
@@ -124,8 +242,14 @@ class SettingsFragment : Fragment() {
         mmprojModelAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         binding.mmprojModelSpinner.adapter = mmprojModelAdapter
 
-        // Select the current mmproj model if it's available
-        val currentMmprojModelIndex = appState.availableMmprojModels.indexOfFirst { it.second == appState.mmprojModelPath }
+        // Select "Empty" if no mmproj model is selected, otherwise select the current model
+        val currentMmprojModelIndex = if (appState.mmprojModelPath.isEmpty()) {
+            0 // Select "Empty" option
+        } else {
+            // Current model is available, add 1 for the "Empty" option
+            1 + appState.availableMmprojModels.indexOfFirst { it.second == appState.mmprojModelPath }
+        }
+        
         if (currentMmprojModelIndex >= 0) {
             binding.mmprojModelSpinner.setSelection(currentMmprojModelIndex)
         }
@@ -133,8 +257,12 @@ class SettingsFragment : Fragment() {
         // Handle mmproj model selection
         binding.mmprojModelSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: android.widget.AdapterView<*>, view: View?, position: Int, id: Long) {
-                if (appState.availableMmprojModels.isNotEmpty()) {
-                    appState.mmprojModelPath = appState.availableMmprojModels[position].second
+                if (position == 0) {
+                    // "Empty" option selected
+                    appState.mmprojModelPath = ""
+                } else if (appState.availableMmprojModels.isNotEmpty()) {
+                    // Convert position to available models index (subtract 1 for "Empty" option)
+                    appState.mmprojModelPath = appState.availableMmprojModels[position - 1].second
                 }
             }
 
@@ -145,10 +273,13 @@ class SettingsFragment : Fragment() {
     }
     
     private fun setupVocoderModelSpinner() {
+        val appState = this.appState ?: return
+        
         val vocoderModelNames = if (appState.availableVocoderModels.isNotEmpty()) {
-            appState.availableVocoderModels.map { it.first }
+            // Add "Empty" option at the beginning
+            mutableListOf(getString(R.string.empty_option)) + appState.availableVocoderModels.map { it.first }
         } else {
-            listOf(getString(R.string.no_models_available))
+            listOf(getString(R.string.empty_option))
         }
 
         vocoderModelAdapter = ArrayAdapter(
@@ -160,8 +291,14 @@ class SettingsFragment : Fragment() {
         vocoderModelAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         binding.vocoderModelSpinner.adapter = vocoderModelAdapter
 
-        // Select the current vocoder model if it's available
-        val currentVocoderModelIndex = appState.availableVocoderModels.indexOfFirst { it.second == appState.vocoderModelPath }
+        // Select "Empty" if no vocoder model is selected, otherwise select the current model
+        val currentVocoderModelIndex = if (appState.vocoderModelPath.isEmpty()) {
+            0 // Select "Empty" option
+        } else {
+            // Current model is available, add 1 for the "Empty" option
+            1 + appState.availableVocoderModels.indexOfFirst { it.second == appState.vocoderModelPath }
+        }
+        
         if (currentVocoderModelIndex >= 0) {
             binding.vocoderModelSpinner.setSelection(currentVocoderModelIndex)
         }
@@ -169,8 +306,12 @@ class SettingsFragment : Fragment() {
         // Handle vocoder model selection
         binding.vocoderModelSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: android.widget.AdapterView<*>, view: View?, position: Int, id: Long) {
-                if (appState.availableVocoderModels.isNotEmpty()) {
-                    appState.vocoderModelPath = appState.availableVocoderModels[position].second
+                if (position == 0) {
+                    // "Empty" option selected
+                    appState.vocoderModelPath = ""
+                } else if (appState.availableVocoderModels.isNotEmpty()) {
+                    // Convert position to available models index (subtract 1 for "Empty" option)
+                    appState.vocoderModelPath = appState.availableVocoderModels[position - 1].second
                 }
             }
 
@@ -181,10 +322,13 @@ class SettingsFragment : Fragment() {
     }
     
     private fun setupLoRAModelSpinner() {
+        val appState = this.appState ?: return
+        
         val loraModelNames = if (appState.availableLoRAModels.isNotEmpty()) {
-            appState.availableLoRAModels.map { it.first }
+            // Add "Empty" option at the beginning
+            mutableListOf(getString(R.string.empty_option)) + appState.availableLoRAModels.map { it.first }
         } else {
-            listOf(getString(R.string.no_models_available))
+            listOf(getString(R.string.empty_option))
         }
 
         loraModelAdapter = ArrayAdapter(
@@ -196,8 +340,14 @@ class SettingsFragment : Fragment() {
         loraModelAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         binding.loraModelSpinner.adapter = loraModelAdapter
 
-        // Select the current LoRA model if it's available
-        val currentLoRAModelIndex = appState.availableLoRAModels.indexOfFirst { it.second == appState.loraModelPath }
+        // Select "Empty" if no LoRA model is selected, otherwise select the current model
+        val currentLoRAModelIndex = if (appState.loraModelPath.isEmpty()) {
+            0 // Select "Empty" option
+        } else {
+            // Current model is available, add 1 for the "Empty" option
+            1 + appState.availableLoRAModels.indexOfFirst { it.second == appState.loraModelPath }
+        }
+        
         if (currentLoRAModelIndex >= 0) {
             binding.loraModelSpinner.setSelection(currentLoRAModelIndex)
         }
@@ -205,8 +355,12 @@ class SettingsFragment : Fragment() {
         // Handle LoRA model selection
         binding.loraModelSpinner.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: android.widget.AdapterView<*>, view: View?, position: Int, id: Long) {
-                if (appState.availableLoRAModels.isNotEmpty()) {
-                    appState.loraModelPath = appState.availableLoRAModels[position].second
+                if (position == 0) {
+                    // "Empty" option selected
+                    appState.loraModelPath = ""
+                } else if (appState.availableLoRAModels.isNotEmpty()) {
+                    // Convert position to available models index (subtract 1 for "Empty" option)
+                    appState.loraModelPath = appState.availableLoRAModels[position - 1].second
                 }
             }
 
@@ -217,6 +371,8 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupParameterControls() {
+        val appState = this.appState ?: return
+        
         // GPU Layers
         binding.gpuLayersValue.text = appState.nGpuLayers.toString()
         binding.decreaseGpuLayers.setOnClickListener {
@@ -270,6 +426,8 @@ class SettingsFragment : Fragment() {
     }
 
     private fun setupSystemPrompt() {
+        val appState = this.appState ?: return
+        
         binding.systemPromptEditText.setText(appState.systemPrompt)
         binding.systemPromptEditText.setOnFocusChangeListener { _, hasFocus ->
             if (!hasFocus) {
@@ -278,7 +436,7 @@ class SettingsFragment : Fragment() {
                     appState.systemPrompt = newPrompt
                     if (appState.isModelLoaded) {
                         Toast.makeText(
-                            requireContext(),
+                            context,
                             "System prompt changed. Please reload the model for changes to take effect.",
                             Toast.LENGTH_SHORT
                         ).show()
@@ -289,13 +447,15 @@ class SettingsFragment : Fragment() {
     }
 
     private fun loadModel() {
+        val appState = this.appState ?: return
+        
         if (appState.availableModels.isEmpty()) {
-            Toast.makeText(requireContext(), "No models available", Toast.LENGTH_SHORT).show()
+            activity?.let { Toast.makeText(it, "No models available", Toast.LENGTH_SHORT).show()}
             return
         }
 
         if (appState.isModelLoaded) {
-            Toast.makeText(requireContext(), "Model already loaded", Toast.LENGTH_SHORT).show()
+            activity?.let { Toast.makeText(it, "Model already loaded", Toast.LENGTH_SHORT).show()}
             return
         }
 
@@ -306,13 +466,13 @@ class SettingsFragment : Fragment() {
         hideError()
 
         appState.loadModel { success ->
-            requireActivity().runOnUiThread {
+            activity?.runOnUiThread {
                 binding.loadModelButton.isEnabled = true
                 binding.loadModelButton.text = "Load Model"
                 binding.unloadModelButton.isEnabled = success
 
                 if (success) {
-                    Toast.makeText(requireContext(), "Model loaded successfully", Toast.LENGTH_SHORT).show()
+                    activity?.let { Toast.makeText(it, "Model loaded successfully", Toast.LENGTH_SHORT).show()}
                     updateModelStatusUI()
                 } else {
                     showError(appState.errorMessage ?: "Failed to load model")
@@ -322,8 +482,10 @@ class SettingsFragment : Fragment() {
     }
 
     private fun unloadModel() {
+        val appState = this.appState ?: return
+        
         appState.unloadModel()
-        Toast.makeText(requireContext(), "Model unloaded", Toast.LENGTH_SHORT).show()
+        activity?.let { Toast.makeText(it, "Model unloaded", Toast.LENGTH_SHORT).show()}
         updateModelStatusUI()
         binding.unloadModelButton.isEnabled = false
         hideError()
@@ -331,13 +493,20 @@ class SettingsFragment : Fragment() {
 
     private fun updateUI() {
         updateModelStatusUI()
-        if (appState.errorMessage != null) {
-            showError(appState.errorMessage!!)
+        val errorMsg = appState?.errorMessage
+        if (errorMsg != null) {
+            showError(errorMsg)
+        }
+        
+        // Update embedding toggle based on app state
+        appState?.let {
+            binding.embeddingToggle.isChecked = it.enableEmbedding
         }
     }
 
     private fun updateModelStatusUI() {
-        if (appState.isModelLoaded) {
+        val modelLoaded = appState?.isModelLoaded ?: false
+        if (modelLoaded) {
             binding.modelStatusLayout.visibility = View.VISIBLE
             binding.loadModelButton.isEnabled = false
             binding.unloadModelButton.isEnabled = true

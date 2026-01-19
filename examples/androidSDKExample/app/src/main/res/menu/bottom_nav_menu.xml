@@ -4,43 +4,26 @@
     <item
         android:id="@+id/nav_chat"
         android:icon="@android:drawable/ic_dialog_email"
-        android:title="Chat"
-        android:orderInCategory="100" />
+        android:title="Chat" />
 
     <item
         android:id="@+id/nav_tokenization"
         android:icon="@android:drawable/ic_menu_recent_history"
-        android:title="Tokenization"
-        android:orderInCategory="150" />
+        android:title="Tokenize" />
 
     <item
         android:id="@+id/nav_embeddings"
         android:icon="@android:drawable/ic_menu_agenda"
-        android:title="Embeddings"
-        android:orderInCategory="175" />
-
-    <item
-        android:id="@+id/nav_multimodal"
-        android:icon="@android:drawable/ic_menu_gallery"
-        android:title="Multimodal"
-        android:orderInCategory="180" />
-
-    <item
-        android:id="@+id/nav_tts"
-        android:icon="@android:drawable/ic_btn_speak_now"
-        android:title="TTS"
-        android:orderInCategory="185" />
+        android:title="Embed" />
 
     <item
         android:id="@+id/nav_lora"
         android:icon="@android:drawable/ic_menu_edit"
-        android:title="LoRA"
-        android:orderInCategory="190" />
+        android:title="LoRA" />
 
     <item
         android:id="@+id/nav_settings"
-        android:icon="@android:drawable/ic_menu_preferences"
-        android:title="Settings"
-        android:orderInCategory="200" />
+        android:icon="@android:drawable/ic_menu_more"
+        android:title="More" />
 
 </menu>

@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.content.Context
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import com.llamamobile.LlamaMobile
@@ -12,25 +13,25 @@ import com.llamamobile.sdkexample.databinding.FragmentLoraBinding
 
 class LoRAFragment : Fragment() {
 
-    private lateinit var binding: FragmentLoraBinding
-    private lateinit var appState: AppState
+    private var _binding: FragmentLoraBinding? = null
+    private val binding get() = _binding!!
+    private var appState: AppState? = null
     private var isProcessing = false
     private var isLoraApplied = false
+
+    override fun onAttach(context: Context) {
+        super.onAttach(context)
+        // Access appState when the fragment is properly attached to the activity
+        appState = (context as? MainActivity)?.appState
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        binding = FragmentLoraBinding.inflate(inflater, container, false)
-        // Access appState safely during fragment creation
-        try {
-            appState = (activity as MainActivity).appState
-        } catch (e: Exception) {
-            // Log but don't crash - appState will be set later in onViewCreated if needed
-            e.printStackTrace()
-        }
-        return binding.root
+        _binding = FragmentLoraBinding.inflate(inflater, container, false)
+        return _binding!!.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -38,7 +39,7 @@ class LoRAFragment : Fragment() {
 
         try {
             // Set default values from AppState
-            binding.loraPathEditText.setText(appState.loraModelPath)
+            binding.loraPathEditText.setText(appState?.loraModelPath ?: "")
             binding.loraPathEditText.isEnabled = false // Read-only since we select from settings
             binding.loraScaleEditText.setText("1.0")
 
@@ -62,28 +63,43 @@ class LoRAFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        // Update selected LoRA path when fragment resumes
+        binding.loraPathEditText.setText(appState?.loraModelPath ?: "")
         // Check model status when fragment resumes
         updateModelLoadedUI()
         updateLoraStatusUI()
     }
+    
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
 
     private fun handleApplyLora() {
-        val loraPath = appState.loraModelPath.trim()
+        val currentAppState = appState ?: run {
+            activity?.let { Toast.makeText(it, "App state not initialized", Toast.LENGTH_SHORT).show()}
+            return
+        }
+        
+        val loraPath = currentAppState.loraModelPath.trim()
         val loraScaleText = binding.loraScaleEditText.text.toString().trim()
         
         if (loraPath.isEmpty() || loraScaleText.isEmpty() || isProcessing) {
+            activity?.let { 
+                Toast.makeText(it, "Please select a LoRA model and enter a valid scale", Toast.LENGTH_SHORT).show()
+            }
             return
         }
 
-        if (!appState.isModelLoaded) {
-            Toast.makeText(requireContext(), "Please load a model first", Toast.LENGTH_SHORT).show()
+        if (!currentAppState.isModelLoaded) {
+            activity?.let { Toast.makeText(it, "Please load a model first", Toast.LENGTH_SHORT).show()}
             return
         }
 
         val loraScale = try {
             loraScaleText.toFloat()
         } catch (e: NumberFormatException) {
-            Toast.makeText(requireContext(), "Please enter a valid scale value", Toast.LENGTH_SHORT).show()
+            activity?.let { Toast.makeText(it, "Please enter a valid scale value", Toast.LENGTH_SHORT).show()}
             return
         }
 
@@ -93,35 +109,83 @@ class LoRAFragment : Fragment() {
         // Apply LoRA adapter in a background thread
         Thread {
             try {
-                // Create LoRA adapter
-                val loraAdapter = LoraAdapter(path = loraPath, scale = loraScale)
+                // Create LoRA adapter - use positional parameters for Java interop compatibility
+                val loraAdapter = LoraAdapter(loraPath, loraScale)
                 
-                // Call the new LlamaMobile applyLoRAAdapters method
-                val result = LlamaMobile.applyLoraAdapters(appState.contextHandle, arrayOf(loraAdapter))
+                // Log comprehensive information about the LoRA application attempt
+                android.util.Log.i("LoRAFragment", "=== LoRA Application Debug Info ===")
+                android.util.Log.i("LoRAFragment", "Calling LlamaMobile.applyLoRAAdapters() with:")
+                android.util.Log.i("LoRAFragment", "- Context handle: ${currentAppState.contextHandle}")
+                android.util.Log.i("LoRAFragment", "- LoRA path: ${loraPath}")
+                android.util.Log.i("LoRAFragment", "- LoRA scale: ${loraScale}")
                 
-                requireActivity().runOnUiThread {
+                // Check LoRA file validity
+                val loraFile = java.io.File(loraPath)
+                android.util.Log.i("LoRAFragment", "- LoRA file exists: ${loraFile.exists()}")
+                android.util.Log.i("LoRAFragment", "- LoRA file readable: ${loraFile.canRead()}")
+                android.util.Log.i("LoRAFragment", "- LoRA file size: ${loraFile.length()} bytes")
+                
+                // Call the LlamaMobile applyLoRAAdapters method
+                val result = LlamaMobile.applyLoraAdapters(currentAppState.contextHandle, arrayOf(loraAdapter))
+                
+                android.util.Log.i("LoRAFragment", "- applyLoRAAdapters result: ${result}")
+                
+                activity?.runOnUiThread {
                     isProcessing = false
                     updateProcessingUI()
                     if (result) {
                         isLoraApplied = true
                         updateLoraStatusUI()
-                        Toast.makeText(requireContext(), "LoRA adapter applied successfully", Toast.LENGTH_SHORT).show()
+                        activity?.let { Toast.makeText(it, "LoRA adapter applied successfully", Toast.LENGTH_SHORT).show()}
                     } else {
-                        Toast.makeText(requireContext(), "Failed to apply LoRA adapter", Toast.LENGTH_SHORT).show()
+                        activity?.let { Toast.makeText(it, "Failed to apply LoRA adapter. Check logcat for details.", Toast.LENGTH_SHORT).show()}
                     }
                 }
             } catch (e: Exception) {
-                requireActivity().runOnUiThread {
+                // Log comprehensive error information
+                android.util.Log.e("LoRAFragment", "=== LoRA Application Exception ===")
+                android.util.Log.e("LoRAFragment", "Exception type: ${e.javaClass.name}")
+                android.util.Log.e("LoRAFragment", "Exception message: ${e.message}")
+                
+                // Log stack trace
+                val stackTrace = e.stackTrace.joinToString("\n") {
+                    "  at ${it.className}.${it.methodName}(${it.fileName}:${it.lineNumber})"
+                }
+                android.util.Log.e("LoRAFragment", "Stack trace:\n$stackTrace")
+                
+                activity?.runOnUiThread {
                     isProcessing = false
                     updateProcessingUI()
-                    Toast.makeText(requireContext(), "LoRA error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    activity?.let { Toast.makeText(it, "LoRA error: ${e.localizedMessage}. Check logcat for details.", Toast.LENGTH_SHORT).show()}
+                }
+            } catch (t: Throwable) {
+                // Catch all throwables, including native errors
+                android.util.Log.e("LoRAFragment", "=== LoRA Application FATAL ERROR ===")
+                android.util.Log.e("LoRAFragment", "Throwable type: ${t.javaClass.name}")
+                android.util.Log.e("LoRAFragment", "Throwable message: ${t.message}")
+                
+                // Log stack trace
+                val stackTrace = t.stackTrace.joinToString("\n") {
+                    "  at ${it.className}.${it.methodName}(${it.fileName}:${it.lineNumber})"
+                }
+                android.util.Log.e("LoRAFragment", "Stack trace:\n$stackTrace")
+                
+                activity?.runOnUiThread {
+                    isProcessing = false
+                    updateProcessingUI()
+                    activity?.let { Toast.makeText(it, "Fatal LoRA error: ${t.localizedMessage}", Toast.LENGTH_SHORT).show()}
                 }
             }
         }.start()
     }
 
     private fun handleRemoveLora() {
-        if (!appState.isModelLoaded || isProcessing) {
+        val currentAppState = appState ?: run {
+            activity?.let { Toast.makeText(it, "App state not initialized", Toast.LENGTH_SHORT).show()}
+            return
+        }
+        
+        if (!currentAppState.isModelLoaded || isProcessing) {
             return
         }
 
@@ -132,27 +196,27 @@ class LoRAFragment : Fragment() {
         Thread {
             try {
                 // Call the new LlamaMobile removeLoraAdapters method
-                LlamaMobile.removeLoraAdapters(appState.contextHandle)
+                LlamaMobile.removeLoraAdapters(currentAppState.contextHandle)
                 
-                requireActivity().runOnUiThread {
+                activity?.runOnUiThread {
                     isProcessing = false
                     updateProcessingUI()
                     isLoraApplied = false
                     updateLoraStatusUI()
-                    Toast.makeText(requireContext(), "LoRA adapter removed successfully", Toast.LENGTH_SHORT).show()
+                    activity?.let { Toast.makeText(it, "LoRA adapter removed successfully", Toast.LENGTH_SHORT).show()}
                 }
             } catch (e: Exception) {
-                requireActivity().runOnUiThread {
+                activity?.runOnUiThread {
                     isProcessing = false
                     updateProcessingUI()
-                    Toast.makeText(requireContext(), "LoRA removal error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    activity?.let { Toast.makeText(it, "LoRA removal error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()}
                 }
             }
         }.start()
     }
 
     private fun updateModelLoadedUI() {
-        val modelLoaded = appState.isModelLoaded
+        val modelLoaded = appState?.isModelLoaded ?: false
         binding.applyLoraButton.isEnabled = modelLoaded && !isProcessing
         binding.removeLoraButton.isEnabled = modelLoaded && !isProcessing && isLoraApplied
 
@@ -176,8 +240,8 @@ class LoRAFragment : Fragment() {
     }
 
     private fun updateProcessingUI() {
-        binding.applyLoraButton.isEnabled = appState.isModelLoaded && !isProcessing
-        binding.removeLoraButton.isEnabled = appState.isModelLoaded && !isProcessing && isLoraApplied
+        binding.applyLoraButton.isEnabled = (appState?.isModelLoaded ?: false) && !isProcessing
+        binding.removeLoraButton.isEnabled = (appState?.isModelLoaded ?: false) && !isProcessing && isLoraApplied
         binding.progressBar.visibility = if (isProcessing) View.VISIBLE else View.GONE
     }
 }

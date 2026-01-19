@@ -143,6 +143,7 @@ typedef struct {
     const char** stop_sequences;      /**< Array of stop sequences to terminate generation (optional) */
     int stop_sequence_count;          /**< Number of stop sequences (optional, 0 for none) */
     const char* grammar;              /**< Path to grammar file (optional, NULL for no grammar) */
+    bool use_json_response;           /**< Generate response in OpenAI-like JSON format (default: false) */
     bool (*token_callback)(const char* token);  /**< Streaming callback for generated tokens (optional) */
 } llama_mobile_completion_params_t;
 

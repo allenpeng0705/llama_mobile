@@ -31,6 +31,160 @@ class AppState: ObservableObject {
     
     // LlamaMobile instance - optional since it requires a model path to initialize
     @Published var llamaMobile: LlamaMobile? = nil
+    
+    // Grammar support
+    @Published var selectedGrammar: String? = nil
+    @Published var availableGrammars: [String] = []
+    
+    // Load grammar content from available locations
+    func loadGrammarContent(grammarName: String) -> String? {
+        // First priority: the absolute path where we copied the grammar files
+        let absolutePath = "/Users/shileipeng/Documents/mygithub/llama_mobile/examples/iOSSDKExample/iOSSDKExample/grammars/\(grammarName).gbnf"
+        
+        if FileManager.default.fileExists(atPath: absolutePath) {
+            print("[DEBUG] ✓ Found grammar file at absolute path: \(absolutePath)")
+            
+            do {
+                let content = try String(contentsOf: URL(fileURLWithPath: absolutePath), encoding: .utf8)
+                print("[DEBUG] ✓ Successfully loaded grammar content for: \(grammarName)")
+                return content
+            } catch {
+                print("[ERROR] ✗ Failed to read grammar file at \(absolutePath): \(error)")
+            }
+        } else {
+            print("[DEBUG] ✗ Grammar file not found at absolute path: \(absolutePath)")
+        }
+        
+        // Second priority: main app bundle
+        let mainBundle = Bundle.main
+        
+        // Try directly in main bundle
+        if let fileURL = mainBundle.url(forResource: grammarName, withExtension: "gbnf") {
+            print("[DEBUG] ✓ Found grammar file directly in main app bundle: \(fileURL.path)")
+            
+            do {
+                let content = try String(contentsOf: fileURL, encoding: .utf8)
+                print("[DEBUG] ✓ Successfully loaded grammar content")
+                return content
+            } catch {
+                print("[ERROR] ✗ Failed to read grammar file: \(error)")
+            }
+        }
+        
+        // Try in grammars subdirectory of main bundle
+        if let fileURL = mainBundle.url(forResource: grammarName, withExtension: "gbnf", subdirectory: "grammars") {
+            print("[DEBUG] ✓ Found grammar file in main app bundle grammars subdirectory: \(fileURL.path)")
+            
+            do {
+                let content = try String(contentsOf: fileURL, encoding: .utf8)
+                print("[DEBUG] ✓ Successfully loaded grammar content")
+                return content
+            } catch {
+                print("[ERROR] ✗ Failed to read grammar file: \(error)")
+            }
+        }
+        
+        // Third priority: framework bundle - try direct access to embedded framework
+        print("[DEBUG] Main bundle path: \(Bundle.main.bundlePath)")
+        
+        // Try 1: Find framework bundle directly in the app's Frameworks directory
+        let frameworkURL = mainBundle.bundleURL.appendingPathComponent("Frameworks/llama_mobile.framework")
+        print("[DEBUG] Direct framework URL: \(frameworkURL.path)")
+        
+        let frameworkExists = FileManager.default.fileExists(atPath: frameworkURL.path)
+        print("[DEBUG] Framework exists at direct path: \(frameworkExists)")
+        
+        if frameworkExists {
+            // Check if this is a valid bundle
+            if let frameworkBundle = Bundle(url: frameworkURL) {
+                print("[DEBUG] Created framework bundle from URL successfully")
+                
+                // List framework bundle contents
+                do {
+                    let frameworkContents = try FileManager.default.contentsOfDirectory(atPath: frameworkBundle.bundlePath)
+                    print("[DEBUG] Framework bundle contents: \(frameworkContents)")
+                    
+                    // Check for grammars directory
+                    let grammarsURL = frameworkBundle.bundleURL.appendingPathComponent("grammars")
+                    print("[DEBUG] Framework grammars URL: \(grammarsURL.path)")
+                    
+                    let grammarsExists = FileManager.default.fileExists(atPath: grammarsURL.path)
+                    print("[DEBUG] Framework grammars directory exists: \(grammarsExists)")
+                    
+                    if grammarsExists {
+                        let grammarFiles = try FileManager.default.contentsOfDirectory(atPath: grammarsURL.path)
+                        print("[DEBUG] Framework grammar files: \(grammarFiles)")
+                        
+                        // Try to find the specific grammar file
+                        let grammarFilePath = grammarsURL.appendingPathComponent("\(grammarName).gbnf")
+                        print("[DEBUG] Specific grammar file path: \(grammarFilePath.path)")
+                        
+                        let grammarFileExists = FileManager.default.fileExists(atPath: grammarFilePath.path)
+                        print("[DEBUG] Specific grammar file exists: \(grammarFileExists)")
+                        
+                        if grammarFileExists {
+                            // Try to read the file
+                            do {
+                                let content = try String(contentsOf: grammarFilePath, encoding: .utf8)
+                                print("[DEBUG] ✓ Successfully loaded grammar from direct framework path")
+                                return content
+                            } catch {
+                                print("[ERROR] ✗ Failed to read grammar file: \(error)")
+                            }
+                        }
+                    }
+                } catch {
+                    print("[ERROR] ✗ Failed to access framework bundle: \(error)")
+                }
+            } else {
+            print("[ERROR] ✗ Failed to create bundle from framework URL")
+        }
+        }
+        
+        // Try 2: Fallback to Bundle(for:) method
+        print("[DEBUG] Trying fallback: Bundle(for: LlamaMobile.self)")
+        let fallbackFrameworkBundle = Bundle(for: LlamaMobile.self)
+        print("[DEBUG] Fallback framework bundle path: \(fallbackFrameworkBundle.bundlePath)")
+        
+        // Try 2: Fallback to Bundle(for:) method - continued
+        // Try with Bundle API on the fallback bundle
+        if let fileURL = fallbackFrameworkBundle.url(forResource: grammarName, withExtension: "gbnf", subdirectory: "grammars") {
+            print("[DEBUG] ✓ Found grammar file using fallback Bundle API: \(fileURL.path)")
+            
+            do {
+                let content = try String(contentsOf: fileURL, encoding: .utf8)
+                print("[DEBUG] ✓ Successfully loaded grammar content from fallback bundle")
+                return content
+            } catch {
+                print("[ERROR] ✗ Failed to read grammar file from fallback bundle: \(error)")
+            }
+        } else {
+            print("[DEBUG] ✗ Grammar file not found using fallback Bundle API")
+        }
+        
+        // Try direct file path access on the fallback bundle
+        let directGrammarPath = fallbackFrameworkBundle.bundlePath + "/grammars/\(grammarName).gbnf"
+        print("[DEBUG] Trying direct file path on fallback bundle: \(directGrammarPath)")
+        
+        if FileManager.default.fileExists(atPath: directGrammarPath) {
+            print("[DEBUG] ✓ Found grammar file using direct path on fallback bundle: \(directGrammarPath)")
+            
+            do {
+                let content = try String(contentsOf: URL(fileURLWithPath: directGrammarPath), encoding: .utf8)
+                print("[DEBUG] ✓ Successfully loaded grammar content using direct path on fallback bundle")
+                return content
+            } catch {
+                print("[ERROR] ✗ Failed to read grammar file using direct path on fallback bundle: \(error)")
+            }
+        } else {
+            print("[DEBUG] ✗ Grammar file not found using direct path on fallback bundle")
+        }
+        
+
+        
+        print("[ERROR] ✗ Could not find grammar file in any location: \(grammarName).gbnf")
+        return nil
+    }
 }
 
 struct ContentView: View {
@@ -82,13 +236,7 @@ struct ContentView: View {
                     }
                     .tag(3)
                 
-                // Grammar Tab
-                GrammarTestView(appState: appState)
-                    .tabItem {
-                        Image(systemName: "textformat.fill")
-                        Text("Grammar")
-                    }
-                    .tag(4)
+
                 
                 // TTS Tab
                 TTSTestView(appState: appState)
@@ -127,29 +275,34 @@ struct ContentView: View {
                         appState.modelPath = firstModel.path
                     }
                     
-                    // Populate mmproj models (for multimodal) - show all models
-                    appState.availableMmprojModels = appState.availableModels
+                    // Populate mmproj models (for multimodal) - show all models plus "Empty" option
+                    appState.availableMmprojModels = [
+                        (name: "Empty", path: "")
+                    ] + appState.availableModels
                     
-                    // Set default mmproj model path if any are found
-                    if let firstMmprojModel = appState.availableMmprojModels.first {
-                        appState.mmprojModelPath = firstMmprojModel.path
-                    }
+                    // Set default mmproj model path to "Empty"
+                    appState.mmprojModelPath = ""
                     
-                    // Populate vocoder models (for TTS) - show all models
-                    appState.availableVocoderModels = appState.availableModels
+                    // Populate vocoder models (for TTS) - show all models plus "Empty" option
+                    appState.availableVocoderModels = [
+                        (name: "Empty", path: "")
+                    ] + appState.availableModels
                     
-                    // Set default vocoder model path if any are found
-                    if let firstVocoderModel = appState.availableVocoderModels.first {
-                        appState.vocoderModelPath = firstVocoderModel.path
-                    }
+                    // Set default vocoder model path to "Empty"
+                    appState.vocoderModelPath = ""
                     
-                    // Populate LoRA models - show all models
-                    appState.availableLoRAModels = appState.availableModels
+                    // Populate LoRA models - show all models plus "Empty" option
+                    appState.availableLoRAModels = [
+                        (name: "Empty", path: "")
+                    ] + appState.availableModels
                     
-                    // Set default LoRA model path if any are found
-                    if let firstLoRAModel = appState.availableLoRAModels.first {
-                        appState.loraModelPath = firstLoRAModel.path
-                    }
+                    // Set default LoRA model path to "Empty"
+                    appState.loraModelPath = ""
+                    
+                    // Load available grammar files
+                    appState.availableGrammars = ["json", "json_arr", "list", "arithmetic", "c", "chess", "english", "japanese"]
+                    // Set default grammar to nil (Empty)
+                    appState.selectedGrammar = nil
                     
                 } catch {
                     print("Error listing models: \(error)")
@@ -282,6 +435,24 @@ struct ChatView: View {
             // Build conversation history for proper chat flow
             let fullPrompt = buildConversationHistory()
             
+            // Use the selected grammar from appState if available
+            let selectedGrammar = appState.selectedGrammar
+            var grammarContent: String? = nil
+            
+            // Load grammar content if a grammar is selected
+            if let selectedGrammarName = selectedGrammar {
+                print("[DEBUG] Attempting to load grammar: \(selectedGrammarName)")
+                grammarContent = appState.loadGrammarContent(grammarName: selectedGrammarName)
+                
+                if grammarContent != nil {
+                    print("[DEBUG] ✓ Grammar will be used for generation: \(selectedGrammarName)")
+                } else {
+                    print("[DEBUG] ✗ Grammar not loaded, generation will proceed without grammar constraints")
+                }
+            } else {
+                print("[DEBUG] No grammar selected, generation will proceed without grammar constraints")
+            }
+            
             let params = LlamaMobile.CompletionParams(
                 prompt: fullPrompt,
                 maxTokens: 256,
@@ -293,26 +464,45 @@ struct ChatView: View {
                 penaltyRepeat: 1.0,
                 penaltyFreq: 0.0,
                 penaltyPresent: 0.0,
-                grammar: jsonGrammar
+                grammar: grammarContent
             )
             
             if let result = appState.llamaMobile?.generateCompletion(with: params) {
                 DispatchQueue.main.async {
-                    // Log raw response from LLM
-                    print("[DEBUG] Raw LLM response: \(result.text)")
+                    // Log complete raw response from LLM (no parsing)
+                    print("\n" + String(repeating: "=", count: 50))
+                    print("[RAW MODEL RESPONSE] START (length: \(result.text.count) characters)")
+                    print(result.text)
+                    print("[RAW MODEL RESPONSE] END")
+                    print(String(repeating: "=", count: 50) + "\n")
                     
                     // Parse the JSON response from LLM
                     do {
                         // Clean up response by removing ending tags only, keep think content
-                    var cleanedText = result.text
-                    
-                    // Remove ending tags
-                    cleanedText = cleanedText.replacingOccurrences(of: "<|im_end|>", with: "")
-                    cleanedText = cleanedText.replacingOccurrences(of: "<|endoftext|>", with: "")
-                    
-                    // Trim whitespace
-                    let jsonString = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        print("[DEBUG] Cleaned JSON string: \(jsonString)")
+                        var cleanedText = result.text
+                        
+                        // Remove ending tags
+                        cleanedText = cleanedText.replacingOccurrences(of: "<|im_end|>", with: "")
+                        cleanedText = cleanedText.replacingOccurrences(of: "<|endoftext|>", with: "")
+                        
+                        // Trim whitespace
+                        var jsonString = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        print("[DEBUG] Cleaned Model Response: \(jsonString)")
+                        
+                        // Try to extract valid JSON from within mixed text response
+                        // Look for the first '{' and last '}' to extract JSON object
+                        if let firstBrace = jsonString.firstIndex(of: "{"),
+                           let lastBrace = jsonString.lastIndex(of: "}") {
+                            let extractedJSON = String(jsonString[firstBrace...lastBrace])
+                            print("[DEBUG] Extracted JSON from mixed response: \(extractedJSON)")
+                            jsonString = extractedJSON
+                        } else if let firstBracket = jsonString.firstIndex(of: "["),
+                                  let lastBracket = jsonString.lastIndex(of: "]") {
+                            // If it's an array instead of object
+                            let extractedJSON = String(jsonString[firstBracket...lastBracket])
+                            print("[DEBUG] Extracted JSON array from mixed response: \(extractedJSON)")
+                            jsonString = extractedJSON
+                        }
                         
                         guard let data = jsonString.data(using: .utf8) else {
                             throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: [], debugDescription: "Invalid JSON data"))
@@ -321,33 +511,36 @@ struct ChatView: View {
                         // Try parsing as standard OpenAI response first (with choices array)
                         do {
                             let response = try JSONDecoder().decode(OpenAIResponse.self, from: data)
-                            print("[DEBUG] Successfully parsed as OpenAIResponse: \(response)")
+                            print("[DEBUG] Successfully parsed as OpenAI Response Format: \(response)")
                             if let assistantMessage = response.choices.last?.message, assistantMessage.role == "assistant" {
+                                print("[DEBUG] Extracted assistant response: \(assistantMessage.content)")
                                 self.messages.append(Message(role: assistantMessage.role, text: assistantMessage.content))
                                 return
                             }
                         } catch {
-                            print("[DEBUG] Failed to parse as OpenAIResponse: \(error)")
+                            print("[DEBUG] Failed to parse as OpenAI Response Format: \(error)")
                             // If standard format fails, try parsing as array of messages
                             do {
                                 let messages = try JSONDecoder().decode([OpenAIMessage].self, from: data)
-                                print("[DEBUG] Successfully parsed as [OpenAIMessage]: \(messages)")
+                                print("[DEBUG] Successfully parsed as OpenAI Messages Array: \(messages)")
                                 if let assistantMessage = messages.last(where: { $0.role == "assistant" }) {
+                                    print("[DEBUG] Extracted assistant response from array: \(assistantMessage.content)")
                                     self.messages.append(Message(role: assistantMessage.role, text: assistantMessage.content))
                                     return
                                 }
                             } catch {
-                                print("[DEBUG] Failed to parse as [OpenAIMessage]: \(error)")
+                                print("[DEBUG] Failed to parse as OpenAI Messages Array: \(error)")
                                 // If array parsing fails, try single message
                                 do {
                                     let singleMessage = try JSONDecoder().decode(OpenAIMessage.self, from: data)
-                                    print("[DEBUG] Successfully parsed as single OpenAIMessage: \(singleMessage)")
+                                    print("[DEBUG] Successfully parsed as single OpenAI Message: \(singleMessage)")
                                     if singleMessage.role == "assistant" {
+                                        print("[DEBUG] Extracted assistant response from single message: \(singleMessage.content)")
                                         self.messages.append(Message(role: singleMessage.role, text: singleMessage.content))
                                         return
                                     }
                                 } catch {
-                                    print("[DEBUG] Failed to parse as single OpenAIMessage: \(error)")
+                                    print("[DEBUG] Failed to parse as single OpenAI Message: \(error)")
                                     // All JSON parsing attempts failed, try to extract assistant content using regex
                                     if let assistantContent = extractAssistantContent(from: cleanedText) {
                                         print("[DEBUG] Successfully extracted assistant content via regex: \(assistantContent)")
@@ -355,7 +548,7 @@ struct ChatView: View {
                                         return
                                     }
                                     // Last resort: use cleaned raw text
-                                    print("[DEBUG] Using cleaned raw text as fallback")
+                                    print("[DEBUG] Using cleaned raw text as fallback: \(cleanedText)")
                                     self.messages.append(Message(role: "assistant", text: cleanedText))
                                     return
                                 }
@@ -393,6 +586,14 @@ struct ChatView: View {
             }
         } catch {
             DispatchQueue.main.async {
+                // Log complete error information
+                print("\n" + String(repeating: "=", count: 50))
+                print("[GENERATION ERROR] START")
+                print("Error: \(error)")
+                print("Error description: \(error.localizedDescription)")
+                print("[GENERATION ERROR] END")
+                print(String(repeating: "=", count: 50) + "\n")
+                
                 self.appState.errorMessage = "Error: \(error.localizedDescription)"
             }
         }
@@ -402,6 +603,13 @@ struct ChatView: View {
     struct OpenAIMessage: Codable {
         let role: String
         let content: String
+    }
+    
+    // Define OpenAI request structure
+    struct OpenAIRequest: Codable {
+        let model: String
+        let messages: [OpenAIMessage]
+        let temperature: Double
     }
     
     // Define OpenAI standard response structure (choices array format)
@@ -470,36 +678,54 @@ struct ChatView: View {
             content: appState.systemPrompt
         ))
         
-        // Add only the last 10 conversation rounds
-        let recentMessages = Array(messages.suffix(20)) // 10 rounds = 20 messages (user + assistant)
-        
-        // Add user/assistant messages
-        for message in recentMessages {
+        // Add all conversation messages
+        for message in messages {
             messagesArray.append(OpenAIMessage(
                 role: message.role,
                 content: message.text
             ))
         }
         
+        // Create complete OpenAI request format
+        let openAIRequest = OpenAIRequest(
+            model: "gpt-4o",
+            messages: messagesArray,
+            temperature: 0.7
+        )
+        
         // Convert to JSON string using JSONEncoder
         do {
             let encoder = JSONEncoder()
             encoder.outputFormatting = .withoutEscapingSlashes
-            let jsonData = try encoder.encode(messagesArray)
+            let jsonData = try encoder.encode(openAIRequest)
             if let jsonString = String(data: jsonData, encoding: .utf8) {
-                // Log the full prompt being sent to LLM
-                print("[DEBUG] Prompt sent to LLM: \(jsonString)")
+                // Log the full OpenAI format input being sent to LLM
+                print("[DEBUG] OpenAI Format Input: \(jsonString)")
                 return jsonString
             }
         } catch {
             print("Error encoding JSON: \(error)")
         }
         
-        // Fallback to minimal JSON format if encoding fails
-        let escapedContent = appState.systemPrompt.replacingOccurrences(of: "\"", with: "\\\"")
-        let fallbackPrompt = "[{\"role\":\"system\",\"content\":\"\(escapedContent)\"}]"
-        print("[DEBUG] Using fallback prompt: \(fallbackPrompt)")
-        return fallbackPrompt
+        // Fallback to complete JSON format if encoding fails
+        var fallbackBuilder = "{\"model\": \"gpt-4o\", \"messages\": ["
+        
+        // Add system message to fallback
+        let escapedSystemContent = appState.systemPrompt.replacingOccurrences(of: "\"", with: "\\\"")
+        fallbackBuilder.append("{\"role\": \"system\", \"content\": \"\(escapedSystemContent)\"}")
+        
+        // Add conversation history to fallback
+        for (index, message) in messages.enumerated() {
+            fallbackBuilder.append(",")
+            let escapedContent = message.text.replacingOccurrences(of: "\"", with: "\\\"")
+            fallbackBuilder.append("{\"role\": \"\(message.role)\", \"content\": \"\(escapedContent)\"}")
+        }
+        
+        // Complete fallback JSON
+        fallbackBuilder.append("], \"temperature\": 0.7}")
+        
+        print("[DEBUG] OpenAI Format Input (Fallback): \(fallbackBuilder)")
+        return fallbackBuilder
     }
 }
 
@@ -567,53 +793,45 @@ struct SettingsView: View {
                         .disabled(appState.isModelLoaded)
                     }
                     
-                    // Multimodal (mmproj) model picker
-                    if appState.availableMmprojModels.isEmpty {
-                        Text("No mmproj models found for multimodal")
-                            .foregroundColor(.gray)
-                            .font(.caption)
-                    } else {
-                        Picker("Select MMProj Model", selection: $appState.mmprojModelPath) {
-                            ForEach(appState.availableMmprojModels, id: \.path) {
-                                Text($0.name)
-                                    .tag($0.path)
-                            }
+                    // Multimodal (mmproj) model picker - always show picker with "Empty" option
+                    Picker("Select MMProj Model", selection: $appState.mmprojModelPath) {
+                        ForEach(appState.availableMmprojModels, id: \.path) {
+                            Text($0.name)
+                                .tag($0.path)
                         }
-                        .pickerStyle(.menu)
-                        .disabled(appState.isModelLoaded)
                     }
+                    .pickerStyle(.menu)
+                    .disabled(appState.isModelLoaded)
                     
-                    // TTS (vocoder) model picker
-                    if appState.availableVocoderModels.isEmpty {
-                        Text("No vocoder models found for TTS")
-                            .foregroundColor(.gray)
-                            .font(.caption)
-                    } else {
-                        Picker("Select Vocoder Model", selection: $appState.vocoderModelPath) {
-                            ForEach(appState.availableVocoderModels, id: \.path) {
-                                Text($0.name)
-                                    .tag($0.path)
-                            }
+                    // TTS (vocoder) model picker - always show picker with "Empty" option
+                    Picker("Select Vocoder Model", selection: $appState.vocoderModelPath) {
+                        ForEach(appState.availableVocoderModels, id: \.path) {
+                            Text($0.name)
+                                .tag($0.path)
                         }
-                        .pickerStyle(.menu)
-                        .disabled(appState.isModelLoaded)
                     }
+                    .pickerStyle(.menu)
+                    .disabled(appState.isModelLoaded)
                     
-                    // LoRA model picker
-                    if appState.availableLoRAModels.isEmpty {
-                        Text("No LoRA models found")
-                            .foregroundColor(.gray)
-                            .font(.caption)
-                    } else {
-                        Picker("Select LoRA Model", selection: $appState.loraModelPath) {
-                            ForEach(appState.availableLoRAModels, id: \.path) {
-                                Text($0.name)
-                                    .tag($0.path)
-                            }
+                    // LoRA model picker - always show picker with "Empty" option
+                    Picker("Select LoRA Model", selection: $appState.loraModelPath) {
+                        ForEach(appState.availableLoRAModels, id: \.path) {
+                            Text($0.name)
+                                .tag($0.path)
                         }
-                        .pickerStyle(.menu)
-                        .disabled(appState.isModelLoaded)
                     }
+                    .pickerStyle(.menu)
+                    .disabled(appState.isModelLoaded)
+                    
+                    // Grammar picker - always show picker with "Empty" option
+                    Picker("Select Grammar", selection: $appState.selectedGrammar) {
+                        Text("Empty").tag(nil as String?)
+                        ForEach(appState.availableGrammars, id: \.self) {
+                            Text($0).tag($0 as String?)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .disabled(appState.isModelLoaded)
                     
                     HStack {
                         Text("GPU Layers")

@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.content.Context
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import com.llamamobile.LlamaMobile
@@ -11,24 +12,24 @@ import com.llamamobile.sdkexample.databinding.FragmentEmbeddingsBinding
 
 class EmbeddingsFragment : Fragment() {
 
-    private lateinit var binding: FragmentEmbeddingsBinding
-    private lateinit var appState: AppState
+    private var _binding: FragmentEmbeddingsBinding? = null
+    private val binding get() = _binding!!
+    private var appState: AppState? = null
     private var isProcessing = false
+
+    override fun onAttach(context: Context) {
+        super.onAttach(context)
+        // Access appState when the fragment is properly attached to the activity
+        appState = (context as? MainActivity)?.appState
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        binding = FragmentEmbeddingsBinding.inflate(inflater, container, false)
-        // Access appState safely during fragment creation
-        try {
-            appState = (activity as MainActivity).appState
-        } catch (e: Exception) {
-            // Log but don't crash - appState will be set later in onViewCreated if needed
-            e.printStackTrace()
-        }
-        return binding.root
+        _binding = FragmentEmbeddingsBinding.inflate(inflater, container, false)
+        return _binding!!.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -56,6 +57,11 @@ class EmbeddingsFragment : Fragment() {
         // Check model status when fragment resumes
         updateModelLoadedUI()
     }
+    
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
 
     private fun handleGenerateEmbeddings() {
         val text = binding.embedEditText.text.toString().trim()
@@ -63,13 +69,18 @@ class EmbeddingsFragment : Fragment() {
             return
         }
 
-        if (!appState.isModelLoaded) {
-            Toast.makeText(requireContext(), "Please load a model first", Toast.LENGTH_SHORT).show()
+        val currentAppState = appState ?: run {
+            activity?.let { Toast.makeText(it, "App state not initialized", Toast.LENGTH_SHORT).show()}
             return
         }
 
-        if (!appState.enableEmbedding) {
-            Toast.makeText(requireContext(), "Embedding is not enabled. Please enable it in Settings and reload the model.", Toast.LENGTH_SHORT).show()
+        if (!currentAppState.isModelLoaded) {
+            activity?.let { Toast.makeText(it, "Please load a model first", Toast.LENGTH_SHORT).show()}
+            return
+        }
+
+        if (!currentAppState.enableEmbedding) {
+            activity?.let { Toast.makeText(it, "Embedding is not enabled. Please enable it in Settings and reload the model.", Toast.LENGTH_SHORT).show()}
             return
         }
 
@@ -80,24 +91,33 @@ class EmbeddingsFragment : Fragment() {
         Thread {
             try {
                 // Call the new LlamaMobile generateEmbeddings method
-                val embeddingsArray = LlamaMobile.generateEmbeddings(appState.contextHandle, text)
+                val embeddingsArray = LlamaMobile.generateEmbeddings(currentAppState.contextHandle, text)
                 
-                requireActivity().runOnUiThread {
+                activity?.runOnUiThread {
                     isProcessing = false
                     updateProcessingUI()
                     
                     if (embeddingsArray != null) {
                         val embeddingsList = embeddingsArray.toList()
                         binding.embeddingsTextView.text = formatEmbeddings(embeddingsList)
+                        
+                        // Show embeddings result section
+                        binding.embeddingsSection.visibility = View.VISIBLE
                     } else {
-                        Toast.makeText(requireContext(), "Embeddings generation failed: null result", Toast.LENGTH_SHORT).show()
+                        activity?.let { Toast.makeText(it, "Embeddings generation failed: null result", Toast.LENGTH_SHORT).show()}
+                        
+                        // Hide embeddings result section on error
+                        binding.embeddingsSection.visibility = View.GONE
                     }
                 }
             } catch (e: Exception) {
-                requireActivity().runOnUiThread {
+                activity?.runOnUiThread {
                     isProcessing = false
                     updateProcessingUI()
-                    Toast.makeText(requireContext(), "Embeddings error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    activity?.let { Toast.makeText(it, "Embeddings error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()}
+                    
+                    // Hide embeddings result section on error
+                    binding.embeddingsSection.visibility = View.GONE
                 }
             }
         }.start()
@@ -118,15 +138,16 @@ class EmbeddingsFragment : Fragment() {
     }
 
     private fun updateModelLoadedUI() {
-        val modelLoaded = appState.isModelLoaded
-        binding.generateEmbeddingsButton.isEnabled = modelLoaded && !isProcessing && appState.enableEmbedding
+        val modelLoaded = appState?.isModelLoaded ?: false
+        val embeddingEnabled = appState?.enableEmbedding ?: false
+        binding.generateEmbeddingsButton.isEnabled = modelLoaded && !isProcessing && embeddingEnabled
 
         if (!modelLoaded) {
             binding.statusTextView.text = "Model not loaded"
             binding.statusTextView.setTextColor(android.graphics.Color.RED)
-        } else if (!appState.enableEmbedding) {
+        } else if (!embeddingEnabled) {
             binding.statusTextView.text = "Embedding disabled. Enable in Settings and reload model."
-            binding.statusTextView.setTextColor(android.graphics.Color.YELLOW)
+            binding.statusTextView.setTextColor(android.graphics.Color.RED)
         } else {
             binding.statusTextView.text = "Model loaded and embedding enabled"
             binding.statusTextView.setTextColor(android.graphics.Color.GREEN)
@@ -134,7 +155,7 @@ class EmbeddingsFragment : Fragment() {
     }
 
     private fun updateProcessingUI() {
-        binding.generateEmbeddingsButton.isEnabled = appState.isModelLoaded && !isProcessing && appState.enableEmbedding
+        binding.generateEmbeddingsButton.isEnabled = (appState?.isModelLoaded ?: false) && !isProcessing && (appState?.enableEmbedding ?: false)
         binding.progressBar.visibility = if (isProcessing) View.VISIBLE else View.GONE
     }
 }

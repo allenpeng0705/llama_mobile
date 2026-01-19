@@ -59,6 +59,12 @@ typedef struct llama_mobile_init_params_c {
 
 } llama_mobile_init_params_c_t;
 
+// Chat message structure for structured input
+typedef struct llama_mobile_chat_message_c {
+    const char* role;
+    const char* content;
+} llama_mobile_chat_message_c;
+
 typedef struct llama_mobile_completion_params_c {
     const char* prompt;
     int32_t n_predict; 
@@ -82,6 +88,11 @@ typedef struct llama_mobile_completion_params_c {
     int stop_sequence_count;
     const char* grammar; 
     bool (*token_callback)(const char* token_json);
+    
+    // New fields for chat support
+    const llama_mobile_chat_message_c* chat_messages;
+    int32_t chat_message_count;
+    bool use_json_response;
 
 } llama_mobile_completion_params_c_t;
 

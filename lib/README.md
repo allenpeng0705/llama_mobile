@@ -258,6 +258,184 @@ int main() {
 }
 ```
 
+## Building a Conversational AI Application
+
+Building a robust conversational application requires careful handling of chat templates, stop sequences, and conversation history. This section provides a comprehensive guide to creating high-quality chat experiences.
+
+### 1. Chat Templates
+
+Chat templates format conversation history into a prompt that the model understands. The library supports Jinja templates and provides built-in templates for various model types.
+
+```cpp
+// Using a custom chat template
+std::string custom_template = "{% for message in messages %}
+{% if message['role'] == 'system' %}
+System: {{ message['content'] }}
+{% elif message['role'] == 'user' %}
+User: {{ message['content'] }}
+{% elif message['role'] == 'assistant' %}
+Assistant: {{ message['content'] }}
+{% endif %}
+{% endfor %}
+Assistant: ";
+
+// Apply template to conversation history
+std::vector<Message> messages = {
+    {"system", "You are a helpful assistant."},
+    {"user", "Hello!"}
+};
+
+std::string prompt = apply_chat_template(messages, custom_template);
+```
+
+### 2. Stop Sequences
+
+Stop sequences are crucial for preventing the model from generating unwanted text, such as additional conversation turns. Use a comprehensive set of stop sequences for best results.
+
+```cpp
+// Example: Setting comprehensive stop sequences
+llama_mobile_completion_params_t params;
+
+// Define stop sequences
+const char* stop_sequences[] = {
+    "\n\n", "<|im_end|>", "<|endoftext|>",
+    "\nUser:", "User:", "\n\tUser:", "\tUser:",
+    "\nAssistant:", "Assistant:", "\n\tAssistant:", "\tAssistant:",
+    "\nHuman:", "Human:", "\nSystem:", "System:",
+    "\nBot:", "Bot:", "\nAI:", "AI:",
+    "\nuser:", "user:", "\n\tuser:", "\tuser:",
+    "\nassistant:", "assistant:", "\n\tassistant:", "\tassistant:"
+};
+
+params.stop_sequences = stop_sequences;
+params.stop_sequence_count = sizeof(stop_sequences) / sizeof(stop_sequences[0]);
+```
+
+### 3. Conversation History Management
+
+Maintain a structured conversation history to enable natural multi-turn dialogues.
+
+```cpp
+// Define a message structure
+struct ChatMessage {
+    std::string role;
+    std::string content;
+};
+
+// Maintain conversation history
+std::vector<ChatMessage> chat_history;
+
+// Add initial system message
+chat_history.push_back({"system", "You are a helpful assistant."});
+
+// Process user input
+std::string user_input = "Hello!";
+chat_history.push_back({"user", user_input});
+
+// Build prompt from history
+std::stringstream prompt_builder;
+for (const auto& msg : chat_history) {
+    prompt_builder << msg.role << ": " << msg.content << "\n";
+}
+prompt_builder << "Assistant: ";
+std::string prompt = prompt_builder.str();
+
+// Generate response
+// ... (generation code)
+
+// Add assistant response to history
+if (status == 0) {
+    std::string assistant_response = extract_response_text(result);
+    chat_history.push_back({"assistant", assistant_response});
+    // Remove stop sequences from response for cleaner history
+}
+```
+
+### 4. JSON Input/Output for OpenAI Compatibility
+
+Support OpenAI-compatible JSON format for easier integration:
+
+```cpp
+// Parse JSON input (OpenAI format)
+json input_json = json::parse(user_input);
+std::string model = input_json["model"];
+std::vector<json> messages = input_json["messages"];
+
+// Convert to internal chat history
+std::vector<ChatMessage> chat_history;
+for (const auto& msg : messages) {
+    ChatMessage chat_msg;
+    chat_msg.role = msg["role"];
+    chat_msg.content = msg["content"];
+    chat_history.push_back(chat_msg);
+}
+
+// Generate response and format as JSON
+json response_json;
+response_json["id"] = "cmpl-" + generate_id();
+response_json["object"] = "text_completion";
+response_json["created"] = time(nullptr);
+response_json["model"] = model;
+
+json choices = json::array();
+json choice;
+choice["text"] = assistant_response;
+choice["index"] = 0;
+choice["logprobs"] = nullptr;
+choice["finish_reason"] = "stop";
+choices.push_back(choice);
+
+response_json["choices"] = choices;
+
+json usage;
+usage["prompt_tokens"] = prompt_tokens;
+usage["completion_tokens"] = completion_tokens;
+usage["total_tokens"] = prompt_tokens + completion_tokens;
+
+response_json["usage"] = usage;
+
+// Output JSON response
+std::cout << response_json.dump() << std::endl;
+```
+
+### 5. Handling Malformed JSON Responses
+
+The model might generate malformed JSON. Implement robust parsing with fallbacks:
+
+```cpp
+// Parse LLM response with error handling
+std::string response_text = "";
+try {
+    // Clean malformed JSON first
+    std::string cleaned_response = clean_malformed_json(result.text);
+    json response_json = json::parse(cleaned_response);
+    
+    if (response_json.contains("choices") && !response_json["choices"].empty()) {
+        response_text = response_json["choices"][0]["text"];
+    }
+} catch (const json::parse_error& e) {
+    // Fallback: extract text using string manipulation
+    std::string raw_response(result.text);
+    size_t text_start = raw_response.find("\"text\":\"");
+    if (text_start != std::string::npos) {
+        text_start += 8;
+        size_t text_end = raw_response.find("\"", text_start);
+        if (text_end != std::string::npos) {
+            response_text = raw_response.substr(text_start, text_end - text_start);
+        }
+    }
+}
+```
+
+### 6. Best Practices
+
+- **Use a system prompt**: Guide the model's behavior with a clear system message
+- **Maintain conversation context**: Keep the full history for natural dialogues
+- **Set appropriate stop sequences**: Prevent unwanted generation of conversation turns
+- **Clean responses**: Remove stop sequences and formatting artifacts from outputs
+- **Handle edge cases**: Implement fallbacks for malformed inputs and outputs
+- **Optimize context window**: Manage long conversations to fit within the model's context limit
+
 ## Key Features
 
 ### Model Loading

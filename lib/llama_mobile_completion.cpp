@@ -316,6 +316,10 @@ completion_token_output llama_mobile_context::doCompletion()
     }
     generated_text += token_text;
 
+    // Check for stop sequences after adding each token
+    size_t last_token_size = token_text.size();
+    findStoppingStrings(generated_text, last_token_size, STOP_FULL);
+
     if (isVocoderEnabled()) {
         tts_type type = getTTSType();
         if ((type == TTS_OUTETTS_V0_2 || type == TTS_OUTETTS_V0_3) && 

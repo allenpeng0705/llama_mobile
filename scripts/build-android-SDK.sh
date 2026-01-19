@@ -1342,20 +1342,22 @@ for file in "${java_required_files[@]}"; do
     fi
 done
 
-# Check for libraries in both SDKs
+# Check for libc++_shared.so in both SDKs (libllama_mobile.so is imported via CMake, not copied to jniLibs)
 for ABI in "arm64-v8a" "x86_64"; do
-    if [ -f "$KOTLIN_SDK_DIR/src/main/jniLibs/$ABI/libllama_mobile.so" ]; then
-        log_message "SUCCESS" "Kotlin SDK: Found $ABI library"
+    # Check libc++_shared.so for Kotlin SDK
+    if [ -f "$KOTLIN_SDK_DIR/src/main/jniLibs/$ABI/libc++_shared.so" ]; then
+        log_message "SUCCESS" "Kotlin SDK: Found $ABI libc++_shared.so"
     else
-        log_message "ERROR" "Kotlin SDK: Missing $ABI library"
-        all_valid=false
+        log_message "WARN" "Kotlin SDK: Missing $ABI libc++_shared.so"
+        # This is a warning, not an error - app can use its own if needed
     fi
     
-    if [ -f "$JAVA_SDK_DIR/src/main/jniLibs/$ABI/libllama_mobile.so" ]; then
-        log_message "SUCCESS" "Java SDK: Found $ABI library"
+    # Check libc++_shared.so for Java SDK
+    if [ -f "$JAVA_SDK_DIR/src/main/jniLibs/$ABI/libc++_shared.so" ]; then
+        log_message "SUCCESS" "Java SDK: Found $ABI libc++_shared.so"
     else
-        log_message "ERROR" "Java SDK: Missing $ABI library"
-        all_valid=false
+        log_message "WARN" "Java SDK: Missing $ABI libc++_shared.so"
+        # This is a warning, not an error - app can use its own if needed
     fi
 done
 

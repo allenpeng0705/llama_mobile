@@ -19,7 +19,9 @@
             android:layout_height="match_parent"
             android:gravity="center"
             android:orientation="vertical"
-            android:padding="32dp">
+            android:padding="32dp"
+            android:background="?android:attr/colorBackground"
+            android:visibility="visible">
 
             <ImageView
                 android:layout_width="100dp"

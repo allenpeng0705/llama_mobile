@@ -8,6 +8,17 @@ using json = nlohmann::ordered_json;
 
 namespace llama_mobile {
 
+llama_mobile_context::llama_mobile_context() {
+    // Initialize TTS vocoder members
+    vocoder_wrapper = nullptr;
+    has_vocoder = false;
+    audio_tokens.clear();
+    
+    // Initialize conversation management state
+    conversation_active = false;
+    last_chat_template = "";
+}
+
 llama_mobile_context::~llama_mobile_context() {
     if (ctx_sampling != nullptr) {
         common_sampler_free(ctx_sampling);

@@ -135,7 +135,7 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
 }
 
 // Extract CompletionParams from Java object
-static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, llama_mobile_completion_params_c_t& params, const char*& prompt, const char*& grammar) {
+static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, llama_mobile_completion_params_c_t& params, const char*& prompt, const char*& grammar, std::vector<std::string>& mediaPaths) {
     jclass paramsClass = env->GetObjectClass(completionParamsObj);
     if (paramsClass == nullptr) {
         return false;
@@ -219,7 +219,7 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     }
     
     // Extract media paths
-    std::vector<std::string> mediaPaths;
+    mediaPaths.clear(); // Clear the passed vector
     jfieldID mediaPathsField = env->GetFieldID(paramsClass, "mediaPaths", "Ljava/util/List;");
     if (mediaPathsField != nullptr) {
         jobject mediaPathsObj = env->GetObjectField(completionParamsObj, mediaPathsField);
@@ -248,6 +248,60 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
         }
     }
     
+    // Extract chat messages
+    std::vector<llama_mobile_chat_message_c> chatMessages;
+    jfieldID chatMessagesField = env->GetFieldID(paramsClass, "chatMessages", "Ljava/util/List;");
+    if (chatMessagesField != nullptr) {
+        jobject chatMessagesObj = env->GetObjectField(completionParamsObj, chatMessagesField);
+        if (chatMessagesObj != nullptr) {
+            jclass listClass = env->GetObjectClass(chatMessagesObj);
+            jmethodID sizeMethod = env->GetMethodID(listClass, "size", "()I");
+            jmethodID getMethod = env->GetMethodID(listClass, "get", "(I)Ljava/lang/Object;");
+            
+            if (sizeMethod != nullptr && getMethod != nullptr) {
+                jint size = env->CallIntMethod(chatMessagesObj, sizeMethod);
+                for (jint i = 0; i < size; i++) {
+                    jobject chatMessageObj = env->CallObjectMethod(chatMessagesObj, getMethod, i);
+                    if (chatMessageObj != nullptr) {
+                        jclass chatMessageClass = env->GetObjectClass(chatMessageObj);
+                        jfieldID roleField = env->GetFieldID(chatMessageClass, "role", "Ljava/lang/String;");
+                        jfieldID contentField = env->GetFieldID(chatMessageClass, "content", "Ljava/lang/String;");
+                        
+                        if (roleField != nullptr && contentField != nullptr) {
+                            jstring roleStr = (jstring)env->GetObjectField(chatMessageObj, roleField);
+                            jstring contentStr = (jstring)env->GetObjectField(chatMessageObj, contentField);
+                            
+                            const char* role = getStringUTFChars(env, roleStr);
+                            const char* content = getStringUTFChars(env, contentStr);
+                            
+                            if (role != nullptr && content != nullptr) {
+                                chatMessages.push_back({strdup(role), strdup(content)});
+                            }
+                            
+                            releaseStringUTFChars(env, roleStr, role);
+                            releaseStringUTFChars(env, contentStr, content);
+                            env->DeleteLocalRef(roleStr);
+                            env->DeleteLocalRef(contentStr);
+                        }
+                        
+                        env->DeleteLocalRef(chatMessageClass);
+                        env->DeleteLocalRef(chatMessageObj);
+                    }
+                }
+            }
+            
+            env->DeleteLocalRef(listClass);
+            env->DeleteLocalRef(chatMessagesObj);
+        }
+    }
+    
+    // Extract useJsonResponse flag
+    bool useJsonResponse = false;
+    jfieldID useJsonResponseField = env->GetFieldID(paramsClass, "useJsonResponse", "Z");
+    if (useJsonResponseField != nullptr) {
+        useJsonResponse = env->GetBooleanField(completionParamsObj, useJsonResponseField);
+    }
+    
     // Convert strings
     prompt = getStringUTFChars(env, promptStr);
     grammar = (grammarField != nullptr && grammarStr != nullptr) ? getStringUTFChars(env, grammarStr) : nullptr;
@@ -273,6 +327,18 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     params.ignore_eos = ignoreEos;
     params.n_probs = nProbs;
     params.grammar = grammar;
+    
+    // Set chat messages
+    if (!chatMessages.empty()) {
+        params.chat_messages = new llama_mobile_chat_message_c[chatMessages.size()];
+        for (size_t i = 0; i < chatMessages.size(); i++) {
+            params.chat_messages[i] = chatMessages[i];
+        }
+        params.chat_message_count = static_cast<int32_t>(chatMessages.size());
+    }
+    
+    // Set JSON response flag
+    params.use_json_response = useJsonResponse;
     
     // Set stop sequences
     if (!stopSequences.empty()) {
@@ -432,13 +498,28 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_generateCompletion(JN
     llama_mobile_completion_params_c_t params;
     const char* prompt = nullptr;
     const char* grammar = nullptr;
+    std::vector<std::string> mediaPaths;
     
-    if (!extractCompletionParams(env, completionParamsObj, params, prompt, grammar)) {
+    if (!extractCompletionParams(env, completionParamsObj, params, prompt, grammar, mediaPaths)) {
         return nullptr;
     }
     
     llama_mobile_completion_result_c_t result;
-    int ret = llama_mobile_completion_c(context, &params, &result);
+    int ret;
+    
+    // Use multimodal completion if media paths are present
+    if (!mediaPaths.empty()) {
+        const char** mediaPathsArray = new const char*[mediaPaths.size()];
+        for (size_t i = 0; i < mediaPaths.size(); i++) {
+            mediaPathsArray[i] = mediaPaths[i].c_str();
+        }
+        
+        ret = llama_mobile_multimodal_completion_c(context, &params, mediaPathsArray, static_cast<int>(mediaPaths.size()), &result);
+        
+        delete[] mediaPathsArray;
+    } else {
+        ret = llama_mobile_completion_c(context, &params, &result);
+    }
     
     // Release strings
     jclass paramsClass = env->GetObjectClass(completionParamsObj);
@@ -455,6 +536,15 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_generateCompletion(JN
             free((void*)params.stop_sequences[i]);
         }
         delete[] params.stop_sequences;
+    }
+    
+    // Free chat messages
+    if (params.chat_messages != nullptr && params.chat_message_count > 0) {
+        for (int i = 0; i < params.chat_message_count; i++) {
+            free((void*)params.chat_messages[i].role);
+            free((void*)params.chat_messages[i].content);
+        }
+        delete[] params.chat_messages;
     }
     
 
@@ -812,6 +902,78 @@ JNIEXPORT jfloatArray JNICALL Java_com_llamamobile_LlamaMobile_decodeAudioTokens
     return result;
 }
 
+// Sets guide tokens for audio generation
+JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_setGuideTokens(JNIEnv* env, jclass clazz, jlong contextHandle, jintArray tokens) {
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
+    
+    if (context == nullptr || tokens == nullptr) {
+        return;
+    }
+    
+    // Get the tokens array
+    jsize tokenCount = env->GetArrayLength(tokens);
+    jint* tokenValues = env->GetIntArrayElements(tokens, nullptr);
+    
+    if (tokenValues == nullptr) {
+        return;
+    }
+    
+    // Create a vector of tokens
+    std::vector<int32_t> tokenVector;
+    tokenVector.reserve(tokenCount);
+    
+    for (jsize i = 0; i < tokenCount; i++) {
+        tokenVector.push_back(static_cast<int32_t>(tokenValues[i]));
+    }
+    
+    // Call the FFI set guide tokens function
+    llama_mobile_set_guide_tokens_c(context, tokenVector.data(), tokenVector.size());
+    
+    // Release the tokens array
+    env->ReleaseIntArrayElements(tokens, tokenValues, JNI_ABORT);
+}
+
+// Saves audio samples to WAV file
+JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_saveAudioToWav(JNIEnv* env, jclass clazz, jlong contextHandle, jstring filePath, jfloatArray audioData, jint sampleRate) {
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
+    
+    if (context == nullptr || filePath == nullptr || audioData == nullptr) {
+        return JNI_FALSE;
+    }
+    
+    // Get the file path
+    const char* cFilePath = getStringUTFChars(env, filePath, nullptr);
+    if (cFilePath == nullptr) {
+        return JNI_FALSE;
+    }
+    
+    // Get the audio data
+    jsize dataCount = env->GetArrayLength(audioData);
+    jfloat* dataValues = env->GetFloatArrayElements(audioData, nullptr);
+    
+    if (dataValues == nullptr) {
+        releaseStringUTFChars(env, filePath, cFilePath);
+        return JNI_FALSE;
+    }
+    
+    // Create a vector of audio data
+    std::vector<float> audioVector;
+    audioVector.reserve(dataCount);
+    
+    for (jsize i = 0; i < dataCount; i++) {
+        audioVector.push_back(static_cast<float>(dataValues[i]));
+    }
+    
+    // Call the FFI save audio to WAV function
+    bool result = llama_mobile_save_audio_to_wav_c(context, cFilePath, audioVector.data(), audioVector.size(), sampleRate);
+    
+    // Release resources
+    env->ReleaseFloatArrayElements(audioData, dataValues, JNI_ABORT);
+    releaseStringUTFChars(env, filePath, cFilePath);
+    
+    return result ? JNI_TRUE : JNI_FALSE;
+}
+
 // Releases vocoder resources
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_releaseVocoder(JNIEnv* env, jclass clazz, jlong contextHandle) {
     llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
@@ -820,15 +982,91 @@ JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_releaseVocoder(JNIEnv* e
 
 // Applies LoRA adapters
 JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_applyLoraAdapters(JNIEnv* env, jclass clazz, jlong contextHandle, jobjectArray adaptersArray) {
-    // This would require more complex code to extract LoRA adapter information
-    // For now, return false as not implemented
-    return JNI_FALSE;
+    if (contextHandle == 0 || adaptersArray == nullptr) {
+        return JNI_FALSE;
+    }
+
+    // Get the context
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
+    if (!context) {
+        return JNI_FALSE;
+    }
+
+    // Get the number of adapters
+    jsize adapterCount = env->GetArrayLength(adaptersArray);
+    if (adapterCount == 0) {
+        return JNI_FALSE;
+    }
+
+    // Extract adapter information
+    llama_mobile_lora_adapter_t* adapters = new llama_mobile_lora_adapter_t[adapterCount];
+    if (!adapters) {
+        return JNI_FALSE;
+    }
+
+    // Get LoraAdapter class
+    jclass loraAdapterClass = env->FindClass("com/llamamobile/LlamaMobile$LoraAdapter");
+    if (!loraAdapterClass) {
+        delete[] adapters;
+        return JNI_FALSE;
+    }
+
+    // Get field IDs
+    jfieldID pathField = env->GetFieldID(loraAdapterClass, "path", "Ljava/lang/String;");
+    jfieldID scaleField = env->GetFieldID(loraAdapterClass, "scale", "F");
+    if (!pathField || !scaleField) {
+        env->DeleteLocalRef(loraAdapterClass);
+        delete[] adapters;
+        return JNI_FALSE;
+    }
+
+    // Extract each adapter
+    std::vector<jstring> pathStrings;
+    for (int i = 0; i < adapterCount; i++) {
+        // Get the LoraAdapter object
+        jobject adapterObj = env->GetObjectArrayElement(adaptersArray, i);
+        if (!adapterObj) {
+            continue;
+        }
+
+        // Get path
+        jstring pathStr = static_cast<jstring>(env->GetObjectField(adapterObj, pathField));
+        if (pathStr) {
+            pathStrings.push_back(pathStr);
+            const char* path = env->GetStringUTFChars(pathStr, nullptr);
+            if (path) {
+                adapters[i].path = path;
+            }
+        }
+
+        // Get scale
+        adapters[i].scale = env->GetFloatField(adapterObj, scaleField);
+
+        env->DeleteLocalRef(adapterObj);
+    }
+
+    // Call the FFI function
+    int result = llama_mobile_apply_lora_adapters(context, adapters, adapterCount);
+
+    // Clean up
+    for (int i = 0; i < pathStrings.size(); i++) {
+        if (adapters[i].path) {
+            env->ReleaseStringUTFChars(pathStrings[i], adapters[i].path);
+        }
+        env->DeleteLocalRef(pathStrings[i]);
+    }
+    delete[] adapters;
+    env->DeleteLocalRef(loraAdapterClass);
+
+    return (result == 0) ? JNI_TRUE : JNI_FALSE;
 }
 
 // Removes all LoRA adapters
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_removeLoraAdapters(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
-    // Not implemented in FFI yet
+    if (contextHandle != 0) {
+        llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
+        llama_mobile_remove_lora_adapters(context);
+    }
 }
 
 // Gets loaded LoRA adapters
@@ -957,9 +1195,89 @@ JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_releaseContext(JNIEnv* e
 
 // Gets grammar content from assets
 JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_grammarContent(JNIEnv* env, jclass clazz, jobject context, jint grammarName) {
-    // Implementation would require reading from Android assets
-    // For now, return null as not implemented
-    return nullptr;
+    // Map GrammarName enum values to file names
+    const char* grammar_files[] = {
+        "arithmetic.gbnf",  // ARITHMETIC = 0
+        "c.gbnf",           // C = 1
+        "chess.gbnf",       // CHESS = 2
+        "english.gbnf",     // ENGLISH = 3
+        "japanese.gbnf",    // JAPANESE = 4
+        "json.gbnf",        // JSON = 5
+        "json_arr.gbnf",    // JSON_ARR = 6
+        "list.gbnf"         // LIST = 7
+    };
+
+    // Check if grammarName is within valid range
+    if (grammarName < 0 || grammarName >= sizeof(grammar_files) / sizeof(grammar_files[0])) {
+        return nullptr;
+    }
+
+    // Get AssetManager from context
+    jclass contextClass = env->GetObjectClass(context);
+    jmethodID getAssetsMethod = env->GetMethodID(contextClass, "getAssets", "()Landroid/content/res/AssetManager;");
+    jobject assetManagerObj = env->CallObjectMethod(context, getAssetsMethod);
+
+    if (assetManagerObj == nullptr) {
+        return nullptr;
+    }
+
+    // Get AssetManager class and open method
+    jclass assetManagerClass = env->GetObjectClass(assetManagerObj);
+    jmethodID openMethod = env->GetMethodID(assetManagerClass, "open", "(Ljava/lang/String;)Ljava/io/InputStream;");
+
+    // Construct grammar file path
+    const char* grammarFile = grammar_files[grammarName];
+    jstring grammarFilePath = env->NewStringUTF(grammarFile);
+    jobject inputStreamObj = env->CallObjectMethod(assetManagerObj, openMethod, grammarFilePath);
+
+    if (inputStreamObj == nullptr) {
+        env->DeleteLocalRef(grammarFilePath);
+        env->DeleteLocalRef(assetManagerObj);
+        env->DeleteLocalRef(assetManagerClass);
+        env->DeleteLocalRef(contextClass);
+        return nullptr;
+    }
+
+    // Read the input stream
+    jclass inputStreamClass = env->GetObjectClass(inputStreamObj);
+    jmethodID availableMethod = env->GetMethodID(inputStreamClass, "available", "()I");
+    jmethodID readMethod = env->GetMethodID(inputStreamClass, "read", "([B)I");
+    jmethodID closeMethod = env->GetMethodID(inputStreamClass, "close", "()V");
+
+    // Get available bytes
+    jint available = env->CallIntMethod(inputStreamObj, availableMethod);
+    if (available <= 0) {
+        env->CallVoidMethod(inputStreamObj, closeMethod);
+        env->DeleteLocalRef(grammarFilePath);
+        env->DeleteLocalRef(assetManagerObj);
+        env->DeleteLocalRef(assetManagerClass);
+        env->DeleteLocalRef(inputStreamObj);
+        env->DeleteLocalRef(inputStreamClass);
+        env->DeleteLocalRef(contextClass);
+        return nullptr;
+    }
+
+    // Create byte array and read data
+    jbyteArray buffer = env->NewByteArray(available);
+    env->CallIntMethod(inputStreamObj, readMethod, buffer);
+
+    // Close the input stream
+    env->CallVoidMethod(inputStreamObj, closeMethod);
+
+    // Convert byte array to string
+    jstring grammarContent = env->NewStringUTF((const char*)env->GetByteArrayElements(buffer, nullptr));
+
+    // Clean up
+    env->ReleaseByteArrayElements(buffer, env->GetByteArrayElements(buffer, nullptr), JNI_ABORT);
+    env->DeleteLocalRef(buffer);
+    env->DeleteLocalRef(grammarFilePath);
+    env->DeleteLocalRef(assetManagerObj);
+    env->DeleteLocalRef(assetManagerClass);
+    env->DeleteLocalRef(inputStreamObj);
+    env->DeleteLocalRef(inputStreamClass);
+    env->DeleteLocalRef(contextClass);
+
+    return grammarContent;
 }
 
 // Downloads a model

@@ -124,6 +124,7 @@ struct llama_mobile_context {
     bool conversation_active = false;
     std::string last_chat_template = "";
 
+    llama_mobile_context();
     ~llama_mobile_context();
 
     void rewind();

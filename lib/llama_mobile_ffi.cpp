@@ -13,6 +13,9 @@
 #include <sstream>
 #include <iostream>
 #include <climits>
+#include <random>
+#include <iomanip>
+#include <ctime>
 
 static std::vector<std::string> c_str_array_to_vector(const char** arr, int count) {
     std::vector<std::string> vec;
@@ -185,6 +188,20 @@ int llama_mobile_completion_c(
         if (params->grammar) {
              context->params.sampling.grammar = params->grammar;
         }
+        
+        // Handle chat messages if provided
+        context->params.chat_messages.clear();
+        if (params->chat_messages && params->chat_message_count > 0) {
+            for (int i = 0; i < params->chat_message_count; ++i) {
+                const auto& msg = params->chat_messages[i];
+                if (msg.role && msg.content) {
+                    context->params.chat_messages.push_back({msg.role, msg.content});
+                }
+            }
+        }
+        
+        // Set JSON response flag
+        context->params.use_json_response = params->use_json_response;
 
         if (!context->initSampling()) {
             return -2;
@@ -210,7 +227,68 @@ int llama_mobile_completion_c(
             }
         }
 
-        result->text = safe_strdup(context->generated_text);
+        // Set results with optional JSON wrapping
+        std::string final_text = context->generated_text;
+        if (context->params.use_json_response) {
+            // Create OpenAI-like JSON response
+            std::stringstream json_stream;
+            json_stream << "{";
+            json_stream << R"("id":"cmpl-")";
+            // Add a simple random ID (in production, use a proper UUID)
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<> dis(0, 999999);
+            json_stream << std::setfill('0') << std::setw(6) << dis(gen);
+            json_stream << R"(","object":"text_completion","created":)";
+            // Add current timestamp
+            json_stream << static_cast<long long>(std::time(nullptr));
+            json_stream << R"(,"model":"",)";
+            // Add model name if available (simplified for now)
+            if (context->model) {
+                char model_desc[128] = {0};
+                llama_model_desc(context->model, model_desc, sizeof(model_desc));
+                json_stream << R"("model":")" << model_desc << R"(",)";
+            }
+            // Add choices array
+            json_stream << R"("choices":[{"text":")";
+            // Escape JSON special characters in the generated text
+            for (char c : final_text) {
+                if (c == '"') {
+                    json_stream << '\\' << '"';
+                } else if (c == '\\') {
+                    json_stream << '\\' << '\\';
+                } else if (c == '\n') {
+                    json_stream << '\\' << 'n';
+                } else if (c == '\r') {
+                    json_stream << '\\' << 'r';
+                } else if (c == '\t') {
+                    json_stream << '\\' << 't';
+                } else {
+                    json_stream << c;
+                }
+            }
+            json_stream << R"(","index":0,"logprobs":null,"finish_reason":)";
+            // Add finish reason
+            if (context->stopped_eos) {
+                json_stream << R"("stop")";
+            } else if (context->stopped_word) {
+                json_stream << R"("stop")";
+            } else if (context->stopped_limit) {
+                json_stream << R"("length")";
+            } else {
+                json_stream << R"(null)";
+            }
+            json_stream << R"(}]}),"usage":{"prompt_tokens":)";
+            json_stream << context->num_prompt_tokens;
+            json_stream << R"(,"completion_tokens":)";
+            json_stream << context->num_tokens_predicted;
+            json_stream << R"(,"total_tokens":)";
+            json_stream << (context->num_prompt_tokens + context->num_tokens_predicted);
+            json_stream << R"(}})";
+            final_text = json_stream.str();
+        }
+        
+        result->text = safe_strdup(final_text.c_str());
         result->tokens_predicted = context->num_tokens_predicted;
         result->tokens_evaluated = context->num_prompt_tokens;
         result->truncated = context->truncated;
@@ -277,6 +355,20 @@ int llama_mobile_multimodal_completion_c(
         if (params->grammar) {
             context->params.sampling.grammar = params->grammar;
         }
+        
+        // Handle chat messages if provided
+        context->params.chat_messages.clear();
+        if (params->chat_messages && params->chat_message_count > 0) {
+            for (int i = 0; i < params->chat_message_count; ++i) {
+                const auto& msg = params->chat_messages[i];
+                if (msg.role && msg.content) {
+                    context->params.chat_messages.push_back({msg.role, msg.content});
+                }
+            }
+        }
+        
+        // Set JSON response flag
+        context->params.use_json_response = params->use_json_response;
 
         // Initialize sampling
         if (!context->initSampling()) {
@@ -318,8 +410,68 @@ int llama_mobile_multimodal_completion_c(
             }
         }
 
-        // Set results
-        result->text = safe_strdup(context->generated_text);
+        // Set results with optional JSON wrapping
+        std::string final_text = context->generated_text;
+        if (context->params.use_json_response) {
+            // Create OpenAI-like JSON response
+            std::stringstream json_stream;
+            json_stream << "{";
+            json_stream << R"("id":"cmpl-")";
+            // Add a simple random ID (in production, use a proper UUID)
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<> dis(0, 999999);
+            json_stream << std::setfill('0') << std::setw(6) << dis(gen);
+            json_stream << R"(","object":"text_completion","created":)";
+            // Add current timestamp
+            json_stream << static_cast<long long>(std::time(nullptr));
+            json_stream << R"(,"model":"",)";
+            // Add model name if available (simplified for now)
+            if (context->model) {
+                char model_desc[128] = {0};
+                llama_model_desc(context->model, model_desc, sizeof(model_desc));
+                json_stream << R"("model":")" << model_desc << R"(",)";
+            }
+            // Add choices array
+            json_stream << R"("choices":[{"text":")";
+            // Escape JSON special characters in the generated text
+            for (char c : final_text) {
+                if (c == '"') {
+                    json_stream << '\\' << '"';
+                } else if (c == '\\') {
+                    json_stream << '\\' << '\\';
+                } else if (c == '\n') {
+                    json_stream << '\\' << 'n';
+                } else if (c == '\r') {
+                    json_stream << '\\' << 'r';
+                } else if (c == '\t') {
+                    json_stream << '\\' << 't';
+                } else {
+                    json_stream << c;
+                }
+            }
+            json_stream << R"(","index":0,"logprobs":null,"finish_reason":)";
+            // Add finish reason
+            if (context->stopped_eos) {
+                json_stream << R"("stop")";
+            } else if (context->stopped_word) {
+                json_stream << R"("stop")";
+            } else if (context->stopped_limit) {
+                json_stream << R"("length")";
+            } else {
+                json_stream << R"(null)";
+            }
+            json_stream << R"(}]}),"usage":{"prompt_tokens":)";
+            json_stream << context->num_prompt_tokens;
+            json_stream << R"(,"completion_tokens":)";
+            json_stream << context->num_tokens_predicted;
+            json_stream << R"(,"total_tokens":)";
+            json_stream << (context->num_prompt_tokens + context->num_tokens_predicted);
+            json_stream << R"(}})";
+            final_text = json_stream.str();
+        }
+        
+        result->text = safe_strdup(final_text.c_str());
         result->tokens_predicted = context->num_tokens_predicted;
         result->tokens_evaluated = context->num_prompt_tokens;
         result->truncated = context->truncated;

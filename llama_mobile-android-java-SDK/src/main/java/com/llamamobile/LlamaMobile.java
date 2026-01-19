@@ -69,6 +69,27 @@ public class LlamaMobile {
     }
 
     /**
+     * Chat message structure for structured input
+     */
+    public static class ChatMessage {
+        private final String role;
+        private final String content;
+
+        public ChatMessage(String role, String content) {
+            this.role = role;
+            this.content = content;
+        }
+
+        public String getRole() {
+            return role;
+        }
+
+        public String getContent() {
+            return content;
+        }
+    }
+
+    /**
      * Token callback interface for streaming generation
      */
     public interface TokenCallback {
@@ -261,20 +282,26 @@ public class LlamaMobile {
         private final List<String> stopSequences;
         private final List<String> mediaPaths;
         private final TokenCallback tokenCallback;
+        private final List<ChatMessage> chatMessages;
+        private final boolean useJsonResponse;
 
         public CompletionParams(String prompt) {
-            this(prompt, 0.8f, 100, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null);
+            this(prompt, 0.8f, 100, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, false);
         }
 
         public CompletionParams(String prompt, float temperature) {
-            this(prompt, temperature, 100, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null);
+            this(prompt, temperature, 100, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, false);
         }
 
         public CompletionParams(String prompt, float temperature, int maxTokens) {
-            this(prompt, temperature, maxTokens, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null);
+            this(prompt, temperature, maxTokens, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, false);
         }
 
         public CompletionParams(String prompt, float temperature, int maxTokens, int nThreads, int seed, int topK, double topP, double minP, double typicalP, int penaltyLastN, double penaltyRepeat, double penaltyFreq, double penaltyPresent, int mirostat, double mirostatTau, double mirostatEta, boolean ignoreEos, int nProbs, String grammar, List<String> stopSequences, List<String> mediaPaths, TokenCallback tokenCallback) {
+            this(prompt, temperature, maxTokens, nThreads, seed, topK, topP, minP, typicalP, penaltyLastN, penaltyRepeat, penaltyFreq, penaltyPresent, mirostat, mirostatTau, mirostatEta, ignoreEos, nProbs, grammar, stopSequences, mediaPaths, tokenCallback, null, false);
+        }
+
+        public CompletionParams(String prompt, float temperature, int maxTokens, int nThreads, int seed, int topK, double topP, double minP, double typicalP, int penaltyLastN, double penaltyRepeat, double penaltyFreq, double penaltyPresent, int mirostat, double mirostatTau, double mirostatEta, boolean ignoreEos, int nProbs, String grammar, List<String> stopSequences, List<String> mediaPaths, TokenCallback tokenCallback, List<ChatMessage> chatMessages, boolean useJsonResponse) {
             this.prompt = prompt;
             this.temperature = temperature;
             this.maxTokens = maxTokens;
@@ -297,6 +324,8 @@ public class LlamaMobile {
             this.stopSequences = stopSequences != null ? stopSequences : new ArrayList<>();
             this.mediaPaths = mediaPaths != null ? mediaPaths : new ArrayList<>();
             this.tokenCallback = tokenCallback;
+            this.chatMessages = chatMessages != null ? chatMessages : new ArrayList<>();
+            this.useJsonResponse = useJsonResponse;
         }
 
         public String getPrompt() { return prompt; }
@@ -321,6 +350,38 @@ public class LlamaMobile {
         public List<String> getStopSequences() { return stopSequences; }
         public List<String> getMediaPaths() { return mediaPaths; }
         public TokenCallback getTokenCallback() { return tokenCallback; }
+        public List<ChatMessage> getChatMessages() { return chatMessages; }
+        public boolean isUseJsonResponse() { return useJsonResponse; }
+    }
+    
+    /**
+     * Convenience method to get JSON grammar content
+     * 
+     * @param context Application context to access assets
+     * @return JSON grammar content as string
+     */
+    public static String getJsonGrammar(android.content.Context context) {
+        return grammarContent(context, GrammarName.JSON);
+    }
+    
+    /**
+     * Convenience method to get arithmetic grammar content
+     * 
+     * @param context Application context to access assets
+     * @return Arithmetic grammar content as string
+     */
+    public static String getArithmeticGrammar(android.content.Context context) {
+        return grammarContent(context, GrammarName.ARITHMETIC);
+    }
+    
+    /**
+     * Convenience method to get C grammar content
+     * 
+     * @param context Application context to access assets
+     * @return C grammar content as string
+     */
+    public static String getCGrammar(android.content.Context context) {
+        return grammarContent(context, GrammarName.C);
     }
 
     /**
@@ -516,6 +577,25 @@ public class LlamaMobile {
      * @return Array of floating-point audio samples, or null if an error occurred
      */
     public static native float[] decodeAudioTokens(long contextHandle, int[] tokens);
+
+    /**
+     * Sets guide tokens for audio generation
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param tokens Guide tokens to set for audio generation
+     */
+    public static native void setGuideTokens(long contextHandle, int[] tokens);
+
+    /**
+     * Saves audio samples to WAV file
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param filePath Path to save the WAV file
+     * @param audioData Array of floating-point audio samples
+     * @param sampleRate Sample rate for the audio (e.g., 48000)
+     * @return true on success, false on failure
+     */
+    public static native boolean saveAudioToWav(long contextHandle, String filePath, float[] audioData, int sampleRate);
 
     /**
      * Releases vocoder (TTS) resources

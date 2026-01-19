@@ -46,6 +46,10 @@ class AppState {
 
     // JSON grammar content
     var jsonGrammar: String? = null
+    
+    // Selected grammar for generation
+    var selectedGrammar: String? = null
+    var selectedGrammarFile: String? = null
 
     // Model context handle
     var contextHandle: Long = 0
@@ -54,12 +58,18 @@ class AppState {
     private val uiHandler = Handler(Looper.getMainLooper())
 
     fun init(context: Context) {
-        // Run directly on UI thread for simplicity in example app
-        // Extract models from assets to local storage
-        extractModelsFromAssets(context)
-        
-        // Extract and load JSON grammar
-        jsonGrammar = loadGrammarFromAssets(context, JSON_GRAMMAR_FILE)
+        // Run model extraction in a background thread to prevent UI blocking
+        Thread { 
+            try {
+                // Extract models from assets to local storage
+                extractModelsFromAssets(context)
+                
+                // Extract and load JSON grammar
+                jsonGrammar = loadGrammarFromAssets(context, JSON_GRAMMAR_FILE)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during app state initialization: ${e.message}")
+            }
+        }.start()
     }
 
     fun extractModelsFromAssets(context: Context) {
@@ -109,8 +119,8 @@ class AppState {
                     }
                     models.addAll(assetModels)
                     
-                    // Extract mmproj models
-                    val mmprojFiles = assetFiles.filter { it.contains(".mmproj") }
+                    // Extract mmproj models (including .gguf files as the framework now uses GGUF)
+                    val mmprojFiles = assetFiles.filter { it.contains(".mmproj") || it.endsWith(".gguf") }
                     val assetMmprojModels = mmprojFiles.mapNotNull { fileName ->
                         try {
                             val localFile = File(localModelsDir, fileName)
@@ -128,8 +138,12 @@ class AppState {
                     }
                     mmprojModels.addAll(assetMmprojModels)
                     
-                    // Extract vocoder models
-                    val vocoderFiles = assetFiles.filter { it.contains("vocoder") || it.contains("voco") || it.endsWith(".bin") && !it.endsWith(".mmproj") }
+                    // Extract vocoder models - filter for relevant file types
+                    val vocoderFiles = assetFiles.filter { fileName -> 
+                        (fileName.contains("vocoder") || fileName.contains("voco")) && 
+                        (fileName.endsWith(".bin") || fileName.endsWith(".gguf") || fileName.endsWith(".pth")) &&
+                        !fileName.endsWith(".mmproj")
+                    }
                     val assetVocoderModels = vocoderFiles.mapNotNull { fileName ->
                         try {
                             val localFile = File(localModelsDir, fileName)
@@ -147,8 +161,11 @@ class AppState {
                     }
                     vocoderModels.addAll(assetVocoderModels)
                     
-                    // Extract LoRA models - show all models (no filtering)
-                    val assetLoRAModels = assetFiles.mapNotNull { fileName ->
+                    // Extract LoRA models - filter for relevant file types (include GGUF as iOS supports this)
+                    val assetLoRAModels = assetFiles.filter { fileName -> 
+                        fileName.endsWith(".bin") || fileName.endsWith(".gguf") || 
+                        fileName.endsWith(".safetensors") || fileName.endsWith(".lora")
+                    }.mapNotNull { fileName ->
                         try {
                             val localFile = File(localModelsDir, fileName)
                             
@@ -187,20 +204,21 @@ class AppState {
                     }
                     models.addAll(externalModels)
                     
-                    // Add LoRA models - show all models (no filtering)
-                    val externalLoRAModels = allFiles.filter { it.isFile }.map { file ->
+                    // Add LoRA models - filter for relevant file types (include GGUF as iOS supports this)
+                    val externalLoRAModels = allFiles.filter { it.isFile && (it.name.endsWith(".bin") || it.name.endsWith(".gguf") || 
+                        it.name.endsWith(".safetensors") || it.name.endsWith(".lora")) }.map { file ->
                         Pair(file.name, file.absolutePath)
                     }
                     loraModels.addAll(externalLoRAModels)
                     
-                    // Add mmproj models - show all models (no filtering)
-                    val externalMmprojModels = allFiles.filter { it.isFile }.map { file ->
+                    // Add mmproj models - filter for relevant file types
+                    val externalMmprojModels = allFiles.filter { it.isFile && (it.name.endsWith(".mmproj") || it.name.endsWith(".gguf") || it.name.endsWith(".bin")) }.map { file ->
                         Pair(file.name, file.absolutePath)
                     }
                     mmprojModels.addAll(externalMmprojModels)
                     
-                    // Add vocoder models - show all models (no filtering)
-                    val externalVocoderModels = allFiles.filter { it.isFile }.map { file ->
+                    // Add vocoder models - filter for relevant file types
+                    val externalVocoderModels = allFiles.filter { it.isFile && (it.name.endsWith(".bin") || it.name.endsWith(".gguf") || it.name.endsWith(".pth")) }.map { file ->
                         Pair(file.name, file.absolutePath)
                     }
                     vocoderModels.addAll(externalVocoderModels)
@@ -230,14 +248,21 @@ class AppState {
                     }
                     models.addAll(externalModels)
                     
-                    // Add mmproj models - show all models (no filtering)
-                    val externalMmprojModels = allFiles.filter { it.isFile }.map { file ->
+                    // Add mmproj models - filter for relevant file types
+                    val externalMmprojModels = allFiles.filter { it.isFile && (it.name.contains(".mmproj") || it.name.endsWith(".gguf") || it.name.endsWith(".bin")) }.map { file ->
                         Pair(file.name, file.absolutePath)
                     }
                     mmprojModels.addAll(externalMmprojModels)
                     
-                    // Add vocoder models - show all models (no filtering)
-                    val externalVocoderModels = allFiles.filter { it.isFile }.map { file ->
+                    // Add LoRA models - filter for relevant file types (include GGUF as iOS supports this)
+                    val externalLoRAModels = allFiles.filter { it.isFile && (it.name.endsWith(".bin") || it.name.endsWith(".gguf") || 
+                        it.name.endsWith(".safetensors") || it.name.endsWith(".lora")) }.map { file ->
+                        Pair(file.name, file.absolutePath)
+                    }
+                    loraModels.addAll(externalLoRAModels)
+                    
+                    // Add vocoder models - filter for relevant file types
+                    val externalVocoderModels = allFiles.filter { it.isFile && (it.name.endsWith(".bin") || it.name.endsWith(".gguf") || it.name.endsWith(".pth")) }.map { file ->
                         Pair(file.name, file.absolutePath)
                     }
                     vocoderModels.addAll(externalVocoderModels)
@@ -320,47 +345,59 @@ class AppState {
                 Log.i(TAG, "No models found. Model path remains: $modelPath")
             }
             
-            // Set default mmproj model path if any are found
+            // Keep mmproj model path empty by default - don't auto-select
             if (availableMmprojModels.isNotEmpty()) {
-                // Check if current mmproj model path is still valid
-                val currentMmprojValid = availableMmprojModels.any { it.second == mmprojModelPath }
-                if (!currentMmprojValid) {
-                    mmprojModelPath = availableMmprojModels.first().second
-                    Log.i(TAG, "Set default mmproj model path: $mmprojModelPath")
+                // Only validate current path if it's not empty
+                if (mmprojModelPath.isNotEmpty()) {
+                    val currentMmprojValid = availableMmprojModels.any { it.second == mmprojModelPath }
+                    if (!currentMmprojValid) {
+                        mmprojModelPath = ""
+                        Log.i(TAG, "Reset mmproj model path to empty as current path is no longer valid")
+                    }
                 }
+                Log.i(TAG, "MMProj path remains: $mmprojModelPath")
             } else {
-                Log.i(TAG, "No mmproj models found. MMProj path remains: $mmprojModelPath")
+                mmprojModelPath = ""
+                Log.i(TAG, "No mmproj models found. MMProj path set to empty")
             }
             
-            // Set default vocoder model path if any are found
+            // Keep vocoder model path empty by default - don't auto-select
             if (availableVocoderModels.isNotEmpty()) {
-                // Check if current vocoder model path is still valid
-                val currentVocoderValid = availableVocoderModels.any { it.second == vocoderModelPath }
-                if (!currentVocoderValid) {
-                    vocoderModelPath = availableVocoderModels.first().second
-                    Log.i(TAG, "Set default vocoder model path: $vocoderModelPath")
+                // Only validate current path if it's not empty
+                if (vocoderModelPath.isNotEmpty()) {
+                    val currentVocoderValid = availableVocoderModels.any { it.second == vocoderModelPath }
+                    if (!currentVocoderValid) {
+                        vocoderModelPath = ""
+                        Log.i(TAG, "Reset vocoder model path to empty as current path is no longer valid")
+                    }
                 }
+                Log.i(TAG, "Vocoder path remains: $vocoderModelPath")
             } else {
-                Log.i(TAG, "No vocoder models found. Vocoder path remains: $vocoderModelPath")
+                vocoderModelPath = ""
+                Log.i(TAG, "No vocoder models found. Vocoder path set to empty")
             }
             
-            // Set default LoRA model path if any are found
+            // Keep LoRA model path empty by default - don't auto-select
             if (availableLoRAModels.isNotEmpty()) {
-                // Check if current LoRA model path is still valid
-                val currentLoRAValid = availableLoRAModels.any { it.second == loraModelPath }
-                if (!currentLoRAValid) {
-                    loraModelPath = availableLoRAModels.first().second
-                    Log.i(TAG, "Set default LoRA model path: $loraModelPath")
+                // Only validate current path if it's not empty
+                if (loraModelPath.isNotEmpty()) {
+                    val currentLoRAValid = availableLoRAModels.any { it.second == loraModelPath }
+                    if (!currentLoRAValid) {
+                        loraModelPath = ""
+                        Log.i(TAG, "Reset LoRA model path to empty as current path is no longer valid")
+                    }
                 }
+                Log.i(TAG, "LoRA path remains: $loraModelPath")
             } else {
-                Log.i(TAG, "No LoRA models found. LoRA path remains: $loraModelPath")
+                loraModelPath = ""
+                Log.i(TAG, "No LoRA models found. LoRA path set to empty")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error in extractModelsFromAssets: ${e.message}", e)
         }
     }
 
-    private fun loadGrammarFromAssets(context: Context, grammarFileName: String): String? {
+    fun loadGrammarFromAssets(context: Context, grammarFileName: String): String? {
         val assetManager = context.assets
         val localGrammarDir = File(context.filesDir, GRAMMARS_ASSET_DIR)
 
@@ -561,10 +598,23 @@ class AppState {
                     }
                 }
                 
-                // Initialize vocoder if vocoder path is provided
-                if (vocoderModelPath.isNotEmpty()) {
+                // Initialize vocoder if vocoder path is provided and it's likely a valid vocoder model
+                Log.d(TAG, "Checking vocoder initialization:")
+                Log.d(TAG, "- vocoderModelPath: $vocoderModelPath")
+                Log.d(TAG, "- Contains vocoder/voco: ${vocoderModelPath.contains("vocoder") || vocoderModelPath.contains("voco")}")
+                Log.d(TAG, "- Ends with .pth/.pt/.gguf: ${vocoderModelPath.endsWith(".pth") || vocoderModelPath.endsWith(".pt") || vocoderModelPath.endsWith(".gguf")}")
+                Log.d(TAG, "- Contains embedding: ${vocoderModelPath.contains("embedding")}")
+                
+                if (vocoderModelPath.isNotEmpty() && 
+                    (vocoderModelPath.contains("vocoder") || vocoderModelPath.contains("voco") || 
+                     vocoderModelPath.endsWith(".pth") || vocoderModelPath.endsWith(".pt") || vocoderModelPath.endsWith(".gguf")) &&
+                    !vocoderModelPath.contains("embedding")) {
                     try {
                         val vocoderFile = File(vocoderModelPath)
+                        Log.d(TAG, "- Vocoder file exists: ${vocoderFile.exists()}")
+                        Log.d(TAG, "- Is file: ${vocoderFile.isFile}")
+                        Log.d(TAG, "- Can read: ${vocoderFile.canRead()}")
+                        
                         if (vocoderFile.exists() && vocoderFile.isFile && vocoderFile.canRead()) {
                             Log.i(TAG, "Initializing vocoder with path: $vocoderModelPath")
                             // Assuming LlamaMobile has an initVocoder method
@@ -574,7 +624,7 @@ class AppState {
                             Log.e(TAG, "Invalid vocoder model path: $vocoderModelPath")
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error initializing vocoder: ${e.message}")
+                        Log.e(TAG, "Error initializing vocoder: ${e.message}", e)
                     }
                 }
                 

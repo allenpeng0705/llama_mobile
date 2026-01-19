@@ -47,6 +47,31 @@ object LlamaMobile {
     }
     
     /**
+     * Grammar name enum for structured output
+     */
+    enum class GrammarName {
+        ARITHMETIC,
+        C,
+        CHESS,
+        ENGLISH,
+        JAPANESE,
+        JSON,
+        JSON_ARR,
+        LIST
+    }
+    
+    /**
+     * Chat message structure for structured input
+     * 
+     * @property role Role of the message sender (e.g., "system", "user", "assistant")
+     * @property content Content of the message
+     */
+    data class ChatMessage(
+        val role: String,
+        val content: String
+    )
+
+    /**
      * Initialization parameters for creating a llama context
      * 
      * @property modelPath Path to the llama model file
@@ -147,7 +172,9 @@ object LlamaMobile {
         val ignoreEos: Boolean = false,
         val stopSequences: List<String> = emptyList(),
         val grammar: String? = null,
-        val mediaPaths: List<String> = emptyList()
+        val mediaPaths: List<String> = emptyList(),
+        val chatMessages: List<ChatMessage> = emptyList(),
+        val useJsonResponse: Boolean = false
     ) {
         companion object {
             /**
@@ -174,7 +201,21 @@ object LlamaMobile {
             )
             
             /**
-             * Convenience factory for chat-like responses
+             * Convenience factory for chat conversations using structured messages
+             */
+            @JvmStatic
+            fun chat(messages: List<ChatMessage>, maxTokens: Int = 256): CompletionParams = CompletionParams(
+                prompt = "",
+                chatMessages = messages,
+                maxTokens = maxTokens,
+                temperature = 0.7f,
+                topP = 0.95f,
+                topK = 40,
+                penaltyRepeat = 1.2f
+            )
+            
+            /**
+             * Convenience factory for chat-like responses using raw prompt
              */
             @JvmStatic
             fun chat(prompt: String, maxTokens: Int = 256): CompletionParams = CompletionParams(
@@ -187,14 +228,23 @@ object LlamaMobile {
             )
             
             /**
-             * Convenience factory for multimodal inputs
-             */
-            @JvmStatic
-            fun multimodal(prompt: String, mediaPaths: List<String>, maxTokens: Int = 256): CompletionParams = CompletionParams(
-                prompt = prompt,
-                maxTokens = maxTokens,
-                mediaPaths = mediaPaths
-            )
+         * Convenience factory for multimodal inputs
+         */
+        @JvmStatic
+        fun multimodal(prompt: String, mediaPaths: List<String>, maxTokens: Int = 256): CompletionParams = CompletionParams(
+            prompt = prompt,
+            maxTokens = maxTokens,
+            mediaPaths = mediaPaths
+        )
+        
+        /**
+         * Convenience factory for JSON output
+         */
+        @JvmStatic
+        fun jsonOutput(prompt: String, maxTokens: Int = 256): CompletionParams = CompletionParams(
+            prompt = prompt,
+            maxTokens = maxTokens
+        )
         }
     }
     
@@ -646,6 +696,27 @@ object LlamaMobile {
     fun download(params: DownloadParams): DownloadResult? {
         return downloadModel(params)
     }
+    
+    /**
+     * Gets the content of a grammar file from assets
+     * 
+     * @param context Application context to access assets
+     * @param grammarName Grammar name to retrieve
+     * @return Grammar content as string, or null if not found
+     */
+    external fun grammarContent(context: android.content.Context, grammarName: GrammarName): String?
+    
+    /**
+     * Convenience method to get JSON grammar content
+     * 
+     * @param context Application context to access assets
+     * @return JSON grammar content as string
+     */
+    fun getJsonGrammar(context: android.content.Context): String? {
+        return grammarContent(context, GrammarName.JSON)
+    }
+    
+
     
     /**
      * Releases a llama context

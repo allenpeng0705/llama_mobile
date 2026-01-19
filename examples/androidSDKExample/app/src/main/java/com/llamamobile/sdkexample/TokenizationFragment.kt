@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.content.Context
 import android.widget.Toast
 import androidx.fragment.app.Fragment
 import com.llamamobile.LlamaMobile
@@ -11,24 +12,24 @@ import com.llamamobile.sdkexample.databinding.FragmentTokenizationBinding
 
 class TokenizationFragment : Fragment() {
 
-    private lateinit var binding: FragmentTokenizationBinding
-    private lateinit var appState: AppState
+    private var _binding: FragmentTokenizationBinding? = null
+    private val binding get() = _binding!!
+    private var appState: AppState? = null
     private var isProcessing = false
+
+    override fun onAttach(context: Context) {
+        super.onAttach(context)
+        // Access appState when the fragment is properly attached to the activity
+        appState = (context as? MainActivity)?.appState
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        binding = FragmentTokenizationBinding.inflate(inflater, container, false)
-        // Access appState safely during fragment creation
-        try {
-            appState = (activity as MainActivity).appState
-        } catch (e: Exception) {
-            // Log but don't crash - appState will be set later in onViewCreated if needed
-            e.printStackTrace()
-        }
-        return binding.root
+        _binding = FragmentTokenizationBinding.inflate(inflater, container, false)
+        return _binding!!.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -61,6 +62,11 @@ class TokenizationFragment : Fragment() {
         // Check model status when fragment resumes
         updateModelLoadedUI()
     }
+    
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
+    }
 
     private fun handleTokenize() {
         val text = binding.tokenizeEditText.text.toString().trim()
@@ -68,8 +74,13 @@ class TokenizationFragment : Fragment() {
             return
         }
 
-        if (!appState.isModelLoaded) {
-            Toast.makeText(requireContext(), "Please load a model first", Toast.LENGTH_SHORT).show()
+        val currentAppState = appState ?: run {
+            activity?.let { Toast.makeText(it, "App state not initialized", Toast.LENGTH_SHORT).show()}
+            return
+        }
+
+        if (!currentAppState.isModelLoaded) {
+            activity?.let { Toast.makeText(it, "Please load a model first", Toast.LENGTH_SHORT).show()}
             return
         }
 
@@ -80,9 +91,9 @@ class TokenizationFragment : Fragment() {
         Thread {
             try {
                 // Call the new LlamaMobile tokenize method
-                val tokensArray = LlamaMobile.tokenize(appState.contextHandle, text)
+                val tokensArray = LlamaMobile.tokenize(currentAppState.contextHandle, text)
                 
-                requireActivity().runOnUiThread {
+                activity?.runOnUiThread {
                     isProcessing = false
                     updateProcessingUI()
                     
@@ -90,15 +101,29 @@ class TokenizationFragment : Fragment() {
                         val tokensList = tokensArray.toList()
                         binding.tokensTextView.text = formatTokens(tokensList)
                         binding.detokenizeResultTextView.text = ""
+                        
+                        // Show tokens section
+                        binding.tokensSection.visibility = View.VISIBLE
+                        binding.detokenizeSection.visibility = View.GONE
+                        
+                        // Enable detokenize button
+                        binding.detokenizeButton.isEnabled = true
                     } else {
-                        Toast.makeText(requireContext(), "Tokenization failed: null result", Toast.LENGTH_SHORT).show()
+                        activity?.let { Toast.makeText(it, "Tokenization failed: null result", Toast.LENGTH_SHORT).show()}
+                        
+                        // Hide sections on error
+                        binding.tokensSection.visibility = View.GONE
+                        binding.detokenizeSection.visibility = View.GONE
+                        
+                        // Disable detokenize button
+                        binding.detokenizeButton.isEnabled = false
                     }
                 }
             } catch (e: Exception) {
-                requireActivity().runOnUiThread {
+                activity?.runOnUiThread {
                     isProcessing = false
                     updateProcessingUI()
-                    Toast.makeText(requireContext(), "Tokenization error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    activity?.let { Toast.makeText(it, "Tokenization error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()}
                 }
             }
         }.start()
@@ -110,8 +135,13 @@ class TokenizationFragment : Fragment() {
             return
         }
 
-        if (!appState.isModelLoaded) {
-            Toast.makeText(requireContext(), "Please load a model first", Toast.LENGTH_SHORT).show()
+        val currentAppState = appState ?: run {
+            activity?.let { Toast.makeText(it, "App state not initialized", Toast.LENGTH_SHORT).show()}
+            return
+        }
+
+        if (!currentAppState.isModelLoaded) {
+            activity?.let { Toast.makeText(it, "Please load a model first", Toast.LENGTH_SHORT).show()}
             return
         }
 
@@ -121,7 +151,7 @@ class TokenizationFragment : Fragment() {
         // Parse the tokens
         val tokens = tokensText.split(" ").mapNotNull { it.toIntOrNull() }
         if (tokens.isEmpty()) {
-            Toast.makeText(requireContext(), "No valid tokens to detokenize", Toast.LENGTH_SHORT).show()
+            activity?.let { Toast.makeText(it, "No valid tokens to detokenize", Toast.LENGTH_SHORT).show()}
             isProcessing = false
             updateProcessingUI()
             return
@@ -134,23 +164,29 @@ class TokenizationFragment : Fragment() {
                 val tokensArray = tokens.toIntArray()
                 
                 // Call the new LlamaMobile detokenize method
-                val result = LlamaMobile.detokenize(appState.contextHandle, tokensArray)
+                val result = LlamaMobile.detokenize(currentAppState.contextHandle, tokensArray)
                 
-                requireActivity().runOnUiThread {
+                activity?.runOnUiThread {
                     isProcessing = false
                     updateProcessingUI()
                     
                     if (result != null) {
                         binding.detokenizeResultTextView.text = result
+                        
+                        // Show detokenize section
+                        binding.detokenizeSection.visibility = View.VISIBLE
                     } else {
-                        Toast.makeText(requireContext(), "Detokenization failed: null result", Toast.LENGTH_SHORT).show()
+                        activity?.let { Toast.makeText(it, "Detokenization failed: null result", Toast.LENGTH_SHORT).show()}
+                        
+                        // Hide detokenize section on error
+                        binding.detokenizeSection.visibility = View.GONE
                     }
                 }
             } catch (e: Exception) {
-                requireActivity().runOnUiThread {
+                activity?.runOnUiThread {
                     isProcessing = false
                     updateProcessingUI()
-                    Toast.makeText(requireContext(), "Detokenization error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                    activity?.let { Toast.makeText(it, "Detokenization error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()}
                 }
             }
         }.start()
@@ -165,7 +201,7 @@ class TokenizationFragment : Fragment() {
     }
 
     private fun updateModelLoadedUI() {
-        val modelLoaded = appState.isModelLoaded
+        val modelLoaded = appState?.isModelLoaded ?: false
         binding.tokenizeButton.isEnabled = modelLoaded && !isProcessing
         binding.detokenizeButton.isEnabled = modelLoaded && !isProcessing
 
@@ -179,8 +215,8 @@ class TokenizationFragment : Fragment() {
     }
 
     private fun updateProcessingUI() {
-        binding.tokenizeButton.isEnabled = appState.isModelLoaded && !isProcessing
-        binding.detokenizeButton.isEnabled = appState.isModelLoaded && !isProcessing
+        binding.tokenizeButton.isEnabled = (appState?.isModelLoaded ?: false) && !isProcessing
+        binding.detokenizeButton.isEnabled = (appState?.isModelLoaded ?: false) && !isProcessing
         binding.progressBar.visibility = if (isProcessing) View.VISIBLE else View.GONE
     }
 }
