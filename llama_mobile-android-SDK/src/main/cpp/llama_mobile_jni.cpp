@@ -305,10 +305,17 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     
     // Set chat messages
     if (!chatMessages.empty()) {
-        params.chat_messages = new llama_mobile_chat_message_c[chatMessages.size()];
+        // Allocate non-const memory first
+        llama_mobile_chat_message_c* temp_messages = new llama_mobile_chat_message_c[chatMessages.size()];
+        
+        // Copy elements individually
         for (size_t i = 0; i < chatMessages.size(); i++) {
-            params.chat_messages[i] = chatMessages[i];
+            temp_messages[i].role = chatMessages[i].role;
+            temp_messages[i].content = chatMessages[i].content;
         }
+        
+        // Assign to the const pointer
+        params.chat_messages = temp_messages;
         params.chat_message_count = static_cast<int32_t>(chatMessages.size());
     }
     
