@@ -717,7 +717,8 @@ public class LlamaMobile {
                 chatMessagesC[index].content = message.content.withCString { $0 }
             }
             
-            cParams.chat_messages = chatMessagesC
+            // Convert mutable pointer to const pointer to match the expected type
+            cParams.chat_messages = UnsafePointer(chatMessagesC)
             cParams.chat_message_count = Int32(chatMessageCount)
         } else {
             cParams.chat_messages = nil
