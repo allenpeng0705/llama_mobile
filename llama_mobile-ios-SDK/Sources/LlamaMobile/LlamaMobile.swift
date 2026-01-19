@@ -383,7 +383,7 @@ public class LlamaMobile {
     /// Contains the generated text and metadata about the completion process.
     public struct CompletionResult {
         /// Default initializer with all parameters
-        public init(text: String, tokensGenerated: Int32, tokensEvaluated: Int32, truncated: Bool, stoppedEos: Bool, stoppedWord: Bool, stoppedLimit: Bool) {
+        public init(text: String, tokensGenerated: Int32, tokensEvaluated: Int32, truncated: Bool, stoppedEos: Bool, stoppedWord: Bool, stoppedLimit: Bool, stoppingWord: String?) {
             self.text = text
             self.tokensGenerated = tokensGenerated
             self.tokensEvaluated = tokensEvaluated
@@ -391,6 +391,7 @@ public class LlamaMobile {
             self.stoppedEos = stoppedEos
             self.stoppedWord = stoppedWord
             self.stoppedLimit = stoppedLimit
+            self.stoppingWord = stoppingWord
         }
         /// The generated completion text
         public var text: String
@@ -412,6 +413,9 @@ public class LlamaMobile {
         
         /// Whether generation stopped due to reaching maxTokens limit
         public var stoppedLimit: Bool
+        
+        /// The specific stop sequence that triggered generation to stop (if applicable)
+        public var stoppingWord: String?
     }
     
     /// LoRA adapter configuration
@@ -652,10 +656,26 @@ public class LlamaMobile {
         // Convert stop sequences to C array
         let stopSequenceCount = params.stopSequences.count
         let stopSequencesC = UnsafeMutablePointer<UnsafePointer<CChar>?>.allocate(capacity: stopSequenceCount)
-        defer { stopSequencesC.deallocate() }
+        
+        // Array to store C strings that need to be freed
+        var stopStringsToFree: [UnsafeMutablePointer<CChar>] = []
+        defer {
+            // Free all allocated C strings for stop sequences
+            for cString in stopStringsToFree {
+                cString.deallocate()
+            }
+            // Free the stop sequences array
+            stopSequencesC.deallocate()
+        }
         
         for (index, sequence) in params.stopSequences.enumerated() {
-            stopSequencesC[index] = sequence.withCString { $0 }
+            // Allocate permanent C string for stop sequence
+            let stopCString = UnsafeMutablePointer<CChar>.allocate(capacity: sequence.utf8.count + 1)
+            sequence.withCString { source in
+                stopCString.update(from: source, count: sequence.utf8.count + 1)
+            }
+            stopStringsToFree.append(stopCString)
+            stopSequencesC[index] = UnsafePointer(stopCString)
         }
         
         // Create token callback wrapper if needed
@@ -693,14 +713,24 @@ public class LlamaMobile {
         cParams.stop_sequences = stopSequenceCount > 0 ? stopSequencesC : nil
         cParams.stop_sequence_count = Int32(stopSequenceCount)
         
-        // Log grammar usage
+        // Log grammar usage and handle grammar string
+        var grammarCString: UnsafeMutablePointer<CChar>? = nil
         if let grammar = params.grammar {
             print("[DEBUG] Using grammar for generation")
             print("[DEBUG] Grammar preview: \(grammar.prefix(100))...")
-            cParams.grammar = grammar.withCString { $0 }
+            // Allocate permanent C string for grammar
+            grammarCString = UnsafeMutablePointer<CChar>.allocate(capacity: grammar.utf8.count + 1)
+            grammar.withCString { source in
+                grammarCString?.update(from: source, count: grammar.utf8.count + 1)
+            }
+            cParams.grammar = UnsafePointer(grammarCString)
         } else {
             print("[DEBUG] No grammar specified for generation")
             cParams.grammar = nil
+        }
+        // Add grammar to cleanup list if allocated
+        if let grammarCString = grammarCString {
+            stopStringsToFree.append(grammarCString) // Reuse existing cleanup list
         }
         
         cParams.token_callback = tokenCallbackPtr
@@ -710,11 +740,36 @@ public class LlamaMobile {
             print("[DEBUG] Using structured chat messages instead of raw prompt")
             let chatMessageCount = params.chatMessages.count
             let chatMessagesC = UnsafeMutablePointer<llama_mobile_chat_message_c>.allocate(capacity: chatMessageCount)
-            defer { chatMessagesC.deallocate() }
+            
+            // Array to store C strings that need to be freed
+            var cStringsToFree: [UnsafeMutablePointer<CChar>] = []
+            defer {
+                // Free all allocated C strings
+                for cString in cStringsToFree {
+                    cString.deallocate()
+                }
+                // Free the chat messages array
+                chatMessagesC.deallocate()
+            }
             
             for (index, message) in params.chatMessages.enumerated() {
-                chatMessagesC[index].role = message.role.withCString { $0 }
-                chatMessagesC[index].content = message.content.withCString { $0 }
+                // Allocate permanent C strings for role
+                let roleCString = UnsafeMutablePointer<CChar>.allocate(capacity: message.role.utf8.count + 1)
+                message.role.withCString { source in
+                    roleCString.update(from: source, count: message.role.utf8.count + 1)
+                }
+                cStringsToFree.append(roleCString)
+                
+                // Allocate permanent C strings for content
+                let contentCString = UnsafeMutablePointer<CChar>.allocate(capacity: message.content.utf8.count + 1)
+                message.content.withCString { source in
+                    contentCString.update(from: source, count: message.content.utf8.count + 1)
+                }
+                cStringsToFree.append(contentCString)
+                
+                // Assign to struct
+                chatMessagesC[index].role = UnsafePointer(roleCString)
+                chatMessagesC[index].content = UnsafePointer(contentCString)
             }
             
             // Convert mutable pointer to const pointer to match the expected type
@@ -736,10 +791,26 @@ public class LlamaMobile {
             // Convert media paths to C array
             let mediaCount = params.mediaPaths.count
             let mediaPathsC = UnsafeMutablePointer<UnsafePointer<CChar>?>.allocate(capacity: mediaCount)
-            defer { mediaPathsC.deallocate() }
+            
+            // Array to store C strings that need to be freed
+            var mediaStringsToFree: [UnsafeMutablePointer<CChar>] = []
+            defer {
+                // Free all allocated C strings for media paths
+                for cString in mediaStringsToFree {
+                    cString.deallocate()
+                }
+                // Free the media paths array
+                mediaPathsC.deallocate()
+            }
             
             for (index, path) in params.mediaPaths.enumerated() {
-                mediaPathsC[index] = path.withCString { $0 }
+                // Allocate permanent C string for media path
+                let mediaCString = UnsafeMutablePointer<CChar>.allocate(capacity: path.utf8.count + 1)
+                path.withCString { source in
+                    mediaCString.update(from: source, count: path.utf8.count + 1)
+                }
+                mediaStringsToFree.append(mediaCString)
+                mediaPathsC[index] = UnsafePointer(mediaCString)
             }
             
             status = llama_mobile_multimodal_completion_c(context, &cParams, mediaPathsC, Int32(mediaCount), &cResult)
@@ -767,6 +838,9 @@ public class LlamaMobile {
         print("[DEBUG] Tokens generated: \(cResult.tokens_predicted)")
         print("[DEBUG] Generation stopped because: \n  - End of sequence: \(cResult.stopped_eos)\n  - Stop word: \(cResult.stopped_word)\n  - Token limit: \(cResult.stopped_limit)")
         
+        // Get stopping word if available
+        let stoppingWord = cResult.stopping_word != nil ? String(cString: cResult.stopping_word!) : nil
+        
         // Create Swift result
         let result = CompletionResult(
             text: text,
@@ -775,7 +849,8 @@ public class LlamaMobile {
             truncated: cResult.truncated,
             stoppedEos: cResult.stopped_eos,
             stoppedWord: cResult.stopped_word,
-            stoppedLimit: cResult.stopped_limit
+            stoppedLimit: cResult.stopped_limit,
+            stoppingWord: stoppingWord
         )
         
         // Log the result for debugging

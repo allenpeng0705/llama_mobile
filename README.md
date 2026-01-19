@@ -214,6 +214,41 @@ if (status == 0 && result.text) {
 }
 ```
 
+#### Set Stop Sequences
+
+Stop sequences can be configured to terminate generation when specific patterns are detected. They work with both JSON and regular text output formats:
+
+```cpp
+#include "llama_mobile_api.h"
+
+// Initialize completion parameters
+llama_mobile_completion_params_t params;
+memset(&params, 0, sizeof(params));
+
+// Set basic parameters
+params.prompt = "Hello, who are you?";
+params.max_tokens = 128;
+params.temperature = 0.7;
+
+// Set stop sequences
+const char* stop_sequences[] = {"\n\n", "<|im_end|>", "<|endoftext|>", "\nUser:"};
+params.stop_sequences = stop_sequences;
+params.stop_sequence_count = 4;
+
+// Enable JSON response format
+params.use_json_response = true;
+
+// Call the completion API
+llama_mobile_completion_result_t result;
+int status = llama_mobile_completion(ctx, &params, &result);
+
+if (status == 0 && result.text) {
+    // result.text contains JSON output truncated at the first stop sequence
+    printf("JSON Response: %s\n", result.text);
+    llama_mobile_free_string(result.text);
+}
+```
+
 #### Disable JSON Output
 
 To disable JSON output (default behavior), set the parameter to `false`:
@@ -245,6 +280,30 @@ params.useJsonResponse = YES;
 }];
 ```
 
+#### Set Stop Sequences (Objective-C)
+
+```objective-c
+// Create completion parameters
+LlamaMobileCompletionParams *params = [[LlamaMobileCompletionParams alloc] init];
+params.prompt = @"Hello, who are you?";
+params.maxTokens = 128;
+params.temperature = 0.7;
+
+// Set stop sequences
+params.stopSequences = @[@"\n\n", @"<|im_end|>", @"<|endoftext|>", @"\nUser:"];
+
+// Enable JSON output
+params.useJsonResponse = YES;
+
+// Call completion API
+[llamaMobile completionWithContext:ctx params:params completion:^(LlamaMobileCompletionResult *result, NSError *error) {
+    if (result && result.text) {
+        // result.text contains JSON output truncated at the first stop sequence
+        NSLog(@"JSON Response: %@", result.text);
+    }
+}];
+```
+
 #### Swift
 
 ```swift
@@ -266,6 +325,30 @@ llamaMobile.completion(with: ctx, params: params) { result, error in
 }
 ```
 
+#### Set Stop Sequences (Swift)
+
+```swift
+// Create completion parameters
+var params = LlamaMobileCompletionParams()
+params.prompt = "Hello, who are you?"
+params.maxTokens = 128
+params.temperature = 0.7
+
+// Set stop sequences
+params.stopSequences = ["\n\n", "<|im_end|>", "<|endoftext|>", "\nUser:"]
+
+// Enable JSON output
+params.useJsonResponse = true
+
+// Call completion API
+llamaMobile.completion(with: ctx, params: params) { result, error in
+    if let result = result, let text = result.text {
+        // text contains JSON output truncated at the first stop sequence
+        print("JSON Response: \(text)")
+    }
+}
+```
+
 ### Android SDK
 
 ```java
@@ -282,6 +365,30 @@ try {
     CompletionResult result = llamaMobile.completion(ctx, params);
     if (result.getText() != null) {
         // result.getText() contains JSON output
+        Log.d("LlamaMobile", "JSON Response: " + result.getText());
+    }
+} catch (LlamaMobileException e) {
+    e.printStackTrace();
+}
+```
+
+#### Set Stop Sequences (Android)
+
+```java
+// Create completion parameters with stop sequences
+CompletionParams params = new CompletionParams.Builder()
+    .setPrompt("Hello, who are you?")
+    .setMaxTokens(128)
+    .setTemperature(0.7f)
+    .setStopSequences(new String[] {"\n\n", "<|im_end|>", "<|endoftext|>", "\nUser:"})
+    .setUseJsonResponse(true)  // Enable JSON output
+    .build();
+
+// Call completion API
+try {
+    CompletionResult result = llamaMobile.completion(ctx, params);
+    if (result.getText() != null) {
+        // result.getText() contains JSON output truncated at the first stop sequence
         Log.d("LlamaMobile", "JSON Response: " + result.getText());
     }
 } catch (LlamaMobileException e) {

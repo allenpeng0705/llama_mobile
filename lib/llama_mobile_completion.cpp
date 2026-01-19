@@ -271,14 +271,9 @@ size_t llama_mobile_context::findStoppingStrings(const std::string &text, const 
         if (word.empty()) continue;
 
         size_t pos;
-        if (type == STOP_FULL)
-        {
-            size_t from_pos = 0;
-            size_t tmp_len = word.size() + last_token_size;
-            if (text.size() > tmp_len) {
-                from_pos = text.size() - tmp_len;
-            }
-            pos = text.find(word, from_pos);
+        if (type == STOP_FULL) {
+            // Search the entire text for stop sequences to ensure we don't miss "\n\n"
+            pos = text.find(word);
         }
         else
         {

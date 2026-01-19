@@ -432,8 +432,16 @@ struct ChatView: View {
         }
         
         do {
-            // Build conversation history for proper chat flow
-            let fullPrompt = buildConversationHistory()
+            // Create chat messages from conversation history
+            var chatMessages: [LlamaMobile.ChatMessage] = []
+            
+            // Add system message
+            chatMessages.append(LlamaMobile.ChatMessage(role: "system", content: appState.systemPrompt))
+            
+            // Add all conversation messages
+            for message in messages {
+                chatMessages.append(LlamaMobile.ChatMessage(role: message.role, content: message.text))
+            }
             
             // Use the selected grammar from appState if available
             let selectedGrammar = appState.selectedGrammar
@@ -448,27 +456,94 @@ struct ChatView: View {
                     print("[DEBUG] ✓ Grammar will be used for generation: \(selectedGrammarName)")
                 } else {
                     print("[DEBUG] ✗ Grammar not loaded, generation will proceed without grammar constraints")
+                    grammarContent = nil // Ensure grammar is nil if not loaded
                 }
             } else {
                 print("[DEBUG] No grammar selected, generation will proceed without grammar constraints")
+                grammarContent = nil // Explicitly clear grammar when none selected
             }
             
-            let params = LlamaMobile.CompletionParams(
-                prompt: fullPrompt,
-                maxTokens: 256,
-                temperature: 0.7,
-                topK: 40,
-                topP: 0.9,
-                minP: 0.1,
-                penaltyLastN: 64,
-                penaltyRepeat: 1.0,
-                penaltyFreq: 0.0,
-                penaltyPresent: 0.0,
-                grammar: grammarContent
+            // Format chat messages into a prompt string like chat_example.cpp does
+            var formattedPrompt = ""
+            for message in chatMessages {
+                formattedPrompt += "\(message.role): \(message.content)\n"
+            }
+            formattedPrompt += "Assistant: "
+            
+            // Create completion parameters with formatted prompt
+            var params = LlamaMobile.CompletionParams(
+                prompt: formattedPrompt
             )
+            params.maxTokens = 256
+            params.temperature = 0.7
+            params.topK = 40
+            params.topP = 0.9
+            params.minP = 0.1
+            params.penaltyLastN = 64
+            params.penaltyRepeat = 1.0
+            params.penaltyFreq = 0.0
+            params.penaltyPresent = 0.0
+            params.grammar = grammarContent
+
+            // Set comprehensive stop sequences exactly matching chat_example.cpp
+            params.stopSequences = [
+                "\n\n", "<|im_end|>", "<|endoftext|>",
+                "\nUser:", "User:", "\n\tUser:", "\tUser:",
+                "\nAssistant:", "Assistant:", "\n\tAssistant:", "\tAssistant:",
+                "\nHuman:", "Human:", "\nSystem:", "System:",
+                "\nBot:", "Bot:", "\nAI:", "AI:",
+                "\nuser:", "user:", "\n\tuser:", "\tuser:",
+                "\nassistant:", "assistant:", "\n\tassistant:", "\tassistant:"
+            ]
+
+            // Clear chat messages since we're formatting them manually
+            params.chatMessages = []
+
+            // Enable JSON response format
+            params.useJsonResponse = true
+            
+            // Log detailed LLM input parameters for debugging
+            print("\n==================================================")
+            print("[LLM INPUT DETAILS]")
+            print("==================================================")
+            print("Formatted Prompt (first 100 chars): \(formattedPrompt.prefix(100))...")
+            print("Prompt Length: \(formattedPrompt.count) characters")
+            print("Max Tokens: \(params.maxTokens)")
+            print("Temperature: \(params.temperature)")
+            print("Top K: \(params.topK)")
+            print("Top P: \(params.topP)")
+            print("Min P: \(params.minP)")
+            print("Penalty Repeat: \(params.penaltyRepeat)")
+            print("Stop Sequences Count: \(params.stopSequences.count)")
+            print("Stop Sequences (exact representation with escaped newlines/tabs):")
+            for (index, sequence) in params.stopSequences.enumerated() {
+                let escapedSequence = sequence
+                    .replacingOccurrences(of: "\n", with: "\\n")
+                    .replacingOccurrences(of: "\t", with: "\\t")
+                print("  \(index): '\(escapedSequence)'")
+            }
+            print("JSON Response Enabled: \(params.useJsonResponse)")
+            print("Chat Messages Count: \(params.chatMessages.count)")
+            print("Grammar Enabled: \(params.grammar != nil)")
+            if let grammar = params.grammar {
+                print("Grammar Content: \(grammar)")
+            } else {
+                print("Grammar Content: nil")
+            }
+            print("==================================================")
             
             if let result = appState.llamaMobile?.generateCompletion(with: params) {
                 DispatchQueue.main.async {
+                    // Log stop sequence detection results from completion result
+                    print("\n[STOP SEQUENCE DETAILS]")
+                    print("Stopped due to EOS: \(result.stoppedEos)")
+                    print("Stopped due to stop sequence: \(result.stoppedWord)")
+                    print("Stopped due to max tokens: \(result.stoppedLimit)")
+                    if let stoppingWord = result.stoppingWord {
+                        print("Stopping word detected: \(stoppingWord)")
+                    } else {
+                        print("No stopping word detected")
+                    }
                     // Log complete raw response from LLM (no parsing)
                     print("\n" + String(repeating: "=", count: 50))
                     print("[RAW MODEL RESPONSE] START (length: \(result.text.count) characters)")
@@ -478,29 +553,42 @@ struct ChatView: View {
                     
                     // Parse the JSON response from LLM
                     do {
-                        // Clean up response by removing ending tags only, keep think content
+                        // Clean up response by removing ending tags and stop sequences
                         var cleanedText = result.text
                         
-                        // Remove ending tags
+                        // Remove ending tags and stop sequences
                         cleanedText = cleanedText.replacingOccurrences(of: "<|im_end|>", with: "")
                         cleanedText = cleanedText.replacingOccurrences(of: "<|endoftext|>", with: "")
+                        
+                        // Remove stop sequences that might still be present
+                        for stopSeq in params.stopSequences {
+                            cleanedText = cleanedText.replacingOccurrences(of: stopSeq, with: "")
+                        }
                         
                         // Trim whitespace
                         var jsonString = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
                         print("[DEBUG] Cleaned Model Response: \(jsonString)")
                         
-                        // Try to extract valid JSON from within mixed text response
-                        // Look for the first '{' and last '}' to extract JSON object
-                        if let firstBrace = jsonString.firstIndex(of: "{"),
-                           let lastBrace = jsonString.lastIndex(of: "}") {
-                            let extractedJSON = String(jsonString[firstBrace...lastBrace])
-                            print("[DEBUG] Extracted JSON from mixed response: \(extractedJSON)")
-                            jsonString = extractedJSON
-                        } else if let firstBracket = jsonString.firstIndex(of: "["),
-                                  let lastBracket = jsonString.lastIndex(of: "]") {
-                            // If it's an array instead of object
-                            let extractedJSON = String(jsonString[firstBracket...lastBracket])
-                            print("[DEBUG] Extracted JSON array from mixed response: \(extractedJSON)")
+                        // Fix malformed JSON like chat_example.cpp does
+                        var fixedJSON = jsonString
+                        
+                        // Fix duplicate model fields by removing the empty one
+                        let emptyModelPattern = #""model""\s*:\s*""\s*,"#
+                        if let emptyModelRange = fixedJSON.range(of: emptyModelPattern, options: .regularExpression) {
+                            fixedJSON.removeSubrange(emptyModelRange)
+                        }
+                        
+                        // Fix extra closing bracket before usage field
+                        let extraBracketPattern = #"}\s*")\s*,("#
+                        if let extraBracketRange = fixedJSON.range(of: extraBracketPattern, options: .regularExpression) {
+                            fixedJSON.replaceSubrange(extraBracketRange, with: "},")
+                        }
+                        
+                        // Extract valid JSON from response (from first '{' to last '}')
+                        if let firstBrace = fixedJSON.firstIndex(of: "{"),
+                           let lastBrace = fixedJSON.lastIndex(of: "}") {
+                            let extractedJSON = String(fixedJSON[firstBrace...lastBrace])
+                            print("[DEBUG] Extracted and fixed JSON from response: \(extractedJSON)")
                             jsonString = extractedJSON
                         }
                         
@@ -508,62 +596,124 @@ struct ChatView: View {
                             throw DecodingError.dataCorrupted(DecodingError.Context(codingPath: [], debugDescription: "Invalid JSON data"))
                         }
                         
-                        // Try parsing as standard OpenAI response first (with choices array)
+                        // Try parsing as standard OpenAI response format
+                        let decoder = JSONDecoder()
+                        
+                        // First try the format used by chat_example.cpp (text field in choices)
                         do {
-                            let response = try JSONDecoder().decode(OpenAIResponse.self, from: data)
-                            print("[DEBUG] Successfully parsed as OpenAI Response Format: \(response)")
-                            if let assistantMessage = response.choices.last?.message, assistantMessage.role == "assistant" {
-                                print("[DEBUG] Extracted assistant response: \(assistantMessage.content)")
-                                self.messages.append(Message(role: assistantMessage.role, text: assistantMessage.content))
+                            // Try parsing as choices with text field
+                            struct ResponseWithTextChoices: Codable {
+                                let choices: [ChoiceWithText]
+                            }
+                            
+                            struct ChoiceWithText: Codable {
+                                let text: String
+                            }
+                            
+                            let response = try decoder.decode(ResponseWithTextChoices.self, from: data)
+                            print("[DEBUG] Successfully parsed as choices with text format")
+                            
+                            // Extract the assistant message content
+                            if let assistantContent = response.choices.last?.text {
+                                // Clean the assistant content by removing stop sequences like chat_example.cpp
+                                var cleanedAssistantContent = assistantContent
+                                for stopSeq in params.stopSequences {
+                                    cleanedAssistantContent = cleanedAssistantContent.replacingOccurrences(of: stopSeq, with: "")
+                                }
+                                // Trim any remaining whitespace
+                                cleanedAssistantContent = cleanedAssistantContent.trimmingCharacters(in: .whitespacesAndNewlines)
+                                
+                                print("[DEBUG] Extracted assistant response: \(assistantContent)")
+                                print("[DEBUG] Cleaned assistant response (after removing stop sequences): \(cleanedAssistantContent)")
+                                self.messages.append(Message(role: "assistant", text: cleanedAssistantContent))
                                 return
+                            } else {
+                                print("[DEBUG] No text found in choices")
                             }
                         } catch {
-                            print("[DEBUG] Failed to parse as OpenAI Response Format: \(error)")
-                            // If standard format fails, try parsing as array of messages
+                            print("[DEBUG] Failed to parse as choices with text: \(error)")
+                            
+                            // Try standard OpenAI response with choices array as fallback
                             do {
-                                let messages = try JSONDecoder().decode([OpenAIMessage].self, from: data)
-                                print("[DEBUG] Successfully parsed as OpenAI Messages Array: \(messages)")
-                                if let assistantMessage = messages.last(where: { $0.role == "assistant" }) {
-                                    print("[DEBUG] Extracted assistant response from array: \(assistantMessage.content)")
-                                    self.messages.append(Message(role: assistantMessage.role, text: assistantMessage.content))
+                                let response = try decoder.decode(OpenAIResponse.self, from: data)
+                                print("[DEBUG] Successfully parsed as OpenAI Response Format")
+                                
+                                // Extract the assistant message content
+                                if let assistantMessage = response.choices.last?.message,
+                                   assistantMessage.role == "assistant" {
+                                    // Clean the assistant content by removing stop sequences like chat_example.cpp
+                                    var cleanedAssistantContent = assistantMessage.content
+                                    for stopSeq in params.stopSequences {
+                                        cleanedAssistantContent = cleanedAssistantContent.replacingOccurrences(of: stopSeq, with: "")
+                                    }
+                                    // Trim any remaining whitespace
+                                    cleanedAssistantContent = cleanedAssistantContent.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    
+                                    print("[DEBUG] Extracted assistant response: \(assistantMessage.content)")
+                                    print("[DEBUG] Cleaned assistant response (after removing stop sequences): \(cleanedAssistantContent)")
+                                    self.messages.append(Message(role: assistantMessage.role, text: cleanedAssistantContent))
                                     return
+                                } else {
+                                    print("[DEBUG] No assistant message found in response")
                                 }
                             } catch {
-                                print("[DEBUG] Failed to parse as OpenAI Messages Array: \(error)")
-                                // If array parsing fails, try single message
+                                print("[DEBUG] Failed to parse as standard OpenAI Response: \(error)")
+                                
+                                // Try parsing as single message object as fallback
                                 do {
-                                    let singleMessage = try JSONDecoder().decode(OpenAIMessage.self, from: data)
-                                    print("[DEBUG] Successfully parsed as single OpenAI Message: \(singleMessage)")
-                                    if singleMessage.role == "assistant" {
-                                        print("[DEBUG] Extracted assistant response from single message: \(singleMessage.content)")
-                                        self.messages.append(Message(role: singleMessage.role, text: singleMessage.content))
-                                        return
+                                    let message = try decoder.decode(OpenAIMessage.self, from: data)
+                                    print("[DEBUG] Successfully parsed as single OpenAI Message")
+                                    
+                                    // Clean the message content by removing stop sequences like chat_example.cpp
+                                    var cleanedMessageContent = message.content
+                                    for stopSeq in params.stopSequences {
+                                        cleanedMessageContent = cleanedMessageContent.replacingOccurrences(of: stopSeq, with: "")
                                     }
+                                    // Trim any remaining whitespace
+                                    cleanedMessageContent = cleanedMessageContent.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    
+                                    print("[DEBUG] Using parsed message: \(message.content)")
+                                    print("[DEBUG] Cleaned message (after removing stop sequences): \(cleanedMessageContent)")
+                                    self.messages.append(Message(role: message.role, text: cleanedMessageContent))
+                                    return
                                 } catch {
                                     print("[DEBUG] Failed to parse as single OpenAI Message: \(error)")
-                                    // All JSON parsing attempts failed, try to extract assistant content using regex
-                                    if let assistantContent = extractAssistantContent(from: cleanedText) {
-                                        print("[DEBUG] Successfully extracted assistant content via regex: \(assistantContent)")
-                                        self.messages.append(Message(role: "assistant", text: assistantContent))
-                                        return
-                                    }
-                                    // Last resort: use cleaned raw text
-                                    print("[DEBUG] Using cleaned raw text as fallback: \(cleanedText)")
-                                    self.messages.append(Message(role: "assistant", text: cleanedText))
+                                }
+                            }
+                        }
+                        
+                        // Try a simplified fallback - extract content directly from JSON string
+                        if jsonString.contains("content") {
+                            // Use regex to extract content field value
+                            let contentPattern = #""content"\s*:\s*"([^"]+)"#
+                            if let contentRange = jsonString.range(of: contentPattern, options: .regularExpression) {
+                                let contentMatch = String(jsonString[contentRange])
+                                if let valueStart = contentMatch.range(of: ": \""), 
+                                   let valueEnd = contentMatch.range(of: "\"", options: [], range: valueStart.upperBound..<contentMatch.endIndex) {
+                                    let assistantContent = String(contentMatch[valueStart.upperBound..<valueEnd.lowerBound])
+                                    print("[DEBUG] Extracted assistant content via regex fallback: \(assistantContent)")
+                                    self.messages.append(Message(role: "assistant", text: assistantContent))
                                     return
                                 }
                             }
                         }
                         
-                        // Fallback if parsing succeeds but no assistant message found
+                        // Last resort: use cleaned raw text
+                        print("[DEBUG] Using cleaned raw text as final fallback: \(cleanedText)")
                         self.messages.append(Message(role: "assistant", text: cleanedText))
                         
                     } catch {
                         print("[DEBUG] Error parsing LLM response: \(error.localizedDescription)")
-                        // Fallback to cleaned text if parsing fails (keep think content)
+                        // Fallback to cleaned text if parsing fails
                         var cleanedText = result.text
                         cleanedText = cleanedText.replacingOccurrences(of: "<|im_end|>", with: "")
                         cleanedText = cleanedText.replacingOccurrences(of: "<|endoftext|>", with: "")
+                        
+                        // Remove stop sequences
+                        for stopSeq in params.stopSequences {
+                            cleanedText = cleanedText.replacingOccurrences(of: stopSeq, with: "")
+                        }
+                        
                         cleanedText = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
                         print("[DEBUG] Error fallback - cleaned text: \(cleanedText)")
                         

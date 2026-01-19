@@ -273,9 +273,27 @@ public class LlamaMobile {
         /// Paths to media files for multimodal generation (images/audio)
         public var mediaPaths: [String] = []
         
+        /// Structured chat messages for conversation-based input
+        /// If provided, these will be formatted using the chat template instead of using the prompt directly
+        public var chatMessages: [ChatMessage] = []
+        
+        /// Whether to return the response in OpenAI-like JSON format
+        public var useJsonResponse: Bool = false
+        
         /// Default initializer with minimal parameters
         public init(prompt: String) {
             self.prompt = prompt
+        }
+        
+        /// Convenience initializer for chat conversations
+        public init(chatMessages: [ChatMessage]) {
+            self.prompt = ""
+            self.chatMessages = chatMessages
+            self.maxTokens = 256
+            self.temperature = 0.7
+            self.topP = 0.95
+            self.topK = 40
+            self.penaltyRepeat = 1.2
         }
         
         /// Convenience initializer for creative writing
@@ -313,7 +331,7 @@ public class LlamaMobile {
         }
         
         /// Full initializer with all parameters
-        public init(prompt: String, maxTokens: Int32 = 128, nThreads: Int32? = nil, seed: Int32 = -1, temperature: Double = 0.8, topK: Int32 = 40, topP: Double = 0.95, minP: Double = 0.05, typicalP: Double = 1.0, penaltyLastN: Int32 = 64, penaltyRepeat: Double = 1.1, penaltyFreq: Double = 0.0, penaltyPresent: Double = 0.0, mirostat: Int32 = 0, mirostatTau: Double = 5.0, mirostatEta: Double = 0.1, ignoreEos: Bool = false, stopSequences: [String] = [], grammar: String? = nil, mediaPaths: [String] = [], tokenCallback: ((String) -> Bool)? = nil) {
+        public init(prompt: String, maxTokens: Int32 = 128, nThreads: Int32? = nil, seed: Int32 = -1, temperature: Double = 0.8, topK: Int32 = 40, topP: Double = 0.95, minP: Double = 0.05, typicalP: Double = 1.0, penaltyLastN: Int32 = 64, penaltyRepeat: Double = 1.1, penaltyFreq: Double = 0.0, penaltyPresent: Double = 0.0, mirostat: Int32 = 0, mirostatTau: Double = 5.0, mirostatEta: Double = 0.1, ignoreEos: Bool = false, stopSequences: [String] = [], grammar: String? = nil, mediaPaths: [String] = [], chatMessages: [ChatMessage] = [], useJsonResponse: Bool = false, tokenCallback: ((String) -> Bool)? = nil) {
             self.prompt = prompt
             self.maxTokens = maxTokens
             self.nThreads = nThreads
@@ -334,7 +352,29 @@ public class LlamaMobile {
             self.stopSequences = stopSequences
             self.grammar = grammar
             self.mediaPaths = mediaPaths
+            self.chatMessages = chatMessages
+            self.useJsonResponse = useJsonResponse
             self.tokenCallback = tokenCallback
+        }
+    }
+    
+    /// Chat message structure for structured conversation input
+    ///
+    /// Represents a single message in a chat conversation with a role and content.
+    public struct ChatMessage {
+        /// The role of the message sender (e.g., "system", "user", "assistant")
+        public var role: String
+        
+        /// The content of the message
+        public var content: String
+        
+        /// Initialize a new chat message
+        /// - Parameters:
+        ///   - role: The role of the message sender
+        ///   - content: The content of the message
+        public init(role: String, content: String) {
+            self.role = role
+            self.content = content
         }
     }
     
@@ -343,7 +383,7 @@ public class LlamaMobile {
     /// Contains the generated text and metadata about the completion process.
     public struct CompletionResult {
         /// Default initializer with all parameters
-        public init(text: String, tokensGenerated: Int32, tokensEvaluated: Int32, truncated: Bool, stoppedEos: Bool, stoppedWord: Bool, stoppedLimit: Bool) {
+        public init(text: String, tokensGenerated: Int32, tokensEvaluated: Int32, truncated: Bool, stoppedEos: Bool, stoppedWord: Bool, stoppedLimit: Bool, stoppingWord: String?) {
             self.text = text
             self.tokensGenerated = tokensGenerated
             self.tokensEvaluated = tokensEvaluated
@@ -351,6 +391,7 @@ public class LlamaMobile {
             self.stoppedEos = stoppedEos
             self.stoppedWord = stoppedWord
             self.stoppedLimit = stoppedLimit
+            self.stoppingWord = stoppingWord
         }
         /// The generated completion text
         public var text: String
@@ -370,8 +411,11 @@ public class LlamaMobile {
         /// Whether generation stopped due to a stop sequence
         public var stoppedWord: Bool
         
-        /// Whether generation stopped due to reaching maxTokens limit
+        /// Whether generation stopped due to reaching the max_tokens limit
         public var stoppedLimit: Bool
+        
+        /// The specific stop sequence that triggered generation to stop (if applicable)
+        public var stoppingWord: String?
     }
     
     /// LoRA adapter configuration
@@ -552,6 +596,55 @@ public class LlamaMobile {
     
     // MARK: - Completion Methods
     
+    /// Load grammar content from a file path
+    /// - Parameter grammarPath: Path to the grammar file (.gbnf format)
+    /// - Returns: Grammar content as a string, or nil if an error occurred
+    public func loadGrammar(from grammarPath: String) -> String? {
+        do {
+            return try String(contentsOfFile: grammarPath, encoding: .utf8)
+        } catch {
+            print("Error loading grammar file: \(error)")
+            return nil
+        }
+    }
+    
+    /// Load grammar content from the framework's grammars directory
+    /// - Parameter grammarName: Name of the grammar file (without .gbnf extension)
+    /// - Returns: Grammar content as a string, or nil if an error occurred
+    public func loadGrammar(named grammarName: String) -> String? {
+        // Get the framework bundle
+        let frameworkBundle = Bundle(for: type(of: self))
+        print("[DEBUG] Loading grammar '\(grammarName)' from framework bundle: \(frameworkBundle.bundlePath)")
+        
+        // Try to find the grammar file in the framework's grammars directory
+        if let grammarURL = frameworkBundle.url(forResource: grammarName, withExtension: "gbnf", subdirectory: "grammars") {
+            print("[DEBUG] Found grammar file at: \(grammarURL.path)")
+            
+            do {
+                let content = try String(contentsOf: grammarURL, encoding: .utf8)
+                print("[DEBUG] ✓ Successfully loaded grammar '\(grammarName)' (\(content.count) characters)")
+                return content
+            } catch {
+                print("[ERROR] ✗ Failed to read grammar file: \(error)")
+            }
+        } else {
+            // List available grammar files for debugging
+            do {
+                let grammarsDirURL = frameworkBundle.url(forResource: nil, withExtension: nil, subdirectory: "grammars")
+                if let grammarsPath = grammarsDirURL?.path {
+                    let availableGrammars = try FileManager.default.contentsOfDirectory(atPath: grammarsPath)
+                    print("[DEBUG] Available grammar files in framework: \(availableGrammars)")
+                }
+            } catch {
+                print("[ERROR] ✗ Failed to list available grammar files: \(error)")
+            }
+            
+            print("[ERROR] ✗ Grammar file '\(grammarName).gbnf' not found in framework's grammars directory")
+        }
+        
+        return nil
+    }
+    
     /// Generate a text completion from a prompt
     /// - Parameter params: Completion parameters
     /// - Returns: Completion result, or nil if an error occurred
@@ -563,11 +656,27 @@ public class LlamaMobile {
         // Convert stop sequences to C array
         let stopSequenceCount = params.stopSequences.count
         let stopSequencesC = UnsafeMutablePointer<UnsafePointer<CChar>?>.allocate(capacity: stopSequenceCount)
-        defer { stopSequencesC.deallocate() }
+        
+        // Array to store C strings that need to be freed
+        var stopStringsToFree: [UnsafeMutablePointer<CChar>] = []
+        defer {
+            // Free all allocated C strings for stop sequences
+            for cString in stopStringsToFree {
+                cString.deallocate()
+            }
+            // Free the stop sequences array
+            stopSequencesC.deallocate()
+        }
         
         for (index, sequence) in params.stopSequences.enumerated() {
-            stopSequencesC[index] = sequence.withCString { $0 }
-        }
+                // Allocate permanent C string for stop sequence
+                let stopCString = UnsafeMutablePointer<CChar>.allocate(capacity: sequence.utf8.count + 1)
+                sequence.withCString { source in
+                    stopCString.update(from: source, count: sequence.utf8.count + 1)
+                }
+                stopStringsToFree.append(stopCString)
+                stopSequencesC[index] = UnsafePointer(stopCString)
+            }
         
         // Create token callback wrapper if needed
         typealias TokenCallbackType = @convention(c) (UnsafePointer<CChar>?) -> Bool
@@ -603,8 +712,76 @@ public class LlamaMobile {
         cParams.ignore_eos = params.ignoreEos
         cParams.stop_sequences = stopSequenceCount > 0 ? stopSequencesC : nil
         cParams.stop_sequence_count = Int32(stopSequenceCount)
-        cParams.grammar = params.grammar?.withCString { $0 }
+        
+        // Log grammar usage and handle grammar string
+        var grammarCString: UnsafeMutablePointer<CChar>? = nil
+        if let grammar = params.grammar {
+            print("[DEBUG] Using grammar for generation")
+            print("[DEBUG] Grammar preview: \(grammar.prefix(100))...")
+            // Allocate permanent C string for grammar
+            grammarCString = UnsafeMutablePointer<CChar>.allocate(capacity: grammar.utf8.count + 1)
+            grammar.withCString { source in
+                grammarCString?.update(from: source, count: grammar.utf8.count + 1)
+            }
+            cParams.grammar = UnsafePointer(grammarCString)
+        } else {
+            print("[DEBUG] No grammar specified for generation")
+            cParams.grammar = nil
+        }
+        // Add grammar to cleanup list if allocated
+        if let grammarCString = grammarCString {
+            stopStringsToFree.append(grammarCString) // Reuse existing cleanup list
+        }
+        
         cParams.token_callback = tokenCallbackPtr
+        
+        // Handle chat messages if provided
+        if !params.chatMessages.isEmpty {
+            print("[DEBUG] Using structured chat messages instead of raw prompt")
+            let chatMessageCount = params.chatMessages.count
+            let chatMessagesC = UnsafeMutablePointer<llama_mobile_chat_message_c>.allocate(capacity: chatMessageCount)
+            
+            // Array to store C strings that need to be freed
+            var cStringsToFree: [UnsafeMutablePointer<CChar>] = []
+            defer {
+                // Free all allocated C strings
+                for cString in cStringsToFree {
+                    cString.deallocate()
+                }
+                // Free the chat messages array
+                chatMessagesC.deallocate()
+            }
+            
+            for (index, message) in params.chatMessages.enumerated() {
+                // Allocate permanent C strings for role
+                let roleCString = UnsafeMutablePointer<CChar>.allocate(capacity: message.role.utf8.count + 1)
+                message.role.withCString { source in
+                    roleCString.update(from: source, count: message.role.utf8.count + 1)
+                }
+                cStringsToFree.append(roleCString)
+                
+                // Allocate permanent C strings for content
+                let contentCString = UnsafeMutablePointer<CChar>.allocate(capacity: message.content.utf8.count + 1)
+                message.content.withCString { source in
+                    contentCString.update(from: source, count: message.content.utf8.count + 1)
+                }
+                cStringsToFree.append(contentCString)
+                
+                // Assign to struct
+                chatMessagesC[index].role = UnsafePointer(roleCString)
+                chatMessagesC[index].content = UnsafePointer(contentCString)
+            }
+            
+            // Convert mutable pointer to const pointer to match the expected type
+            cParams.chat_messages = UnsafePointer(chatMessagesC)
+            cParams.chat_message_count = Int32(chatMessageCount)
+        } else {
+            cParams.chat_messages = nil
+            cParams.chat_message_count = 0
+        }
+        
+        // Set JSON response flag
+        cParams.use_json_response = params.useJsonResponse
         
         // Generate completion - use multimodal if media paths are provided
         var cResult = llama_mobile_completion_result_c_t()
@@ -614,10 +791,26 @@ public class LlamaMobile {
             // Convert media paths to C array
             let mediaCount = params.mediaPaths.count
             let mediaPathsC = UnsafeMutablePointer<UnsafePointer<CChar>?>.allocate(capacity: mediaCount)
-            defer { mediaPathsC.deallocate() }
+            
+            // Array to store C strings that need to be freed
+            var mediaStringsToFree: [UnsafeMutablePointer<CChar>] = []
+            defer {
+                // Free all allocated C strings for media paths
+                for cString in mediaStringsToFree {
+                    cString.deallocate()
+                }
+                // Free the media paths array
+                mediaPathsC.deallocate()
+            }
             
             for (index, path) in params.mediaPaths.enumerated() {
-                mediaPathsC[index] = path.withCString { $0 }
+                // Allocate permanent C string for media path
+                let mediaCString = UnsafeMutablePointer<CChar>.allocate(capacity: path.utf8.count + 1)
+                path.withCString { source in
+                    mediaCString.update(from: source, count: path.utf8.count + 1)
+                }
+                mediaStringsToFree.append(mediaCString)
+                mediaPathsC[index] = UnsafePointer(mediaCString)
             }
             
             status = llama_mobile_multimodal_completion_c(context, &cParams, mediaPathsC, Int32(mediaCount), &cResult)
@@ -625,12 +818,28 @@ public class LlamaMobile {
             status = llama_mobile_completion_c(context, &cParams, &cResult)
         }
         
-        guard status == 0, let text = cResult.text.map({ String(cString: $0) }) else {
+        // Log the result status
+        print("[DEBUG] Completion C API status: \(status)")
+        
+        guard status == 0 else {
+            print("[ERROR] Completion C API failed with status: \(status)")
             llama_mobile_free_completion_result_members_c(&cResult)
             return nil
         }
         
+        guard let text = cResult.text.map({ String(cString: $0) }) else {
+            print("[ERROR] Completion result has no text")
+            llama_mobile_free_completion_result_members_c(&cResult)
+            return nil
+        }
+        
+        // Log token statistics
+        print("[DEBUG] Tokens evaluated: \(cResult.tokens_evaluated)")
+        print("[DEBUG] Tokens generated: \(cResult.tokens_predicted)")
+        print("[DEBUG] Generation stopped because: \n  - End of sequence: \(cResult.stopped_eos)\n  - Stop word: \(cResult.stopped_word)\n  - Token limit: \(cResult.stopped_limit)")
+        
         // Create Swift result
+        let stoppingWord = cResult.stopping_word != nil ? String(cString: cResult.stopping_word!) : nil
         let result = CompletionResult(
             text: text,
             tokensGenerated: cResult.tokens_predicted,
@@ -638,8 +847,22 @@ public class LlamaMobile {
             truncated: cResult.truncated,
             stoppedEos: cResult.stopped_eos,
             stoppedWord: cResult.stopped_word,
-            stoppedLimit: cResult.stopped_limit
+            stoppedLimit: cResult.stopped_limit,
+            stoppingWord: stoppingWord
         )
+        
+        // Log the result for debugging
+        print("[DEBUG] Completion result: \(text)")
+        
+        // Validate if generated text is different from prompt
+        if text == params.prompt {
+            print("[WARNING] Generated text is identical to input prompt. This could indicate:")
+            print("          - Model may not be generating any tokens")
+            print("          - Generation parameters may be causing early stopping")
+            print("          - Model file may be corrupt or incompatible")
+            print("          - Prompt may need to be formatted differently for the model")
+            print("[DEBUG] Tokens generated: \(cResult.tokens_predicted) (should be > 0 for new content)")
+        }
         
         // Free C result members
         llama_mobile_free_completion_result_members_c(&cResult)
@@ -794,19 +1017,13 @@ public class LlamaMobile {
         
         return text.withCString { textC in
             let cResult = llama_mobile_embedding_c(context, textC)
+            defer { llama_mobile_free_float_array_c(cResult) }
             
             guard let values = cResult.values else {
-                llama_mobile_free_float_array_c(cResult)
                 return nil
             }
             
-            // Copy the embedding values before freeing the memory
-            let embeddingArray = Array(UnsafeBufferPointer(start: values, count: Int(cResult.count)))
-            
-            // Now free the memory
-            llama_mobile_free_float_array_c(cResult)
-            
-            return embeddingArray
+            return Array(UnsafeBufferPointer(start: values, count: Int(cResult.count)))
         }
     }
     
