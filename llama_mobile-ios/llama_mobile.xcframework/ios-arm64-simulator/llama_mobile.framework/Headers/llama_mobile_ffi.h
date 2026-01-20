@@ -198,6 +198,9 @@ LLAMA_MOBILE_FFI_EXPORT void llama_mobile_release_vocoder_c(llama_mobile_context
 
 // **HIGH PRIORITY ADDITIONS**
 
+// Get the model's built-in chat template
+LLAMA_MOBILE_FFI_EXPORT const char* llama_mobile_get_model_chat_template_c(llama_mobile_context_handle_t handle);
+
 typedef struct {
     const char* path;
     float scale;

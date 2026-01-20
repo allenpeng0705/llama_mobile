@@ -7,6 +7,7 @@
 
 import Foundation
 import llama_mobile
+import Darwin
 
 // Global callback context holders
 private var progressCallbackContext: ((Float) -> Void)? = nil
@@ -73,6 +74,9 @@ public class LlamaMobile {
     
     /// Opaque handle to the llama_mobile context
     private var context: llama_mobile_context_handle_t?
+    
+    /// Chat template used by the model
+    public var chatTemplate: String? = nil
     
     /// Configure Metal paths before model initialization
     private func configureMetalPaths() {
@@ -280,6 +284,9 @@ public class LlamaMobile {
         /// Whether to return the response in OpenAI-like JSON format
         public var useJsonResponse: Bool = false
         
+        /// Custom chat template for formatting conversations
+        public var chatTemplate: String? = nil
+        
         /// Default initializer with minimal parameters
         public init(prompt: String) {
             self.prompt = prompt
@@ -331,7 +338,7 @@ public class LlamaMobile {
         }
         
         /// Full initializer with all parameters
-        public init(prompt: String, maxTokens: Int32 = 128, nThreads: Int32? = nil, seed: Int32 = -1, temperature: Double = 0.8, topK: Int32 = 40, topP: Double = 0.95, minP: Double = 0.05, typicalP: Double = 1.0, penaltyLastN: Int32 = 64, penaltyRepeat: Double = 1.1, penaltyFreq: Double = 0.0, penaltyPresent: Double = 0.0, mirostat: Int32 = 0, mirostatTau: Double = 5.0, mirostatEta: Double = 0.1, ignoreEos: Bool = false, stopSequences: [String] = [], grammar: String? = nil, mediaPaths: [String] = [], chatMessages: [ChatMessage] = [], useJsonResponse: Bool = false, tokenCallback: ((String) -> Bool)? = nil) {
+        public init(prompt: String, maxTokens: Int32 = 128, nThreads: Int32? = nil, seed: Int32 = -1, temperature: Double = 0.8, topK: Int32 = 40, topP: Double = 0.95, minP: Double = 0.05, typicalP: Double = 1.0, penaltyLastN: Int32 = 64, penaltyRepeat: Double = 1.1, penaltyFreq: Double = 0.0, penaltyPresent: Double = 0.0, mirostat: Int32 = 0, mirostatTau: Double = 5.0, mirostatEta: Double = 0.1, ignoreEos: Bool = false, stopSequences: [String] = [], grammar: String? = nil, mediaPaths: [String] = [], chatMessages: [ChatMessage] = [], useJsonResponse: Bool = false, chatTemplate: String? = nil, tokenCallback: ((String) -> Bool)? = nil) {
             self.prompt = prompt
             self.maxTokens = maxTokens
             self.nThreads = nThreads
@@ -354,7 +361,91 @@ public class LlamaMobile {
             self.mediaPaths = mediaPaths
             self.chatMessages = chatMessages
             self.useJsonResponse = useJsonResponse
+            self.chatTemplate = chatTemplate
             self.tokenCallback = tokenCallback
+        }
+        
+        /// Initializer that accepts OpenAI format JSON
+        /// Example JSON format:
+        /// {"messages": [{"role": "system", "content": "You are a helpful assistant"}, {"role": "user", "content": "Hello"}]}
+        public init(openAIJSON: String) throws {
+            // Parse OpenAI JSON
+            guard let jsonData = openAIJSON.data(using: .utf8) else {
+                throw Error.invalidParameter("Invalid JSON string")
+            }
+            
+            let jsonObject = try JSONSerialization.jsonObject(with: jsonData, options: [])
+            guard let root = jsonObject as? [String: Any], let messages = root["messages"] as? [[String: Any]] else {
+                throw Error.invalidParameter("Invalid OpenAI JSON format - missing 'messages' field")
+            }
+            
+            // Convert to ChatMessage objects and extract media paths
+            var chatMessages: [ChatMessage] = []
+            var mediaPaths: [String] = []
+            
+            for message in messages {
+                guard let role = message["role"] as? String else {
+                    throw Error.invalidParameter("Invalid message format - missing 'role'")
+                }
+                
+                var textContent = ""
+                
+                // Check if content is an array (multimodal format)
+                if let contentArray = message["content"] as? [[String: Any]] {
+                    for contentItem in contentArray {
+                        guard let type = contentItem["type"] as? String else {
+                            throw Error.invalidParameter("Invalid content item format - missing 'type'")
+                        }
+                        
+                        if type == "text" {
+                            if let text = contentItem["text"] as? String {
+                                textContent += text + " "
+                            }
+                        } else if type == "image_url" {
+                            if let imageUrlDict = contentItem["image_url"] as? [String: Any],
+                               let urlString = imageUrlDict["url"] as? String {
+                                // For local files, extract path from URL
+                                if let url = URL(string: urlString), url.scheme == "file" {
+                                    mediaPaths.append(url.path)
+                                } else {
+                                    // For remote URLs, we'll need to download the image first
+                                    // For now, just add the URL as-is (corelib might handle it)
+                                    mediaPaths.append(urlString)
+                                }
+                            }
+                        }
+                    }
+                } else if let content = message["content"] as? String {
+                    // Legacy string format
+                    textContent = content
+                } else {
+                    throw Error.invalidParameter("Invalid message format - 'content' must be string or array")
+                }
+                
+                // Add the text content to chat messages
+                chatMessages.append(ChatMessage(role: role, content: textContent.trimmingCharacters(in: .whitespacesAndNewlines)))
+            }
+            
+            // Call the existing chatMessages initializer first to ensure proper initialization
+            self.init(chatMessages: chatMessages)
+            
+            // Override with improved parameters for OpenAI compatibility
+            self.minP = 0.1
+            self.penaltyRepeat = 1.0
+            self.penaltyFreq = 0.0
+            self.penaltyPresent = 0.0
+            self.penaltyLastN = 64
+            
+            // No hardcoded stop sequences - let the caller set them explicitly
+            // This allows better control over when generation stops
+            
+            // Enable JSON response format for OpenAI compatibility
+            self.useJsonResponse = true
+            
+            // Set media paths if any were found
+            self.mediaPaths = mediaPaths
+            
+            // No hardcoded template - let the caller or SDK set it
         }
     }
     
@@ -411,7 +502,7 @@ public class LlamaMobile {
         /// Whether generation stopped due to a stop sequence
         public var stoppedWord: Bool
         
-        /// Whether generation stopped due to reaching the max_tokens limit
+        /// Whether generation stopped due to reaching maxTokens limit
         public var stoppedLimit: Bool
         
         /// The specific stop sequence that triggered generation to stop (if applicable)
@@ -543,6 +634,12 @@ public class LlamaMobile {
         }
     }
     
+    /// Sets the chat template for the model.
+    /// - Parameter template: The chat template to use.
+    public func setChatTemplate(_ template: String?) {
+        self.chatTemplate = template
+    }
+    
     /// Internal initialization method
     private func initialize(with params: InitParams) -> Bool {
         // Configure Metal paths before initialization
@@ -563,6 +660,7 @@ public class LlamaMobile {
         
         // Create and populate the C params struct
         var cParams = llama_mobile_init_params_c_t()
+        memset(&cParams, 0, MemoryLayout<llama_mobile_init_params_c_t>.size)
         cParams.model_path = params.modelPath.withCString { $0 }
         cParams.chat_template = params.chatTemplate?.withCString { $0 }
         cParams.system_prompt = params.systemPrompt?.withCString { $0 }
@@ -583,6 +681,16 @@ public class LlamaMobile {
         
         // Initialize the context
         context = llama_mobile_init_context_c(&cParams)
+        
+        // Store the chat template
+        if let chatTemplate = params.chatTemplate {
+            self.chatTemplate = chatTemplate
+        } else {
+            // Note: We're unable to access the built-in template from Swift due to framework limitations
+            // This functionality would require updating the binary framework's headers or modulemap
+            // For now, apps can implement their own fallback logic using the setChatTemplate method
+            self.chatTemplate = nil
+        }
         
         return context != nil
     }
@@ -669,14 +777,14 @@ public class LlamaMobile {
         }
         
         for (index, sequence) in params.stopSequences.enumerated() {
-                // Allocate permanent C string for stop sequence
-                let stopCString = UnsafeMutablePointer<CChar>.allocate(capacity: sequence.utf8.count + 1)
-                sequence.withCString { source in
-                    stopCString.update(from: source, count: sequence.utf8.count + 1)
-                }
-                stopStringsToFree.append(stopCString)
-                stopSequencesC[index] = UnsafePointer(stopCString)
+            // Allocate permanent C string for stop sequence
+            let stopCString = UnsafeMutablePointer<CChar>.allocate(capacity: sequence.utf8.count + 1)
+            sequence.withCString { source in
+                stopCString.update(from: source, count: sequence.utf8.count + 1)
             }
+            stopStringsToFree.append(stopCString)
+            stopSequencesC[index] = UnsafePointer(stopCString)
+        }
         
         // Create token callback wrapper if needed
         typealias TokenCallbackType = @convention(c) (UnsafePointer<CChar>?) -> Bool
@@ -692,8 +800,13 @@ public class LlamaMobile {
         }
         
         // Create and populate the C params struct
+        // Initialize with zero values to prevent garbage memory issues
         var cParams = llama_mobile_completion_params_c_t()
-        cParams.prompt = params.prompt.withCString { $0 }
+        memset(&cParams, 0, MemoryLayout<llama_mobile_completion_params_c_t>.size)
+        
+        // Set prompt to empty string when chat messages are present, otherwise use the prompt
+        let promptToUse = params.chatMessages.isEmpty ? params.prompt : ""
+        cParams.prompt = promptToUse.withCString { $0 }
         cParams.n_predict = params.maxTokens
         cParams.n_threads = params.nThreads ?? 0
         cParams.seed = params.seed
@@ -738,43 +851,54 @@ public class LlamaMobile {
         // Handle chat messages if provided
         if !params.chatMessages.isEmpty {
             print("[DEBUG] Using structured chat messages instead of raw prompt")
-            let chatMessageCount = params.chatMessages.count
-            let chatMessagesC = UnsafeMutablePointer<llama_mobile_chat_message_c>.allocate(capacity: chatMessageCount)
             
-            // Array to store C strings that need to be freed
-            var cStringsToFree: [UnsafeMutablePointer<CChar>] = []
-            defer {
-                // Free all allocated C strings
-                for cString in cStringsToFree {
-                    cString.deallocate()
-                }
-                // Free the chat messages array
-                chatMessagesC.deallocate()
+            // Manually format chat messages using the template since C API doesn't support passing template with structured messages
+            guard let chatTemplate = params.chatTemplate else {
+                print("[ERROR] Cannot format chat messages: No chat template provided")
+                return nil
             }
             
-            for (index, message) in params.chatMessages.enumerated() {
-                // Allocate permanent C strings for role
-                let roleCString = UnsafeMutablePointer<CChar>.allocate(capacity: message.role.utf8.count + 1)
-                message.role.withCString { source in
-                    roleCString.update(from: source, count: message.role.utf8.count + 1)
-                }
-                cStringsToFree.append(roleCString)
-                
-                // Allocate permanent C strings for content
-                let contentCString = UnsafeMutablePointer<CChar>.allocate(capacity: message.content.utf8.count + 1)
-                message.content.withCString { source in
-                    contentCString.update(from: source, count: message.content.utf8.count + 1)
-                }
-                cStringsToFree.append(contentCString)
-                
-                // Assign to struct
-                chatMessagesC[index].role = UnsafePointer(roleCString)
-                chatMessagesC[index].content = UnsafePointer(contentCString)
+            print("[MANUAL FORMAT] Using chat template: \(chatTemplate)")
+            
+            var formattedPrompt = ""
+            
+            for message in params.chatMessages {
+                var messageTemplate = chatTemplate
+                messageTemplate = messageTemplate.replacingOccurrences(of: "{{role}}", with: message.role)
+                messageTemplate = messageTemplate.replacingOccurrences(of: "{{content}}", with: message.content)
+                formattedPrompt += messageTemplate
             }
             
-            // Convert mutable pointer to const pointer to match the expected type
-            cParams.chat_messages = UnsafePointer(chatMessagesC)
-            cParams.chat_message_count = Int32(chatMessageCount)
+            // Add the assistant prompt suffix based on the chat template
+            // This extracts the assistant turn format by replacing role with 'assistant' and removing content placeholder and closing tag
+            var assistantTurnTemplate = chatTemplate
+            assistantTurnTemplate = assistantTurnTemplate.replacingOccurrences(of: "{{role}}", with: "assistant")
+            
+            // Find the position of the content placeholder and only keep the part before it
+            if let contentPlaceholderRange = assistantTurnTemplate.range(of: "{{content}}") {
+                // Only keep the part before the content placeholder
+                assistantTurnTemplate = String(assistantTurnTemplate[..<contentPlaceholderRange.lowerBound])
+            }
+            
+            // Trim whitespace
+            assistantTurnTemplate = assistantTurnTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+            formattedPrompt += assistantTurnTemplate + "\n"
+            
+            print("[DEBUG] Manually formatted prompt using template:")
+            print(formattedPrompt)
+            
+            // Use the manually formatted prompt instead of structured chat messages
+            // Create a persistent C string copy since withCString only keeps it valid for the closure
+            let promptCString = UnsafeMutablePointer<CChar>.allocate(capacity: formattedPrompt.utf8.count + 1)
+            formattedPrompt.withCString { source in
+                promptCString.update(from: source, count: formattedPrompt.utf8.count + 1)
+            }
+            cParams.prompt = UnsafePointer(promptCString)
+            cParams.chat_messages = nil
+            cParams.chat_message_count = 0
+            
+            // Free the C string later using the existing cleanup list
+            stopStringsToFree.append(promptCString)
         } else {
             cParams.chat_messages = nil
             cParams.chat_message_count = 0
@@ -838,8 +962,10 @@ public class LlamaMobile {
         print("[DEBUG] Tokens generated: \(cResult.tokens_predicted)")
         print("[DEBUG] Generation stopped because: \n  - End of sequence: \(cResult.stopped_eos)\n  - Stop word: \(cResult.stopped_word)\n  - Token limit: \(cResult.stopped_limit)")
         
-        // Create Swift result
+        // Get stopping word if available
         let stoppingWord = cResult.stopping_word != nil ? String(cString: cResult.stopping_word!) : nil
+        
+        // Create Swift result
         let result = CompletionResult(
             text: text,
             tokensGenerated: cResult.tokens_predicted,
@@ -868,6 +994,43 @@ public class LlamaMobile {
         llama_mobile_free_completion_result_members_c(&cResult)
         
         return result
+    }
+    
+    /// OpenAI-compatible completion API
+    /// Accepts OpenAI format JSON and generates a completion
+    /// - Parameter openAIJSON: OpenAI format JSON string
+    /// - Parameter grammar: Optional grammar content to constrain generation
+    /// - Returns: The generated completion result in OpenAI format, or nil if an error occurred.
+    public func generateOpenAICompletion(with openAIJSON: String, grammar: String? = nil) -> CompletionResult? {
+        guard let context = context else {
+            return nil
+        }
+        
+        do {
+            // Create completion params from OpenAI JSON
+            var params = try CompletionParams(openAIJSON: openAIJSON)
+            
+            // Only use the stored chat template if available
+            // No fallback template - template remains nil if none is available
+            params.chatTemplate = self.chatTemplate
+            print("[JSON API] Using chat template: \(params.chatTemplate ?? "(none)")")
+            
+            // Set grammar if provided
+            if let grammar = grammar {
+                params.grammar = grammar
+                print("[JSON API] Using grammar")
+            }
+            
+            // Use JSON response format for OpenAI compatibility unless a custom grammar is provided
+            // This avoids conflicts between built-in JSON formatting and custom JSON grammar
+            params.useJsonResponse = grammar == nil
+            
+            // Generate completion using the standard method
+            return generateCompletion(with: params)
+        } catch {
+            print("[ERROR] Error in generateOpenAICompletion: \(error)")
+            return nil
+        }
     }
     
     /// Generate a text completion with simplified parameters
@@ -989,12 +1152,16 @@ public class LlamaMobile {
     /// - Parameter tokens: Array of token IDs to detokenize
     /// - Returns: Detokenized text string, or nil if an error occurred
     public func detokenize(tokens: [Int32]) -> String? {
+        print("[LLAMA DETOKENIZE] Called with tokens: \(tokens)")
+        print("[LLAMA DETOKENIZE] Number of tokens: \(tokens.count)")
         guard let context = context else {
             return nil
         }
         
         let cString = tokens.withUnsafeBufferPointer { buffer in
-            llama_mobile_detokenize_c(context, buffer.baseAddress, Int32(buffer.count))
+            let result = llama_mobile_detokenize_c(context, buffer.baseAddress, Int32(buffer.count))
+            print("[LLAMA DETOKENIZE] C function result: \(result != nil ? String(cString: result!) : "nil")")
+            return result
         }
         
         guard let cString = cString else {

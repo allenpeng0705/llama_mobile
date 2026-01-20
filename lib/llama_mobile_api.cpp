@@ -362,6 +362,10 @@ int llama_mobile_get_tts_type(llama_mobile_context_t ctx) {
     return llama_mobile_get_tts_type_c((llama_mobile_context_handle_t) ctx);
 }
 
+const char* llama_mobile_get_model_chat_template(llama_mobile_context_t ctx) {
+    return llama_mobile_get_model_chat_template_c((llama_mobile_context_handle_t) ctx);
+}
+
 llama_mobile_token_array_t llama_mobile_get_audio_guide_tokens(llama_mobile_context_t ctx, const char* text_to_speak) {
     llama_mobile_token_array_c_t ffi_result = llama_mobile_get_audio_guide_tokens_c(
         (llama_mobile_context_handle_t) ctx,

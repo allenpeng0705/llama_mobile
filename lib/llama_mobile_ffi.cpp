@@ -233,22 +233,26 @@ int llama_mobile_completion_c(
             // Create OpenAI-like JSON response
             std::stringstream json_stream;
             json_stream << "{";
-            json_stream << R"("id":"cmpl-")";
+            // Add ID with proper formatting
+            json_stream << '"' << "id" << '"' << ":" << '"' << "cmpl-";
             // Add a simple random ID (in production, use a proper UUID)
             std::random_device rd;
             std::mt19937 gen(rd());
             std::uniform_int_distribution<> dis(0, 999999);
             json_stream << std::setfill('0') << std::setw(6) << dis(gen);
-            json_stream << R"(","object":"text_completion","created":)";
+            json_stream << '"' << ',' << '"' << "object" << '"' << ":" << '"' << "text_completion" << '"' << ',';
+            json_stream << '"' << "created" << '"' << ":";
             // Add current timestamp
             json_stream << static_cast<long long>(std::time(nullptr));
-            json_stream << R"(,"model":"",)";
-            // Add model name if available (simplified for now)
+
+            // Add model name (always include field)
+            json_stream << R"(,"model":")";
             if (context->model) {
                 char model_desc[128] = {0};
                 llama_model_desc(context->model, model_desc, sizeof(model_desc));
-                json_stream << R"("model":")" << model_desc << R"(",)";
+                json_stream << model_desc;
             }
+            json_stream << R"(",)";
             // Add choices array
             json_stream << R"("choices":[{"text":")";
             // Escape JSON special characters in the generated text
@@ -278,7 +282,7 @@ int llama_mobile_completion_c(
             } else {
                 json_stream << R"(null)";
             }
-            json_stream << R"(}]}),"usage":{"prompt_tokens":)";
+            json_stream << R"(}],"usage":{"prompt_tokens":)";
             json_stream << context->num_prompt_tokens;
             json_stream << R"(,"completion_tokens":)";
             json_stream << context->num_tokens_predicted;
@@ -416,22 +420,26 @@ int llama_mobile_multimodal_completion_c(
             // Create OpenAI-like JSON response
             std::stringstream json_stream;
             json_stream << "{";
-            json_stream << R"("id":"cmpl-")";
+            // Add ID with proper formatting
+            json_stream << '"' << "id" << '"' << ":" << '"' << "cmpl-";
             // Add a simple random ID (in production, use a proper UUID)
             std::random_device rd;
             std::mt19937 gen(rd());
             std::uniform_int_distribution<> dis(0, 999999);
             json_stream << std::setfill('0') << std::setw(6) << dis(gen);
-            json_stream << R"(","object":"text_completion","created":)";
+            json_stream << '"' << ',' << '"' << "object" << '"' << ":" << '"' << "text_completion" << '"' << ',';
+            json_stream << '"' << "created" << '"' << ":";
             // Add current timestamp
             json_stream << static_cast<long long>(std::time(nullptr));
-            json_stream << R"(,"model":"",)";
-            // Add model name if available (simplified for now)
+
+            // Add model name (always include field)
+            json_stream << R"(,"model":")";
             if (context->model) {
                 char model_desc[128] = {0};
                 llama_model_desc(context->model, model_desc, sizeof(model_desc));
-                json_stream << R"("model":")" << model_desc << R"(",)";
+                json_stream << model_desc;
             }
+            json_stream << R"(",)";
             // Add choices array
             json_stream << R"("choices":[{"text":")";
             // Escape JSON special characters in the generated text
@@ -461,7 +469,7 @@ int llama_mobile_multimodal_completion_c(
             } else {
                 json_stream << R"(null)";
             }
-            json_stream << R"(}]}),"usage":{"prompt_tokens":)";
+            json_stream << R"(}],"usage":{"prompt_tokens":)";
             json_stream << context->num_prompt_tokens;
             json_stream << R"(,"completion_tokens":)";
             json_stream << context->num_tokens_predicted;
@@ -1474,6 +1482,21 @@ int64_t llama_mobile_get_model_params_c(llama_mobile_context_handle_t handle) {
         std::cerr << "Error getting model params: " << e.what() << std::endl;
         return 0;
     }
+}
+
+const char* llama_mobile_get_model_chat_template_c(llama_mobile_context_handle_t handle) {
+    if (!handle) {
+        return nullptr;
+    }
+    
+    llama_mobile::llama_mobile_context* context = reinterpret_cast<llama_mobile::llama_mobile_context*>(handle);
+    
+    if (!context->model) {
+        return nullptr;
+    }
+    
+    // Get the model's built-in chat template
+    return llama_model_chat_template(context->model, nullptr);
 }
 
 void llama_mobile_free_bench_result_members_c(llama_mobile_bench_result_c_t* result) {

@@ -494,12 +494,21 @@ LLAMA_MOBILE_API int llama_mobile_init_vocoder(llama_mobile_context_t ctx, const
 LLAMA_MOBILE_API bool llama_mobile_is_vocoder_enabled(llama_mobile_context_t ctx);
 
 /**
- * @brief Get the TTS type supported by the loaded model.
+ * @brief Get the current TTS model type.
  * 
  * @param ctx Context handle obtained from llama_mobile_init() or llama_mobile_init_simple().
  * @return TTS type identifier, or -1 on failure.
  */
 LLAMA_MOBILE_API int llama_mobile_get_tts_type(llama_mobile_context_t ctx);
+
+/**
+ * @brief Get the model's built-in chat template.
+ * 
+ * @param ctx Context handle obtained from llama_mobile_init() or llama_mobile_init_simple().
+ * @return The model's built-in chat template, or NULL if no template is available.
+ *         The returned string is owned by the model and should not be freed.
+ */
+LLAMA_MOBILE_API const char* llama_mobile_get_model_chat_template(llama_mobile_context_t ctx);
 
 /**
  * @brief Get audio guide tokens for a given text to speak.
