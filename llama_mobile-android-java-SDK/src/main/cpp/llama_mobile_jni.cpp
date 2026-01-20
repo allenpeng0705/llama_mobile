@@ -321,7 +321,12 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     
     // Set params
     memset(&params, 0, sizeof(llama_mobile_completion_params_c_t));
-    params.prompt = prompt;
+    
+    // Only set prompt if chat messages are not provided
+    if (chatMessages.empty()) {
+        params.prompt = prompt;
+    }
+    
     params.temperature = temperature;
     params.n_predict = maxTokens;
     params.n_threads = nThreads;
@@ -387,7 +392,7 @@ static jobject createCompletionResult(JNIEnv* env, const llama_mobile_completion
     }
     
     // Get the constructor
-    jmethodID constructor = env->GetMethodID(resultClass, "<init>", "(Ljava/lang/String;IIZZZZ)V");
+    jmethodID constructor = env->GetMethodID(resultClass, "<init>", "(Ljava/lang/String;IIZZZZLjava/lang/String;)V");
     if (constructor == nullptr) {
         env->DeleteLocalRef(resultClass);
         return nullptr;
@@ -395,6 +400,7 @@ static jobject createCompletionResult(JNIEnv* env, const llama_mobile_completion
     
     // Create the Java object
     jstring text = env->NewStringUTF(result.text);
+    jstring stoppingWord = result.stopping_word ? env->NewStringUTF(result.stopping_word) : nullptr;
     jobject completionResult = env->NewObject(resultClass, constructor,
         text,
         (jint)result.tokens_predicted,
@@ -402,7 +408,8 @@ static jobject createCompletionResult(JNIEnv* env, const llama_mobile_completion
         (jboolean)result.truncated,
         (jboolean)result.stopped_eos,
         (jboolean)result.stopped_word,
-        (jboolean)result.stopped_limit);
+        (jboolean)result.stopped_limit,
+        stoppingWord);
     
     env->DeleteLocalRef(text);
     env->DeleteLocalRef(resultClass);
@@ -507,7 +514,7 @@ JNIEXPORT jlong JNICALL Java_com_llamamobile_LlamaMobile_initContext(JNIEnv* env
 }
 
 // Generates completion text based on the given prompt and parameters
-JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_generateCompletion(JNIEnv* env, jclass clazz, jlong contextHandle, jobject completionParamsObj) {
+JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_nativeGenerateCompletion(JNIEnv* env, jclass cls, jlong contextHandle, jobject completionParamsObj) {
     // Check if context is invalid
     if (contextHandle <= 0) {
         return nullptr;
@@ -734,6 +741,33 @@ JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_supportsAudio(JNIEnv
     
     llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     return llama_mobile_supports_audio_c(context) ? JNI_TRUE : JNI_FALSE;
+}
+
+// Formats chat messages using the specified template
+JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_formatChatMessages(JNIEnv* env, jclass clazz, jlong contextHandle, jstring messagesJson, jstring chatTemplate) {
+    // Check if context or messages are invalid
+    if (contextHandle == 0 || messagesJson == nullptr) {
+        return nullptr;
+    }
+    
+    const char* messages_c = env->GetStringUTFChars(messagesJson, nullptr);
+    const char* template_c = chatTemplate != nullptr ? env->GetStringUTFChars(chatTemplate, nullptr) : nullptr;
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
+    char* formatted_prompt = llama_mobile_get_formatted_chat_c(context, messages_c, template_c);
+    
+    env->ReleaseStringUTFChars(messagesJson, messages_c);
+    if (chatTemplate != nullptr) {
+        env->ReleaseStringUTFChars(chatTemplate, template_c);
+    }
+    
+    if (formatted_prompt != nullptr) {
+        jstring result = env->NewStringUTF(formatted_prompt);
+        llama_mobile_free_string_c(formatted_prompt);
+        return result;
+    }
+    
+    return nullptr;
 }
 
 // Releases multimodal resources

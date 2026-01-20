@@ -325,9 +325,10 @@ class TTSTestFragment : Fragment() {
         Log.d("TTSTestFragment", "- Completion params: prompt length=${formattedPrompt.length}, maxTokens=200")
         val completionResult = LlamaMobile.generateCompletion(currentAppState.contextHandle, completionParams)
         
-        Log.d("TTSTestFragment", "- Completion result: ${completionResult?.take(50) ?: "null"}${if (completionResult?.length ?: 0 > 50) "..." else ""}")
+        val completionText = completionResult?.text ?: ""
+        Log.d("TTSTestFragment", "- Completion result: ${completionText.take(50)}${if (completionText.length > 50) "..." else ""}")
         
-        if (completionResult == null || completionResult.isEmpty()) {
+        if (completionText.isEmpty()) {
             Log.e("TTSTestFragment", "- Failed at Step 4: Cannot generate audio content via text completion")
             activity?.runOnUiThread {
                 isProcessing = false
@@ -338,15 +339,15 @@ class TTSTestFragment : Fragment() {
         }
         
         // Debug: Print actual text content
-        Log.d("TTSTestFragment", "Completion Result Content: \"$completionResult\"")
+        Log.d("TTSTestFragment", "Completion Result Content: \"$completionText\"")
         
         // Combine prompt and completion for full audio tokens - or just use completion if prompt contains template markers
         val contentToTokenize = if (useOnlyCompletion) {
             // If prompt contains template markers, only use the completion result (prevents audio from template)
-            completionResult
+            completionText
         } else {
             // Otherwise combine both
-            formattedPrompt + completionResult
+            formattedPrompt + completionText
         }
         
         Log.d("TTSTestFragment", "Final Content to Tokenize: \"$contentToTokenize\"")

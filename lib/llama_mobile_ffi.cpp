@@ -154,7 +154,11 @@ int llama_mobile_completion_c(
     const llama_mobile_completion_params_c_t* params,
     llama_mobile_completion_result_c_t* result // Output parameter
 ) {
-    if (!handle || !params || !params->prompt || !result) {
+    if (!handle || !params || !result) {
+        return -1; // Invalid arguments
+    }
+    // Either prompt or chat messages must be provided
+    if (!params->prompt && (!params->chat_messages || params->chat_message_count <= 0)) {
         return -1; // Invalid arguments
     }
     llama_mobile::llama_mobile_context* context = reinterpret_cast<llama_mobile::llama_mobile_context*>(handle);
@@ -164,7 +168,7 @@ int llama_mobile_completion_c(
     try {
         context->rewind();
 
-        context->params.prompt = params->prompt;
+        context->params.prompt = params->prompt ? params->prompt : "";
         if (params->n_threads > 0) {
              context->params.cpuparams.n_threads = params->n_threads;
         }

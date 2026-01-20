@@ -362,7 +362,7 @@ class MultimodalTestFragment : Fragment() {
                     params = params
                 )
                 
-                val response = result ?: ""
+                val response = result?.text ?: ""
                 Log.d(TAG, "Model response length: ${response.length} characters")
                 Log.d(TAG, "Model response: $response")
                 

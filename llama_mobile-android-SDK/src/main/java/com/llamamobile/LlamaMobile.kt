@@ -1,5 +1,6 @@
 package com.llamamobile
 
+import android.util.Log
 import kotlin.jvm.JvmStatic
 
 /**
@@ -49,7 +50,26 @@ object LlamaMobile {
     /**
      * Chat template for structured conversation input
      */
-    var chatTemplate: String? = null
+    private var chatTemplate: String? = null
+    
+    /**
+     * Sets the chat template to use for structured input
+     * 
+     * @param template Chat template string with {{role}} and {{content}} placeholders
+     */
+    fun setChatTemplate(template: String?) {
+        chatTemplate = template
+    }
+    
+    /**
+     * Formats chat messages using the specified template
+     * 
+     * @param contextHandle Context handle obtained from initContext
+     * @param messages JSON string containing chat messages
+     * @param chatTemplate Chat template to use (optional)
+     * @return Formatted prompt string, or null if an error occurred
+     */
+    external fun formatChatMessages(contextHandle: Long, messages: String, chatTemplate: String?): String?
     
     /**
      * Grammar name enum for structured output
@@ -380,7 +400,8 @@ object LlamaMobile {
         val truncated: Boolean,
         val stoppedEos: Boolean,
         val stoppedWord: Boolean,
-        val stoppedLimit: Boolean
+        val stoppedLimit: Boolean,
+        val stoppingWord: String? = null
     )
     
     /**
@@ -477,7 +498,57 @@ object LlamaMobile {
      * @param params Completion parameters
      * @return Completion result containing generated text and metadata, or null if an error occurred
      */
-    external fun generateCompletion(contextHandle: Long, params: CompletionParams): CompletionResult?
+    fun generateCompletion(contextHandle: Long, params: CompletionParams): CompletionResult? {
+        // Handle chat messages formatting (same as iOS)
+        var processedParams = params
+        
+        if (params.chatMessages.isNotEmpty()) {
+            try {
+                // Convert chat messages to JSON format
+                val messagesJson = buildString {
+                    append("[")
+                    for ((index, message) in params.chatMessages.withIndex()) {
+                        if (index > 0) append(",")
+                        append("{\"role\":\"${message.role}\",\"content\":\"${message.content.replace("\"", "\\\"")}\"}")
+                    }
+                    append("]")
+                }
+                
+                // Determine which chat template to use:
+                // 1. First check if params has a custom template
+                // 2. If not, check if we have a globally set template
+                // 3. If either is available, use it; otherwise let the native function use the built-in one
+                val templateToUse = params.chatTemplate ?: chatTemplate
+                
+                // Format the chat messages using the appropriate template
+                val formattedPrompt = formatChatMessages(contextHandle, messagesJson, templateToUse)
+                
+                if (formattedPrompt != null) {
+                    Log.i("LlamaMobile", "Successfully formatted chat messages")
+                    // Update params to use formatted prompt instead of chat messages
+                    processedParams = params.copy(
+                        prompt = formattedPrompt,
+                        chatMessages = emptyList()
+                    )
+                } else {
+                    Log.e("LlamaMobile", "Cannot format chat messages: Formatting failed")
+                    // Fall back to original params
+                    return nativeGenerateCompletion(contextHandle, processedParams)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Log.e("LlamaMobile", "Error formatting chat messages: ${e.message}")
+                // Fall back to original params if formatting fails
+            }
+        }
+        
+        return nativeGenerateCompletion(contextHandle, processedParams)
+    }
+    
+    /**
+     * Native implementation of generateCompletion
+     */
+    private external fun nativeGenerateCompletion(contextHandle: Long, params: CompletionParams): CompletionResult?
     
     /**
      * Generates text completion with simplified parameters

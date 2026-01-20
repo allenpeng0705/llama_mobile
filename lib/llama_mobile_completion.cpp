@@ -11,7 +11,7 @@ namespace llama_mobile {
 void llama_mobile_context::truncatePrompt(std::vector<llama_token> &prompt_tokens) {
     const int n_left = n_ctx - params.n_keep;
     const int n_block_size = (n_left > 0) ? n_left / 2 : 0;
-    const int erased_blocks = (n_block_size > 0) ? (prompt_tokens.size() - params.n_keep - n_block_size) / n_block_size : 0;
+    const int erased_blocks = (n_block_size > 0) ? static_cast<int>((prompt_tokens.size() - params.n_keep - n_block_size) / n_block_size) : 0;
 
     int keep_count = std::max(0, params.n_keep);
     keep_count = std::min(keep_count, (int)prompt_tokens.size());
@@ -35,8 +35,18 @@ void llama_mobile_context::truncatePrompt(std::vector<llama_token> &prompt_token
 }
 
 void llama_mobile_context::loadPrompt() {
-    std::vector<llama_token> prompt_tokens = ::common_tokenize(ctx, params.prompt, true, true);
+    std::vector<llama_token> prompt_tokens;
+    
+    // Always use the regular prompt (chat messages are now formatted on the client side)
+    prompt_tokens = ::common_tokenize(ctx, params.prompt, true, true);
     num_prompt_tokens = prompt_tokens.size();
+
+    // Ensure we have at least one token to avoid crashes
+    if (prompt_tokens.empty()) {
+        LOG_WARNING("Tokenization returned empty vector, adding BOS token manually");
+        prompt_tokens.push_back(llama_vocab_bos(llama_model_get_vocab(llama_get_model(ctx))));
+        num_prompt_tokens = 1;
+    }
 
     std::stringstream ss;
     ss << "\n" << __func__ << ": prompt_tokens = ";

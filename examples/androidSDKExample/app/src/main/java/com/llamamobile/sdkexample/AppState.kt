@@ -581,6 +581,8 @@ class AppState {
                 errorMessage = null
                 Log.i(TAG, "Model loaded successfully with handle: $contextHandle")
                 
+                // Note: No need to set a hardcoded chat template - we now use the built-in one from the GGUF model by default
+                
                 // Initialize multimodal if mmproj path is provided
                 if (mmprojModelPath.isNotEmpty()) {
                     try {

@@ -17,6 +17,25 @@ public class LlamaMobile {
      * Chat template to use for structured input
      */
     public static String chatTemplate = null;
+    
+    /**
+     * Sets the chat template to use for structured input
+     * 
+     * @param template Chat template string with {{role}} and {{content}} placeholders
+     */
+    public static void setChatTemplate(String template) {
+        chatTemplate = template;
+    }
+    
+    /**
+     * Formats chat messages using the specified template
+     * 
+     * @param contextHandle Context handle obtained from initContext
+     * @param messagesJson JSON string containing chat messages
+     * @param chatTemplate Chat template to use (optional)
+     * @return Formatted prompt string, or null if an error occurred
+     */
+    public static native String formatChatMessages(long contextHandle, String messagesJson, String chatTemplate);
 
     /**
      * Error types for LlamaMobile operations
@@ -120,8 +139,9 @@ public class LlamaMobile {
         private final boolean stoppedEos;
         private final boolean stoppedWord;
         private final boolean stoppedLimit;
+        private final String stoppingWord;
 
-        public CompletionResult(String text, int tokensGenerated, int tokensEvaluated, boolean truncated, boolean stoppedEos, boolean stoppedWord, boolean stoppedLimit) {
+        public CompletionResult(String text, int tokensGenerated, int tokensEvaluated, boolean truncated, boolean stoppedEos, boolean stoppedWord, boolean stoppedLimit, String stoppingWord) {
             this.text = text;
             this.tokensGenerated = tokensGenerated;
             this.tokensEvaluated = tokensEvaluated;
@@ -129,6 +149,7 @@ public class LlamaMobile {
             this.stoppedEos = stoppedEos;
             this.stoppedWord = stoppedWord;
             this.stoppedLimit = stoppedLimit;
+            this.stoppingWord = stoppingWord;
         }
 
         public String getText() { return text; }
@@ -138,6 +159,7 @@ public class LlamaMobile {
         public boolean isStoppedEos() { return stoppedEos; }
         public boolean isStoppedWord() { return stoppedWord; }
         public boolean isStoppedLimit() { return stoppedLimit; }
+        public String getStoppingWord() { return stoppingWord; }
     }
 
     /**
@@ -774,7 +796,91 @@ public class LlamaMobile {
      * @param params Completion parameters
      * @return Generated text result, or null if generation failed
      */
-    public static native CompletionResult generateCompletion(long contextHandle, CompletionParams params);
+    public static CompletionResult generateCompletion(long contextHandle, CompletionParams params) {
+        // Handle chat messages formatting (same as iOS)
+        CompletionParams processedParams = params;
+        
+        if (params.chatMessages != null && params.chatMessages.length > 0) {
+            try {
+                // Determine which chat template to use:
+                // 1. First check if params has a custom template
+                // 2. If not, check if we have a globally set template
+                // 3. If not, try to get the built-in template from the model
+                String templateToUse = params.chatTemplate != null ? params.chatTemplate : chatTemplate;
+                
+                if (templateToUse == null) {
+                    // Try to get the built-in chat template from the model
+                    templateToUse = getModelChatTemplate(contextHandle);
+                    if (templateToUse == null) {
+                        System.err.println("LlamaMobile: Cannot format chat messages: No chat template available (neither custom nor built-in)");
+                        // Fall back to original params
+                        return nativeGenerateCompletion(contextHandle, processedParams);
+                    }
+                    System.out.println("LlamaMobile: Using built-in chat template from GGUF model");
+                } else {
+                    System.out.println("LlamaMobile: Using custom chat template");
+                }
+                // Manually format chat messages using the template
+                StringBuilder formattedPrompt = new StringBuilder();
+                
+                // Apply template to each message
+                for (ChatMessage message : params.chatMessages) {
+                    String messageTemplate = templateToUse;
+                    messageTemplate = messageTemplate.replace("{{role}}", message.role);
+                    messageTemplate = messageTemplate.replace("{{content}}", message.content);
+                    formattedPrompt.append(messageTemplate);
+                }
+                
+                // Add the assistant prompt suffix
+                String assistantTurnTemplate = templateToUse;
+                assistantTurnTemplate = assistantTurnTemplate.replace("{{role}}", "assistant");
+                
+                // Remove content placeholder
+                int contentPlaceholderIndex = assistantTurnTemplate.indexOf("{{content}}");
+                if (contentPlaceholderIndex != -1) {
+                    assistantTurnTemplate = assistantTurnTemplate.substring(0, contentPlaceholderIndex);
+                }
+                
+                assistantTurnTemplate = assistantTurnTemplate.trim();
+                formattedPrompt.append(assistantTurnTemplate).append("\n");
+                
+                // Update params to use formatted prompt instead of chat messages
+                processedParams = new CompletionParams(
+                    formattedPrompt.toString(),
+                    params.maxTokens,
+                    params.temperature,
+                    params.topK,
+                    params.topP,
+                    params.minP,
+                    params.typicalP,
+                    params.penaltyLastN,
+                    params.penaltyRepeat,
+                    params.penaltyFreq,
+                    params.penaltyPresent,
+                    params.mirostat,
+                    params.mirostatTau,
+                    params.mirostatEta,
+                    params.ignoreEos,
+                    params.stopSequences,
+                    params.grammar,
+                    params.mediaPaths,
+                    new ChatMessage[0],  // Empty chat messages
+                    params.useJsonResponse,
+                    params.chatTemplate
+                );
+            } catch (Exception e) {
+                e.printStackTrace();
+                // Fall back to original params if formatting fails
+            }
+        }
+        
+        return nativeGenerateCompletion(contextHandle, processedParams);
+    }
+    
+    /**
+     * Native implementation of generateCompletion
+     */
+    private static native CompletionResult nativeGenerateCompletion(long contextHandle, CompletionParams params);
 
     /**
      * Releases a llama context
