@@ -516,7 +516,7 @@ JNIEXPORT jlong JNICALL Java_com_llamamobile_LlamaMobile_initContext(JNIEnv* env
 // Generates completion text based on the given prompt and parameters
 JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_nativeGenerateCompletion(JNIEnv* env, jclass cls, jlong contextHandle, jobject completionParamsObj) {
     // Check if context is invalid
-    if (contextHandle <= 0) {
+    if (contextHandle == 0) {
         return nullptr;
     }
     
@@ -590,6 +590,11 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_nativeGenerateComplet
 
 // Stops an ongoing completion generation
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_stopCompletion(JNIEnv* env, jclass clazz, jlong contextHandle) {
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return;
+    }
+    
     llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     llama_mobile_stop_completion_c(context);
 }
@@ -662,7 +667,7 @@ JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_detokenize(JNIEnv* en
 
 // Generates embeddings for the given text
 JNIEXPORT jfloatArray JNICALL Java_com_llamamobile_LlamaMobile_generateEmbeddings(JNIEnv* env, jclass clazz, jlong contextHandle, jstring text) {
-    if (contextHandle <= 0) {
+    if (contextHandle == 0) {
         return nullptr;
     }
     
@@ -696,6 +701,11 @@ JNIEXPORT jfloatArray JNICALL Java_com_llamamobile_LlamaMobile_generateEmbedding
 
 // Initializes multimodal support
 JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_initMultimodal(JNIEnv* env, jclass clazz, jlong contextHandle, jstring mmprojPath, jboolean useGpu) {
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return JNI_FALSE;
+    }
+    
     llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     const char* cMmprojPath = getStringUTFChars(env, mmprojPath);
@@ -772,12 +782,22 @@ JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_formatChatMessages(JN
 
 // Releases multimodal resources
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_releaseMultimodal(JNIEnv* env, jclass clazz, jlong contextHandle) {
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return;
+    }
+    
     llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     llama_mobile_release_multimodal_c(context);
 }
 
 // Initializes vocoder for text-to-speech
 JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_initVocoder(JNIEnv* env, jclass clazz, jlong contextHandle, jstring vocoderModelPath) {
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return JNI_FALSE;
+    }
+    
     llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     const char* cVocoderModelPath = getStringUTFChars(env, vocoderModelPath);
@@ -805,6 +825,11 @@ JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_isVocoderEnabled(JNI
 
 // Gets the TTS model type
 JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_getTTSType(JNIEnv* env, jclass clazz, jlong contextHandle) {
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return nullptr;
+    }
+    
     // Get the TTSModelType enum class
     jclass ttsModelTypeClass = env->FindClass("com/llamamobile/LlamaMobile$TTSModelType");
     if (ttsModelTypeClass == nullptr) {
@@ -857,6 +882,11 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_getTTSType(JNIEnv* en
 
 // Gets formatted audio completion
 JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_getFormattedAudioCompletion(JNIEnv* env, jclass clazz, jlong contextHandle, jstring speakerJson, jstring textToSpeak) {
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return nullptr;
+    }
+    
     llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     const char* cSpeakerJson = getStringUTFChars(env, speakerJson);
@@ -886,6 +916,11 @@ JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_getFormattedAudioComp
 
 // Gets audio guide tokens
 JNIEXPORT jintArray JNICALL Java_com_llamamobile_LlamaMobile_getAudioGuideTokens(JNIEnv* env, jclass clazz, jlong contextHandle, jstring textToSpeak) {
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return nullptr;
+    }
+    
     llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     const char* cTextToSpeak = getStringUTFChars(env, textToSpeak);
@@ -902,8 +937,6 @@ JNIEXPORT jintArray JNICALL Java_com_llamamobile_LlamaMobile_getAudioGuideTokens
         return nullptr;
     }
     
-    releaseStringUTFChars(env, textToSpeak, cTextToSpeak);
-    
     // Convert to jintArray
     jintArray result = env->NewIntArray(tokens.count);
     if (result != nullptr) {
@@ -918,6 +951,11 @@ JNIEXPORT jintArray JNICALL Java_com_llamamobile_LlamaMobile_getAudioGuideTokens
 
 // Decodes audio tokens
 JNIEXPORT jfloatArray JNICALL Java_com_llamamobile_LlamaMobile_decodeAudioTokens(JNIEnv* env, jclass clazz, jlong contextHandle, jintArray tokens) {
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return nullptr;
+    }
+    
     llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     // Get the token array
@@ -942,8 +980,6 @@ JNIEXPORT jfloatArray JNICALL Java_com_llamamobile_LlamaMobile_decodeAudioTokens
         return nullptr;
     }
     
-    env->ReleaseIntArrayElements(tokens, tokenArray, JNI_ABORT);
-    
     // Convert to jfloatArray
     jfloatArray result = env->NewFloatArray(audioData.count);
     if (result != nullptr) {
@@ -958,11 +994,12 @@ JNIEXPORT jfloatArray JNICALL Java_com_llamamobile_LlamaMobile_decodeAudioTokens
 
 // Sets guide tokens for audio generation
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_setGuideTokens(JNIEnv* env, jclass clazz, jlong contextHandle, jintArray tokens) {
-    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
-    
-    if (context == nullptr || tokens == nullptr) {
+    // Check if context is invalid
+    if (contextHandle == 0 || tokens == nullptr) {
         return;
     }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     // Get the tokens array
     jsize tokenCount = env->GetArrayLength(tokens);
@@ -989,11 +1026,12 @@ JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_setGuideTokens(JNIEnv* e
 
 // Saves audio samples to WAV file
 JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_saveAudioToWav(JNIEnv* env, jclass clazz, jlong contextHandle, jstring filePath, jfloatArray audioData, jint sampleRate) {
-    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
-    
-    if (context == nullptr || filePath == nullptr || audioData == nullptr) {
+    // Check if context is invalid
+    if (contextHandle == 0 || filePath == nullptr || audioData == nullptr) {
         return JNI_FALSE;
     }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
     
     // Get the file path
     const char* cFilePath = getStringUTFChars(env, filePath);
@@ -1133,7 +1171,7 @@ JNIEXPORT jobjectArray JNICALL Java_com_llamamobile_LlamaMobile_getLoadedLoraAda
 // Generates a response in conversation mode
 JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_generateResponse(JNIEnv* env, jclass clazz, jlong contextHandle, jstring userMessage, jint maxTokens) {
     // Check if context is invalid
-    if (contextHandle <= 0) {
+    if (contextHandle == 0) {
         return nullptr;
     }
     

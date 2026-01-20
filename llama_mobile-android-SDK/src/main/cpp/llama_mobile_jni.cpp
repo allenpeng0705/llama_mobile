@@ -568,6 +568,11 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_nativeGenerateComplet
 
 // Stops an ongoing completion generation
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_stopCompletion(JNIEnv* env, jobject obj, jlong contextHandle) {
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return;
+    }
+    
     llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
     llama_mobile_stop_completion_c(context);
 }
@@ -786,6 +791,11 @@ JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_isVocoderEnabled(JNI
 
 // Gets the TTS model type
 JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_getTTSType(JNIEnv* env, jobject obj, jlong contextHandle) {
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        return nullptr;
+    }
+    
     // Get the TTSModelType enum class
     jclass ttsModelTypeClass = env->FindClass("com/llamamobile/LlamaMobile$TTSModelType");
     if (ttsModelTypeClass == nullptr) {
@@ -949,11 +959,12 @@ JNIEXPORT jfloatArray JNICALL Java_com_llamamobile_LlamaMobile_decodeAudioTokens
 
 // Sets guide tokens for audio generation
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_setGuideTokens(JNIEnv* env, jobject obj, jlong contextHandle, jintArray tokens) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
-    
-    if (context == nullptr || tokens == nullptr) {
+    // Check if context is invalid
+    if (contextHandle == 0 || tokens == nullptr) {
         return;
     }
+    
+    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
     
     // Get the tokens array
     jsize tokenCount = env->GetArrayLength(tokens);
@@ -980,11 +991,12 @@ JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_setGuideTokens(JNIEnv* e
 
 // Saves audio samples to WAV file
 JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_saveAudioToWav(JNIEnv* env, jobject obj, jlong contextHandle, jstring filePath, jfloatArray audioData, jint sampleRate) {
-    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
-    
-    if (context == nullptr || filePath == nullptr || audioData == nullptr) {
+    // Check if context is invalid
+    if (contextHandle == 0 || filePath == nullptr || audioData == nullptr) {
         return JNI_FALSE;
     }
+    
+    llama_mobile_context_t context = reinterpret_cast<llama_mobile_context_t>(contextHandle);
     
     // Get the file path
     const char* cFilePath = getStringUTFChars(env, filePath);

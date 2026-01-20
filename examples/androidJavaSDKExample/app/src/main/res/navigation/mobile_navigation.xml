@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/mobile_navigation"
+    app:startDestination="@id/nav_chat">
+
+    <fragment
+        android:id="@+id/nav_chat"
+        android:name="com.llamamobile.sdkexample.ChatFragment"
+        android:label="Chat"
+        tools:layout="@layout/fragment_chat" />
+
+    <fragment
+        android:id="@+id/nav_tokenization"
+        android:name="com.llamamobile.sdkexample.TokenizationFragment"
+        android:label="Tokenize"
+        tools:layout="@layout/fragment_tokenization" />
+
+    <fragment
+        android:id="@+id/nav_embeddings"
+        android:name="com.llamamobile.sdkexample.EmbeddingsFragment"
+        android:label="Embed"
+        tools:layout="@layout/fragment_embeddings" />
+
+    <fragment
+        android:id="@+id/nav_lora"
+        android:name="com.llamamobile.sdkexample.LoRAFragment"
+        android:label="LoRA"
+        tools:layout="@layout/fragment_lora" />
+
+    <fragment
+        android:id="@+id/nav_settings"
+        android:name="com.llamamobile.sdkexample.SettingsFragment"
+        android:label="More"
+        tools:layout="@layout/fragment_settings" />
+
+    <fragment
+        android:id="@+id/nav_multimodal"
+        android:name="com.llamamobile.sdkexample.MultimodalTestFragment"
+        android:label="Multimodal"
+        tools:layout="@layout/fragment_multimodal_test" />
+
+    <fragment
+        android:id="@+id/nav_tts"
+        android:name="com.llamamobile.sdkexample.TTSTestFragment"
+        android:label="TTS"
+        tools:layout="@layout/fragment_tts_test" />
+
+</navigation>
