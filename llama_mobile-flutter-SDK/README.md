@@ -38,6 +38,7 @@ llama_mobile-flutter-SDK/
 - **Text-to-Speech (TTS)**: Generate audio from text using TTS models
 - **Model Downloads**: Download models directly within your application
 - **Grammar Support**: Load and use grammar files to constrain generation
+- **OpenAI JSON Format**: Generate responses in OpenAI-compatible JSON format for easy migration from OpenAI API
 
 ## Installation
 
@@ -187,6 +188,62 @@ final structuredResult = await context?.generateCompletion(
 );
 
 print(structuredResult?.text); // Will be valid JSON
+```
+
+### OpenAI JSON Format
+
+The SDK supports generating responses in OpenAI-compatible JSON format, making it easy to migrate applications from the OpenAI API:
+
+```dart
+// Generate completion with OpenAI JSON format
+final completion = await context?.generateCompletion(
+  prompt: 'Tell me about artificial intelligence',
+  maxTokens: 150,
+  temperature: 0.7,
+  useJsonResponse: true, // Enable OpenAI JSON format
+);
+
+print(completion?.text); // Will contain JSON formatted response
+```
+
+**Example Output:**
+
+```json
+{
+  "id": "chatcmpl-123",
+  "object": "chat.completion",
+  "created": 1677652288,
+  "model": "model-name",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "AI, or artificial intelligence, refers to the simulation of human intelligence in machines..."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 50,
+    "total_tokens": 60
+  }
+}
+```
+
+This format is also supported for conversation generation:
+
+```dart
+final response = await context?.generateConversation(
+  chatMessages: [
+    ChatMessage(role: "user", content: "Hello!"),
+  ],
+  maxTokens: 100,
+  useJsonResponse: true, // Enable OpenAI JSON format
+);
+
+print(response?.text); // Will contain JSON formatted response
 ```
 
 ### Advanced Usage Examples
