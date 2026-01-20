@@ -1,0 +1,4 @@
+rootProject.name = 'llama_mobile_flutter_sdk'
+
+include ":llama_mobile-android-SDK"
+project(":llama_mobile-android-SDK").projectDir = new File("../../llama_mobile-android-SDK")
