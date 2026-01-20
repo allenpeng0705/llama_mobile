@@ -3,6 +3,8 @@ package com.llamamobile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.json.JSONObject;
+import org.json.JSONArray;
 
 /**
  * LlamaMobile Android Library
@@ -11,6 +13,10 @@ import java.util.Map;
  * allowing Android applications to interact with llama models.
  */
 public class LlamaMobile {
+    /**
+     * Chat template to use for structured input
+     */
+    public static String chatTemplate = null;
 
     /**
      * Error types for LlamaMobile operations
@@ -284,24 +290,25 @@ public class LlamaMobile {
         private final TokenCallback tokenCallback;
         private final List<ChatMessage> chatMessages;
         private final boolean useJsonResponse;
+        private final String chatTemplate;
 
         public CompletionParams(String prompt) {
-            this(prompt, 0.8f, 100, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, false);
+            this(prompt, 0.8f, 100, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, false, null);
         }
 
         public CompletionParams(String prompt, float temperature) {
-            this(prompt, temperature, 100, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, false);
+            this(prompt, temperature, 100, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, false, null);
         }
 
         public CompletionParams(String prompt, float temperature, int maxTokens) {
-            this(prompt, temperature, maxTokens, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, false);
+            this(prompt, temperature, maxTokens, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, false, null);
         }
 
         public CompletionParams(String prompt, float temperature, int maxTokens, int nThreads, int seed, int topK, double topP, double minP, double typicalP, int penaltyLastN, double penaltyRepeat, double penaltyFreq, double penaltyPresent, int mirostat, double mirostatTau, double mirostatEta, boolean ignoreEos, int nProbs, String grammar, List<String> stopSequences, List<String> mediaPaths, TokenCallback tokenCallback) {
-            this(prompt, temperature, maxTokens, nThreads, seed, topK, topP, minP, typicalP, penaltyLastN, penaltyRepeat, penaltyFreq, penaltyPresent, mirostat, mirostatTau, mirostatEta, ignoreEos, nProbs, grammar, stopSequences, mediaPaths, tokenCallback, null, false);
+            this(prompt, temperature, maxTokens, nThreads, seed, topK, topP, minP, typicalP, penaltyLastN, penaltyRepeat, penaltyFreq, penaltyPresent, mirostat, mirostatTau, mirostatEta, ignoreEos, nProbs, grammar, stopSequences, mediaPaths, tokenCallback, null, false, null);
         }
 
-        public CompletionParams(String prompt, float temperature, int maxTokens, int nThreads, int seed, int topK, double topP, double minP, double typicalP, int penaltyLastN, double penaltyRepeat, double penaltyFreq, double penaltyPresent, int mirostat, double mirostatTau, double mirostatEta, boolean ignoreEos, int nProbs, String grammar, List<String> stopSequences, List<String> mediaPaths, TokenCallback tokenCallback, List<ChatMessage> chatMessages, boolean useJsonResponse) {
+        public CompletionParams(String prompt, float temperature, int maxTokens, int nThreads, int seed, int topK, double topP, double minP, double typicalP, int penaltyLastN, double penaltyRepeat, double penaltyFreq, double penaltyPresent, int mirostat, double mirostatTau, double mirostatEta, boolean ignoreEos, int nProbs, String grammar, List<String> stopSequences, List<String> mediaPaths, TokenCallback tokenCallback, List<ChatMessage> chatMessages, boolean useJsonResponse, String chatTemplate) {
             this.prompt = prompt;
             this.temperature = temperature;
             this.maxTokens = maxTokens;
@@ -326,6 +333,7 @@ public class LlamaMobile {
             this.tokenCallback = tokenCallback;
             this.chatMessages = chatMessages != null ? chatMessages : new ArrayList<>();
             this.useJsonResponse = useJsonResponse;
+            this.chatTemplate = chatTemplate;
         }
 
         public String getPrompt() { return prompt; }
@@ -352,6 +360,64 @@ public class LlamaMobile {
         public TokenCallback getTokenCallback() { return tokenCallback; }
         public List<ChatMessage> getChatMessages() { return chatMessages; }
         public boolean isUseJsonResponse() { return useJsonResponse; }
+        public String getChatTemplate() { return chatTemplate; }
+
+        /**
+         * Creates CompletionParams from OpenAI format JSON
+         * Example JSON format:
+         * {"messages": [{"role": "system", "content": "You are a helpful assistant"}, {"role": "user", "content": "Hello"}]}
+         */
+        public static CompletionParams fromOpenAIJSON(String openAIJSON) throws Exception {
+            return new CompletionParams("", 0.7f, 256, 4, -1, 40, 0.95, 0.05, 1.0, 64, 1.0, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, new ArrayList<>(), parseMediaPaths(openAIJSON), null, parseChatMessages(openAIJSON), true, null);
+        }
+
+        /**
+         * Parse chat messages from OpenAI JSON
+         */
+        private static List<ChatMessage> parseChatMessages(String openAIJSON) throws Exception {
+            List<ChatMessage> chatMessages = new ArrayList<>();
+            JSONObject jsonObject = new JSONObject(openAIJSON);
+            JSONArray messages = jsonObject.optJSONArray("messages");
+            if (messages != null) {
+                for (int i = 0; i < messages.length(); i++) {
+                    JSONObject message = messages.getJSONObject(i);
+                    String role = message.getString("role");
+                    String content = message.getString("content");
+                    chatMessages.add(new ChatMessage(role, content));
+                }
+            }
+            return chatMessages;
+        }
+
+        /**
+         * Parse media paths from OpenAI JSON
+         */
+        private static List<String> parseMediaPaths(String openAIJSON) throws Exception {
+            List<String> mediaPaths = new ArrayList<>();
+            JSONObject jsonObject = new JSONObject(openAIJSON);
+            JSONArray messages = jsonObject.optJSONArray("messages");
+            if (messages != null) {
+                for (int i = 0; i < messages.length(); i++) {
+                    JSONObject message = messages.getJSONObject(i);
+                    JSONArray contentArray = message.optJSONArray("content");
+                    if (contentArray != null) {
+                        for (int j = 0; j < contentArray.length(); j++) {
+                            JSONObject contentItem = contentArray.getJSONObject(j);
+                            String type = contentItem.getString("type");
+                            if ("image_url".equals(type)) {
+                                JSONObject imageUrl = contentItem.getJSONObject("image_url");
+                                String url = imageUrl.getString("url");
+                                if (url.startsWith("file://")) {
+                                    String path = url.substring(7);
+                                    mediaPaths.add(path);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return mediaPaths;
+        }
     }
     
     /**
@@ -766,6 +832,61 @@ public class LlamaMobile {
     public static CompletionResult generateCompletion(long contextHandle, String prompt, int maxTokens, float temperature) {
         CompletionParams params = new CompletionParams(prompt, temperature, maxTokens);
         return generateCompletion(contextHandle, params);
+    }
+
+    /**
+     * Generates text completion from OpenAI format JSON
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param openAIJSON JSON string in OpenAI format containing messages
+     * @param grammar Optional grammar string to constrain generation
+     * @return Completion result, or null if generation failed
+     */
+    public static CompletionResult generateOpenAICompletion(long contextHandle, String openAIJSON, String grammar) {
+        try {
+            CompletionParams params = CompletionParams.fromOpenAIJSON(openAIJSON);
+            params = new CompletionParams(
+                params.getPrompt(),
+                params.getTemperature(),
+                params.getMaxTokens(),
+                params.getNThreads(),
+                params.getSeed(),
+                params.getTopK(),
+                params.getTopP(),
+                params.getMinP(),
+                params.getTypicalP(),
+                params.getPenaltyLastN(),
+                params.getPenaltyRepeat(),
+                params.getPenaltyFreq(),
+                params.getPenaltyPresent(),
+                params.getMirostat(),
+                params.getMirostatTau(),
+                params.getMirostatEta(),
+                params.isIgnoreEos(),
+                params.getNProbs(),
+                grammar != null ? grammar : params.getGrammar(),
+                params.getStopSequences(),
+                params.getMediaPaths(),
+                params.getTokenCallback(),
+                params.getChatMessages(),
+                grammar != null ? false : params.isUseJsonResponse(),
+                chatTemplate
+            );
+            return generateCompletion(contextHandle, params);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Generates text completion from OpenAI format JSON with default grammar
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param openAIJSON JSON string in OpenAI format containing messages
+     * @return Completion result, or null if generation failed
+     */
+    public static CompletionResult generateOpenAICompletion(long contextHandle, String openAIJSON) {
+        return generateOpenAICompletion(contextHandle, openAIJSON, null);
     }
 
     /**

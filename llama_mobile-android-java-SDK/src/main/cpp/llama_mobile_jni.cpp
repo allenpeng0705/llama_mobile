@@ -302,6 +302,19 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
         useJsonResponse = env->GetBooleanField(completionParamsObj, useJsonResponseField);
     }
     
+    // Extract chatTemplate (not used in C API yet)
+    jfieldID chatTemplateField = env->GetFieldID(paramsClass, "chatTemplate", "Ljava/lang/String;");
+    if (chatTemplateField != nullptr) {
+        jstring chatTemplateStr = (jstring)env->GetObjectField(completionParamsObj, chatTemplateField);
+        if (chatTemplateStr != nullptr) {
+            const char* chatTemplate = getStringUTFChars(env, chatTemplateStr);
+            // Note: chatTemplate is not currently passed to C API as it doesn't support it
+            // The template is handled in the Java layer
+            releaseStringUTFChars(env, chatTemplateStr, chatTemplate);
+            env->DeleteLocalRef(chatTemplateStr);
+        }
+    }
+    
     // Convert strings
     prompt = getStringUTFChars(env, promptStr);
     grammar = (grammarField != nullptr && grammarStr != nullptr) ? getStringUTFChars(env, grammarStr) : nullptr;

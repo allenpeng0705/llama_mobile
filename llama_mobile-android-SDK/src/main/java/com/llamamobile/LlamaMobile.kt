@@ -47,6 +47,11 @@ object LlamaMobile {
     }
     
     /**
+     * Chat template for structured conversation input
+     */
+    var chatTemplate: String? = null
+    
+    /**
      * Grammar name enum for structured output
      */
     enum class GrammarName {
@@ -174,9 +179,118 @@ object LlamaMobile {
         val grammar: String? = null,
         val mediaPaths: List<String> = emptyList(),
         val chatMessages: List<ChatMessage> = emptyList(),
-        val useJsonResponse: Boolean = false
+        val useJsonResponse: Boolean = false,
+        val chatTemplate: String? = null
     ) {
+        /**
+         * Initializer that accepts OpenAI format JSON
+         * Example JSON format:
+         * {"messages": [{"role": "system", "content": "You are a helpful assistant"}, {"role": "user", "content": "Hello"}]}
+         */
+        @Throws(Error::class)
+        constructor(openAIJSON: String) : this(
+            prompt = "",
+            maxTokens = 256,
+            temperature = 0.7f,
+            topP = 0.95f,
+            topK = 40,
+            penaltyRepeat = 1.0f,
+            penaltyFreq = 0.0f,
+            penaltyPresent = 0.0f,
+            penaltyLastN = 64,
+            useJsonResponse = true,
+            mediaPaths = parseMediaPaths(openAIJSON),
+            chatMessages = parseChatMessages(openAIJSON)
+        )
+        
         companion object {
+            /**
+             * Parse chat messages from OpenAI JSON
+             */
+            @Throws(Error::class)
+            private fun parseChatMessages(openAIJSON: String): List<ChatMessage> {
+                val chatMessages = mutableListOf<ChatMessage>()
+                val jsonObject = try {
+                    org.json.JSONObject(openAIJSON)
+                } catch (e: Exception) {
+                    throw IllegalArgumentException("Invalid JSON format")
+                }
+                
+                val messages = jsonObject.optJSONArray("messages") ?: throw IllegalArgumentException("Missing or invalid 'messages' field")
+                
+                for (i in 0 until messages.length()) {
+                    val message = messages.optJSONObject(i) ?: continue
+                    val role = message.optString("role").takeIf { it.isNotEmpty() } ?: throw IllegalArgumentException("Missing or empty 'role' field")
+                    
+                    var textContent = ""
+                    
+                    // Check if content is an array (multimodal format)
+                    val content = message.opt("content")
+                    if (content is org.json.JSONArray) {
+                        for (j in 0 until content.length()) {
+                            val contentItem = content.optJSONObject(j) ?: continue
+                            val type = contentItem.optString("type")
+                            
+                            if (type == "text") {
+                                textContent += contentItem.optString("text") + " "
+                            }
+                        }
+                    } else if (content is String) {
+                        // Legacy string format
+                        textContent = content
+                    } else {
+                        throw IllegalArgumentException("Invalid content format")
+                    }
+                    
+                    // Add the text content to chat messages
+                    chatMessages.add(ChatMessage(role, textContent.trim()))
+                }
+                
+                return chatMessages
+            }
+            
+            /**
+             * Parse media paths from OpenAI JSON
+             */
+            @Throws(Error::class)
+            private fun parseMediaPaths(openAIJSON: String): List<String> {
+                val mediaPaths = mutableListOf<String>()
+                val jsonObject = try {
+                    org.json.JSONObject(openAIJSON)
+                } catch (e: Exception) {
+                    throw IllegalArgumentException("Invalid JSON format")
+                }
+                
+                val messages = jsonObject.optJSONArray("messages") ?: return emptyList()
+                
+                for (i in 0 until messages.length()) {
+                    val message = messages.optJSONObject(i) ?: continue
+                    
+                    // Check if content is an array (multimodal format)
+                    val content = message.opt("content")
+                    if (content is org.json.JSONArray) {
+                        for (j in 0 until content.length()) {
+                            val contentItem = content.optJSONObject(j) ?: continue
+                            val type = contentItem.optString("type")
+                            
+                            if (type == "image_url") {
+                                val imageUrlDict = contentItem.optJSONObject("image_url")
+                                val urlString = imageUrlDict?.optString("url") ?: continue
+                                // For local files, extract path from URL
+                                if (urlString.startsWith("file://")) {
+                                    mediaPaths.add(urlString.substring(7))
+                                } else {
+                                    // For remote URLs, add as-is
+                                    mediaPaths.add(urlString)
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                return mediaPaths
+            }
+            
             /**
              * Convenience factory for creative writing
              */
@@ -357,13 +471,13 @@ object LlamaMobile {
     external fun initContext(params: InitParams): Long
     
     /**
-     * Generates text completion with custom parameters
+     * Generates a completion for the given prompt
      * 
      * @param contextHandle Context handle obtained from initContext
      * @param params Completion parameters
-     * @return Generated text, or null if generation failed
+     * @return Completion result containing generated text and metadata, or null if an error occurred
      */
-    external fun generateCompletion(contextHandle: Long, params: CompletionParams): String?
+    external fun generateCompletion(contextHandle: Long, params: CompletionParams): CompletionResult?
     
     /**
      * Generates text completion with simplified parameters
@@ -376,19 +490,38 @@ object LlamaMobile {
      */
     fun generateCompletion(contextHandle: Long, prompt: String, maxTokens: Int = 128, temperature: Float = 0.8f): CompletionResult? {
         val params = CompletionParams(prompt = prompt, maxTokens = maxTokens, temperature = temperature)
-        val text = generateCompletion(contextHandle, params)
-        return text?.let {
-            // Create a CompletionResult object with the generated text
-            // Note: We're missing some fields that would require more complex JNI implementation
-            CompletionResult(
-                text = it,
-                tokensGenerated = 0, // Will need to be updated in JNI implementation
-                tokensEvaluated = 0, // Will need to be updated in JNI implementation
-                truncated = false,    // Will need to be updated in JNI implementation
-                stoppedEos = false,   // Will need to be updated in JNI implementation
-                stoppedWord = false,  // Will need to be updated in JNI implementation
-                stoppedLimit = false  // Will need to be updated in JNI implementation
-            )
+        return generateCompletion(contextHandle, params)
+    }
+    
+    /**
+     * Generates a completion using OpenAI format JSON
+     * 
+     * @param contextHandle Context handle obtained from initContext
+     * @param openAIJSON OpenAI format JSON string
+     * @param grammar Optional grammar content to constrain generation
+     * @return Completion result in OpenAI format, or null if generation failed
+     */
+    fun generateOpenAICompletion(contextHandle: Long, openAIJSON: String, grammar: String? = null): CompletionResult? {
+        try {
+            // Create completion params from OpenAI JSON
+            var params = CompletionParams(openAIJSON = openAIJSON)
+            
+            // Use the stored chat template if available
+            params = params.copy(chatTemplate = chatTemplate)
+            
+            // Set grammar if provided
+            if (grammar != null) {
+                params = params.copy(grammar = grammar)
+            }
+            
+            // Use JSON response format for OpenAI compatibility unless a custom grammar is provided
+            // This avoids conflicts between built-in JSON formatting and custom JSON grammar
+            params = params.copy(useJsonResponse = grammar == null)
+            
+            // Generate completion using the standard method
+            return generateCompletion(contextHandle, params)
+        } catch (e: Exception) {
+            return null
         }
     }
     

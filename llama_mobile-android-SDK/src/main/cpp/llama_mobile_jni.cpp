@@ -280,6 +280,19 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
         useJsonResponse = env->GetBooleanField(completionParamsObj, useJsonResponseField);
     }
     
+    // Extract chatTemplate (not used in C API yet)
+    jfieldID chatTemplateField = env->GetFieldID(paramsClass, "chatTemplate", "Ljava/lang/String;");
+    if (chatTemplateField != nullptr) {
+        jstring chatTemplateStr = (jstring)env->GetObjectField(completionParamsObj, chatTemplateField);
+        if (chatTemplateStr != nullptr) {
+            const char* chatTemplate = getStringUTFChars(env, chatTemplateStr);
+            // Note: chatTemplate is not currently passed to C API as it doesn't support it
+            // The template is handled in the Kotlin layer
+            releaseStringUTFChars(env, chatTemplateStr, chatTemplate);
+            env->DeleteLocalRef(chatTemplateStr);
+        }
+    }
+    
     // Convert strings
     prompt = getStringUTFChars(env, promptStr);
     grammar = (grammarField != nullptr && grammarStr != nullptr) ? getStringUTFChars(env, grammarStr) : nullptr;
@@ -469,7 +482,7 @@ JNIEXPORT jlong JNICALL Java_com_llamamobile_LlamaMobile_initContext(JNIEnv* env
 }
 
 // Generates completion text based on the given prompt and parameters
-JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_generateCompletion(JNIEnv* env, jobject obj, jlong contextHandle, jobject completionParamsObj) {
+JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_generateCompletion(JNIEnv* env, jobject obj, jlong contextHandle, jobject completionParamsObj) {
     if (contextHandle == 0) {
         return nullptr;
     }
@@ -540,10 +553,10 @@ JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_generateCompletion(JN
         return nullptr;
     }
     
-    jstring text = env->NewStringUTF(result.text);
+    jobject completionResult = createCompletionResult(env, result);
     llama_mobile_free_completion_result_members_c(&result);
     
-    return text;
+    return completionResult;
 }
 
 // Stops an ongoing completion generation
