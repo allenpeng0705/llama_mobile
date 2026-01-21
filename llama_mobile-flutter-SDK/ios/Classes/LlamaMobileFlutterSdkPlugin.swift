@@ -1,6 +1,5 @@
 import Flutter
 import UIKit
-import LlamaMobile
 
 public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin {
   // Dictionary to store LlamaMobile instances
@@ -65,36 +64,14 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin {
     let systemPrompt = args["systemPrompt"] as? String
     let nCtx = args["nCtx"] as? Int32 ?? 2048
     let nBatch = args["nBatch"] as? Int32 ?? 512
-    let nUBatch = args["nUBatch"] as? Int32 ?? 512
     let nGpuLayers = args["nGpuLayers"] as? Int32 ?? 0
     let nThreads = args["nThreads"] as? Int32 ?? 4
-    let useMmap = args["useMmap"] as? Bool ?? true
-    let useMlock = args["useMlock"] as? Bool ?? false
-    let embedding = args["embedding"] as? Bool ?? false
-    let poolingType = args["poolingType"] as? Int32 ?? 0
-    let embdNormalize = args["embdNormalize"] as? Int32 ?? 0
-    let flashAttention = args["flashAttention"] as? Bool ?? false
-    let cacheTypeK = args["cacheTypeK"] as? String
-    let cacheTypeV = args["cacheTypeV"] as? String
 
-    let params = LlamaMobile.InitParams(modelPath: modelPath)
-    params.chatTemplate = chatTemplate
-    params.systemPrompt = systemPrompt
-    params.nCtx = nCtx
-    params.nBatch = nBatch
-    params.nUBatch = nUBatch
-    params.nGpuLayers = nGpuLayers
-    params.nThreads = nThreads
-    params.useMmap = useMmap
-    params.useMlock = useMlock
-    params.embedding = embedding
-    params.poolingType = poolingType
-    params.embdNormalize = embdNormalize
-    params.flashAttention = flashAttention
-    params.cacheTypeK = cacheTypeK
-    params.cacheTypeV = cacheTypeV
-
-    if let llamaMobile = LlamaMobile(with: params) {
+    if let llamaMobile = LlamaMobile(modelPath: modelPath, nCtx: nCtx, nGpuLayers: nGpuLayers, nThreads: nThreads) {
+      // Set chat template if provided
+      if let chatTemplate = chatTemplate {
+        llamaMobile.setChatTemplate(chatTemplate)
+      }
       let handle = nextContextHandle
       nextContextHandle += 1
       contexts[handle] = llamaMobile
@@ -186,13 +163,15 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin {
     }
 
     // Convert chat messages to LlamaMobile.ChatMessage
-    let messages = chatMessages.compactMap { msg in
-      guard let role = msg["role"], let content = msg["content"] else { return nil }
-      return LlamaMobile.ChatMessage(role: role, content: content)
+    var messages: [LlamaMobile.ChatMessage] = []
+    for msg in chatMessages {
+      if let role = msg["role"], let content = msg["content"] {
+        messages.append(LlamaMobile.ChatMessage(role: role, content: content))
+      }
     }
 
-    var completionParams = createCompletionParams(from: paramsDict, prompt: "")
-    completionParams.chatMessages = messages
+    // Create completion params for chat messages
+    let completionParams = LlamaMobile.CompletionParams(chatMessages: messages)
 
     if let completionResult = llamaMobile.generateCompletion(with: completionParams) {
       let resultDict: [String: Any] = [
@@ -209,48 +188,56 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin {
 
   // MARK: - Helper Methods
   private func createCompletionParams(from dict: [String: Any], prompt: String) -> LlamaMobile.CompletionParams {
-    let params = LlamaMobile.CompletionParams(prompt: prompt)
-    params.maxTokens = dict["maxTokens"] as? Int32 ?? 128
-    params.nThreads = dict["nThreads"] as? Int32
-    params.seed = dict["seed"] as? Int32 ?? -1
-    params.temperature = dict["temperature"] as? Double ?? 0.8
-    params.topK = dict["topK"] as? Int32 ?? 40
-    params.topP = dict["topP"] as? Double ?? 0.95
-    params.minP = dict["minP"] as? Double ?? 0.05
-    params.typicalP = dict["typicalP"] as? Double ?? 1.0
-    params.penaltyLastN = dict["penaltyLastN"] as? Int32 ?? 64
-    params.penaltyRepeat = dict["penaltyRepeat"] as? Double ?? 1.1
-    params.penaltyFreq = dict["penaltyFreq"] as? Double ?? 0.0
-    params.penaltyPresent = dict["penaltyPresent"] as? Double ?? 0.0
-    params.mirostat = dict["mirostat"] as? Int32 ?? 0
-    params.mirostatTau = dict["mirostatTau"] as? Double ?? 5.0
-    params.mirostatEta = dict["mirostatEta"] as? Double ?? 0.1
-    params.ignoreEos = dict["ignoreEos"] as? Bool ?? false
-    params.stopSequences = dict["stopSequences"] as? [String] ?? []
-    params.grammar = dict["grammar"] as? String
-    params.useJsonResponse = dict["useJsonResponse"] as? Bool ?? false
-    params.chatTemplate = dict["chatTemplate"] as? String
-    return params
+    let maxTokens = dict["maxTokens"] as? Int32 ?? 128
+    let nThreads = dict["nThreads"] as? Int32
+    let seed = dict["seed"] as? Int32 ?? -1
+    let temperature = dict["temperature"] as? Double ?? 0.8
+    let topK = dict["topK"] as? Int32 ?? 40
+    let topP = dict["topP"] as? Double ?? 0.95
+    let minP = dict["minP"] as? Double ?? 0.05
+    let typicalP = dict["typicalP"] as? Double ?? 1.0
+    let penaltyLastN = dict["penaltyLastN"] as? Int32 ?? 64
+    let penaltyRepeat = dict["penaltyRepeat"] as? Double ?? 1.1
+    let penaltyFreq = dict["penaltyFreq"] as? Double ?? 0.0
+    let penaltyPresent = dict["penaltyPresent"] as? Double ?? 0.0
+    let mirostat = dict["mirostat"] as? Int32 ?? 0
+    let mirostatTau = dict["mirostatTau"] as? Double ?? 5.0
+    let mirostatEta = dict["mirostatEta"] as? Double ?? 0.1
+    let ignoreEos = dict["ignoreEos"] as? Bool ?? false
+    let stopSequences = dict["stopSequences"] as? [String] ?? []
+    let grammar = dict["grammar"] as? String
+    let useJsonResponse = dict["useJsonResponse"] as? Bool ?? false
+    let chatTemplate = dict["chatTemplate"] as? String
+
+    return LlamaMobile.CompletionParams(
+      prompt: prompt,
+      maxTokens: maxTokens,
+      nThreads: nThreads,
+      seed: seed,
+      temperature: temperature,
+      topK: topK,
+      topP: topP,
+      minP: minP,
+      typicalP: typicalP,
+      penaltyLastN: penaltyLastN,
+      penaltyRepeat: penaltyRepeat,
+      penaltyFreq: penaltyFreq,
+      penaltyPresent: penaltyPresent,
+      mirostat: mirostat,
+      mirostatTau: mirostatTau,
+      mirostatEta: mirostatEta,
+      ignoreEos: ignoreEos,
+      stopSequences: stopSequences,
+      grammar: grammar,
+      useJsonResponse: useJsonResponse,
+      chatTemplate: chatTemplate
+    )
   }
 
   // MARK: - Chat Methods
   private func handleFormatChatMessages(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    guard let args = call.arguments as? [String: Any],
-          let contextHandle = args["contextHandle"] as? Int,
-          let messages = args["messages"] as? [[String: String]],
-          let llamaMobile = contexts[contextHandle] else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
-      return
-    }
-
-    let chatMessages = messages.compactMap { msg in
-      guard let role = msg["role"], let content = msg["content"] else { return nil }
-      return LlamaMobile.ChatMessage(role: role, content: content)
-    }
-
-    let chatTemplate = args["chatTemplate"] as? String
-    let formattedMessages = llamaMobile.formatChatMessages(messages: chatMessages, chatTemplate: chatTemplate)
-    result(formattedMessages)
+    // Note: formatChatMessages not implemented in iOS SDK
+    result(FlutterError(code: "NOT_IMPLEMENTED", message: "formatChatMessages not implemented in iOS SDK", details: nil))
   }
 
   private func handleSetChatTemplate(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
