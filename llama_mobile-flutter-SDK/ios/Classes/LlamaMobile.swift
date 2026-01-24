@@ -80,13 +80,78 @@ public class LlamaMobile {
     
     /// Configure Metal paths before model initialization
     private func configureMetalPaths() {
-        // Get the framework bundle
-        let frameworkBundle = Bundle(for: type(of: self))
-        let frameworkPath = frameworkBundle.bundlePath
+        print("=== Starting Metal Path Configuration ===")
         
-        // Log the paths for debugging
-        print("[DEBUG] Framework bundle path: \(frameworkPath)")
-        print("[DEBUG] Framework bundle resources path: \(frameworkBundle.resourcePath ?? "nil")")
+        do {
+            // Get the directory where the current binary is located
+            let binaryPath = CommandLine.arguments[0]
+            let binaryDir = URL(fileURLWithPath: binaryPath).deletingLastPathComponent().path
+            print("Current binary path: \(binaryPath)")
+            print("Binary directory: \(binaryDir)")
+            
+            // Check framework directory for metallib files
+            let frameworkPath = Bundle.main.bundlePath + "/Frameworks/llama_mobile.framework"
+            print("Checking framework directory: \(frameworkPath)")
+            
+            if FileManager.default.fileExists(atPath: frameworkPath) {
+                print("Framework directory exists")
+                let frameworkContents = try FileManager.default.contentsOfDirectory(atPath: frameworkPath)
+                print("Framework contents: \(frameworkContents)")
+                
+                // Look for metallib files in the framework
+                let metallibFiles = frameworkContents.filter { $0.hasSuffix(".metallib") }
+                print("Found \(metallibFiles.count) metallib files in framework")
+                
+                for file in metallibFiles {
+                    let sourcePath = frameworkPath + "/" + file
+                    let destPath = binaryDir + "/" + file
+                    print("Copying metallib file: \(file)")
+                    print("Source: \(sourcePath)")
+                    print("Destination: \(destPath)")
+                    
+                    // Copy the file to the binary directory
+                    if FileManager.default.fileExists(atPath: sourcePath) {
+                        // Remove existing file if it exists
+                        if FileManager.default.fileExists(atPath: destPath) {
+                            try FileManager.default.removeItem(atPath: destPath)
+                            print("Removed existing file: \(file)")
+                        }
+                        
+                        try FileManager.default.copyItem(atPath: sourcePath, toPath: destPath)
+                        print("✓ Copied metallib file to binary directory: \(file)")
+                    } else {
+                        print("✗ Source metallib file not found: \(file)")
+                    }
+                }
+            } else {
+                print("Framework directory does not exist")
+            }
+            
+            // Verify metallib files were copied successfully
+            let possibleMetallibFiles = ["ggml-llama.metallib", "ggml-llama-sim.metallib"]
+            var metallibFilesFound = 0
+            
+            for file in possibleMetallibFiles {
+                let filePath = binaryDir + "/" + file
+                if FileManager.default.fileExists(atPath: filePath) {
+                    print("✓ Verified metallib file in binary directory: \(file)")
+                    metallibFilesFound += 1
+                } else {
+                    print("✗ Metallib file missing from binary directory: \(file)")
+                }
+            }
+            
+            print("Total metallib files verified in binary directory: \(metallibFilesFound)")
+            
+            // According to ggml-metal-device.m, the code looks in:
+            // 1. Bundle resources for metallib files
+            // 2. The binary directory for metallib files (where we just copied them)
+            // 3. Uses LM_GGML_METAL_PATH_RESOURCES only for source .metal files
+            
+            print("=== Metal Path Configuration Completed ===")
+        } catch {
+            print("Error in configureMetalPaths: \(error.localizedDescription)")
+        }
     }
     
     /// Text-to-Speech model types
@@ -642,28 +707,34 @@ public class LlamaMobile {
     
     /// Internal initialization method
     private func initialize(with params: InitParams) -> Bool {
+        print("[DEBUG] LlamaMobile: initialize(with:) called")
+        
         // Configure Metal paths before initialization
+        print("[DEBUG] LlamaMobile: Calling configureMetalPaths()")
         configureMetalPaths()
+        print("[DEBUG] LlamaMobile: configureMetalPaths() completed")
         
-        // Create progress callback wrapper if needed
-        typealias ProgressCallbackType = @convention(c) (Float) -> Void
-        var callbackWrapper: ProgressCallbackType? = nil
+        // Debug logging
+        print("[DEBUG] LlamaMobile: Model path: \(params.modelPath)")
+        print("[DEBUG] LlamaMobile: Model file exists: \(FileManager.default.fileExists(atPath: params.modelPath) ? 1 : 0)")
+        print("[DEBUG] LlamaMobile: nCtx: \(params.nCtx)")
+        print("[DEBUG] LlamaMobile: nGpuLayers: \(params.nGpuLayers)")
+        print("[DEBUG] LlamaMobile: nThreads: \(params.nThreads)")
+        print("[DEBUG] LlamaMobile: nBatch: \(params.nBatch)")
+        print("[DEBUG] LlamaMobile: nUBatch: \(params.nUBatch)")
         
-        if params.progressCallback != nil {
-            // Store the closure in global context
-            progressCallbackContext = params.progressCallback
-            // Use the global C-compatible function
-            callbackWrapper = { (progress: Float) -> Void in
-                cProgressCallback(progress: progress)
-            }
+        // Check if model file exists
+        if !FileManager.default.fileExists(atPath: params.modelPath) {
+            print("[ERROR] LlamaMobile: Model file does not exist at path: \(params.modelPath)")
+            return false
         }
         
         // Create and populate the C params struct
+        print("[DEBUG] LlamaMobile: Creating C params struct")
         var cParams = llama_mobile_init_params_c_t()
         memset(&cParams, 0, MemoryLayout<llama_mobile_init_params_c_t>.size)
-        cParams.model_path = params.modelPath.withCString { $0 }
-        cParams.chat_template = params.chatTemplate?.withCString { $0 }
-        cParams.system_prompt = params.systemPrompt?.withCString { $0 }
+        
+        // Set non-string parameters
         cParams.n_ctx = params.nCtx
         cParams.n_batch = params.nBatch
         cParams.n_ubatch = params.nUBatch
@@ -675,23 +746,62 @@ public class LlamaMobile {
         cParams.pooling_type = params.poolingType
         cParams.embd_normalize = params.embdNormalize
         cParams.flash_attn = params.flashAttention
-        cParams.cache_type_k = params.cacheTypeK?.withCString { $0 }
-        cParams.cache_type_v = params.cacheTypeV?.withCString { $0 }
-        cParams.progress_callback = callbackWrapper
+        cParams.progress_callback = nil
+        
+        // Store the chat template for later use
+        let chatTemplateToStore = params.chatTemplate
+        
+        // Use strdup to create persistent copies of the strings
+        print("[DEBUG] LlamaMobile: Creating string pointers")
+        let modelPathPtr = params.modelPath.withCString { strdup($0) }
+        print("[DEBUG] LlamaMobile: modelPathPtr created: \(modelPathPtr != nil ? 1 : 0)")
+        let chatTemplatePtr = params.chatTemplate?.withCString { strdup($0) }
+        let systemPromptPtr = params.systemPrompt?.withCString { strdup($0) }
+        let cacheTypeKPtr = params.cacheTypeK?.withCString { strdup($0) }
+        let cacheTypeVPtr = params.cacheTypeV?.withCString { strdup($0) }
+        
+        guard modelPathPtr != nil else {
+            print("[ERROR] LlamaMobile: Failed to create modelPathPtr")
+            return false
+        }
+        
+        // Set the pointers in the params struct
+        print("[DEBUG] LlamaMobile: Setting pointers in params struct")
+        cParams.model_path = UnsafePointer(modelPathPtr)
+        cParams.chat_template = UnsafePointer(chatTemplatePtr)
+        cParams.system_prompt = UnsafePointer(systemPromptPtr)
+        cParams.cache_type_k = UnsafePointer(cacheTypeKPtr)
+        cParams.cache_type_v = UnsafePointer(cacheTypeVPtr)
+        
+        // Initialize the context with proper C string handling
+        print("[DEBUG] LlamaMobile: Calling llama_mobile_init_context_c...")
         
         // Initialize the context
         context = llama_mobile_init_context_c(&cParams)
         
-        // Store the chat template
-        if let chatTemplate = params.chatTemplate {
-            self.chatTemplate = chatTemplate
-        } else {
-            // Note: We're unable to access the built-in template from Swift due to framework limitations
-            // This functionality would require updating the binary framework's headers or modulemap
-            // For now, apps can implement their own fallback logic using the setChatTemplate method
-            self.chatTemplate = nil
+        print("[DEBUG] LlamaMobile: llama_mobile_init_context_c returned: \(context != nil ? "success" : "nil")")
+        
+        // Free the duplicated strings
+        print("[DEBUG] LlamaMobile: Freeing string pointers")
+        free(modelPathPtr)
+        if let chatTemplatePtr = chatTemplatePtr {
+            free(chatTemplatePtr)
+        }
+        if let systemPromptPtr = systemPromptPtr {
+            free(systemPromptPtr)
+        }
+        if let cacheTypeKPtr = cacheTypeKPtr {
+            free(cacheTypeKPtr)
+        }
+        if let cacheTypeVPtr = cacheTypeVPtr {
+            free(cacheTypeVPtr)
         }
         
+        // Store the chat template
+        self.chatTemplate = chatTemplateToStore
+        print("[DEBUG] LlamaMobile: Stored chat template")
+        
+        print("[DEBUG] LlamaMobile: Initialization completed with result: \(context != nil ? 1 : 0)")
         return context != nil
     }
     
@@ -726,28 +836,12 @@ public class LlamaMobile {
         
         // Try to find the grammar file in the framework's grammars directory
         if let grammarURL = frameworkBundle.url(forResource: grammarName, withExtension: "gbnf", subdirectory: "grammars") {
-            print("[DEBUG] Found grammar file at: \(grammarURL.path)")
-            
             do {
-                let content = try String(contentsOf: grammarURL, encoding: .utf8)
-                print("[DEBUG] ✓ Successfully loaded grammar '\(grammarName)' (\(content.count) characters)")
-                return content
+                return try String(contentsOf: grammarURL, encoding: .utf8)
             } catch {
-                print("[ERROR] ✗ Failed to read grammar file: \(error)")
+                print("Error loading grammar file: \(error)")
+                return nil
             }
-        } else {
-            // List available grammar files for debugging
-            do {
-                let grammarsDirURL = frameworkBundle.url(forResource: nil, withExtension: nil, subdirectory: "grammars")
-                if let grammarsPath = grammarsDirURL?.path {
-                    let availableGrammars = try FileManager.default.contentsOfDirectory(atPath: grammarsPath)
-                    print("[DEBUG] Available grammar files in framework: \(availableGrammars)")
-                }
-            } catch {
-                print("[ERROR] ✗ Failed to list available grammar files: \(error)")
-            }
-            
-            print("[ERROR] ✗ Grammar file '\(grammarName).gbnf' not found in framework's grammars directory")
         }
         
         return nil
@@ -1033,143 +1127,6 @@ public class LlamaMobile {
         }
     }
     
-    /// Generate a text completion with simplified parameters
-    /// - Parameters:
-    ///   - prompt: Input prompt text
-    ///   - maxTokens: Maximum number of tokens to generate
-    ///   - temperature: Sampling temperature
-    ///   - tokenCallback: Optional streaming callback for generated tokens
-    /// - Returns: Completion result, or nil if an error occurred
-    public func generateCompletion(prompt: String, maxTokens: Int32 = 128, temperature: Double = 0.8, tokenCallback: ((String) -> Bool)? = nil) -> CompletionResult? {
-        var params = CompletionParams(prompt: prompt)
-        params.maxTokens = maxTokens
-        params.temperature = temperature
-        params.tokenCallback = tokenCallback
-        
-        return generateCompletion(with: params)
-    }
-    
-    /// Generate a completion with multimodal input (images/audio)
-    /// - Parameters:
-    ///   - params: Completion parameters
-    ///   - mediaPaths: Array of paths to media files (images/audio)
-    /// - Returns: Completion result, or nil if an error occurred
-    /// - Note: This method is maintained for backward compatibility. Consider using `generateCompletion` with `mediaPaths` parameter instead.
-    @available(*, deprecated, message: "Use generateCompletion(with:) with mediaPaths parameter instead")
-    public func generateMultimodalCompletion(with params: CompletionParams, mediaPaths: [String]) -> CompletionResult? {
-        var paramsWithMedia = params
-        paramsWithMedia.mediaPaths = mediaPaths
-        return generateCompletion(with: paramsWithMedia)
-    }
-    
-    /// Stop an ongoing completion generation
-    public func stopCompletion() {
-        if let context = context {
-            llama_mobile_stop_completion_c(context)
-        }
-    }
-    
-    // MARK: - Download Methods
-    
-    /// Download a Hugging Face model file to a specified local path
-    /// - Parameter params: Download parameters
-    /// - Returns: Download result containing success status and local path
-    public func download(with params: DownloadParams) -> DownloadResult {
-        // Create a progress callback wrapper if needed
-        typealias DownloadProgressCallbackType = @convention(c) (Float, UnsafePointer<CChar>?, Int64, Int64) -> Void
-        var callbackWrapper: DownloadProgressCallbackType? = nil
-        
-        if params.progressCallback != nil {
-            // Store the closure in global context
-            downloadProgressCallbackContext = params.progressCallback
-            // Use the global C-compatible function
-            callbackWrapper = { (progress: Float, status: UnsafePointer<CChar>?, downloadedBytes: Int64, totalBytes: Int64) -> Void in
-                cDownloadProgressCallback(progress: progress, status: status, downloadedBytes: downloadedBytes, totalBytes: totalBytes)
-            }
-        }
-        
-        // Create destination directory if it doesn't exist
-        let destinationURL = URL(fileURLWithPath: params.localPath)
-        let destinationDir = destinationURL.deletingLastPathComponent()
-        
-        do {
-            try FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
-        } catch {
-            return DownloadResult(
-                success: false,
-                localPath: params.localPath,
-                errorMessage: "Failed to create destination directory: \(error.localizedDescription)"
-            )
-        }
-        
-        // Use the download model function with appropriate parameters
-        var cParams = llama_mobile_download_params_c_t()
-        cParams.repo_id = params.url.withCString { $0 }
-        cParams.filename = destinationURL.lastPathComponent.withCString { $0 }
-        cParams.destination_path = destinationDir.path.withCString { $0 }
-        cParams.bearer_token = params.password?.withCString { $0 } // password field used for bearer token
-        cParams.offline = false
-        cParams.progress_callback = callbackWrapper
-        
-        var cResult = llama_mobile_download_model_c(&cParams)
-        
-        // Convert C result to Swift result
-        defer {
-            // Free the C result
-            llama_mobile_free_download_result_c(&cResult)
-        }
-        
-        return DownloadResult(
-            success: cResult.success,
-            localPath: cResult.local_path != nil ? String(cString: cResult.local_path!) : params.localPath,
-            errorMessage: cResult.error_message != nil ? String(cString: cResult.error_message!) : nil
-        )
-    }
-    
-    // MARK: - Tokenization Methods
-    
-    /// Tokenize a text string into token IDs
-    /// - Parameter text: Text string to tokenize
-    /// - Returns: Array of token IDs, or nil if an error occurred
-    public func tokenize(text: String) -> [Int32]? {
-        guard let context = context else {
-            return nil
-        }
-        
-        return text.withCString { textC in
-            let cResult = llama_mobile_tokenize_c(context, textC)
-            defer { llama_mobile_free_token_array_c(cResult) }
-            
-            guard let tokens = cResult.tokens else {
-                return nil
-            }
-            
-            return Array(UnsafeBufferPointer(start: tokens, count: Int(cResult.count)))
-        }
-    }
-    
-    /// Detokenize an array of token IDs back to a text string
-    /// - Parameter tokens: Array of token IDs to detokenize
-    /// - Returns: Detokenized text string, or nil if an error occurred
-    public func detokenize(tokens: [Int32]) -> String? {
-        guard let context = context else {
-            return nil
-        }
-        
-        let cString = tokens.withUnsafeBufferPointer { buffer in
-            llama_mobile_detokenize_c(context, buffer.baseAddress, Int32(buffer.count))
-        }
-        
-        guard let cString = cString else {
-            return nil
-        }
-        
-        defer { llama_mobile_free_string_c(cString) }
-        return String(cString: cString)
-    }
-    
-    // MARK: - Embedding Methods
-    
     /// Generate embeddings for a text string
     /// - Parameter text: Text string to generate embeddings for
     /// - Returns: Array of floating-point embeddings, or nil if an error occurred
@@ -1190,72 +1147,59 @@ public class LlamaMobile {
         }
     }
     
-    // MARK: - Multimodal Methods
-    
-    /// Initialize multimodal support (vision/audio)
-    /// - Parameters:
-    ///   - mmprojPath: Path to the multimodal projection file
-    ///   - useGpu: Whether to use GPU acceleration for multimodal processing
+    /// Apply LoRA adapters to the model
+    /// - Parameter adapters: Array of LoRA adapter configurations
     /// - Returns: true on success, false on failure
-    public func initMultimodal(mmprojPath: String, useGpu: Bool = true) -> Bool {
+    public func applyLoraAdapters(_ adapters: [LoraAdapter]) -> Bool {
         guard let context = context else {
             return false
         }
         
-        return mmprojPath.withCString { pathC in
-            llama_mobile_init_multimodal_c(context, pathC, useGpu) == 0
-        }
-    }
-    
-    /// Check if multimodal support is enabled
-    /// - Returns: true if enabled, false otherwise
-    public func isMultimodalEnabled() -> Bool {
-        guard let context = context else {
-            return false
+        // Convert Swift adapters to C array
+        let adapterCount = adapters.count
+        let cAdapters = UnsafeMutablePointer<llama_mobile_lora_adapter_c_t>.allocate(capacity: adapterCount)
+        defer { cAdapters.deallocate() }
+        
+        for (index, adapter) in adapters.enumerated() {
+            cAdapters[index].path = adapter.path.withCString { $0 }
+            cAdapters[index].scale = adapter.scale
         }
         
-        return llama_mobile_is_multimodal_enabled_c(context)
-    }
-    
-    /// Check if the model supports vision input
-    /// - Returns: true if vision is supported, false otherwise
-    public func supportsVision() -> Bool {
-        guard let context = context else {
-            return false
-        }
+        // Create C adapters struct
+        var cLoraAdapters = llama_mobile_lora_adapters_c_t()
+        cLoraAdapters.adapters = cAdapters
+        cLoraAdapters.count = Int32(adapterCount)
         
-        return llama_mobile_supports_vision_c(context)
-    }
-    
-    /// Check if the model supports audio input
-    /// - Returns: true if audio is supported, false otherwise
-    public func supportsAudio() -> Bool {
-        guard let context = context else {
-            return false
-        }
+        // Apply adapters
+        let result = llama_mobile_apply_lora_adapters_c(context, &cLoraAdapters)
         
-        return llama_mobile_supports_audio_c(context)
+        return result == 0
     }
     
-    /// Release multimodal resources
-    public func releaseMultimodal() {
+    /// Remove all loaded LoRA adapters
+    public func removeLoraAdapters() {
         if let context = context {
-            llama_mobile_release_multimodal_c(context)
+            llama_mobile_remove_lora_adapters_c(context)
         }
     }
-    
-    // MARK: - TTS Methods
     
     /// Initialize the vocoder for text-to-speech functionality
     /// - Parameter vocoderModelPath: Path to the vocoder model file
     /// - Returns: true on success, false on failure
     public func initVocoder(vocoderModelPath: String) -> Bool {
         guard let context = context else {
+            print("[TTS] initVocoder failed: context is nil")
             return false
         }
         
+        print("[TTS] Initializing vocoder with model path: \(vocoderModelPath)")
+        let fileExists = FileManager.default.fileExists(atPath: vocoderModelPath)
+        print("[TTS] Vocoder model file exists: \(fileExists)")
+        
         return vocoderModelPath.withCString { pathC in
-            llama_mobile_init_vocoder_c(context, pathC) == 0
+            let result = llama_mobile_init_vocoder_c(context, pathC)
+            print("[TTS] initVocoder_c result: \(result) (0 = success)")
+            return result == 0
         }
     }
     
@@ -1327,7 +1271,7 @@ public class LlamaMobile {
             return Array(UnsafeBufferPointer(start: tokens, count: Int(cResult.count)))
         }
     }
-    
+
     /// Set guide tokens for audio generation
     /// - Parameter tokens: Array of guide tokens to use
     public func setGuideTokens(tokens: [Int32]) {
@@ -1342,6 +1286,13 @@ public class LlamaMobile {
         }
     }
     
+
+    
+
+    
+    /// Decode audio tokens into raw audio data
+    /// - Parameter tokens: Audio tokens to decode
+    /// - Returns: Array of floating-point audio samples, or nil if an error occurred
     /// Decode audio tokens into raw audio data
     /// - Parameter tokens: Audio tokens to decode
     /// - Returns: Array of floating-point audio samples, or nil if an error occurred
@@ -1363,12 +1314,46 @@ public class LlamaMobile {
         return Array(UnsafeBufferPointer(start: values, count: Int(cResult.count)))
     }
     
-    /// Save audio data to a WAV file
+    /// Generate audio samples from text using TTS
     /// - Parameters:
-    ///   - filePath: Path to the output WAV file
+    ///   - text: Text to convert to speech
+    ///   - speakerJson: JSON string with speaker configuration (optional, defaults to default speaker)
+    /// - Returns: Array of floating-point audio samples, or nil if an error occurred
+    /// - Note: This method handles the entire TTS workflow in a single call: formatting, token generation, and audio decoding
+    public func generateAudioFromText(text: String, speakerJson: String = "{\"speaker\": \"default\"}") -> [Float]? {
+        
+        guard let context = context, isVocoderEnabled() else {
+            return nil
+        }
+
+        // Get formatted audio completion
+        guard let formattedPrompt = getFormattedAudioCompletion(speakerJson: speakerJson, textToSpeak: text) else {
+            return nil
+        }
+
+        // Generate audio tokens
+        guard let audioTokens = getAudioGuideTokens(textToSpeak: formattedPrompt) else {
+            return nil
+        }
+
+        // Decode audio tokens to samples
+        return decodeAudioTokens(tokens: audioTokens)
+    }
+    
+    
+    /// Release vocoder (TTS) resources
+    public func releaseVocoder() {
+        if let context = context {
+            llama_mobile_release_vocoder_c(context)
+        }
+    }
+    
+    /// Save audio samples to WAV file
+    /// - Parameters:
+    ///   - filePath: Path to save the WAV file
     ///   - audioData: Array of floating-point audio samples
-    ///   - sampleRate: Audio sampling rate (default is 24000 Hz)
-    /// - Returns: true on success, false on failure
+    ///   - sampleRate: Sample rate for the audio (default: 24000 Hz)
+    /// - Returns: Boolean indicating whether the audio was saved successfully
     public func saveAudioToWav(filePath: String, audioData: [Float], sampleRate: Int32 = 24000) -> Bool {
         guard let context = context else {
             return false
@@ -1381,236 +1366,92 @@ public class LlamaMobile {
         }
     }
     
-    /// Release vocoder (TTS) resources
-    public func releaseVocoder() {
-        if let context = context {
-            llama_mobile_release_vocoder_c(context)
-        }
-    }
-    
-    /// Generate audio samples from text using TTS
-    /// - Parameters:
-    ///   - text: Text to convert to speech
-    ///   - speakerJson: JSON string with speaker configuration (optional, defaults to default speaker)
-    /// - Returns: Array of floating-point audio samples, or nil if an error occurred
-    /// - Note: This method handles the entire TTS workflow in a single call: formatting, token generation, and audio decoding
-    public func generateAudioFromText(text: String, speakerJson: String = "{\"speaker\": \"default\"}") -> [Float]? {
-        guard let context = context, isVocoderEnabled() else {
-            return nil
-        }
+    /// Download a Hugging Face model file to a specified local path
+    /// - Parameter params: Download parameters
+    /// - Returns: Download result containing success status and local path
+    public func download(with params: DownloadParams) -> DownloadResult {
+        // Create a progress callback wrapper if needed
+        typealias DownloadProgressCallbackType = @convention(c) (Float, UnsafePointer<CChar>?, Int64, Int64) -> Void
+        var callbackWrapper: DownloadProgressCallbackType? = nil
         
-        // Get formatted audio completion
-        guard let formattedPrompt = getFormattedAudioCompletion(speakerJson: speakerJson, textToSpeak: text) else {
-            return nil
-        }
-        
-        // Generate audio tokens
-        guard let audioTokens = getAudioGuideTokens(textToSpeak: formattedPrompt) else {
-            return nil
-        }
-        
-        // Decode audio tokens to samples
-        return decodeAudioTokens(tokens: audioTokens)
-    }
-    
-    // MARK: - LoRA Adapter Methods
-    
-    /// Apply LoRA adapters to the model
-    /// - Parameter adapters: Array of LoRA adapter configurations
-    /// - Returns: true on success, false on failure
-    public func applyLoraAdapters(_ adapters: [LoraAdapter]) -> Bool {
-        guard let context = context else {
-            return false
-        }
-        
-        // Convert Swift adapters to C array
-        let adapterCount = adapters.count
-        let cAdapters = UnsafeMutablePointer<llama_mobile_lora_adapter_c_t>.allocate(capacity: adapterCount)
-        defer { cAdapters.deallocate() }
-        
-        for (index, adapter) in adapters.enumerated() {
-            cAdapters[index].path = adapter.path.withCString { $0 }
-            cAdapters[index].scale = adapter.scale
-        }
-        
-        // Create C adapters struct
-        var cLoraAdapters = llama_mobile_lora_adapters_c_t()
-        cLoraAdapters.adapters = cAdapters
-        cLoraAdapters.count = Int32(adapterCount)
-        
-        // Apply adapters
-        let result = llama_mobile_apply_lora_adapters_c(context, &cLoraAdapters)
-        
-        return result == 0
-    }
-    
-    /// Remove all loaded LoRA adapters
-    public func removeLoraAdapters() {
-        if let context = context {
-            llama_mobile_remove_lora_adapters_c(context)
-        }
-    }
-    
-    /// Get the currently loaded LoRA adapters
-    /// - Returns: Array of loaded LoRA adapter configurations, or nil if an error occurred
-    public func getLoadedLoraAdapters() -> [LoraAdapter]? {
-        guard let context = context else {
-            return nil
-        }
-        
-        var cResult = llama_mobile_get_loaded_lora_adapters_c(context)
-        defer { llama_mobile_free_lora_adapters_c(&cResult) }
-        
-        guard let cAdapters = cResult.adapters else {
-            return []
-        }
-        
-        let adapterCount = Int(cResult.count)
-        var adapters = [LoraAdapter](repeating: LoraAdapter(path: "", scale: 0.0), count: adapterCount)
-        
-        for index in 0..<adapterCount {
-            let cAdapter = cAdapters[index]
-            guard let path = cAdapter.path else {
-                continue
-            }
-            
-            adapters[index] = LoraAdapter(
-                path: String(cString: path),
-                scale: cAdapter.scale
-            )
-        }
-        
-        return adapters
-    }
-    
-    // MARK: - Conversation Methods
-    
-    /// Generate a response to a user message in a conversation
-    /// - Parameters:
-    ///   - userMessage: User's message
-    ///   - maxTokens: Maximum number of tokens to generate
-    /// - Returns: Conversation result, or nil if an error occurred
-    public func generateResponse(userMessage: String, maxTokens: Int32 = 128) -> ConversationResult? {
-        guard let context = context else {
-            return nil
-        }
-        
-        return userMessage.withCString { messageC in
-            var cResult = llama_mobile_continue_conversation_c(
-                context,
-                messageC,
-                maxTokens
-            )
-            
-            defer { llama_mobile_free_conversation_result_members_c(&cResult) }
-            
-            guard let text = cResult.text.map({ String(cString: $0) }) else {
-                return nil
-            }
-            
-            return ConversationResult(
-                text: text,
-                timeToFirstToken: cResult.time_to_first_token,
-                totalTime: cResult.total_time,
-                tokensGenerated: cResult.tokens_generated
-            )
-        }
-    }
-    
-    /// Generate a response to a user message with streaming token callback
-    /// - Parameters:
-    ///   - userMessage: User's message
-    ///   - maxTokens: Maximum number of tokens to generate
-    ///   - tokenCallback: Streaming callback for generated tokens
-    /// - Returns: Conversation result, or nil if an error occurred
-    public func generateResponse(userMessage: String, maxTokens: Int32 = 128, tokenCallback: ((String) -> Bool)?) -> ConversationResult? {
-        guard let context = context else {
-            return nil
-        }
-        
-        // Create token callback wrapper if needed
-        typealias TokenCallbackType = @convention(c) (UnsafePointer<CChar>?) -> Bool
-        var tokenCallbackPtr: TokenCallbackType? = nil
-        
-        if tokenCallback != nil {
+        if params.progressCallback != nil {
             // Store the closure in global context
-            tokenCallbackContext = tokenCallback
+            downloadProgressCallbackContext = params.progressCallback
             // Use the global C-compatible function
-            tokenCallbackPtr = { (token: UnsafePointer<CChar>?) -> Bool in
-                cTokenCallback(token: token)
+            callbackWrapper = { (progress: Float, status: UnsafePointer<CChar>?, downloadedBytes: Int64, totalBytes: Int64) -> Void in
+                cDownloadProgressCallback(progress: progress, status: status, downloadedBytes: downloadedBytes, totalBytes: totalBytes)
             }
         }
         
-        return userMessage.withCString { messageC in
-            var cResult = llama_mobile_continue_conversation_with_callback_c(
-                context,
-                messageC,
-                maxTokens,
-                tokenCallbackPtr
-            )
-            
-            defer { llama_mobile_free_conversation_result_members_c(&cResult) }
-            
-            guard let text = cResult.text.map({ String(cString: $0) }) else {
-                return nil
-            }
-            
-            return ConversationResult(
-                text: text,
-                timeToFirstToken: cResult.time_to_first_token,
-                totalTime: cResult.total_time,
-                tokensGenerated: cResult.tokens_generated
+        // Create destination directory if it doesn't exist
+        let destinationURL = URL(fileURLWithPath: params.localPath)
+        let destinationDir = destinationURL.deletingLastPathComponent()
+        
+        do {
+            try FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
+        } catch {
+            return DownloadResult(
+                success: false,
+                localPath: params.localPath,
+                errorMessage: "Failed to create destination directory: \(error.localizedDescription)"
             )
         }
-    }
-    
-    /// Clear the current conversation context
-    public func clearConversation() {
-        if let context = context {
-            llama_mobile_clear_conversation_c(context)
-        }
-    }
-    
-    /// Check if a conversation is currently active
-    /// - Returns: true if active, false otherwise
-    public func isConversationActive() -> Bool {
-        guard let context = context else {
-            return false
+        
+        // Use the download model function with appropriate parameters
+        var cParams = llama_mobile_download_params_c_t()
+        cParams.repo_id = params.url.withCString { $0 }
+        cParams.filename = destinationURL.lastPathComponent.withCString { $0 }
+        cParams.destination_path = destinationDir.path.withCString { $0 }
+        cParams.bearer_token = params.password?.withCString { $0 } // password field used for bearer token
+        cParams.offline = false
+        cParams.progress_callback = callbackWrapper
+        
+        var cResult = llama_mobile_download_model_c(&cParams)
+        
+        // Convert C result to Swift result
+        defer {
+            // Free the C result
+            llama_mobile_free_download_result_c(&cResult)
         }
         
-        return llama_mobile_is_conversation_active_c(context)
+        return DownloadResult(
+            success: cResult.success,
+            localPath: cResult.local_path != nil ? String(cString: cResult.local_path!) : params.localPath,
+            errorMessage: cResult.error_message != nil ? String(cString: cResult.error_message!) : nil
+        )
     }
     
-    // MARK: - Model Information Methods
-    
-    /// Get the size of the context window
-    /// - Returns: Size of the context window in tokens
-    public func getContextWindowSize() -> Int32 {
-        guard let context = context else {
-            return 0
-        }
-        
-        return llama_mobile_get_n_ctx_c(context)
-    }
-    
-    /// Get the dimension of the model's embeddings
-    /// - Returns: Dimension of the model's embeddings
-    public func getEmbeddingDimension() -> Int32 {
-        guard let context = context else {
-            return 0
-        }
-        
-        return llama_mobile_get_n_embd_c(context)
-    }
-    
-    /// Get a description of the loaded model
-    /// - Returns: Model description string
-    public func getModelDescription() -> String? {
+    /// Tokenize a text string into token IDs
+    /// - Parameter text: Text string to tokenize
+    /// - Returns: Array of token IDs, or nil if an error occurred
+    public func tokenize(text: String) -> [Int32]? {
         guard let context = context else {
             return nil
         }
         
-        let cString = llama_mobile_get_model_desc_c(context)
+        return text.withCString { textC in
+            let cResult = llama_mobile_tokenize_c(context, textC)
+            defer { llama_mobile_free_token_array_c(cResult) }
+            
+            guard let tokens = cResult.tokens else {
+                return nil
+            }
+            
+            return Array(UnsafeBufferPointer(start: tokens, count: Int(cResult.count)))
+        }
+    }
+    
+    /// Detokenize an array of token IDs back to a text string
+    /// - Parameter tokens: Array of token IDs to detokenize
+    /// - Returns: Detokenized text string, or nil if an error occurred
+    public func detokenize(tokens: [Int32]) -> String? {
+        guard let context = context else {
+            return nil
+        }
+        
+        let cString = tokens.withUnsafeBufferPointer { buffer in
+            llama_mobile_detokenize_c(context, buffer.baseAddress, Int32(buffer.count))
+        }
         
         guard let cString = cString else {
             return nil
@@ -1620,24 +1461,55 @@ public class LlamaMobile {
         return String(cString: cString)
     }
     
-    /// Get the size of the loaded model
-    /// - Returns: Model size in bytes
-    public func getModelSize() -> Int64 {
+    /// Initialize multimodal support (vision/audio)
+    /// - Parameters:
+    ///   - mmprojPath: Path to the multimodal projection file
+    ///   - useGpu: Whether to use GPU acceleration for multimodal processing
+    /// - Returns: true on success, false on failure
+    public func initMultimodal(mmprojPath: String, useGpu: Bool = true) -> Bool {
         guard let context = context else {
-            return 0
+            return false
         }
         
-        return llama_mobile_get_model_size_c(context)
+        return mmprojPath.withCString { pathC in
+            llama_mobile_init_multimodal_c(context, pathC, useGpu) == 0
+        }
     }
     
-    /// Get the number of parameters in the loaded model
-    /// - Returns: Number of model parameters
-    public func getModelParametersCount() -> Int64 {
+    /// Check if multimodal support is enabled
+    /// - Returns: true if enabled, false otherwise
+    public func isMultimodalEnabled() -> Bool {
         guard let context = context else {
-            return 0
+            return false
         }
         
-        return llama_mobile_get_model_params_c(context)
+        return llama_mobile_is_multimodal_enabled_c(context)
+    }
+    
+    /// Check if the model supports vision input
+    /// - Returns: true if vision is supported, false otherwise
+    public func supportsVision() -> Bool {
+        guard let context = context else {
+            return false
+        }
+        
+        return llama_mobile_supports_vision_c(context)
+    }
+    
+    /// Check if the model supports audio input
+    /// - Returns: true if audio is supported, false otherwise
+    public func supportsAudio() -> Bool {
+        guard let context = context else {
+            return false
+        }
+        
+        return llama_mobile_supports_audio_c(context)
+    }
+    
+    /// Release multimodal resources
+    public func releaseMultimodal() {
+        if let context = context {
+            llama_mobile_release_multimodal_c(context)
+        }
     }
 }
-

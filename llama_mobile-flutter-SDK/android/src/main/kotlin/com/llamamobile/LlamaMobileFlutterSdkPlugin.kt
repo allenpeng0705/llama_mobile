@@ -57,10 +57,10 @@ class LlamaMobileFlutterSdkPlugin :
         }
     }
 
-    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterBinding) {
+    override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
         // Free all contexts when detaching
-        contexts.values.forEach { LlamaMobile.freeContext(it) }
+        contexts.values.forEach { LlamaMobile.releaseContext(it) }
         contexts.clear()
     }
 
@@ -218,25 +218,27 @@ class LlamaMobileFlutterSdkPlugin :
             }
         }
 
-        val completionParams = LlamaMobile.CompletionParams("$prompt\n")
-        completionParams.maxTokens = maxTokens
-        completionParams.temperature = temperature
-        completionParams.topK = topK
-        completionParams.topP = topP
-        completionParams.minP = minP
-        completionParams.typicalP = typicalP
-        completionParams.penaltyLastN = penaltyLastN
-        completionParams.penaltyRepeat = penaltyRepeat
-        completionParams.penaltyFreq = penaltyFreq
-        completionParams.penaltyPresent = penaltyPresent
-        completionParams.mirostat = mirostat
-        completionParams.mirostatTau = mirostatTau
-        completionParams.mirostatEta = mirostatEta
-        completionParams.ignoreEos = ignoreEos
-        completionParams.stopSequences = stopSequences
-        completionParams.grammar = grammar
-        completionParams.useJsonResponse = useJsonResponse
-        completionParams.mediaPaths = mediaPaths
+        val completionParams = LlamaMobile.CompletionParams(
+            prompt = "$prompt\n",
+            maxTokens = maxTokens,
+            temperature = temperature,
+            topK = topK,
+            topP = topP,
+            minP = minP,
+            typicalP = typicalP,
+            penaltyLastN = penaltyLastN,
+            penaltyRepeat = penaltyRepeat,
+            penaltyFreq = penaltyFreq,
+            penaltyPresent = penaltyPresent,
+            mirostat = mirostat,
+            mirostatTau = mirostatTau,
+            mirostatEta = mirostatEta,
+            ignoreEos = ignoreEos,
+            stopSequences = stopSequences,
+            grammar = grammar,
+            useJsonResponse = useJsonResponse,
+            mediaPaths = mediaPaths
+        )
 
         val completion = LlamaMobile.generateCompletion(contextHandle, completionParams)
 
@@ -349,11 +351,8 @@ class LlamaMobileFlutterSdkPlugin :
     }
 
     private fun handleSetChatTemplate(call: MethodCall, result: Result) {
-        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
         val template = call.argument<String>("template")
-        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
-
-        LlamaMobile.setChatTemplate(contextHandle, template)
+        LlamaMobile.setChatTemplate(template)
         result.success(true)
     }
 
@@ -373,7 +372,7 @@ class LlamaMobileFlutterSdkPlugin :
 
         // Load grammar content from Android assets
         val grammarContent = try {
-            val inputStream = context.assets.open("grammars/${grammarEnum.name.toLowerCase()}.gbnf")
+            val inputStream = context.assets.open("grammars/${grammarEnum.name.lowercase()}.gbnf")
             inputStream.bufferedReader().use { it.readText() }
         } catch (e: Exception) {
             result.error("GRAMMAR_LOAD_FAILED", "Failed to load grammar file: ${e.message}", null)
@@ -444,13 +443,8 @@ class LlamaMobileFlutterSdkPlugin :
     private fun handleGenerateAudio(call: MethodCall, result: Result) {
         val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
         val text = call.argument<String>("text") ?: throw IllegalArgumentException("text is required")
-        val params = call.argument<Map<String, Any>>("params") ?: throw IllegalArgumentException("params is required")
-        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
 
-        val speed = params["speed"] as? Double ?: 1.0
-        val pitch = params["pitch"] as? Double ?: 1.0
-        val volume = params["volume"] as? Double ?: 1.0
-        val sampleRate = params["sampleRate"] as? Int ?: 24000
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
 
         // Check if vocoder is initialized
         if (!LlamaMobile.isVocoderEnabled(contextHandle)) {
@@ -459,16 +453,13 @@ class LlamaMobileFlutterSdkPlugin :
         }
 
         // Create speaker JSON with parameters
-        val speakerJson = "{\"speed\":$speed,\"pitch\":$pitch,\"volume\":$volume}"
+        val speakerJson = "{\"speaker\": \"default\"}"
 
         // Generate audio from text
-        val audioData = LlamaMobile.generateAudioFromText(contextHandle, speakerJson, text)
+        val audioData = LlamaMobile.generateAudioFromText(contextHandle, text, speakerJson)
         if (audioData != null) {
             result.success(mapOf(
-                "audioData" to audioData.toList(),
-                "sampleRate" to sampleRate, // Android SDK doesn't provide sample rate in result
-                "channels" to 1, // Assume mono channel
-                "bitDepth" to 32 // Assume 32-bit float
+                "audioData" to audioData.toList()
             ))
         } else {
             result.error("AUDIO_GENERATION_FAILED", "Failed to generate audio", null)

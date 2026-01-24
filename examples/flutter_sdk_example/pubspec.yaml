@@ -42,6 +42,9 @@ dependencies:
   # Image picker for selecting images from system photo library
   image_picker: ^1.1.2
   
+  # Audio player for playing generated TTS audio
+  audioplayers: ^6.1.0
+  
   # Local LlamaMobile Flutter SDK dependency
   llama_mobile_flutter_sdk:
     path: ../../llama_mobile-flutter-SDK

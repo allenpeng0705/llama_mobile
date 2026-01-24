@@ -200,16 +200,8 @@ class ChatFragment : Fragment() {
         // Run generation in a background thread
         Thread {
             try {
-                // Build exact OpenAI API JSON format
-                val sb = StringBuilder()
-                sb.append("{")
-                sb.append("\"model\": \"test\",")
-                sb.append("\"messages\": [")
-                
-                // Add system message
-                sb.append("{")
-                sb.append("\"role\": \"system\",")
-                sb.append("\"content\": \"")
+                // Build chat messages list directly (similar to iOS implementation)
+                val chatMessages = mutableListOf<LlamaMobile.ChatMessage>()
                 
                 // Extract system message if present (should be first message)
                 var systemMsg = currentAppState.systemPrompt
@@ -220,43 +212,32 @@ class ChatFragment : Fragment() {
                     messageIndex = 1
                 }
                 
-                // Add JSON schema instruction if JSON grammar is enabled
-                var fullSystemMsg = systemMsg
-                if (useJsonGrammar || currentAppState.selectedGrammar != null) {
-                    fullSystemMsg += "\n\nYou must respond in JSON format following this schema:\n{\"response\": \"your response here\"}"
-                }
+                // Add system message
+                chatMessages.add(LlamaMobile.ChatMessage(
+                    "system",
+                    systemMsg
+                ))
                 
-                // Escape special characters in system message
-                sb.append(fullSystemMsg.replace("\"", "\\\"").replace("\n", "\\n"))
-                sb.append("\"}")
-                
-                // Add conversation history
-                while (messageIndex < messages.size - 1) { // -1 because last message is empty assistant placeholder
+                // Add conversation history (all messages except last empty assistant placeholder)
+                while (messageIndex < messages.size - 1) {
                     val currentMsg = messages[messageIndex]
-                    
-                    sb.append(",")
-                    sb.append("{")
-                    sb.append("\"role\": \"")
-                    sb.append(currentMsg.role)
-                    sb.append("\",")
-                    sb.append("\"content\": \"")
-                    // Escape special characters in message content
-                    sb.append(currentMsg.text.replace("\"", "\\\"").replace("\n", "\\n"))
-                    sb.append("\"}")
-                    
+                    chatMessages.add(LlamaMobile.ChatMessage(
+                        currentMsg.role,
+                        currentMsg.text
+                    ))
                     messageIndex++
                 }
                 
-                // Close messages array
-                sb.append("]")
-                
-                // Close JSON object
-                sb.append("}")
-                
-                val formattedPrompt = sb.toString()
+                // Add the user's latest message (which is the last non-empty message)
+                if (prompt.isNotEmpty()) {
+                    chatMessages.add(LlamaMobile.ChatMessage(
+                        Message.ROLE_USER,
+                        prompt
+                    ))
+                }
                 
                 // Log the model input
-                Log.d(TAG, "Model Input: $formattedPrompt")
+                Log.d(TAG, "Model Input: $chatMessages")
 
                 // Determine which grammar to use
                 val grammarToUse = if (currentAppState.selectedGrammar != null) {
@@ -270,50 +251,43 @@ class ChatFragment : Fragment() {
                 // Log grammar usage for debugging
                 if (grammarToUse != null) {
                     val grammarMessage = if (grammarToUse == currentAppState.jsonGrammar) {
-                        "[JSON API] Using built-in JSON grammar"
+                        "[Chat Messages] Using built-in JSON grammar"
                     } else {
-                        "[JSON API] Using selected grammar"
+                        "[Chat Messages] Using selected grammar"
                     }
                     Log.d(TAG, grammarMessage)
                 } else {
-                    Log.d(TAG, "[JSON API] No grammar being used")
+                    Log.d(TAG, "[Chat Messages] No grammar being used")
                 }
                 
-                val result = if (useOpenAIJSONAPI) {
-                    // Use the dedicated OpenAI JSON API method
-                    LlamaMobile.generateOpenAICompletion(
-                        currentAppState.contextHandle,
-                        formattedPrompt,
-                        grammarToUse
-                    )
-                } else {
-                    // Use the traditional completion method
-                    val params = LlamaMobile.CompletionParams(
-                        formattedPrompt,                // prompt
-                        0.7f,                           // temperature
-                        1024,                           // maxTokens
-                        4,                              // nThreads
-                        -1,                             // seed
-                        40,                             // topK
-                        0.9,                            // topP
-                        0.05,                           // minP
-                        1.0,                            // typicalP
-                        64,                             // penaltyLastN
-                        1.1,                            // penaltyRepeat
-                        0.0,                            // penaltyFreq
-                        0.0,                            // penaltyPresent
-                        0,                              // mirostat
-                        5.0,                            // mirostatTau
-                        0.1,                            // mirostatEta
-                        false,                          // ignoreEos
-                        0,                              // nProbs
-                        grammarToUse,                   // grammar
-                        listOf("<|im_end|>"),          // stopSequences
-                        emptyList(),                    // mediaPaths
-                        null                            // tokenCallback
-                    )
-                    LlamaMobile.generateCompletion(currentAppState.contextHandle, params)
-                }
+                // Create completion params similar to iOS implementation
+                val params = LlamaMobile.CompletionParams(
+                    "",                             // prompt (empty when using chatMessages)
+                    0.7f,                           // temperature
+                    256,                            // maxTokens (match iOS)
+                    4,                              // nThreads
+                    -1,                             // seed
+                    40,                             // topK
+                    0.9,                            // topP
+                    0.05,                           // minP
+                    1.0,                            // typicalP
+                    64,                             // penaltyLastN
+                    1.1,                            // penaltyRepeat
+                    0.0,                            // penaltyFreq
+                    0.0,                            // penaltyPresent
+                    0,                              // mirostat
+                    5.0,                            // mirostatTau
+                    0.1,                            // mirostatEta
+                    false,                          // ignoreEos
+                    0,                              // nProbs
+                    grammarToUse,                   // grammar
+                    listOf("<|im_end|>"),          // stopSequences
+                    emptyList(),                    // mediaPaths
+                    null                            // tokenCallback
+                )
+                
+                // Generate response
+                val result = LlamaMobile.generateCompletion(currentAppState.contextHandle, params)
                 
                 // Log the raw model output
                 Log.d(TAG, "Model Raw Output: $result")

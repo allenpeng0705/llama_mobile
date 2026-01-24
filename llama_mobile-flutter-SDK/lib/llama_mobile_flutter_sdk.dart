@@ -119,6 +119,28 @@ class LlamaContext {
     );
   }
 
+  /// Generates a completion using OpenAI-compatible JSON format
+  Future<CompletionResult?> generateOpenAICompletion({
+    required String openAIJSON,
+    String? grammar,
+  }) async {
+    final result = await LlamaMobileFlutterSdkPlatform.instance
+        .generateOpenAICompletion(_contextHandle, openAIJSON, grammar);
+    if (result != null) {
+      return CompletionResult(
+        text: result['text'] as String,
+        tokensGenerated: result['tokensGenerated'] as int,
+        tokensEvaluated: result['tokensEvaluated'] as int,
+        truncated: result['truncated'] as bool,
+        stoppedEos: result['stoppedEos'] as bool,
+        stoppedWord: result['stoppedWord'] as bool,
+        stoppedLimit: result['stoppedLimit'] as bool,
+        stoppingWord: result['stoppingWord'] as String?,
+      );
+    }
+    return null;
+  }
+
   /// Sets the chat template
   Future<bool> setChatTemplate(String? template) async {
     return await LlamaMobileFlutterSdkPlatform.instance.setChatTemplate(
@@ -393,6 +415,34 @@ class LlamaContext {
     );
   }
 
+  /// Tokenizes a text string into token IDs.
+  ///
+  /// Parameters:
+  /// - [text]: Text string to tokenize.
+  ///
+  /// Returns:
+  /// A list of integers representing token IDs, or null if tokenization failed.
+  Future<List<int>?> tokenize(String text) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.tokenize(
+      _contextHandle,
+      text,
+    );
+  }
+
+  /// Detokenizes an array of token IDs back to a text string.
+  ///
+  /// Parameters:
+  /// - [tokens]: Array of token IDs to detokenize.
+  ///
+  /// Returns:
+  /// Detokenized text string, or null if detokenization failed.
+  Future<String?> detokenize(List<int> tokens) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.detokenize(
+      _contextHandle,
+      tokens,
+    );
+  }
+
   /// Loads a LoRA adapter
   Future<bool> loadLoraAdapter(String adapterPath, double scale) async {
     return await LlamaMobileFlutterSdkPlatform.instance.loadLoraAdapter(
@@ -424,7 +474,7 @@ class LlamaContext {
       modelPath,
       params,
     );
-    return result != null;
+    return result?['success'] ?? false;
   }
 
   /// Generates audio from text using the loaded TTS model.
@@ -438,40 +488,83 @@ class LlamaContext {
   ///
   /// Returns:
   /// An [AudioResult] object containing the generated audio data and format information.
-  Future<AudioResult?> generateAudio(
-    String text, {
-    double speed = 1.0,
-    double pitch = 1.0,
-    double volume = 1.0,
-    int sampleRate = 24000,
-  }) async {
-    final params = {
-      'speed': speed,
-      'pitch': pitch,
-      'volume': volume,
-      'sampleRate': sampleRate,
-    };
-
-    final result = await LlamaMobileFlutterSdkPlatform.instance.generateAudio(
-      _contextHandle,
-      text,
-      params,
+  Future<AudioResult?> generateAudio(String text) async {
+    print(
+      "[DEBUG] Dart LlamaContext: generateAudio called - text: $text, contextHandle: $_contextHandle",
     );
-    if (result != null) {
-      return AudioResult(
-        audioData: result['audioData'] as List<int>,
-        sampleRate: result['sampleRate'] as int,
-        channels: result['channels'] as int,
-        bitDepth: result['bitDepth'] as int,
+
+    try {
+      final result = await LlamaMobileFlutterSdkPlatform.instance.generateAudio(
+        _contextHandle,
+        text,
       );
+
+      print(
+        "[DEBUG] Dart LlamaContext: generateAudio result received: $result",
+      );
+
+      if (result != null) {
+        print("[DEBUG] Dart LlamaContext: TTS Audio Generated successfully");
+        // Convert List<Object?> to List<int>
+        final dynamic audioDataDynamic = result['audioData'];
+        List<int> audioData = [];
+        if (audioDataDynamic is List) {
+          audioData = audioDataDynamic
+              .map((e) => e is int ? e : (e is double ? e.toInt() : 0))
+              .toList();
+          print(
+            "[DEBUG] Dart LlamaContext: Audio data converted successfully, length: ${audioData.length}",
+          );
+        }
+        return AudioResult(audioData: audioData);
+      }
+      print("[DEBUG] Dart LlamaContext: TTS Audio Generated NULL");
+      return null;
+    } catch (e) {
+      print("[DEBUG] Dart LlamaContext: Error in generateAudio: $e");
+      rethrow;
     }
-    return null;
   }
 
   /// Frees the TTS model
   Future<bool> freeTTSModel() async {
     return await LlamaMobileFlutterSdkPlatform.instance.freeTTSModel(
       _contextHandle,
+    );
+  }
+
+  /// Save audio samples to WAV file
+  /// - Parameters:
+  ///   - filePath: Path to save the WAV file
+  ///   - audioData: Array of 16-bit integer audio samples
+  ///   - sampleRate: Sample rate for the audio (default: 24000 Hz)
+  /// - Returns: Boolean indicating whether the audio was saved successfully
+  Future<bool> saveAudioToWav(
+    String filePath,
+    List<int> audioData,
+    int sampleRate,
+  ) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.saveAudioToWav(
+      _contextHandle,
+      filePath,
+      audioData,
+      sampleRate,
+    );
+  }
+
+  /// Initializes multimodal support with the specified mmproj model
+  ///
+  /// Parameters:
+  /// - [mmprojPath]: Path to the multimodal projection file
+  /// - [useGpu]: Whether to use GPU acceleration for multimodal processing
+  ///
+  /// Returns:
+  /// `true` if multimodal support was initialized successfully, `false` otherwise
+  Future<bool> initMultimodal(String mmprojPath, bool useGpu) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.initMultimodal(
+      _contextHandle,
+      mmprojPath,
+      useGpu,
     );
   }
 }
@@ -604,14 +697,6 @@ class DownloadResult {
 /// Result of an audio generation operation
 class AudioResult {
   final List<int> audioData;
-  final int sampleRate;
-  final int channels;
-  final int bitDepth;
 
-  AudioResult({
-    required this.audioData,
-    required this.sampleRate,
-    required this.channels,
-    required this.bitDepth,
-  });
+  AudioResult({required this.audioData});
 }

@@ -103,7 +103,7 @@ bool save_wav16(const std::string & fname, const std::vector<float> & data, int 
     header.byte_rate = header.sample_rate * header.num_channels * (header.bits_per_sample / 8);
     header.block_align = header.num_channels * (header.bits_per_sample / 8);
     header.data_size = data.size() * (header.bits_per_sample / 8);
-    header.chunk_size = 36 + header.data_size;
+    header.chunk_size = 28 + header.data_size;
 
     file.write(reinterpret_cast<const char*>(&header), sizeof(header));
 
@@ -1098,8 +1098,8 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
 namespace llama_mobile {
     std::string process_text(const std::string & text, const tts_type tts_version) {
         // Convert tts_type to outetts_version
-        outetts_version outetts_version = (tts_version == TTS_OUTETTS_V0_3) ? OUTETTS_V0_3 : OUTETTS_V0_2;
-        return ::process_text(text, outetts_version);
+        outetts_version version = (tts_version == TTS_OUTETTS_V0_3) ? OUTETTS_V0_3 : OUTETTS_V0_2;
+        return ::process_text(text, version);
     }
 
     std::vector<float> embd_to_audio(const float * embd, const int n_codes, const int n_embd, const int n_thread) {

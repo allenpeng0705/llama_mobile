@@ -1095,7 +1095,7 @@ struct MessageBubble: View {
 // Settings View
 struct SettingsView: View {
     @ObservedObject var appState: AppState
-    @State private var nGpuLayers = 4
+    @State private var nGpuLayers = 8
     @State private var nThreads = 4
     @State private var nCtx = 2048
     
@@ -1291,6 +1291,9 @@ struct SettingsView: View {
         // Increase batch sizes for TTS support (to handle large audio token batches)
         initParams.nBatch = 1024 // Increase from default 512
         initParams.nUBatch = 1024 // Increase from default 512 - must be >= number of audio tokens
+        
+        // Enable flash attention for faster GPU performance
+        initParams.flashAttention = true
         
         appState.llamaMobile = LlamaMobile(with: initParams)
         

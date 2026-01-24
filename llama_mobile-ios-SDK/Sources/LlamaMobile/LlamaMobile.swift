@@ -661,9 +661,8 @@ public class LlamaMobile {
         // Create and populate the C params struct
         var cParams = llama_mobile_init_params_c_t()
         memset(&cParams, 0, MemoryLayout<llama_mobile_init_params_c_t>.size)
-        cParams.model_path = params.modelPath.withCString { $0 }
-        cParams.chat_template = params.chatTemplate?.withCString { $0 }
-        cParams.system_prompt = params.systemPrompt?.withCString { $0 }
+        
+        // Set non-string parameters
         cParams.n_ctx = params.nCtx
         cParams.n_batch = params.nBatch
         cParams.n_ubatch = params.nUBatch
@@ -675,15 +674,45 @@ public class LlamaMobile {
         cParams.pooling_type = params.poolingType
         cParams.embd_normalize = params.embdNormalize
         cParams.flash_attn = params.flashAttention
-        cParams.cache_type_k = params.cacheTypeK?.withCString { $0 }
-        cParams.cache_type_v = params.cacheTypeV?.withCString { $0 }
         cParams.progress_callback = callbackWrapper
+        
+        // Store the chat template for later use
+        let chatTemplateToStore = params.chatTemplate
+        
+        // Use strdup to create persistent copies of the strings
+        let modelPathPtr = params.modelPath.withCString { strdup($0) }
+        let chatTemplatePtr = params.chatTemplate?.withCString { strdup($0) }
+        let systemPromptPtr = params.systemPrompt?.withCString { strdup($0) }
+        let cacheTypeKPtr = params.cacheTypeK?.withCString { strdup($0) }
+        let cacheTypeVPtr = params.cacheTypeV?.withCString { strdup($0) }
+        
+        // Set the pointers in the params struct
+        cParams.model_path = UnsafePointer(modelPathPtr)
+        cParams.chat_template = UnsafePointer(chatTemplatePtr)
+        cParams.system_prompt = UnsafePointer(systemPromptPtr)
+        cParams.cache_type_k = UnsafePointer(cacheTypeKPtr)
+        cParams.cache_type_v = UnsafePointer(cacheTypeVPtr)
         
         // Initialize the context
         context = llama_mobile_init_context_c(&cParams)
         
+        // Free the duplicated strings
+        free(modelPathPtr)
+        if let chatTemplatePtr = chatTemplatePtr {
+            free(chatTemplatePtr)
+        }
+        if let systemPromptPtr = systemPromptPtr {
+            free(systemPromptPtr)
+        }
+        if let cacheTypeKPtr = cacheTypeKPtr {
+            free(cacheTypeKPtr)
+        }
+        if let cacheTypeVPtr = cacheTypeVPtr {
+            free(cacheTypeVPtr)
+        }
+        
         // Store the chat template
-        if let chatTemplate = params.chatTemplate {
+        if let chatTemplate = chatTemplateToStore {
             self.chatTemplate = chatTemplate
         } else {
             // Note: We're unable to access the built-in template from Swift due to framework limitations

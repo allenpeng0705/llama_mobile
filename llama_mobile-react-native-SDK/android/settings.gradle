@@ -1,2 +1,0 @@
-include ':llama_mobile-react-native-SDK'
-rootProject.name = 'llama_mobile-react-native-SDK'

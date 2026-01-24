@@ -128,6 +128,35 @@ defaultConfig {
 </dict>
 ```
 
+4. **Metal Library Setup (Required for GPU Acceleration)**
+
+   Metal shader libraries (`.metallib` files) are required for GPU acceleration on iOS. These files contain precompiled Metal shaders that enable hardware acceleration for model inference.
+
+   **Why This Is Necessary:**
+   - The `llama_mobile` framework uses Metal for GPU acceleration
+   - The `.metallib` files need to be in a location where the framework can find them
+   - In Flutter apps, these files are embedded in the framework bundle but need to be accessible at runtime
+
+   **How to Ensure Metal Libraries Are Available:**
+
+   The SDK automatically handles Metal library setup by:
+   1. Checking if `.metallib` files exist in the app bundle
+   2. Copying them from the framework bundle to the app's binary directory if needed
+   3. Verifying they're accessible for the Metal runtime
+
+   **Manual Setup (If Automatic Setup Fails):**
+   1. Locate the `.metallib` files in the framework bundle:
+      - `ggml-llama.metallib`
+      - `ggml-llama-sim.metallib`
+   2. Copy these files to your app's `ios/Runner` directory
+   3. In Xcode, add these files to your project by dragging them into the Runner target
+   4. Ensure they're included in the app bundle by checking "Copy items if needed" and selecting your target
+
+   **Verification:**
+   - The SDK will log Metal library setup during initialization
+   - Look for logs like "✓ Found metallib file" in your console
+   - If you see "✗ Metallib file not found", check that the files are properly included in your app bundle
+
 ## Getting Started
 
 ### Basic Usage
@@ -536,8 +565,18 @@ Releases the LoRA adapter resources.
 - Ensure the grammar file name is correct (without extension)
 - Some complex grammars may increase generation time
 
-## Example Application
 
+### TTS Pipeline
+1. Load main TTS model (OuteTTS-0.2-500M-Q6_K.gguf)
+2. Load vocoder model (WavTokenizer-Large-75-F16.gguf)
+3. Format text for TTS using``getFormattedAudioCompletion``
+4. Generate guide tokens using``getAudioGuideTokens``
+5. Set the guide tokens using``setGuideTokens``
+6. Generate completion from the main model, which will generate audio tokens
+7. Filter the generated tokens to only include audio tokens (151672-155772)
+8. Decode the filtered audio tokens using the vocoder
+
+## Example Application
 Check the `example/` directory for a complete Flutter application that demonstrates all SDK features:
 
 ```bash

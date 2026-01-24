@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		29C982EFC0C2BF9A3A6CA5E6 /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 428FCA1C6CFE8B6570C43D07 /* Pods_RunnerTests.framework */; };
+		29E3769B2F231AFF0071ABCF /* ggml-llama.metallib in Resources */ = {isa = PBXBuildFile; fileRef = 29E376992F231AFF0071ABCF /* ggml-llama.metallib */; };
+		29E3769C2F231AFF0071ABCF /* ggml-llama-sim.metallib in Resources */ = {isa = PBXBuildFile; fileRef = 29E3769A2F231AFF0071ABCF /* ggml-llama-sim.metallib */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
 		57E933379842AC985FB47630 /* Pods_Runner.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CD0E30968EAC7AB6B8297375 /* Pods_Runner.framework */; };
@@ -44,6 +46,8 @@
 /* Begin PBXFileReference section */
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
+		29E376992F231AFF0071ABCF /* ggml-llama.metallib */ = {isa = PBXFileReference; lastKnownFileType = "archive.metal-library"; name = "ggml-llama.metallib"; path = "Runner/ggml-llama.metallib"; sourceTree = "<group>"; };
+		29E3769A2F231AFF0071ABCF /* ggml-llama-sim.metallib */ = {isa = PBXFileReference; lastKnownFileType = "archive.metal-library"; name = "ggml-llama-sim.metallib"; path = "Runner/ggml-llama-sim.metallib"; sourceTree = "<group>"; };
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
@@ -109,6 +113,8 @@
 		97C146E51CF9000F007C117D = {
 			isa = PBXGroup;
 			children = (
+				29E376992F231AFF0071ABCF /* ggml-llama.metallib */,
+				29E3769A2F231AFF0071ABCF /* ggml-llama-sim.metallib */,
 				9740EEB11CF90186004384FC /* Flutter */,
 				97C146F01CF9000F007C117D /* Runner */,
 				97C146EF1CF9000F007C117D /* Products */,
@@ -152,7 +158,6 @@
 				737669CC0E2CE94414DEACC1 /* Pods-RunnerTests.release.xcconfig */,
 				EC059D54695BC563E55BA7B9 /* Pods-RunnerTests.profile.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -260,6 +265,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				29E3769B2F231AFF0071ABCF /* ggml-llama.metallib in Resources */,
+				29E3769C2F231AFF0071ABCF /* ggml-llama-sim.metallib in Resources */,
 				97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */,
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,

@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:cupertino_icons/cupertino_icons.dart';
+import 'package:flutter/services.dart';
 import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'dart:async';
 
 // Main application state
 class AppState extends ChangeNotifier {
   bool isModelLoaded = false;
   String modelPath = "";
   LlamaContext? llamaContext;
+  LlamaMobile? llamaMobile;
   List<Map<String, String>> availableModels = [];
   String? errorMessage;
 
@@ -27,6 +30,11 @@ class AppState extends ChangeNotifier {
 
   // Feature flags
   bool enableEmbedding = false;
+
+  // Model configuration parameters
+  int nGpuLayers = 99;
+  int nThreads = 4;
+  int nCtx = 2048;
 
   // Chat configuration
   String systemPrompt =
@@ -57,62 +65,100 @@ class AppState extends ChangeNotifier {
   // Load available models
   Future<void> loadAvailableModels() async {
     List<Map<String, String>> models = [];
+    print("=== Starting to load available models ===");
 
-    // 1. Try to load models from assets/models directory
-    // Note: Flutter doesn't support listing assets at runtime, but we can expect specific models
-    // For this example, we'll check if common model files exist
-    List<String> commonModelNames = [
-      "model.gguf",
-      "llama2.gguf",
-      "mistral.gguf",
-      "gemma.gguf",
-    ];
-
-    for (String modelName in commonModelNames) {
-      String assetPath = "assets/models/$modelName";
-      // In Flutter, we can't directly check if an asset exists, but we can try to load it
-      // For this example, we'll assume the models are there if the file exists in the directory
-      try {
-        final file = File('assets/models/$modelName');
-        if (await file.exists()) {
-          models.add({"name": modelName, "path": file.path});
-        }
-      } catch (e) {
-        print("Error checking model file: $e");
-      }
-    }
-
-    // 2. Try to load models from documents directory (for user-added models)
+    // 1. First priority: Scan documents directory for actual user-added models
     try {
       final directory = await getApplicationDocumentsDirectory();
+      print("App documents directory: ${directory.path}");
       final modelsDir = Directory('${directory.path}/models');
-      if (await modelsDir.exists()) {
+      print("Models directory: ${modelsDir.path}");
+      bool modelsDirExists = await modelsDir.exists();
+      print("Models directory exists: $modelsDirExists");
+      if (modelsDirExists) {
         final modelFiles = await modelsDir
             .list()
             .where((file) => file is File && file.path.endsWith('.gguf'))
             .toList();
+        print("Found ${modelFiles.length} model files in documents directory");
         for (var entity in modelFiles) {
           if (entity is File) {
             String fileName = entity.path.split('/').last;
+            // Use full file name including extension
             models.add({"name": fileName, "path": entity.path});
+            print("Added model: $fileName from ${entity.path}");
           }
         }
+      } else {
+        // Create models directory if it doesn't exist
+        await modelsDir.create(recursive: true);
+        print("Created models directory: ${modelsDir.path}");
+        print("Please add your model files to this directory:");
+        print("${modelsDir.path}");
       }
     } catch (e) {
       print("Error scanning documents directory: $e");
     }
 
+    // 2. Second priority: Load models from assets/models directory
+    // Flutter generates an AssetManifest.json file that we can parse to get all assets
+    try {
+      print("Checking assets/models directory");
+      // Load AssetManifest.json
+      String manifestContent = await rootBundle.loadString(
+        'AssetManifest.json',
+      );
+      Map<String, dynamic> manifest = jsonDecode(manifestContent);
+
+      // Extract all model files from assets/models
+      List<String> modelAssets = manifest.keys
+          .where(
+            (key) => key.startsWith('assets/models/') && key.endsWith('.gguf'),
+          )
+          .toList();
+
+      print("Found ${modelAssets.length} model files in assets/models");
+      for (String assetPath in modelAssets) {
+        String fileName = assetPath.split('/').last;
+        // Use full file name including extension
+        models.add({"name": fileName, "path": assetPath});
+        print("Added model: $fileName from $assetPath");
+      }
+    } catch (e) {
+      print("Error loading AssetManifest.json: $e");
+      // Fallback: Add common model files
+      List<String> commonModelFiles = [
+        "model.gguf",
+        "Qwen3-Embedding-0.6B-Q8_0.gguf",
+        "Qwen3-1.7B-Q4_K_M.gguf",
+      ];
+
+      print("Adding common model files as fallback");
+      for (String modelName in commonModelFiles) {
+        String assetPath = "assets/models/$modelName";
+        // Use full file name including extension
+        models.add({"name": modelName, "path": assetPath});
+        print("Added model: $modelName from $assetPath");
+      }
+    }
+
     // 3. If no models found, add a sample model as fallback
+    print("Total models found before fallback: ${models.length}");
     if (models.isEmpty) {
+      print("No models found, adding fallback model");
       models.add({"name": "Sample Model", "path": "assets/models/model.gguf"});
     }
 
     availableModels = models;
+    print("Final available models: $availableModels");
 
     // Set default model path if any models are found
     if (availableModels.isNotEmpty) {
       modelPath = availableModels.first["path"]!;
+      print("Default model path set to: $modelPath");
     }
+
+    print("=== Finished loading available models ===");
 
     // Populate mmproj models (for multimodal) - show all models plus "Empty" option
     availableMmprojModels = [
@@ -162,29 +208,113 @@ class AppState extends ChangeNotifier {
   // Load available packaged images
   Future<void> loadAvailablePackagedImages() async {
     List<Map<String, String>> images = [];
+    print("=== Starting to load available packaged images ===");
 
-    // Common image names to check for in assets/images directory
-    List<String> commonImageNames = [
-      "sample1.jpg",
-      "sample2.jpg",
-      "sample3.png",
-      "sample4.png",
-    ];
-
-    for (String imageName in commonImageNames) {
-      String assetPath = "assets/images/$imageName";
-      try {
-        final file = File('assets/images/$imageName');
-        if (await file.exists()) {
-          images.add({"name": imageName, "path": file.path});
+    // 1. First priority: Scan documents directory for actual user-added images
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      print("App documents directory: ${directory.path}");
+      final imagesDir = Directory('${directory.path}/images');
+      print("Images directory: ${imagesDir.path}");
+      bool imagesDirExists = await imagesDir.exists();
+      print("Images directory exists: $imagesDirExists");
+      if (imagesDirExists) {
+        final imageFiles = await imagesDir
+            .list()
+            .where(
+              (file) =>
+                  file is File &&
+                  (file.path.endsWith('.jpg') ||
+                      file.path.endsWith('.jpeg') ||
+                      file.path.endsWith('.png') ||
+                      file.path.endsWith('.gif') ||
+                      file.path.endsWith('.webp')),
+            )
+            .toList();
+        print("Found ${imageFiles.length} image files in documents directory");
+        for (var entity in imageFiles) {
+          if (entity is File) {
+            String fileName = entity.path.split('/').last;
+            // Use full file name including extension
+            images.add({"name": fileName, "path": entity.path});
+            print("Added image: $fileName from ${entity.path}");
+          }
         }
-      } catch (e) {
-        print("Error checking image file: $e");
+      } else {
+        // Create images directory if it doesn't exist
+        await imagesDir.create(recursive: true);
+        print("Created images directory: ${imagesDir.path}");
+        print("Please add your image files to this directory:");
+        print("${imagesDir.path}");
+      }
+    } catch (e) {
+      print("Error scanning documents directory: $e");
+    }
+
+    // 2. Second priority: Load images from assets/images directory
+    // Flutter generates an AssetManifest.json file that we can parse to get all assets
+    try {
+      print("Checking assets/images directory");
+      // Load AssetManifest.json
+      String manifestContent = await rootBundle.loadString(
+        'AssetManifest.json',
+      );
+      Map<String, dynamic> manifest = jsonDecode(manifestContent);
+
+      // Extract all image files from assets/images
+      List<String> imageAssets = manifest.keys
+          .where(
+            (key) =>
+                key.startsWith('assets/images/') &&
+                (key.endsWith('.jpg') ||
+                    key.endsWith('.jpeg') ||
+                    key.endsWith('.png') ||
+                    key.endsWith('.gif') ||
+                    key.endsWith('.webp')),
+          )
+          .toList();
+
+      print("Found ${imageAssets.length} image files in assets/images");
+      for (String assetPath in imageAssets) {
+        String fileName = assetPath.split('/').last;
+        // Use full file name including extension
+        images.add({"name": fileName, "path": assetPath});
+        print("Added image: $fileName from $assetPath");
+      }
+    } catch (e) {
+      print("Error loading AssetManifest.json: $e");
+      // Fallback: Add common image files
+      List<String> commonImageFiles = [
+        "sample1.jpg",
+        "sample2.jpg",
+        "sample3.png",
+        "sample4.png",
+        "cat.jpg",
+        "dog.jpg",
+        "car.jpg",
+        "house.jpg",
+        "city.jpg",
+        "nature.jpg",
+        "food.jpg",
+        "person.jpg",
+        "landscape.jpg",
+        "portrait.jpg",
+        "technology.jpg",
+      ];
+
+      print("Adding common image files as fallback");
+      for (String imageName in commonImageFiles) {
+        String assetPath = "assets/images/$imageName";
+        // Use full file name including extension
+        images.add({"name": imageName, "path": assetPath});
+        print("Added image: $imageName from $assetPath");
       }
     }
 
-    // If no images found, add a placeholder
+    // 3. If no images found, add a placeholder
+    print("Total images found before fallback: ${images.length}");
     if (images.isEmpty) {
+      print("No images found, adding placeholder");
       images.add({
         "name": "Placeholder",
         "path": "assets/images/placeholder.png",
@@ -192,30 +322,387 @@ class AppState extends ChangeNotifier {
     }
 
     availablePackagedImages = images;
+    print("Final available packaged images: $availablePackagedImages");
+    print("=== Finished loading available packaged images ===");
   }
 
   // Load model
   Future<void> loadModel() async {
     try {
-      if (modelPath.isNotEmpty) {
-        // Initialize LlamaMobile using the correct method
-        final llamaMobile = LlamaMobile();
-        final context = await llamaMobile.initContext(
-          modelPath: modelPath,
-          nCtx: 2048,
-          nGpuLayers: 0,
-          nThreads: 4,
-        );
-        if (context != null) {
-          llamaContext = context;
-        }
-        isModelLoaded = true;
-        errorMessage = null;
+      print("=== Starting model loading process ===");
+      print("Model path: $modelPath");
+      print("nCtx: $nCtx");
+      print("nGpuLayers: $nGpuLayers");
+      print("nThreads: $nThreads");
+      print("enableEmbedding: $enableEmbedding");
+
+      if (modelPath.isEmpty) {
+        errorMessage = "Please select a model first";
+        print("Error: No model selected");
         notifyListeners();
+        return;
       }
-    } catch (e) {
-      errorMessage = e.toString();
+
+      // Check if main model file exists (skip check for assets)
+      print("DEBUG: modelPath = '$modelPath'");
+      print(
+        "DEBUG: modelPath starts with 'assets/' = ${modelPath.startsWith('assets/')}",
+      );
+      bool fileExists = true;
+      String finalModelPath = modelPath;
+
+      // Handle asset paths by copying to temp
+      if (modelPath.startsWith('assets/')) {
+        print("Handling asset path: $modelPath");
+        final tempPath = await copyAssetToTemp(modelPath);
+        if (tempPath == null) {
+          errorMessage = "Failed to copy asset to temporary file: $modelPath";
+          print("Error: Failed to copy asset to temporary file");
+          notifyListeners();
+          return;
+        }
+        finalModelPath = tempPath;
+        print("Asset copied to temp: $finalModelPath");
+      } else {
+        // Check if regular file exists
+        fileExists = await File(modelPath).exists();
+        print("Model file exists: $fileExists");
+        if (!fileExists) {
+          errorMessage = "Model file not found at path: $modelPath";
+          print("Error: Model file not found at path: $modelPath");
+          notifyListeners();
+          return;
+        }
+      }
+
+      // Verify the temp file exists
+      final tempFile = File(finalModelPath);
+      final tempFileExists = await tempFile.exists();
+      final tempFileSize = tempFileExists ? await tempFile.length() : 0;
+      print("Temp file exists: $tempFileExists");
+      print("Temp file size: $tempFileSize bytes");
+
+      // Additional file system checks
+      if (tempFileExists) {
+        try {
+          // Check if we can read the file
+          final fileStat = await tempFile.stat();
+          print("File stat: $fileStat");
+          print("File mode: ${fileStat.mode}");
+          print("File size: ${fileStat.size}");
+          print("File modified: ${fileStat.modified}");
+
+          // Try to read a small portion of the file to verify access
+          final fileHandle = await tempFile.open();
+          final buffer = List<int>.filled(100, 0);
+          final bytesRead = await fileHandle.readInto(buffer);
+          await fileHandle.close();
+          print("Successfully read $bytesRead bytes from the file");
+          print("First 10 bytes: ${buffer.sublist(0, 10)}");
+        } catch (e) {
+          print("Error accessing file: $e");
+          errorMessage = "Error accessing model file: $e";
+          notifyListeners();
+          return;
+        }
+      }
+
+      // Create LlamaMobile instance
+      print("Creating LlamaMobile instance");
+      llamaMobile = LlamaMobile();
+      print("LlamaMobile instance created: ${llamaMobile != null}");
+
+      // Initialize the context with all parameters
+      print("Initializing model context with path: $finalModelPath");
+      print("Parameters:");
+      print("  chatTemplate: <|im_start|>{{role}}\n{{content}}<|im_end|>\n");
+      print("  nCtx: $nCtx");
+      print("  nGpuLayers: $nGpuLayers");
+      print("  nThreads: $nThreads");
+      print("  embedding: $enableEmbedding");
+      print("  poolingType: 0");
+      print("  embdNormalize: 1");
+      print("  nBatch: 1024");
+      print("  nUBatch: 1024");
+      final context = await llamaMobile!.initContext(
+        modelPath: finalModelPath,
+        chatTemplate: "<|im_start|>{{role}}\n{{content}}<|im_end|>\n",
+        nCtx: nCtx,
+        nGpuLayers: nGpuLayers, // Use user-specified GPU layers
+        nThreads: nThreads,
+        embedding: enableEmbedding,
+        poolingType: 0,
+        embdNormalize: 0,
+        nBatch: 1024,
+        nUBatch: 1024,
+        flashAttention: true, // Enable flash attention for better performance
+      );
+      print("Context initialization completed: ${context != null}");
+
+      if (context != null) {
+        llamaContext = context;
+        isModelLoaded = true;
+        errorMessage = "Model loaded successfully";
+        print("Main model loaded successfully: $modelPath");
+
+        // Chat template is now set during initialization
+        print("Chat template already set during initialization");
+
+        // Load LoRA adapter if path is provided
+        if (loraModelPath.isNotEmpty) {
+          print("Loading LoRA adapter: $loraModelPath");
+          String loraPath = loraModelPath;
+          bool loraValid = true;
+
+          // Handle asset paths for LoRA
+          if (loraModelPath.startsWith('assets/')) {
+            final tempPath = await copyAssetToTemp(loraModelPath);
+            if (tempPath != null) {
+              loraPath = tempPath;
+              print("LoRA asset copied to temp: $loraPath");
+              // Update the app state's loraModelPath to use the temp path
+              this.loraModelPath = loraPath;
+            } else {
+              print("Failed to copy LoRA asset to temp");
+              loraValid = false;
+            }
+          } else {
+            // Check if regular file exists
+            final loraExists = await File(loraModelPath).exists();
+            print("LoRA file exists: $loraExists");
+            if (!loraExists) {
+              print("LoRA adapter file not found: $loraModelPath");
+              loraValid = false;
+            }
+          }
+
+          if (loraValid) {
+            try {
+              final success = await context.loadLoraAdapter(loraPath, 1.0);
+              print("LoRA adapter loaded successfully: $success");
+            } catch (e) {
+              print("Error loading LoRA adapter: $e");
+            }
+          }
+        }
+
+        // Load TTS model if vocoder path is provided
+        if (vocoderModelPath.isNotEmpty) {
+          print("Loading TTS model: $vocoderModelPath");
+          String ttsPath = vocoderModelPath;
+          bool ttsValid = true;
+
+          // Handle asset paths for TTS
+          if (vocoderModelPath.startsWith('assets/')) {
+            final tempPath = await copyAssetToTemp(vocoderModelPath);
+            if (tempPath != null) {
+              ttsPath = tempPath;
+              print("TTS asset copied to temp: $ttsPath");
+              // Update the app state's vocoderModelPath to use the temp path
+              this.vocoderModelPath = ttsPath;
+            } else {
+              print("Failed to copy TTS asset to temp");
+              ttsValid = false;
+            }
+          } else {
+            // Check if regular file exists
+            final vocoderExists = await File(vocoderModelPath).exists();
+            print("Vocoder file exists: $vocoderExists");
+            if (!vocoderExists) {
+              print("TTS model file not found: $vocoderModelPath");
+              ttsValid = false;
+            }
+          }
+
+          if (ttsValid) {
+            try {
+              // Try loading as outETTSv03 first
+              var success = await context.loadTTSModel(
+                ttsPath,
+                TTSModelType.outETTSv03,
+              );
+              print("TTS model loaded successfully (v03): $success");
+
+              // If v03 fails, try v02
+              if (!success) {
+                success = await context.loadTTSModel(
+                  ttsPath,
+                  TTSModelType.outETTSv02,
+                );
+                print("TTS model loaded successfully (v02): $success");
+              }
+            } catch (e) {
+              print("Error loading TTS model: $e");
+            }
+          }
+        }
+
+        // Load mmproj model if path is provided for multimodal
+        if (mmprojModelPath.isNotEmpty) {
+          print("Loading mmproj model: $mmprojModelPath");
+          String mmprojPath = mmprojModelPath;
+          bool mmprojValid = true;
+
+          // Handle asset paths for mmproj
+          if (mmprojModelPath.startsWith('assets/')) {
+            final tempPath = await copyAssetToTemp(mmprojModelPath);
+            if (tempPath != null) {
+              mmprojPath = tempPath;
+              print("mmproj asset copied to temp: $mmprojPath");
+              // Update the app state's mmprojModelPath to use the temp path
+              this.mmprojModelPath = mmprojPath;
+            } else {
+              print("Failed to copy mmproj asset to temp");
+              mmprojValid = false;
+            }
+          } else {
+            // Check if regular file exists
+            final mmprojExists = await File(mmprojModelPath).exists();
+            print("mmproj file exists: $mmprojExists");
+            if (!mmprojExists) {
+              print("mmproj model file not found: $mmprojModelPath");
+              mmprojValid = false;
+            }
+          }
+
+          if (mmprojValid) {
+            try {
+              // Initialize multimodal support with the mmproj model
+              print(
+                "Initializing multimodal support with mmproj model: $mmprojPath",
+              );
+              final success = await context.initMultimodal(
+                mmprojPath,
+                nGpuLayers > 0, // Use GPU if layers are specified
+              );
+              print("Multimodal support initialized: $success");
+            } catch (e) {
+              print("Error loading mmproj model: $e");
+            }
+          }
+        }
+      } else {
+        errorMessage = "Failed to initialize model context";
+        isModelLoaded = false;
+        print("Failed to initialize model context - returned null");
+      }
+      print("Model loading process completed");
+      print("isModelLoaded: $isModelLoaded");
+      print("errorMessage: $errorMessage");
       notifyListeners();
+    } catch (e) {
+      errorMessage = "Error loading model: ${e.toString()}";
+      isModelLoaded = false;
+      print("Error loading model: $e");
+      print("Stack trace: ${e.toString()}");
+      notifyListeners();
+    }
+  }
+
+  // Unload model
+  Future<void> unloadModel() async {
+    try {
+      // Clear the context
+      llamaContext = null;
+
+      // Optionally reset LlamaMobile instance
+      // llamaMobile = null;
+
+      isModelLoaded = false;
+      errorMessage = null;
+      print("All models unloaded successfully");
+      notifyListeners();
+    } catch (e) {
+      errorMessage = "Error unloading model: ${e.toString()}";
+      print("Error unloading model: $e");
+      notifyListeners();
+    }
+  }
+
+  // Copy asset to temporary file and return the path
+  Future<String?> copyAssetToTemp(String assetPath) async {
+    try {
+      print("Copying asset to temp: $assetPath");
+
+      // Get temporary directory
+      final tempDir = await getTemporaryDirectory();
+      print("Temp directory: ${tempDir.path}");
+
+      // Extract filename from asset path
+      final fileName = assetPath.split('/').last;
+      print("Filename: $fileName");
+
+      // Create temporary file path
+      final tempPath = '${tempDir.path}/$fileName';
+      print("Temp path: $tempPath");
+
+      // Check if temp file already exists
+      final tempFile = File(tempPath);
+      if (await tempFile.exists()) {
+        print("Temp file already exists, returning existing path");
+        return tempPath;
+      }
+
+      // Load asset as byte data
+      final byteData = await rootBundle.load(assetPath);
+      print("Asset loaded successfully, size: ${byteData.lengthInBytes} bytes");
+
+      // Write to temporary file
+      await tempFile.writeAsBytes(byteData.buffer.asUint8List());
+      print("Asset copied to temp file successfully");
+
+      return tempPath;
+    } catch (e) {
+      print("Error copying asset to temp: $e");
+      return null;
+    }
+  }
+
+  // Copy all model files from assets/models to temporary directory
+  Future<Map<String, String>> copyAllModelsToTemp() async {
+    try {
+      print("=== Starting to copy all models to temp ===");
+
+      // Get temporary directory
+      final tempDir = await getTemporaryDirectory();
+      print("Temp directory: ${tempDir.path}");
+
+      // List of model files to copy
+      final modelFiles = [
+        "assets/models/SmolLM-360M-Instruct.Q6_K.gguf",
+        "assets/models/Qwen3-1.7B-Q4_K_M.gguf",
+        "assets/models/SmolVLM-256M-Instruct-Q8_0.gguf",
+        "assets/models/mmproj-SmolVLM-256M-Instruct-Q8_0.gguf",
+        "assets/models/OuteTTS-0.2-500M-Q6_K.gguf",
+        "assets/models/WavTokenizer-Large-75-F16.gguf",
+        "assets/models/fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf",
+      ];
+
+      final copiedModels = <String, String>{};
+
+      // Copy each model file
+      for (final modelPath in modelFiles) {
+        try {
+          final tempPath = await copyAssetToTemp(modelPath);
+          if (tempPath != null) {
+            copiedModels[modelPath] = tempPath;
+            print("Copied model: $modelPath → $tempPath");
+          } else {
+            print("Failed to copy model: $modelPath");
+          }
+        } catch (e) {
+          print("Error copying model $modelPath: $e");
+        }
+      }
+
+      print("=== Finished copying models to temp ===");
+      print("Copied ${copiedModels.length} out of ${modelFiles.length} models");
+      print("Copied models: $copiedModels");
+
+      return copiedModels;
+    } catch (e) {
+      print("Error in copyAllModelsToTemp: $e");
+      return {};
     }
   }
 }
@@ -323,24 +810,44 @@ class _ChatViewState extends State<ChatView> {
           print("OpenAI JSON Request: $jsonRequest");
 
           // Generate completion with OpenAI JSON format
-          final result = await widget.appState.llamaContext?.generateCompletion(
-            prompt: jsonRequest,
-            maxTokens: 256,
-            temperature: 0.7,
-            useJsonResponse: true,
-            grammar: grammarContent,
-          );
+          final result = await widget.appState.llamaContext
+              ?.generateOpenAICompletion(
+                openAIJSON: jsonRequest,
+                grammar: grammarContent,
+              );
           response = result?.text ?? "";
         } else {
-          // Use standard completion
+          // Use standard completion - iOS SDK Example style
+          // Format chat messages as a single prompt
+          String formattedPrompt = "";
+          for (var msg in chatMessages) {
+            formattedPrompt +=
+                "${msg['role'] == 'user'
+                    ? 'User:'
+                    : msg['role'] == 'assistant'
+                    ? 'Assistant:'
+                    : 'System:'} ${msg['content']}\n";
+          }
+          formattedPrompt += "Assistant:";
+
+          // Generate completion
           final result = await widget.appState.llamaContext?.generateCompletion(
-            prompt: prompt,
-            maxTokens: 256,
+            prompt: formattedPrompt,
+            maxTokens: 512,
             temperature: 0.7,
+            stopSequences: ["User:", "Assistant:", "System:"],
             grammar: grammarContent,
           );
           response = result?.text ?? "";
         }
+
+        // Parse response to match iOS SDK Example behavior
+        response = response.trim();
+        // Remove any trailing stop words
+        response = response.replaceAll(
+          RegExp(r'\s*(User:|Assistant:|System:)$'),
+          '',
+        );
 
         setState(() {
           messages.add(Message(role: "assistant", text: response));
@@ -493,18 +1000,66 @@ class _TokenizationTestViewState extends State<TokenizationTestView> {
   TextEditingController _textController = TextEditingController();
   List<int> tokens = [];
   String tokenCount = "0";
+  String detokenizedText = "";
+  bool isProcessing = false;
 
-  void tokenizeText() {
-    if (_textController.text.isEmpty || !widget.appState.isModelLoaded) return;
+  void tokenizeText() async {
+    if (_textController.text.isEmpty ||
+        !widget.appState.isModelLoaded ||
+        isProcessing)
+      return;
 
     try {
-      // This would be implemented using the actual tokenization method
       setState(() {
-        tokens = [1, 2, 3, 4, 5]; // Sample tokens
-        tokenCount = "5"; // Sample count
+        isProcessing = true;
       });
+      // Use the actual tokenization method
+      final result = await widget.appState.llamaContext?.tokenize(
+        _textController.text,
+      );
+      if (result != null) {
+        setState(() {
+          tokens = result;
+          tokenCount = result.length.toString();
+          detokenizedText = "";
+        });
+      } else {
+        widget.appState.errorMessage =
+            "Error tokenizing text: Tokenization returned null";
+      }
     } catch (e) {
       widget.appState.errorMessage = "Error tokenizing text: $e";
+    } finally {
+      setState(() {
+        isProcessing = false;
+      });
+    }
+  }
+
+  void detokenizeTokens() async {
+    if (tokens.isEmpty || !widget.appState.isModelLoaded || isProcessing)
+      return;
+
+    try {
+      setState(() {
+        isProcessing = true;
+      });
+      // Use the actual detokenization method
+      final result = await widget.appState.llamaContext?.detokenize(tokens);
+      if (result != null) {
+        setState(() {
+          detokenizedText = result;
+        });
+      } else {
+        widget.appState.errorMessage =
+            "Error detokenizing text: Detokenization returned null";
+      }
+    } catch (e) {
+      widget.appState.errorMessage = "Error detokenizing text: $e";
+    } finally {
+      setState(() {
+        isProcessing = false;
+      });
     }
   }
 
@@ -516,35 +1071,75 @@ class _TokenizationTestViewState extends State<TokenizationTestView> {
           // Dismiss keyboard when tapping outside text fields
           FocusScope.of(context).unfocus();
         },
-        child: Column(
-          children: [
-            TextField(
-              controller: _textController,
-              decoration: const InputDecoration(
-                labelText: "Text to Tokenize",
-                border: OutlineInputBorder(),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              TextField(
+                controller: _textController,
+                decoration: const InputDecoration(
+                  labelText: "Text to Tokenize",
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+                enabled: !isProcessing && widget.appState.isModelLoaded,
               ),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: tokenizeText,
-              child: const Text("Tokenize"),
-            ),
-            const SizedBox(height: 20),
-            Text("Token Count: $tokenCount"),
-            const SizedBox(height: 20),
-            Expanded(
-              child: ListView.builder(
-                itemCount: tokens.length,
-                itemBuilder: (context, index) {
-                  return ListTile(
-                    title: Text("Token $index: ${tokens[index]}"),
-                  );
-                },
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed:
+                    isProcessing ||
+                        !widget.appState.isModelLoaded ||
+                        _textController.text.isEmpty
+                    ? null
+                    : tokenizeText,
+                child: Text(isProcessing ? "Tokenizing..." : "Tokenize"),
               ),
-            ),
-          ],
+              const SizedBox(height: 10),
+              if (tokens.isNotEmpty)
+                ElevatedButton(
+                  onPressed: isProcessing ? null : detokenizeTokens,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                  ),
+                  child: Text(isProcessing ? "Detokenizing..." : "Detokenize"),
+                ),
+              const SizedBox(height: 20),
+              Text("Token Count: $tokenCount"),
+              const SizedBox(height: 20),
+              if (tokens.isNotEmpty)
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Tokens:"),
+                        const SizedBox(height: 10),
+                        Text(
+                          tokens.toString(),
+                          style: const TextStyle(fontFamily: 'Courier'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (detokenizedText.isNotEmpty)
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Detokenized Text:"),
+                        const SizedBox(height: 10),
+                        Text(
+                          detokenizedText,
+                          style: const TextStyle(fontFamily: 'Courier'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -565,19 +1160,56 @@ class _EmbeddingTestViewState extends State<EmbeddingTestView> {
   TextEditingController _textController = TextEditingController();
   List<double> embedding = [];
   String embeddingLength = "0";
+  bool isProcessing = false;
 
-  void generateEmbedding() {
-    if (_textController.text.isEmpty || !widget.appState.isModelLoaded) return;
+  void generateEmbedding() async {
+    if (_textController.text.isEmpty ||
+        !widget.appState.isModelLoaded ||
+        isProcessing)
+      return;
 
     try {
-      // This would be implemented using the actual embedding method
       setState(() {
-        embedding = [0.1, 0.2, 0.3, 0.4, 0.5]; // Sample embedding
-        embeddingLength = "5"; // Sample length
+        isProcessing = true;
       });
+      // Use the actual embedding method
+      final result = await widget.appState.llamaContext?.generateEmbedding(
+        _textController.text,
+      );
+      if (result != null) {
+        setState(() {
+          embedding = result;
+          embeddingLength = result.length.toString();
+        });
+      } else {
+        widget.appState.errorMessage =
+            "Error generating embedding: Embedding returned null";
+      }
     } catch (e) {
       widget.appState.errorMessage = "Error generating embedding: $e";
+    } finally {
+      setState(() {
+        isProcessing = false;
+      });
     }
+  }
+
+  String formatEmbeddingResult() {
+    if (embedding.isEmpty) return "Embedding will appear here";
+
+    // Show only first 20 values to avoid overwhelming the UI
+    final truncatedEmbedding = embedding.take(20).toList();
+    final formattedValues = truncatedEmbedding
+        .map((value) => value.toStringAsFixed(6))
+        .join(", ");
+    var result = "[$formattedValues";
+
+    if (embedding.length > 20) {
+      result += ", ... (and ${embedding.length - 20} more values)";
+    }
+
+    result += "\n\nEmbedding dimension: ${embedding.length}";
+    return result;
   }
 
   @override
@@ -588,35 +1220,807 @@ class _EmbeddingTestViewState extends State<EmbeddingTestView> {
           // Dismiss keyboard when tapping outside text fields
           FocusScope.of(context).unfocus();
         },
-        child: Column(
-          children: [
-            TextField(
-              controller: _textController,
-              decoration: const InputDecoration(
-                labelText: "Text to Embed",
-                border: OutlineInputBorder(),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              TextField(
+                controller: _textController,
+                decoration: const InputDecoration(
+                  labelText: "Text to Embed",
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+                enabled: !isProcessing && widget.appState.isModelLoaded,
               ),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: generateEmbedding,
-              child: const Text("Generate Embedding"),
-            ),
-            const SizedBox(height: 20),
-            Text("Embedding Length: $embeddingLength"),
-            const SizedBox(height: 20),
-            Expanded(
-              child: ListView.builder(
-                itemCount: embedding.length,
-                itemBuilder: (context, index) {
-                  return ListTile(
-                    title: Text("Dimension $index: ${embedding[index]}"),
-                  );
-                },
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed:
+                    isProcessing ||
+                        !widget.appState.isModelLoaded ||
+                        _textController.text.isEmpty
+                    ? null
+                    : generateEmbedding,
+                child: Text(
+                  isProcessing
+                      ? "Generating Embedding..."
+                      : "Generate Embedding",
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Embedding Result:"),
+                      const SizedBox(height: 10),
+                      Text(
+                        formatEmbeddingResult(),
+                        style: const TextStyle(fontFamily: 'Courier'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Settings View
+class SettingsView extends StatefulWidget {
+  final AppState appState;
+
+  const SettingsView({Key? key, required this.appState}) : super(key: key);
+
+  @override
+  _SettingsViewState createState() => _SettingsViewState();
+}
+
+class _SettingsViewState extends State<SettingsView> {
+  void _onAppStateChanged() {
+    setState(() {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.appState.addListener(_onAppStateChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.appState.removeListener(_onAppStateChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: GestureDetector(
+        onTap: () {
+          // Dismiss keyboard when tapping outside text fields
+          FocusScope.of(context).unfocus();
+        },
+        child: Form(
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              // Model Configuration Section
+              const SectionHeader(title: "Model Configuration"),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[200]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Main Model Picker
+                      widget.appState.availableModels.isEmpty
+                          ? const Text(
+                              "No models found in the bundle",
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                              ),
+                            )
+                          : Column(
+                              children: [
+                                DropdownButtonFormField<Map<String, String>?>(
+                                  isExpanded: true,
+                                  value:
+                                      widget
+                                              .appState
+                                              .availableModels
+                                              .isNotEmpty &&
+                                          widget.appState.modelPath.isNotEmpty
+                                      ? widget.appState.availableModels
+                                            .firstWhere(
+                                              (model) =>
+                                                  model["path"] ==
+                                                  widget.appState.modelPath,
+                                              orElse: () => widget
+                                                  .appState
+                                                  .availableModels
+                                                  .first,
+                                            )
+                                      : null,
+                                  items: [
+                                    const DropdownMenuItem<
+                                      Map<String, String>?
+                                    >(
+                                      value: null,
+                                      child: Text(
+                                        "Empty",
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    ...widget.appState.availableModels.map((
+                                      model,
+                                    ) {
+                                      return DropdownMenuItem<
+                                        Map<String, String>?
+                                      >(
+                                        value: model,
+                                        child: Text(
+                                          model["name"]!,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ],
+                                  onChanged: widget.appState.isModelLoaded
+                                      ? null
+                                      : (Map<String, String>? value) {
+                                          setState(() {
+                                            widget.appState.modelPath =
+                                                value?["path"] ?? "";
+                                          });
+                                        },
+                                  decoration: const InputDecoration(
+                                    labelText: "Select Main Model",
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                            ),
+
+                      // MMProj Model Picker
+                      Container(
+                        width: double.infinity,
+                        child: DropdownButtonFormField<Map<String, String>>(
+                          isExpanded: true,
+                          value:
+                              widget.appState.availableMmprojModels.isNotEmpty
+                              ? widget.appState.availableMmprojModels.firstWhere(
+                                  (model) {
+                                    // Handle empty path case
+                                    if (widget
+                                        .appState
+                                        .mmprojModelPath
+                                        .isEmpty) {
+                                      return model["path"] == "";
+                                    }
+                                    // Find by filename instead of full path
+                                    // because path changes when copied to temp
+                                    final modelFilename = model["path"]!
+                                        .split('/')
+                                        .last;
+                                    final currentFilename = widget
+                                        .appState
+                                        .mmprojModelPath
+                                        .split('/')
+                                        .last;
+                                    return modelFilename == currentFilename ||
+                                        model["path"] ==
+                                            widget.appState.mmprojModelPath;
+                                  },
+                                  orElse: () => widget
+                                      .appState
+                                      .availableMmprojModels
+                                      .first,
+                                )
+                              : null,
+                          items: [
+                            const DropdownMenuItem<Map<String, String>>(
+                              value: null,
+                              child: Text(
+                                "Empty",
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            ...widget.appState.availableMmprojModels.map((
+                              model,
+                            ) {
+                              return DropdownMenuItem<Map<String, String>>(
+                                value: model,
+                                child: Text(
+                                  model["name"]!,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                          ],
+                          onChanged: widget.appState.isModelLoaded
+                              ? null
+                              : (Map<String, String>? value) {
+                                  setState(() {
+                                    widget.appState.mmprojModelPath =
+                                        value?["path"] ?? "";
+                                  });
+                                },
+                          decoration: const InputDecoration(
+                            labelText: "Select MMProj Model",
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Vocoder Model Picker
+                      Container(
+                        width: double.infinity,
+                        child: DropdownButtonFormField<Map<String, String>>(
+                          isExpanded: true,
+                          value:
+                              widget.appState.availableVocoderModels.isNotEmpty
+                              ? widget.appState.availableVocoderModels.firstWhere(
+                                  (model) {
+                                    // Handle empty path case
+                                    if (widget
+                                        .appState
+                                        .vocoderModelPath
+                                        .isEmpty) {
+                                      return model["path"] == "";
+                                    }
+                                    // Find by filename instead of full path
+                                    // because path changes when copied to temp
+                                    final modelFilename = model["path"]!
+                                        .split('/')
+                                        .last;
+                                    final currentFilename = widget
+                                        .appState
+                                        .vocoderModelPath
+                                        .split('/')
+                                        .last;
+                                    return modelFilename == currentFilename ||
+                                        model["path"] ==
+                                            widget.appState.vocoderModelPath;
+                                  },
+                                  orElse: () => widget
+                                      .appState
+                                      .availableVocoderModels
+                                      .first,
+                                )
+                              : null,
+                          items: [
+                            const DropdownMenuItem<Map<String, String>>(
+                              value: null,
+                              child: Text(
+                                "Empty",
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            ...widget.appState.availableVocoderModels.map((
+                              model,
+                            ) {
+                              return DropdownMenuItem<Map<String, String>>(
+                                value: model,
+                                child: Text(
+                                  model["name"]!,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                          ],
+                          onChanged: widget.appState.isModelLoaded
+                              ? null
+                              : (Map<String, String>? value) {
+                                  setState(() {
+                                    widget.appState.vocoderModelPath =
+                                        value?["path"] ?? "";
+                                  });
+                                },
+                          decoration: const InputDecoration(
+                            labelText: "Select Vocoder Model",
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // LoRA Model Picker
+                      Container(
+                        width: double.infinity,
+                        child: DropdownButtonFormField<Map<String, String>>(
+                          isExpanded: true,
+                          value: widget.appState.availableLoRAModels.isNotEmpty
+                              ? widget.appState.availableLoRAModels.firstWhere(
+                                  (model) {
+                                    // Handle empty path case
+                                    if (widget.appState.loraModelPath.isEmpty) {
+                                      return model["path"] == "";
+                                    }
+                                    // Find by filename instead of full path
+                                    // because path changes when copied to temp
+                                    final modelFilename = model["path"]!
+                                        .split('/')
+                                        .last;
+                                    final currentFilename = widget
+                                        .appState
+                                        .loraModelPath
+                                        .split('/')
+                                        .last;
+                                    return modelFilename == currentFilename ||
+                                        model["path"] ==
+                                            widget.appState.loraModelPath;
+                                  },
+                                  orElse: () =>
+                                      widget.appState.availableLoRAModels.first,
+                                )
+                              : null,
+                          items: [
+                            const DropdownMenuItem<Map<String, String>>(
+                              value: null,
+                              child: Text(
+                                "Empty",
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            ...widget.appState.availableLoRAModels.map((model) {
+                              return DropdownMenuItem<Map<String, String>>(
+                                value: model,
+                                child: Text(
+                                  model["name"]!,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                          ],
+                          onChanged: widget.appState.isModelLoaded
+                              ? null
+                              : (Map<String, String>? value) {
+                                  setState(() {
+                                    widget.appState.loraModelPath =
+                                        value?["path"] ?? "";
+                                  });
+                                },
+                          decoration: const InputDecoration(
+                            labelText: "Select LoRA Model",
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Grammar Picker
+                      Container(
+                        width: double.infinity,
+                        child: DropdownButtonFormField<String?>(
+                          value: widget.appState.selectedGrammar,
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text(
+                                "Empty",
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            ...widget.appState.availableGrammars.map((grammar) {
+                              return DropdownMenuItem<String?>(
+                                value: grammar,
+                                child: Text(
+                                  grammar,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                          ],
+                          onChanged: widget.appState.isModelLoaded
+                              ? null
+                              : (value) {
+                                  setState(() {
+                                    widget.appState.selectedGrammar = value;
+                                  });
+                                },
+                          decoration: const InputDecoration(
+                            labelText: "Select Grammar",
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Enable Embedding Toggle
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("Enable Embedding"),
+                          Switch(
+                            value: widget.appState.enableEmbedding,
+                            onChanged: widget.appState.isModelLoaded
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      widget.appState.enableEmbedding = value;
+                                    });
+                                  },
+                            activeColor: Colors.blue,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // GPU Layers
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("GPU Layers"),
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.remove),
+                                onPressed: widget.appState.isModelLoaded
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          if (widget.appState.nGpuLayers > 0) {
+                                            widget.appState.nGpuLayers--;
+                                          }
+                                        });
+                                      },
+                              ),
+                              SizedBox(
+                                width: 40,
+                                child: Text(
+                                  widget.appState.nGpuLayers.toString(),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.add),
+                                onPressed: widget.appState.isModelLoaded
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          if (widget.appState.nGpuLayers < 16) {
+                                            widget.appState.nGpuLayers++;
+                                          }
+                                        });
+                                      },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Threads
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("Threads"),
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.remove),
+                                onPressed: widget.appState.isModelLoaded
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          if (widget.appState.nThreads > 1) {
+                                            widget.appState.nThreads--;
+                                          }
+                                        });
+                                      },
+                              ),
+                              SizedBox(
+                                width: 40,
+                                child: Text(
+                                  widget.appState.nThreads.toString(),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.add),
+                                onPressed: widget.appState.isModelLoaded
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          if (widget.appState.nThreads < 8) {
+                                            widget.appState.nThreads++;
+                                          }
+                                        });
+                                      },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Context Size
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("Context Size"),
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.remove),
+                                onPressed: widget.appState.isModelLoaded
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          if (widget.appState.nCtx > 512) {
+                                            widget.appState.nCtx -= 512;
+                                          }
+                                        });
+                                      },
+                              ),
+                              SizedBox(
+                                width: 60,
+                                child: Text(
+                                  widget.appState.nCtx.toString(),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.add),
+                                onPressed: widget.appState.isModelLoaded
+                                    ? null
+                                    : () {
+                                        setState(() {
+                                          if (widget.appState.nCtx < 4096) {
+                                            widget.appState.nCtx += 512;
+                                          }
+                                        });
+                                      },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Model Actions Section
+              const SectionHeader(title: "Model Actions"),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[200]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      // Load Model Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: widget.appState.isModelLoaded
+                              ? null
+                              : () async {
+                                  await widget.appState.loadModel();
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: const Text(
+                            "Load Model",
+                            style: TextStyle(fontSize: 16, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Unload Model Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: !widget.appState.isModelLoaded
+                              ? null
+                              : () async {
+                                  await widget.appState.unloadModel();
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: const Text(
+                            "Unload Model",
+                            style: TextStyle(fontSize: 16, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Chat Configuration Section
+              const SectionHeader(title: "Chat Configuration"),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[200]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      // System Prompt
+                      TextField(
+                        controller: TextEditingController(
+                          text: widget.appState.systemPrompt,
+                        ),
+                        onChanged: widget.appState.isModelLoaded
+                            ? null
+                            : (value) {
+                                widget.appState.systemPrompt = value;
+                              },
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          labelText: "System Prompt",
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        "Note: System prompt changes require reloading the model",
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Model Status Section
+              if (widget.appState.isModelLoaded) ...[
+                const SectionHeader(title: "Model Status"),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[200]!),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: const [
+                            Text("Status"),
+                            Text(
+                              "Loaded",
+                              style: TextStyle(
+                                color: Colors.green,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("Multimodal"),
+                            Text(
+                              widget.appState.mmprojModelPath.isNotEmpty
+                                  ? "Yes"
+                                  : "No",
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("Vision Support"),
+                            Text(
+                              widget.appState.mmprojModelPath.isNotEmpty
+                                  ? "Yes"
+                                  : "No",
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("Audio Support"),
+                            Text(
+                              widget.appState.vocoderModelPath.isNotEmpty
+                                  ? "Yes"
+                                  : "No",
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text("Embedding"),
+                            Text(
+                              widget.appState.enableEmbedding ? "Yes" : "No",
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+
+              // LoRA Test Button
+              const SectionHeader(title: "LoRA Testing"),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[200]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                LoRATestView(appState: widget.appState),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: const Text(
+                        "Open LoRA Test Page",
+                        style: TextStyle(fontSize: 16, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Error Section
+              if (widget.appState.errorMessage != null) ...[
+                const SectionHeader(title: "Error", isError: true),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.red[200]!),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      widget.appState.errorMessage ?? "",
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ),
+              ],
+
+              // Bottom padding
+              const SizedBox(height: 40),
+            ],
+          ),
         ),
       ),
     );
@@ -634,47 +2038,269 @@ class LoRATestView extends StatefulWidget {
 }
 
 class _LoRATestViewState extends State<LoRATestView> {
+  double scale = 1.0;
+  bool isProcessing = false;
+  bool loraApplied = false;
+
+  void applyLoRA() async {
+    if (widget.appState.loraModelPath.isEmpty ||
+        !widget.appState.isModelLoaded ||
+        isProcessing) {
+      return;
+    }
+
+    setState(() {
+      isProcessing = true;
+    });
+
+    try {
+      final success =
+          await widget.appState.llamaContext?.loadLoraAdapter(
+            widget.appState.loraModelPath,
+            scale,
+          ) ??
+          false;
+
+      if (success) {
+        setState(() {
+          loraApplied = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('LoRA adapter applied successfully')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to apply LoRA adapter')),
+        );
+      }
+    } catch (e) {
+      widget.appState.errorMessage = "Error applying LoRA adapter: $e";
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      setState(() {
+        isProcessing = false;
+      });
+    }
+  }
+
+  void removeLoRA() async {
+    if (!loraApplied || !widget.appState.isModelLoaded || isProcessing) {
+      return;
+    }
+
+    setState(() {
+      isProcessing = true;
+    });
+
+    try {
+      await widget.appState.llamaContext?.freeLoraAdapter();
+      setState(() {
+        loraApplied = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('LoRA adapter removed successfully')),
+      );
+    } catch (e) {
+      widget.appState.errorMessage = "Error removing LoRA adapter: $e";
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      setState(() {
+        isProcessing = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: [
-          const Text(
-            "LoRA Adapter Test",
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+      appBar: AppBar(title: const Text('LoRA Test')),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // LoRA Adapter Configuration
+              const SectionHeader(title: "LoRA Adapter Configuration"),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[200]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      // LoRA Adapter Path
+                      TextField(
+                        controller: TextEditingController(
+                          text: widget.appState.loraModelPath,
+                        ),
+                        enabled: false,
+                        decoration: const InputDecoration(
+                          labelText: "LoRA Adapter Path",
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // LoRA Scale
+                      TextField(
+                        controller: TextEditingController(
+                          text: scale.toString(),
+                        ),
+                        onChanged: (value) {
+                          final parsedScale = double.tryParse(value);
+                          if (parsedScale != null) {
+                            setState(() {
+                              scale = parsedScale;
+                            });
+                          }
+                        },
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: "LoRA Scale",
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Apply/Remove LoRA Buttons
+              const SectionHeader(title: "LoRA Actions"),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[200]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      // Apply LoRA Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed:
+                              widget.appState.loraModelPath.isEmpty ||
+                                  !widget.appState.isModelLoaded ||
+                                  isProcessing
+                              ? null
+                              : applyLoRA,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            isProcessing ? "Applying LoRA..." : "Apply LoRA",
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Remove LoRA Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed:
+                              !loraApplied ||
+                                  !widget.appState.isModelLoaded ||
+                                  isProcessing
+                              ? null
+                              : removeLoRA,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            isProcessing ? "Removing LoRA..." : "Remove LoRA",
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // LoRA Status
+              const SectionHeader(title: "Status"),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[200]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Icon(
+                        loraApplied ? Icons.check_circle : Icons.error,
+                        color: loraApplied ? Colors.green : Colors.red,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        loraApplied
+                            ? "LoRA adapter applied successfully"
+                            : "No LoRA adapter applied",
+                        style: TextStyle(
+                          color: loraApplied ? Colors.green : Colors.red,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // Bottom padding
+              const SizedBox(height: 40),
+            ],
           ),
-          const SizedBox(height: 20),
-          DropdownButtonFormField<Map<String, String>>(
-            value: widget.appState.availableLoRAModels.isNotEmpty
-                ? widget.appState.availableLoRAModels.firstWhere(
-                    (model) => model["path"] == widget.appState.loraModelPath,
-                    orElse: () => widget.appState.availableLoRAModels.first,
-                  )
-                : null,
-            items: widget.appState.availableLoRAModels.map((model) {
-              return DropdownMenuItem<Map<String, String>>(
-                value: model,
-                child: Text(model["name"]!),
-              );
-            }).toList(),
-            onChanged: (value) {
-              setState(() {
-                widget.appState.loraModelPath = value?["path"] ?? "";
-              });
-            },
-            decoration: const InputDecoration(
-              labelText: "LoRA Model",
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () {
-              // This would be implemented to load the LoRA adapter
-            },
-            child: const Text("Load LoRA Adapter"),
-          ),
-        ],
+        ),
+      ),
+    );
+  }
+}
+
+// Section Header Widget
+class SectionHeader extends StatelessWidget {
+  final String title;
+  final bool isError;
+
+  const SectionHeader({Key? key, required this.title, this.isError = false})
+    : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 24, bottom: 8),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: isError ? Colors.red : null,
+        ),
       ),
     );
   }
@@ -692,7 +2318,10 @@ class MultimodalTestView extends StatefulWidget {
 }
 
 class _MultimodalTestViewState extends State<MultimodalTestView> {
-  // Pick image from system photo library
+  TextEditingController _promptController = TextEditingController();
+  String multimodalResult = "";
+  bool isProcessing = false;
+
   Future<void> pickImageFromGallery() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
@@ -704,11 +2333,70 @@ class _MultimodalTestViewState extends State<MultimodalTestView> {
     }
   }
 
-  // Select image from packaged assets
   void selectPackagedImage(Map<String, String> image) {
     setState(() {
       widget.appState.selectedImagePath = image["path"];
     });
+  }
+
+  void testMultimodal() async {
+    if (_promptController.text.isEmpty ||
+        widget.appState.selectedImagePath == null ||
+        !widget.appState.isModelLoaded ||
+        isProcessing)
+      return;
+
+    try {
+      setState(() {
+        isProcessing = true;
+        multimodalResult = "Processing...";
+      });
+
+      // Use the actual multimodal completion method
+      if (widget.appState.llamaContext != null) {
+        // Handle asset image paths by copying to temp
+        String imagePath = widget.appState.selectedImagePath!;
+        if (imagePath.startsWith('assets/')) {
+          final tempPath = await widget.appState.copyAssetToTemp(imagePath);
+          if (tempPath != null) {
+            imagePath = tempPath;
+            print("Image asset copied to temp: $imagePath");
+          }
+        }
+
+        final result = await widget.appState.llamaContext
+            ?.generateMultimodalCompletion(
+              prompt: _promptController.text,
+              mediaPaths: [imagePath],
+              maxTokens: 512,
+              temperature: 0.7,
+            );
+
+        if (result != null) {
+          setState(() {
+            multimodalResult =
+                "Multimodal test completed!\n\nPrompt: ${_promptController.text}\n\nResponse: ${result.text}";
+          });
+        } else {
+          setState(() {
+            multimodalResult = "Error: No response from model";
+          });
+        }
+      } else {
+        setState(() {
+          multimodalResult = "Error: Model not loaded";
+        });
+      }
+    } catch (e) {
+      widget.appState.errorMessage = "Error testing multimodal: $e";
+      setState(() {
+        multimodalResult = "Error: $e";
+      });
+    } finally {
+      setState(() {
+        isProcessing = false;
+      });
+    }
   }
 
   @override
@@ -718,120 +2406,161 @@ class _MultimodalTestViewState extends State<MultimodalTestView> {
         onTap: () => FocusScope.of(context).unfocus(),
         child: Padding(
           padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              const Text(
-                "Multimodal Test",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 20),
-              DropdownButtonFormField<Map<String, String>>(
-                value: widget.appState.availableMmprojModels.isNotEmpty
-                    ? widget.appState.availableMmprojModels.firstWhere(
-                        (model) =>
-                            model["path"] == widget.appState.mmprojModelPath,
-                        orElse: () =>
-                            widget.appState.availableMmprojModels.first,
-                      )
-                    : null,
-                items: widget.appState.availableMmprojModels.map((model) {
-                  return DropdownMenuItem<Map<String, String>>(
-                    value: model,
-                    child: Text(model["name"]!),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    widget.appState.mmprojModelPath = value?["path"] ?? "";
-                  });
-                },
-                decoration: const InputDecoration(
-                  labelText: "MMProj Model",
-                  border: OutlineInputBorder(),
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                const Text(
+                  "Multimodal Test",
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
-              ),
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-              // Image selection section
-              const Text(
-                "Image Selection",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 10),
-
-              // Selected image preview
-              if (widget.appState.selectedImagePath != null)
-                Container(
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey),
-                    borderRadius: BorderRadius.circular(8),
+                // Input prompt for multimodal
+                TextField(
+                  controller: _promptController,
+                  decoration: const InputDecoration(
+                    labelText: "Input Prompt",
+                    border: OutlineInputBorder(),
                   ),
-                  child: Column(
-                    children: [
-                      const Text("Selected Image:"),
-                      const SizedBox(height: 10),
-                      Image.file(
-                        File(widget.appState.selectedImagePath!),
-                        height: 200,
-                        width: 200,
-                        fit: BoxFit.cover,
-                      ),
-                      const SizedBox(height: 10),
-                      Text(widget.appState.selectedImagePath!.split('/').last),
-                    ],
-                  ),
+                  maxLines: 3,
+                  enabled: !isProcessing,
                 ),
+                const SizedBox(height: 20),
 
-              // Image picking options
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: pickImageFromGallery,
-                    icon: const Icon(Icons.photo_library),
-                    label: const Text("Pick from Gallery"),
+                // Image selection section
+                const Text(
+                  "Image Selection",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 10),
+
+                // Selected image preview
+                if (widget.appState.selectedImagePath != null)
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text("Selected Image:"),
+                        const SizedBox(height: 10),
+                        // Check if the path is an asset (starts with 'assets/')
+                        widget.appState.selectedImagePath!.startsWith('assets/')
+                            ? Image.asset(
+                                widget.appState.selectedImagePath!,
+                                height: 200,
+                                width: 200,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    height: 200,
+                                    width: 200,
+                                    color: Colors.grey[200],
+                                    child: const Center(
+                                      child: Text("Image failed to load"),
+                                    ),
+                                  );
+                                },
+                              )
+                            : Image.file(
+                                File(widget.appState.selectedImagePath!),
+                                height: 200,
+                                width: 200,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    height: 200,
+                                    width: 200,
+                                    color: Colors.grey[200],
+                                    child: const Center(
+                                      child: Text("Image failed to load"),
+                                    ),
+                                  );
+                                },
+                              ),
+                        const SizedBox(height: 10),
+                        Text(
+                          widget.appState.selectedImagePath!.split('/').last,
+                        ),
+                      ],
+                    ),
                   ),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      // Show packaged images dialog
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text("Select Packaged Image"),
-                          content: SingleChildScrollView(
-                            child: Column(
-                              children: widget.appState.availablePackagedImages
-                                  .map((image) {
-                                    return ListTile(
-                                      title: Text(image["name"]!),
-                                      onTap: () {
-                                        selectPackagedImage(image);
-                                        Navigator.pop(context);
-                                      },
-                                    );
-                                  })
-                                  .toList(),
+
+                // Image picking options
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: pickImageFromGallery,
+                      icon: const Icon(Icons.photo_library),
+                      label: const Text("Gallery"),
+                    ),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text("Select App Image"),
+                            content: SingleChildScrollView(
+                              child: Column(
+                                children: widget
+                                    .appState
+                                    .availablePackagedImages
+                                    .map((image) {
+                                      return ListTile(
+                                        title: Text(image["name"]!),
+                                        onTap: () {
+                                          selectPackagedImage(image);
+                                          Navigator.pop(context);
+                                        },
+                                      );
+                                    })
+                                    .toList(),
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.image),
-                    label: const Text("Packaged Images"),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
+                        );
+                      },
+                      icon: const Icon(Icons.image),
+                      label: const Text("App Img"),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
 
-              ElevatedButton(
-                onPressed: () {
-                  // This would be implemented to test multimodal functionality
-                },
-                child: const Text("Test Multimodal"),
-              ),
-            ],
+                ElevatedButton(
+                  onPressed:
+                      isProcessing ||
+                          !widget.appState.isModelLoaded ||
+                          _promptController.text.isEmpty ||
+                          widget.appState.selectedImagePath == null
+                      ? null
+                      : testMultimodal,
+                  child: Text(
+                    isProcessing ? "Processing..." : "Test Multimodal",
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Multimodal result
+                if (multimodalResult.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      multimodalResult,
+                      style: const TextStyle(fontFamily: 'Courier'),
+                    ),
+                  ),
+                const SizedBox(height: 40),
+              ],
+            ),
           ),
         ),
       ),
@@ -850,267 +2579,256 @@ class TTSTestView extends StatefulWidget {
 }
 
 class _TTSTestViewState extends State<TTSTestView> {
-  TextEditingController _textController = TextEditingController();
-  bool isGenerating = false;
+  TextEditingController _ttsController = TextEditingController();
+  String ttsResult = "";
+  bool isProcessing = false;
+  bool isPlaying = false;
+  String? audioFilePath;
 
-  void generateAudio() {
-    if (_textController.text.isEmpty || !widget.appState.isModelLoaded) return;
+  void generateAudio() async {
+    if (_ttsController.text.isEmpty ||
+        !widget.appState.isModelLoaded ||
+        isProcessing)
+      return;
 
-    setState(() {
-      isGenerating = true;
-    });
-
-    // This would be implemented using the actual TTS method
-    Future.delayed(const Duration(seconds: 2), () {
+    try {
       setState(() {
-        isGenerating = false;
+        isProcessing = true;
+        ttsResult = "Generating audio...";
       });
-    });
+
+      // Use the actual TTS functionality
+      if (widget.appState.llamaContext != null) {
+        // Load TTS model if not already loaded
+        if (widget.appState.vocoderModelPath.isNotEmpty) {
+          print(
+            "Attempting to load TTS model: ${widget.appState.vocoderModelPath}",
+          );
+
+          // Check if file exists
+          bool fileExists = true;
+          if (!widget.appState.vocoderModelPath.startsWith('assets/')) {
+            fileExists = await File(widget.appState.vocoderModelPath).exists();
+            print("TTS model file exists: $fileExists");
+          }
+
+          if (!fileExists) {
+            setState(() {
+              ttsResult = "Error: TTS model file not found";
+            });
+            return;
+          }
+
+          // Try loading with both model types
+          bool loaded =
+              await widget.appState.llamaContext?.loadTTSModel(
+                widget.appState.vocoderModelPath,
+                TTSModelType.outETTSv03,
+              ) ??
+              false;
+
+          if (!loaded) {
+            print("Failed to load as outETTSv03, trying outETTSv02");
+            loaded =
+                await widget.appState.llamaContext?.loadTTSModel(
+                  widget.appState.vocoderModelPath,
+                  TTSModelType.outETTSv02,
+                ) ??
+                false;
+          }
+
+          if (!loaded) {
+            setState(() {
+              ttsResult =
+                  "Error: Failed to load TTS model. Make sure you've selected a valid vocoder model.";
+            });
+            return;
+          }
+
+          print("TTS model loaded successfully");
+        } else {
+          setState(() {
+            ttsResult = "Error: Vocoder model not selected";
+          });
+          return;
+        }
+
+        final result = await widget.appState.llamaContext?.generateAudio(
+          _ttsController.text,
+        );
+        print("TTS Audio Generated successfully");
+        print("TTS starts to save audio file!");
+        if (result != null) {
+          // Save audio to WAV file using the saveAudioToWav method
+          final directory = await getApplicationDocumentsDirectory();
+          final filePath = '${directory.path}/tts_output.wav';
+
+          print("Saving audio to WAV file: $filePath");
+          print("Audio data length: ${result.audioData.length}");
+
+          // Use the saveAudioToWav method to properly format the audio as a WAV file
+          final saveSuccess = await widget.appState.llamaContext
+              ?.saveAudioToWav(filePath, result.audioData, 24000);
+
+          setState(() {
+            if (saveSuccess == true) {
+              ttsResult =
+                  "Audio generated successfully!\n\nText: ${_ttsController.text}\nSaved to: ${filePath.split('/').last}";
+              audioFilePath = filePath;
+            } else {
+              ttsResult = "Error: Failed to save audio to WAV file";
+            }
+          });
+        } else {
+          setState(() {
+            ttsResult = "Error: No audio generated";
+          });
+        }
+      } else {
+        setState(() {
+          ttsResult = "Error: Model not loaded";
+        });
+      }
+    } catch (e) {
+      widget.appState.errorMessage = "Error generating audio: $e";
+      setState(() {
+        ttsResult = "Error: $e";
+      });
+    } finally {
+      setState(() {
+        isProcessing = false;
+      });
+    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        children: [
-          TextField(
-            controller: _textController,
-            decoration: const InputDecoration(
-              labelText: "Text to Speak",
-              border: OutlineInputBorder(),
-            ),
-            maxLines: 3,
-          ),
-          const SizedBox(height: 20),
-          DropdownButtonFormField<Map<String, String>>(
-            value: widget.appState.availableVocoderModels.isNotEmpty
-                ? widget.appState.availableVocoderModels.firstWhere(
-                    (model) =>
-                        model["path"] == widget.appState.vocoderModelPath,
-                    orElse: () => widget.appState.availableVocoderModels.first,
-                  )
-                : null,
-            items: widget.appState.availableVocoderModels.map((model) {
-              return DropdownMenuItem<Map<String, String>>(
-                value: model,
-                child: Text(model["name"]!),
-              );
-            }).toList(),
-            onChanged: (value) {
-              setState(() {
-                widget.appState.vocoderModelPath = value?["path"] ?? "";
-              });
-            },
-            decoration: const InputDecoration(
-              labelText: "Vocoder Model",
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: generateAudio,
-            child: isGenerating
-                ? const CircularProgressIndicator()
-                : const Text("Generate Audio"),
-          ),
-        ],
-      ),
-    );
+  void playAudio() async {
+    if (audioFilePath == null || isPlaying) return;
+
+    try {
+      setState(() {
+        isPlaying = true;
+      });
+
+      // Play the audio file
+      print("Playing audio from: $audioFilePath");
+      // Use audioplayers package to play the audio
+      // First, check if the file exists
+      final file = File(audioFilePath!);
+      if (await file.exists()) {
+        print("Audio file size: ${await file.length()} bytes");
+        print("Audio file is accessible and ready to play");
+
+        // Use audioplayers to actually play the audio
+        final player = AudioPlayer();
+        await player.play(DeviceFileSource(audioFilePath!));
+
+        // Wait for playback to complete
+        await player.onPlayerComplete.first;
+        await player.dispose();
+
+        print("Audio playback completed successfully");
+      } else {
+        print("Audio file not found: $audioFilePath");
+        await Future.delayed(const Duration(seconds: 1));
+      }
+
+      setState(() {
+        isPlaying = false;
+      });
+    } catch (e) {
+      widget.appState.errorMessage = "Error playing audio: $e";
+      print("Audio playback error: $e");
+      setState(() {
+        isPlaying = false;
+      });
+    }
   }
-}
 
-// Settings View
-class SettingsView extends StatefulWidget {
-  final AppState appState;
-
-  const SettingsView({Key? key, required this.appState}) : super(key: key);
-
-  @override
-  _SettingsViewState createState() => _SettingsViewState();
-}
-
-class _SettingsViewState extends State<SettingsView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: GestureDetector(
-        onTap: () {
-          // Dismiss keyboard when tapping outside text fields
-          FocusScope.of(context).unfocus();
-        },
-        child: ListView(
-          children: [
-            const Text(
-              "Model Settings",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            DropdownButtonFormField<Map<String, String>>(
-              value: widget.appState.availableModels.isNotEmpty
-                  ? widget.appState.availableModels.firstWhere(
-                      (model) => model["path"] == widget.appState.modelPath,
-                      orElse: () => widget.appState.availableModels.first,
-                    )
-                  : null,
-              items: widget.appState.availableModels.map((model) {
-                return DropdownMenuItem<Map<String, String>>(
-                  value: model,
-                  child: Text(model["name"]!),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  widget.appState.modelPath = value?["path"] ?? "";
-                });
-              },
-              decoration: const InputDecoration(
-                labelText: "Model",
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () async {
-                await widget.appState.loadModel();
-              },
-              child: const Text("Load Model"),
-            ),
-            const SizedBox(height: 40),
-            const Text(
-              "Grammar Settings",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            DropdownButtonFormField<String>(
-              value: widget.appState.selectedGrammar,
-              items: [
-                const DropdownMenuItem<String>(
-                  value: null,
-                  child: Text("None"),
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                const Text(
+                  "TTS Test",
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
-                ...widget.appState.availableGrammars.map((grammar) {
-                  return DropdownMenuItem<String>(
-                    value: grammar,
-                    child: Text(grammar),
-                  );
-                }).toList(),
+                const SizedBox(height: 20),
+
+                TextField(
+                  controller: _ttsController,
+                  decoration: const InputDecoration(
+                    labelText: "Text to Speech",
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                  enabled: !isProcessing,
+                ),
+                const SizedBox(height: 20),
+
+                ElevatedButton(
+                  onPressed:
+                      isProcessing ||
+                          !widget.appState.isModelLoaded ||
+                          _ttsController.text.isEmpty
+                      ? null
+                      : generateAudio,
+                  child: Text(
+                    isProcessing ? "Generating..." : "Generate Audio",
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Play button for audio playback
+                if (audioFilePath != null)
+                  ElevatedButton(
+                    onPressed: isPlaying ? null : playAudio,
+                    child: Text(isPlaying ? "Playing..." : "Play Audio"),
+                  ),
+
+                const SizedBox(height: 20),
+
+                if (ttsResult.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ttsResult,
+                          style: const TextStyle(fontFamily: 'Courier'),
+                        ),
+                        if (isPlaying)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 10),
+                            child: Text(
+                              "Playing audio...",
+                              style: TextStyle(color: Colors.blue),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 40),
               ],
-              onChanged: (value) {
-                setState(() {
-                  widget.appState.selectedGrammar = value;
-                });
-              },
-              decoration: const InputDecoration(
-                labelText: "Grammar",
-                border: OutlineInputBorder(),
-              ),
             ),
-            const SizedBox(height: 40),
-            const Text(
-              "System Prompt",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: TextEditingController(
-                text: widget.appState.systemPrompt,
-              ),
-              onChanged: (value) {
-                widget.appState.systemPrompt = value;
-              },
-              decoration: const InputDecoration(border: OutlineInputBorder()),
-              maxLines: 5,
-            ),
-            const SizedBox(height: 40),
-            const Text(
-              "LoRA Settings",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            DropdownButtonFormField<Map<String, String>>(
-              value: widget.appState.availableLoRAModels.isNotEmpty
-                  ? widget.appState.availableLoRAModels.firstWhere(
-                      (model) => model["path"] == widget.appState.loraModelPath,
-                      orElse: () => widget.appState.availableLoRAModels.first,
-                    )
-                  : null,
-              items: widget.appState.availableLoRAModels.map((model) {
-                return DropdownMenuItem<Map<String, String>>(
-                  value: model,
-                  child: Text(model["name"]!),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  widget.appState.loraModelPath = value?["path"] ?? "";
-                });
-              },
-              decoration: const InputDecoration(
-                labelText: "LoRA Model",
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                // This would be implemented to load the LoRA adapter
-              },
-              child: const Text("Load LoRA Adapter"),
-            ),
-            const SizedBox(height: 40),
-            const Text(
-              "TTS Settings",
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: TextEditingController(),
-              decoration: const InputDecoration(
-                labelText: "Text to Speak",
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-            const SizedBox(height: 20),
-            DropdownButtonFormField<Map<String, String>>(
-              value: widget.appState.availableVocoderModels.isNotEmpty
-                  ? widget.appState.availableVocoderModels.firstWhere(
-                      (model) =>
-                          model["path"] == widget.appState.vocoderModelPath,
-                      orElse: () =>
-                          widget.appState.availableVocoderModels.first,
-                    )
-                  : null,
-              items: widget.appState.availableVocoderModels.map((model) {
-                return DropdownMenuItem<Map<String, String>>(
-                  value: model,
-                  child: Text(model["name"]!),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  widget.appState.vocoderModelPath = value?["path"] ?? "";
-                });
-              },
-              decoration: const InputDecoration(
-                labelText: "Vocoder Model",
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                // This would be implemented to generate audio
-              },
-              child: const Text("Generate Audio"),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
+// Main App
 void main() {
   runApp(const MyApp());
 }
@@ -1131,6 +2849,9 @@ class _MyAppState extends State<MyApp> {
     appState = AppState();
     // Load available models asynchronously
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // First copy all models to temp directory
+      await appState.copyAllModelsToTemp();
+      // Then load available models
       await appState.loadAvailableModels();
     });
   }
@@ -1149,18 +2870,18 @@ class _MyAppState extends State<MyApp> {
           body: TabBarView(
             children: [
               ChatView(appState: appState),
-              TokenizationTestView(appState: appState),
               EmbeddingTestView(appState: appState),
               MultimodalTestView(appState: appState),
+              TTSTestView(appState: appState),
               SettingsView(appState: appState),
             ],
           ),
           bottomNavigationBar: const TabBar(
             tabs: [
               Tab(icon: Icon(Icons.chat_bubble), text: 'Chat'),
-              Tab(icon: Icon(Icons.numbers), text: 'Tokenize'),
               Tab(icon: Icon(Icons.text_fields), text: 'Embed'),
               Tab(icon: Icon(Icons.camera), text: 'Image'),
+              Tab(icon: Icon(Icons.volume_up), text: 'TTS'),
               Tab(icon: Icon(Icons.more_vert), text: 'More'),
             ],
           ),
