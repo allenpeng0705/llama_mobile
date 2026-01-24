@@ -282,8 +282,11 @@ class ChatFragment : Fragment() {
                     0,                              // nProbs
                     grammarToUse,                   // grammar
                     listOf("<|im_end|>"),          // stopSequences
-                    emptyList(),                    // mediaPaths
-                    null                            // tokenCallback
+                    ArrayList<String>(),            // mediaPaths
+                    null,                           // tokenCallback
+                    chatMessages,                   // chatMessages (conversation context)
+                    false,                          // useJsonResponse
+                    null                            // chatTemplate
                 )
                 
                 // Generate response

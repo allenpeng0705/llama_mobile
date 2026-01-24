@@ -67,89 +67,283 @@ class AppState extends ChangeNotifier {
     List<Map<String, String>> models = [];
     print("=== Starting to load available models ===");
 
-    // 1. First priority: Scan documents directory for actual user-added models
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      print("App documents directory: ${directory.path}");
-      final modelsDir = Directory('${directory.path}/models');
-      print("Models directory: ${modelsDir.path}");
-      bool modelsDirExists = await modelsDir.exists();
-      print("Models directory exists: $modelsDirExists");
-      if (modelsDirExists) {
-        final modelFiles = await modelsDir
-            .list()
-            .where((file) => file is File && file.path.endsWith('.gguf'))
-            .toList();
-        print("Found ${modelFiles.length} model files in documents directory");
-        for (var entity in modelFiles) {
-          if (entity is File) {
-            String fileName = entity.path.split('/').last;
-            // Use full file name including extension
-            models.add({"name": fileName, "path": entity.path});
-            print("Added model: $fileName from ${entity.path}");
+    // Use platform-specific model loading logic
+    if (Platform.isAndroid) {
+      print("Using Android-specific model loading logic");
+
+      // 1. First priority: Scan external files directory for actual user-added models
+      // This matches the Android SDK example's approach
+      try {
+        final externalDir = await getExternalStorageDirectory();
+        if (externalDir != null) {
+          print("External storage directory: ${externalDir.path}");
+
+          // Check direct models directory in external files dir (for compatibility with tests)
+          final directExternalModelsDir = Directory(
+            '${externalDir.path}/models',
+          );
+          print(
+            "Direct external models directory: ${directExternalModelsDir.path}",
+          );
+          bool directModelsDirExists = await directExternalModelsDir.exists();
+          print(
+            "Direct external models directory exists: $directModelsDirExists",
+          );
+
+          if (directModelsDirExists) {
+            final modelFiles = await directExternalModelsDir
+                .list()
+                .where(
+                  (file) =>
+                      file is File &&
+                      (file.path.endsWith('.gguf') ||
+                          file.path.endsWith('.bin') ||
+                          file.path.endsWith('.safetensors') ||
+                          file.path.endsWith('.mmproj')),
+                )
+                .toList();
+            print(
+              "Found ${modelFiles.length} model files in direct external directory",
+            );
+            for (var entity in modelFiles) {
+              if (entity is File) {
+                String fileName = entity.path.split('/').last;
+                models.add({"name": fileName, "path": entity.path});
+                print("Added model: $fileName from ${entity.path}");
+              }
+            }
+          }
+
+          // Check legacy LlamaMobile/models directory (original SDK example path)
+          final legacyExternalModelsDir = Directory(
+            '${externalDir.path}/LlamaMobile/models',
+          );
+          print(
+            "Legacy external models directory: ${legacyExternalModelsDir.path}",
+          );
+          bool legacyModelsDirExists = await legacyExternalModelsDir.exists();
+          print(
+            "Legacy external models directory exists: $legacyModelsDirExists",
+          );
+
+          if (legacyModelsDirExists) {
+            final modelFiles = await legacyExternalModelsDir
+                .list()
+                .where(
+                  (file) =>
+                      file is File &&
+                      (file.path.endsWith('.gguf') ||
+                          file.path.endsWith('.bin') ||
+                          file.path.endsWith('.safetensors') ||
+                          file.path.endsWith('.mmproj')),
+                )
+                .toList();
+            print(
+              "Found ${modelFiles.length} model files in legacy external directory",
+            );
+            for (var entity in modelFiles) {
+              if (entity is File) {
+                String fileName = entity.path.split('/').last;
+                models.add({"name": fileName, "path": entity.path});
+                print("Added model: $fileName from ${entity.path}");
+              }
+            }
+          } else {
+            // Create legacy directory if it doesn't exist
+            await legacyExternalModelsDir.create(recursive: true);
+            print(
+              "Created legacy external models directory: ${legacyExternalModelsDir.path}",
+            );
+            print("Please add your model files to this directory:");
+            print("${legacyExternalModelsDir.path}");
           }
         }
-      } else {
-        // Create models directory if it doesn't exist
-        await modelsDir.create(recursive: true);
-        print("Created models directory: ${modelsDir.path}");
-        print("Please add your model files to this directory:");
-        print("${modelsDir.path}");
+      } catch (e) {
+        print("Error scanning external storage directories: $e");
       }
-    } catch (e) {
-      print("Error scanning documents directory: $e");
+
+      // 2. Second priority: Scan documents directory for models
+      try {
+        final directory = await getApplicationDocumentsDirectory();
+        print("App documents directory: ${directory.path}");
+        final modelsDir = Directory('${directory.path}/models');
+        print("Documents models directory: ${modelsDir.path}");
+        bool modelsDirExists = await modelsDir.exists();
+        print("Documents models directory exists: $modelsDirExists");
+        if (modelsDirExists) {
+          final modelFiles = await modelsDir
+              .list()
+              .where(
+                (file) =>
+                    file is File &&
+                    (file.path.endsWith('.gguf') ||
+                        file.path.endsWith('.bin') ||
+                        file.path.endsWith('.safetensors') ||
+                        file.path.endsWith('.mmproj')),
+              )
+              .toList();
+          print(
+            "Found ${modelFiles.length} model files in documents directory",
+          );
+          for (var entity in modelFiles) {
+            if (entity is File) {
+              String fileName = entity.path.split('/').last;
+              models.add({"name": fileName, "path": entity.path});
+              print("Added model: $fileName from ${entity.path}");
+            }
+          }
+        } else {
+          // Create models directory if it doesn't exist
+          await modelsDir.create(recursive: true);
+          print("Created documents models directory: ${modelsDir.path}");
+          print("Please add your model files to this directory:");
+          print("${modelsDir.path}");
+        }
+      } catch (e) {
+        print("Error scanning documents directory: $e");
+      }
+
+      // 3. Remove duplicates by file name (keep the first occurrence)
+      final seenFileNames = <String>{};
+      final uniqueModels = models.where((model) {
+        final fileName = model["name"]!;
+        if (seenFileNames.contains(fileName)) {
+          return false;
+        }
+        seenFileNames.add(fileName);
+        return true;
+      }).toList();
+
+      availableModels = uniqueModels;
+    } else if (Platform.isIOS) {
+      print("Using iOS-specific model loading logic");
+
+      // 1. First priority: Scan documents directory for actual user-added models
+      try {
+        final directory = await getApplicationDocumentsDirectory();
+        print("App documents directory: ${directory.path}");
+        final modelsDir = Directory('${directory.path}/models');
+        print("Models directory: ${modelsDir.path}");
+        bool modelsDirExists = await modelsDir.exists();
+        print("Models directory exists: $modelsDirExists");
+        if (modelsDirExists) {
+          final modelFiles = await modelsDir
+              .list()
+              .where((file) => file is File && file.path.endsWith('.gguf'))
+              .toList();
+          print(
+            "Found ${modelFiles.length} model files in documents directory",
+          );
+          for (var entity in modelFiles) {
+            if (entity is File) {
+              String fileName = entity.path.split('/').last;
+              // Use full file name including extension
+              models.add({"name": fileName, "path": entity.path});
+              print("Added model: $fileName from ${entity.path}");
+            }
+          }
+        } else {
+          // Create models directory if it doesn't exist
+          await modelsDir.create(recursive: true);
+          print("Created models directory: ${modelsDir.path}");
+          print("Please add your model files to this directory:");
+          print("${modelsDir.path}");
+        }
+      } catch (e) {
+        print("Error scanning documents directory: $e");
+      }
+
+      // 2. Second priority: Load models from assets/models directory
+      // Flutter generates an AssetManifest.json file that we can parse to get all assets
+      try {
+        print("Checking assets/models directory");
+        // Load AssetManifest.json
+        String manifestContent = await rootBundle.loadString(
+          'AssetManifest.json',
+        );
+        Map<String, dynamic> manifest = jsonDecode(manifestContent);
+
+        // Extract all model files from assets/models
+        List<String> modelAssets = manifest.keys
+            .where(
+              (key) =>
+                  key.startsWith('assets/models/') && key.endsWith('.gguf'),
+            )
+            .toList();
+
+        print("Found ${modelAssets.length} model files in assets/models");
+        for (String assetPath in modelAssets) {
+          String fileName = assetPath.split('/').last;
+          // Use full file name including extension
+          models.add({"name": fileName, "path": assetPath});
+          print("Added model: $fileName from $assetPath");
+        }
+      } catch (e) {
+        print("Error loading AssetManifest.json: $e");
+        // Fallback: Add common model files
+        List<String> commonModelFiles = [
+          "model.gguf",
+          "Qwen3-Embedding-0.6B-Q8_0.gguf",
+          "Qwen3-1.7B-Q4_K_M.gguf",
+        ];
+
+        print("Adding common model files as fallback");
+        for (String modelName in commonModelFiles) {
+          String assetPath = "assets/models/$modelName";
+          // Use full file name including extension
+          models.add({"name": modelName, "path": assetPath});
+          print("Added model: $modelName from $assetPath");
+        }
+      }
+
+      // 3. If no models found, add a sample model as fallback
+      print("Total models found before fallback: ${models.length}");
+      if (models.isEmpty) {
+        print("No models found, adding fallback model");
+        models.add({
+          "name": "Sample Model",
+          "path": "assets/models/model.gguf",
+        });
+      }
+
+      availableModels = models;
+    } else {
+      print("Using default model loading logic for other platforms");
+      // For other platforms, use the iOS logic
+      try {
+        final directory = await getApplicationDocumentsDirectory();
+        print("App documents directory: ${directory.path}");
+        final modelsDir = Directory('${directory.path}/models');
+        print("Models directory: ${modelsDir.path}");
+        bool modelsDirExists = await modelsDir.exists();
+        print("Models directory exists: $modelsDirExists");
+        if (modelsDirExists) {
+          final modelFiles = await modelsDir
+              .list()
+              .where((file) => file is File && file.path.endsWith('.gguf'))
+              .toList();
+          print(
+            "Found ${modelFiles.length} model files in documents directory",
+          );
+          for (var entity in modelFiles) {
+            if (entity is File) {
+              String fileName = entity.path.split('/').last;
+              models.add({"name": fileName, "path": entity.path});
+              print("Added model: $fileName from ${entity.path}");
+            }
+          }
+        } else {
+          await modelsDir.create(recursive: true);
+          print("Created models directory: ${modelsDir.path}");
+          print("Please add your model files to this directory:");
+          print("${modelsDir.path}");
+        }
+      } catch (e) {
+        print("Error scanning documents directory: $e");
+      }
+      availableModels = models;
     }
 
-    // 2. Second priority: Load models from assets/models directory
-    // Flutter generates an AssetManifest.json file that we can parse to get all assets
-    try {
-      print("Checking assets/models directory");
-      // Load AssetManifest.json
-      String manifestContent = await rootBundle.loadString(
-        'AssetManifest.json',
-      );
-      Map<String, dynamic> manifest = jsonDecode(manifestContent);
-
-      // Extract all model files from assets/models
-      List<String> modelAssets = manifest.keys
-          .where(
-            (key) => key.startsWith('assets/models/') && key.endsWith('.gguf'),
-          )
-          .toList();
-
-      print("Found ${modelAssets.length} model files in assets/models");
-      for (String assetPath in modelAssets) {
-        String fileName = assetPath.split('/').last;
-        // Use full file name including extension
-        models.add({"name": fileName, "path": assetPath});
-        print("Added model: $fileName from $assetPath");
-      }
-    } catch (e) {
-      print("Error loading AssetManifest.json: $e");
-      // Fallback: Add common model files
-      List<String> commonModelFiles = [
-        "model.gguf",
-        "Qwen3-Embedding-0.6B-Q8_0.gguf",
-        "Qwen3-1.7B-Q4_K_M.gguf",
-      ];
-
-      print("Adding common model files as fallback");
-      for (String modelName in commonModelFiles) {
-        String assetPath = "assets/models/$modelName";
-        // Use full file name including extension
-        models.add({"name": modelName, "path": assetPath});
-        print("Added model: $modelName from $assetPath");
-      }
-    }
-
-    // 3. If no models found, add a sample model as fallback
-    print("Total models found before fallback: ${models.length}");
-    if (models.isEmpty) {
-      print("No models found, adding fallback model");
-      models.add({"name": "Sample Model", "path": "assets/models/model.gguf"});
-    }
-
-    availableModels = models;
     print("Final available models: $availableModels");
 
     // Set default model path if any models are found
@@ -160,29 +354,306 @@ class AppState extends ChangeNotifier {
 
     print("=== Finished loading available models ===");
 
-    // Populate mmproj models (for multimodal) - show all models plus "Empty" option
-    availableMmprojModels = [
+    // Populate mmproj models (for multimodal)
+    List<Map<String, String>> mmprojModels = [
       {"name": "Empty", "path": ""},
-      ...availableModels,
     ];
+
+    if (Platform.isAndroid) {
+      // Android-specific: scan external directories for mmproj models
+      try {
+        final externalDir = await getExternalStorageDirectory();
+        print("Android external storage directory: ${externalDir?.path}");
+        if (externalDir != null) {
+          // Check direct models directory
+          final directExternalModelsDir = Directory(
+            '${externalDir.path}/models',
+          );
+          print(
+            "Checking direct mmproj models directory: ${directExternalModelsDir.path}",
+          );
+          print(
+            "Direct mmproj models directory exists: ${await directExternalModelsDir.exists()}",
+          );
+          if (await directExternalModelsDir.exists()) {
+            final mmprojFiles = await directExternalModelsDir
+                .list()
+                .where(
+                  (file) =>
+                      file is File &&
+                      (file.path.endsWith('.mmproj') ||
+                          file.path.endsWith('.gguf') ||
+                          file.path.endsWith('.bin')),
+                )
+                .toList();
+            print(
+              "Found ${mmprojFiles.length} mmproj files in direct directory",
+            );
+            for (var entity in mmprojFiles) {
+              if (entity is File) {
+                String fileName = entity.path.split('/').last;
+                mmprojModels.add({"name": fileName, "path": entity.path});
+                print("Added mmproj model: $fileName from ${entity.path}");
+              }
+            }
+          }
+
+          // Check legacy LlamaMobile/models directory
+          final legacyExternalModelsDir = Directory(
+            '${externalDir.path}/LlamaMobile/models',
+          );
+          print(
+            "Checking legacy mmproj models directory: ${legacyExternalModelsDir.path}",
+          );
+          print(
+            "Legacy mmproj models directory exists: ${await legacyExternalModelsDir.exists()}",
+          );
+          if (await legacyExternalModelsDir.exists()) {
+            final mmprojFiles = await legacyExternalModelsDir
+                .list()
+                .where(
+                  (file) =>
+                      file is File &&
+                      (file.path.endsWith('.mmproj') ||
+                          file.path.endsWith('.gguf') ||
+                          file.path.endsWith('.bin')),
+                )
+                .toList();
+            print(
+              "Found ${mmprojFiles.length} mmproj files in legacy directory",
+            );
+            for (var entity in mmprojFiles) {
+              if (entity is File) {
+                String fileName = entity.path.split('/').last;
+                mmprojModels.add({"name": fileName, "path": entity.path});
+                print("Added mmproj model: $fileName from ${entity.path}");
+              }
+            }
+          }
+        }
+      } catch (e) {
+        print("Error scanning for mmproj models: $e");
+      }
+    }
+
+    // Always include available models (for both Android and iOS)
+    print(
+      "Adding ${availableModels.length} models from availableModels to mmprojModels",
+    );
+    mmprojModels.addAll(availableModels);
+
+    // Remove duplicates
+    final seenMmprojNames = <String>{};
+    availableMmprojModels = mmprojModels.where((model) {
+      final fileName = model["name"]!;
+      if (seenMmprojNames.contains(fileName)) {
+        return false;
+      }
+      seenMmprojNames.add(fileName);
+      return true;
+    }).toList();
 
     // Set default mmproj model path to "Empty"
     mmprojModelPath = "";
 
-    // Populate vocoder models (for TTS) - show all models plus "Empty" option
-    availableVocoderModels = [
+    // Populate vocoder models (for TTS)
+    List<Map<String, String>> vocoderModels = [
       {"name": "Empty", "path": ""},
-      ...availableModels,
     ];
+
+    if (Platform.isAndroid) {
+      // Android-specific: scan external directories for vocoder models
+      try {
+        final externalDir = await getExternalStorageDirectory();
+        print("Android external storage directory: ${externalDir?.path}");
+        if (externalDir != null) {
+          // Check direct models directory
+          final directExternalModelsDir = Directory(
+            '${externalDir.path}/models',
+          );
+          print(
+            "Checking direct vocoder models directory: ${directExternalModelsDir.path}",
+          );
+          print(
+            "Direct vocoder models directory exists: ${await directExternalModelsDir.exists()}",
+          );
+          if (await directExternalModelsDir.exists()) {
+            final vocoderFiles = await directExternalModelsDir
+                .list()
+                .where(
+                  (file) =>
+                      file is File &&
+                      (file.path.endsWith('.bin') ||
+                          file.path.endsWith('.gguf') ||
+                          file.path.endsWith('.pth')),
+                )
+                .toList();
+            print(
+              "Found ${vocoderFiles.length} vocoder files in direct directory",
+            );
+            for (var entity in vocoderFiles) {
+              if (entity is File) {
+                String fileName = entity.path.split('/').last;
+                vocoderModels.add({"name": fileName, "path": entity.path});
+                print("Added vocoder model: $fileName from ${entity.path}");
+              }
+            }
+          }
+
+          // Check legacy LlamaMobile/models directory
+          final legacyExternalModelsDir = Directory(
+            '${externalDir.path}/LlamaMobile/models',
+          );
+          print(
+            "Checking legacy vocoder models directory: ${legacyExternalModelsDir.path}",
+          );
+          print(
+            "Legacy vocoder models directory exists: ${await legacyExternalModelsDir.exists()}",
+          );
+          if (await legacyExternalModelsDir.exists()) {
+            final vocoderFiles = await legacyExternalModelsDir
+                .list()
+                .where(
+                  (file) =>
+                      file is File &&
+                      (file.path.endsWith('.bin') ||
+                          file.path.endsWith('.gguf') ||
+                          file.path.endsWith('.pth')),
+                )
+                .toList();
+            print(
+              "Found ${vocoderFiles.length} vocoder files in legacy directory",
+            );
+            for (var entity in vocoderFiles) {
+              if (entity is File) {
+                String fileName = entity.path.split('/').last;
+                vocoderModels.add({"name": fileName, "path": entity.path});
+                print("Added vocoder model: $fileName from ${entity.path}");
+              }
+            }
+          }
+        }
+      } catch (e) {
+        print("Error scanning for vocoder models: $e");
+      }
+    }
+
+    // Always include available models (for both Android and iOS)
+    print(
+      "Adding ${availableModels.length} models from availableModels to vocoderModels",
+    );
+    vocoderModels.addAll(availableModels);
+
+    // Remove duplicates
+    final seenVocoderNames = <String>{};
+    availableVocoderModels = vocoderModels.where((model) {
+      final fileName = model["name"]!;
+      if (seenVocoderNames.contains(fileName)) {
+        return false;
+      }
+      seenVocoderNames.add(fileName);
+      return true;
+    }).toList();
 
     // Set default vocoder model path to "Empty"
     vocoderModelPath = "";
 
-    // Populate LoRA models - show all models plus "Empty" option
-    availableLoRAModels = [
+    // Populate LoRA models
+    List<Map<String, String>> loraModels = [
       {"name": "Empty", "path": ""},
-      ...availableModels,
     ];
+
+    if (Platform.isAndroid) {
+      // Android-specific: scan external directories for LoRA models
+      try {
+        final externalDir = await getExternalStorageDirectory();
+        print("Android external storage directory: ${externalDir?.path}");
+        if (externalDir != null) {
+          // Check direct models directory
+          final directExternalModelsDir = Directory(
+            '${externalDir.path}/models',
+          );
+          print(
+            "Checking direct LoRA models directory: ${directExternalModelsDir.path}",
+          );
+          print(
+            "Direct LoRA models directory exists: ${await directExternalModelsDir.exists()}",
+          );
+          if (await directExternalModelsDir.exists()) {
+            final loraFiles = await directExternalModelsDir
+                .list()
+                .where(
+                  (file) =>
+                      file is File &&
+                      (file.path.endsWith('.bin') ||
+                          file.path.endsWith('.gguf') ||
+                          file.path.endsWith('.safetensors') ||
+                          file.path.endsWith('.lora')),
+                )
+                .toList();
+            print("Found ${loraFiles.length} LoRA files in direct directory");
+            for (var entity in loraFiles) {
+              if (entity is File) {
+                String fileName = entity.path.split('/').last;
+                loraModels.add({"name": fileName, "path": entity.path});
+                print("Added LoRA model: $fileName from ${entity.path}");
+              }
+            }
+          }
+
+          // Check legacy LlamaMobile/models directory
+          final legacyExternalModelsDir = Directory(
+            '${externalDir.path}/LlamaMobile/models',
+          );
+          print(
+            "Checking legacy LoRA models directory: ${legacyExternalModelsDir.path}",
+          );
+          print(
+            "Legacy LoRA models directory exists: ${await legacyExternalModelsDir.exists()}",
+          );
+          if (await legacyExternalModelsDir.exists()) {
+            final loraFiles = await legacyExternalModelsDir
+                .list()
+                .where(
+                  (file) =>
+                      file is File &&
+                      (file.path.endsWith('.bin') ||
+                          file.path.endsWith('.gguf') ||
+                          file.path.endsWith('.safetensors') ||
+                          file.path.endsWith('.lora')),
+                )
+                .toList();
+            print("Found ${loraFiles.length} LoRA files in legacy directory");
+            for (var entity in loraFiles) {
+              if (entity is File) {
+                String fileName = entity.path.split('/').last;
+                loraModels.add({"name": fileName, "path": entity.path});
+                print("Added LoRA model: $fileName from ${entity.path}");
+              }
+            }
+          }
+        }
+      } catch (e) {
+        print("Error scanning for LoRA models: $e");
+      }
+    }
+
+    // Always include available models (for both Android and iOS)
+    print(
+      "Adding ${availableModels.length} models from availableModels to loraModels",
+    );
+    loraModels.addAll(availableModels);
+
+    // Remove duplicates
+    final seenLoRANames = <String>{};
+    availableLoRAModels = loraModels.where((model) {
+      final fileName = model["name"]!;
+      if (seenLoRANames.contains(fileName)) {
+        return false;
+      }
+      seenLoRANames.add(fileName);
+      return true;
+    }).toList();
 
     // Set default LoRA model path to "Empty"
     loraModelPath = "";
@@ -467,13 +938,12 @@ class AppState extends ChangeNotifier {
               loraValid = false;
             }
           } else {
-            // Check if regular file exists
-            final loraExists = await File(loraModelPath).exists();
-            print("LoRA file exists: $loraExists");
-            if (!loraExists) {
-              print("LoRA adapter file not found: $loraModelPath");
-              loraValid = false;
-            }
+            // For non-asset paths (like Android external storage), don't check existence
+            // because the file is on the device/emulator, not on the development machine
+            print(
+              "Skipping existence check for non-asset LoRA path: $loraModelPath",
+            );
+            loraValid = true;
           }
 
           if (loraValid) {
@@ -505,13 +975,12 @@ class AppState extends ChangeNotifier {
               ttsValid = false;
             }
           } else {
-            // Check if regular file exists
-            final vocoderExists = await File(vocoderModelPath).exists();
-            print("Vocoder file exists: $vocoderExists");
-            if (!vocoderExists) {
-              print("TTS model file not found: $vocoderModelPath");
-              ttsValid = false;
-            }
+            // For non-asset paths (like Android external storage), don't check existence
+            // because the file is on the device/emulator, not on the development machine
+            print(
+              "Skipping existence check for non-asset vocoder path: $vocoderModelPath",
+            );
+            ttsValid = true;
           }
 
           if (ttsValid) {
@@ -556,13 +1025,12 @@ class AppState extends ChangeNotifier {
               mmprojValid = false;
             }
           } else {
-            // Check if regular file exists
-            final mmprojExists = await File(mmprojModelPath).exists();
-            print("mmproj file exists: $mmprojExists");
-            if (!mmprojExists) {
-              print("mmproj model file not found: $mmprojModelPath");
-              mmprojValid = false;
-            }
+            // For non-asset paths (like Android external storage), don't check existence
+            // because the file is on the device/emulator, not on the development machine
+            print(
+              "Skipping existence check for non-asset mmproj path: $mmprojModelPath",
+            );
+            mmprojValid = true;
           }
 
           if (mmprojValid) {
@@ -576,8 +1044,16 @@ class AppState extends ChangeNotifier {
                 nGpuLayers > 0, // Use GPU if layers are specified
               );
               print("Multimodal support initialized: $success");
+              if (!success) {
+                errorMessage =
+                    "Failed to initialize multimodal support. Please check if the mmproj model is compatible with the main model.";
+                print("Error: Multimodal initialization returned false");
+                notifyListeners();
+              }
             } catch (e) {
+              errorMessage = "Error initializing multimodal support: $e";
               print("Error loading mmproj model: $e");
+              notifyListeners();
             }
           }
         }

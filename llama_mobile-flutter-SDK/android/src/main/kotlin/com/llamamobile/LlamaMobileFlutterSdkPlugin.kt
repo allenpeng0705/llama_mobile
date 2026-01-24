@@ -43,12 +43,17 @@ class LlamaMobileFlutterSdkPlugin :
                 "setChatTemplate" -> handleSetChatTemplate(call, result)
                 "loadGrammar" -> handleLoadGrammar(call, result)
                 "generateEmbedding" -> handleGenerateEmbedding(call, result)
+                "tokenize" -> handleTokenize(call, result)
+                "detokenize" -> handleDetokenize(call, result)
                 "loadLoraAdapter" -> handleLoadLoraAdapter(call, result)
                 "freeLoraAdapter" -> handleFreeLoraAdapter(call, result)
                 "loadTTSModel" -> handleLoadTTSModel(call, result)
                 "generateAudio" -> handleGenerateAudio(call, result)
                 "freeTTSModel" -> handleFreeTTSModel(call, result)
+                "saveAudioToWav" -> handleSaveAudioToWav(call, result)
+                "initMultimodal" -> handleInitMultimodal(call, result)
                 "downloadModel" -> handleDownloadModel(call, result)
+                "generateOpenAICompletion" -> handleGenerateOpenAICompletion(call, result)
                 "getPlatformVersion" -> result.success("Android ${android.os.Build.VERSION.RELEASE}")
                 else -> result.notImplemented()
             }
@@ -396,6 +401,33 @@ class LlamaMobileFlutterSdkPlugin :
         }
     }
 
+    // MARK: - Tokenization Methods
+    private fun handleTokenize(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val text = call.argument<String>("text") ?: throw IllegalArgumentException("text is required")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val tokens = LlamaMobile.tokenize(contextHandle, text)
+        if (tokens != null) {
+            result.success(tokens.toList())
+        } else {
+            result.error("TOKENIZE_FAILED", "Failed to tokenize text", null)
+        }
+    }
+
+    private fun handleDetokenize(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val tokens = call.argument<List<Int>>("tokens") ?: throw IllegalArgumentException("tokens is required")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val text = LlamaMobile.detokenize(contextHandle, tokens.toIntArray())
+        if (text != null) {
+            result.success(text)
+        } else {
+            result.error("DETOKENIZE_FAILED", "Failed to detokenize tokens", null)
+        }
+    }
+
     // MARK: - LoRA Methods
     private fun handleLoadLoraAdapter(call: MethodCall, result: Result) {
         val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
@@ -429,14 +461,13 @@ class LlamaMobileFlutterSdkPlugin :
             val ttsType = LlamaMobile.getTTSType(contextHandle)
             result.success(mapOf(
                 "success" to true,
-                "modelType" to when (ttsType) {
-                    LlamaMobile.TTSModelType.OUT_ETTS_V02 -> 1
-                    LlamaMobile.TTSModelType.OUT_ETTS_V03 -> 2
-                    else -> 0
-                }
+                "modelType" to ttsType.ordinal
             ))
         } else {
-            result.error("TTS_LOAD_FAILED", "Failed to load TTS model", null)
+            result.success(mapOf(
+                "success" to false,
+                "modelType" to -1
+            ))
         }
     }
 
@@ -452,18 +483,103 @@ class LlamaMobileFlutterSdkPlugin :
             return
         }
 
-        // Create speaker JSON with parameters
+        // Get TTS model type for debugging
+        val ttsType = LlamaMobile.getTTSType(contextHandle)
+        print("TTS Model Type: $ttsType")
+
         val speakerJson = "{\"speaker\": \"default\"}"
 
-        // Generate audio from text
-        val audioData = LlamaMobile.generateAudioFromText(contextHandle, text, speakerJson)
-        if (audioData != null) {
-            result.success(mapOf(
-                "audioData" to audioData.toList()
-            ))
-        } else {
-            result.error("AUDIO_GENERATION_FAILED", "Failed to generate audio", null)
+        // Step 1: Format the text to get the proper prompt
+        val formattedPrompt = LlamaMobile.getFormattedAudioCompletion(contextHandle, speakerJson, text)
+        if (formattedPrompt == null) {
+            result.error("FORMAT_FAILED", "Failed to format text for TTS", null)
+            return
         }
+
+        print("Formatted prompt: $formattedPrompt")
+
+        // Step 2: Generate audio content using text completion
+        val completionParams = LlamaMobile.CompletionParams(
+            prompt = formattedPrompt,
+            maxTokens = 200, // Generate appropriate audio content
+            temperature = 0.0f, // Deterministic output
+            ignoreEos = true // Don't stop at end-of-sequence
+        )
+
+        val completionResult = LlamaMobile.generateCompletion(contextHandle, completionParams)
+        if (completionResult == null) {
+            result.error("COMPLETION_FAILED", "Failed to generate audio content", null)
+            return
+        }
+
+        print("Completion result: ${completionResult.text}")
+
+        // Check if prompt contains template markers
+        val useOnlyCompletion = formattedPrompt.contains("<|audio_start|") || formattedPrompt.contains("<|text_start|")
+        print("Use only completion: $useOnlyCompletion")
+
+        // Combine prompt and completion for full audio tokens - or just use completion if prompt contains template markers
+        val contentToTokenize = if (useOnlyCompletion) {
+            // If prompt contains template markers, only use the completion result (prevents audio from template)
+            print("Using only completion result for tokenization")
+            completionResult.text
+        } else {
+            // Otherwise combine both
+            print("Combining prompt and completion for tokenization")
+            formattedPrompt + completionResult.text
+        }
+
+        print("Content to tokenize: $contentToTokenize")
+
+        // Step 3: Tokenize the audio content
+        val tokens = LlamaMobile.tokenize(contextHandle, contentToTokenize)
+        if (tokens == null) {
+            result.error("TOKENIZATION_FAILED", "Failed to tokenize audio content", null)
+            return
+        }
+
+        print("Total tokens: ${tokens.size}")
+        print("First 10 tokens: ${tokens.take(10)}")
+        print("Last 10 tokens: ${tokens.takeLast(10)}")
+
+        // Step 4: Filter audio tokens (151672-155772)
+        val audioStartToken = 151672
+        val audioEndToken = 155772
+        val audioTokens = mutableListOf<Int>()
+        var nonAudioTokens = 0
+
+        for (token in tokens) {
+            // Check if token is in audio range
+            if (token >= audioStartToken && token <= audioEndToken) {
+                audioTokens.add(token)
+            } else {
+                nonAudioTokens++
+            }
+        }
+
+        print("Filtered audio tokens: ${audioTokens.size}")
+        print("Non-audio tokens: $nonAudioTokens")
+        print("First 10 audio tokens: ${audioTokens.take(10)}")
+
+        // Step 5: Decode the audio tokens
+        if (audioTokens.isEmpty()) {
+            result.error("NO_AUDIO_TOKENS", "No audio tokens generated", null)
+            return
+        }
+
+        val decodedAudioData = LlamaMobile.decodeAudioTokens(contextHandle, audioTokens.toIntArray())
+        if (decodedAudioData == null) {
+            result.error("DECODE_FAILED", "Failed to decode audio tokens", null)
+            return
+        }
+
+        print("Decoded audio data count: ${decodedAudioData.size}")
+
+        // Convert to int audio data
+        val intAudioData = decodedAudioData.map { (it * Short.MAX_VALUE).toInt() }
+        result.success(mapOf(
+            "audioData" to intAudioData
+        ))
     }
 
     private fun handleFreeTTSModel(call: MethodCall, result: Result) {
@@ -472,6 +588,55 @@ class LlamaMobileFlutterSdkPlugin :
 
         LlamaMobile.releaseVocoder(contextHandle)
         result.success(true)
+    }
+
+    private fun handleInitMultimodal(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val mmprojPath = call.argument<String>("mmprojPath") ?: throw IllegalArgumentException("mmprojPath is required")
+        val useGpu = call.argument<Boolean>("useGpu") ?: false
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val success = LlamaMobile.initMultimodal(contextHandle, mmprojPath, useGpu)
+        result.success(success)
+    }
+
+    private fun handleSaveAudioToWav(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val filePath = call.argument<String>("filePath") ?: throw IllegalArgumentException("filePath is required")
+        val audioData = call.argument<List<Int>>("audioData") ?: throw IllegalArgumentException("audioData is required")
+        val sampleRate = call.argument<Int>("sampleRate") ?: throw IllegalArgumentException("sampleRate is required")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        // Convert List<Int> to FloatArray (assuming 16-bit PCM)
+        val floatAudioData = FloatArray(audioData.size) {
+            audioData[it].toFloat() / 32768.0f // Normalize 16-bit to [-1, 1]
+        }
+
+        val success = LlamaMobile.saveAudioToWav(contextHandle, filePath, floatAudioData, sampleRate)
+        result.success(success)
+    }
+
+    private fun handleGenerateOpenAICompletion(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val openAIJSON = call.argument<String>("openAIJSON") ?: throw IllegalArgumentException("openAIJSON is required")
+        val grammar = call.argument<String>("grammar")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val completionResult = LlamaMobile.generateOpenAICompletion(contextHandle, openAIJSON, grammar)
+        if (completionResult != null) {
+            result.success(mapOf(
+                "text" to completionResult.text,
+                "tokensGenerated" to completionResult.tokensGenerated,
+                "tokensEvaluated" to completionResult.tokensEvaluated,
+                "truncated" to completionResult.truncated,
+                "stoppedEos" to completionResult.stoppedEos,
+                "stoppedWord" to completionResult.stoppedWord,
+                "stoppedLimit" to completionResult.stoppedLimit,
+                "stoppingWord" to completionResult.stoppingWord
+            ))
+        } else {
+            result.error("COMPLETION_FAILED", "Failed to generate completion", null)
+        }
     }
 
     // MARK: - Download Methods
