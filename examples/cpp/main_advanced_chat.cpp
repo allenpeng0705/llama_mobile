@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
     std::cout << "=============================" << std::endl;
     std::cout << "Model: " << model_path << std::endl << std::endl;
 
-    // Initialize model with chat template enabled
+    // Initialize model with custom chat template
     llama_mobile_init_params_c_t init_params = {0};
     init_params.model_path = model_path.c_str();
     init_params.n_ctx = 2048;
@@ -83,6 +83,8 @@ int main(int argc, char* argv[]) {
     init_params.n_threads = 4;
     init_params.progress_callback = progress_callback;
     init_params.enable_chat_template = true;
+    // Use a simple custom chat template that doesn't use reasoning_content
+    init_params.chat_template = "{% for message in messages %}{% if message.role == 'system' %}{{ message.content }}\n{% else %}{% if message.role == 'user' %}<|im_start|>user\n{{ message.content }}<|im_end|>\n{% else %}<|im_start|>assistant\n{{ message.content }}<|im_end|>\n{% endif %}{% endif %}{% endfor %}<|im_start|>assistant\n";
 
     std::cout << "Initializing model..." << std::endl;
     llama_mobile_context_handle_t ctx = llama_mobile_init_context_c(&init_params);
@@ -319,10 +321,10 @@ int main(int argc, char* argv[]) {
         static const char* user3_msg = "How old am I?";
         
         std::vector<llama_mobile_chat_message_c> conversation = {
-            {"system", system_msg},
-            {"user", user1_msg},
-            {"assistant", assistant1_msg},
-            {"user", user2_msg}
+            {"system", system_msg, "", nullptr, nullptr},
+            {"user", user1_msg, "", nullptr, nullptr},
+            {"assistant", assistant1_msg, "", nullptr, nullptr},
+            {"user", user2_msg, "", nullptr, nullptr}
         };
 
         llama_mobile_completion_params_c_t completion_params = {0};
@@ -342,14 +344,40 @@ int main(int argc, char* argv[]) {
             std::cout << "\n\nResponse: " << result.text << std::endl;
             
             // Add assistant's response to conversation
-            char* assistant2_msg_copy = new char[strlen(result.text) + 1];
-            strcpy(assistant2_msg_copy, result.text);
-            conversation.push_back({"assistant", assistant2_msg_copy});
+            std::string assistant2_msg_str = result.text;
+            // Filter out <think>...</think> tags
+            size_t think_start = assistant2_msg_str.find("<think>");
+            size_t think_end = assistant2_msg_str.find("</think>");
+            if (think_start != std::string::npos && think_end != std::string::npos) {
+                // Extract content after </think>
+                std::string filtered_content = assistant2_msg_str.substr(think_end + 8);
+                // Trim whitespace
+                size_t first_non_space = filtered_content.find_first_not_of(" \t\n\r");
+                if (first_non_space != std::string::npos) {
+                    filtered_content = filtered_content.substr(first_non_space);
+                }
+                // Use filtered content
+                char* assistant2_msg_copy = new char[filtered_content.size() + 1];
+                strcpy(assistant2_msg_copy, filtered_content.c_str());
+                conversation.push_back({"assistant", assistant2_msg_copy, "", nullptr, nullptr});
+            } else {
+                // No <think> tags, use original content
+                char* assistant2_msg_copy = new char[strlen(result.text) + 1];
+                strcpy(assistant2_msg_copy, result.text);
+                conversation.push_back({"assistant", assistant2_msg_copy, "", nullptr, nullptr});
+            }
             
             // Continue conversation
-            conversation.push_back({"user", user3_msg});
+            conversation.push_back({"user", user3_msg, "", nullptr, nullptr});
             
             std::cout << "\nUser: " << user3_msg << std::endl;
+            
+            // Log all chat messages for debugging
+            std::cout << "\n=== Debug: Chat Messages ===" << std::endl;
+            for (int i = 0; i < conversation.size(); i++) {
+                const auto& msg = conversation[i];
+                std::cout << "Message " << i << ": role='" << (msg.role ? msg.role : "null") << "', content='" << (msg.content ? msg.content : "null") << "'" << std::endl;
+            }
             
             completion_params.chat_messages = conversation.data();
             completion_params.chat_message_count = conversation.size();

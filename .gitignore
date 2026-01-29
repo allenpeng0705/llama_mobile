@@ -97,3 +97,5 @@ llama_mobile-ios-SDK/llama_mobile.xcframework/ios-arm64/llama_mobile.framework/l
 /examples/capacitorPluginExampleReact/node_modules
 /examples/capacitorPluginExampleReact/ios/Pods
 /examples/capacitorPluginExampleReact/android/.idea
+/llama_mobile-capacitor-plugin/android/.cxx
+/llama_mobile-capacitor-plugin/ios/Libraries/~
