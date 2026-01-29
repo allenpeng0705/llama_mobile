@@ -48,30 +48,7 @@ object LlamaMobile {
     }
     
     /**
-     * Chat template for structured conversation input
-     */
-    private var chatTemplate: String? = null
-    
-    /**
-     * Sets the chat template to use for structured input
-     * 
-     * @param template Chat template string with {{role}} and {{content}} placeholders
-     */
-    fun setChatTemplate(template: String?) {
-        chatTemplate = template
-    }
-    
-    /**
-     * Formats chat messages using the specified template
-     * 
-     * @param contextHandle Context handle obtained from initContext
-     * @param messages JSON string containing chat messages
-     * @param chatTemplate Chat template to use (optional)
-     * @return Formatted prompt string, or null if an error occurred
-     */
-    external fun formatChatMessages(contextHandle: Long, messages: String, chatTemplate: String?): String?
-    
-    /**
+    /**  
      * Grammar name enum for structured output
      */
     enum class GrammarName {
@@ -499,50 +476,7 @@ object LlamaMobile {
      * @return Completion result containing generated text and metadata, or null if an error occurred
      */
     fun generateCompletion(contextHandle: Long, params: CompletionParams): CompletionResult? {
-        // Handle chat messages formatting (same as iOS)
-        var processedParams = params
-        
-        if (params.chatMessages.isNotEmpty()) {
-            try {
-                // Convert chat messages to JSON format
-                val messagesJson = buildString {
-                    append("[")
-                    for ((index, message) in params.chatMessages.withIndex()) {
-                        if (index > 0) append(",")
-                        append("{\"role\":\"${message.role}\",\"content\":\"${message.content.replace("\"", "\\\"")}\"}")
-                    }
-                    append("]")
-                }
-                
-                // Determine which chat template to use:
-                // 1. First check if params has a custom template
-                // 2. If not, check if we have a globally set template
-                // 3. If either is available, use it; otherwise let the native function use the built-in one
-                val templateToUse = params.chatTemplate ?: chatTemplate
-                
-                // Format the chat messages using the appropriate template
-                val formattedPrompt = formatChatMessages(contextHandle, messagesJson, templateToUse)
-                
-                if (formattedPrompt != null) {
-                    Log.i("LlamaMobile", "Successfully formatted chat messages")
-                    // Update params to use formatted prompt instead of chat messages
-                    processedParams = params.copy(
-                        prompt = formattedPrompt,
-                        chatMessages = emptyList()
-                    )
-                } else {
-                    Log.e("LlamaMobile", "Cannot format chat messages: Formatting failed")
-                    // Fall back to original params
-                    return nativeGenerateCompletion(contextHandle, processedParams)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                Log.e("LlamaMobile", "Error formatting chat messages: ${e.message}")
-                // Fall back to original params if formatting fails
-            }
-        }
-        
-        return nativeGenerateCompletion(contextHandle, processedParams)
+        return nativeGenerateCompletion(contextHandle, params)
     }
     
     /**
@@ -576,9 +510,6 @@ object LlamaMobile {
         try {
             // Create completion params from OpenAI JSON
             var params = CompletionParams(openAIJSON = openAIJSON)
-            
-            // Use the stored chat template if available
-            params = params.copy(chatTemplate = chatTemplate)
             
             // Set grammar if provided
             if (grammar != null) {

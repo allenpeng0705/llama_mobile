@@ -145,12 +145,108 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     throw UnimplementedError('platformVersion() has not been implemented.');
   }
 
-  Future<bool> setChatTemplate(int contextHandle, String? template) {
-    throw UnimplementedError('setChatTemplate() has not been implemented.');
-  }
-
   Future<String?> loadGrammar(int contextHandle, String grammarName) {
     throw UnimplementedError('loadGrammar() has not been implemented.');
+  }
+
+  // Streaming methods
+  Stream<String> get onTokenStream {
+    throw UnimplementedError('onTokenStream has not been implemented.');
+  }
+
+  Stream<double> get onProgressStream {
+    throw UnimplementedError('onProgressStream has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>?> generateStreamingCompletion(
+    int contextHandle,
+    Map<String, dynamic> params,
+  ) {
+    throw UnimplementedError(
+      'generateStreamingCompletion() has not been implemented.',
+    );
+  }
+
+  Future<Map<String, dynamic>?> generateStreamingOpenAICompletion(
+    int contextHandle,
+    String openAIJSON,
+    String? grammar,
+  ) {
+    throw UnimplementedError(
+      'generateStreamingOpenAICompletion() has not been implemented.',
+    );
+  }
+
+  Future<bool> stopCompletion(int contextHandle) {
+    throw UnimplementedError('stopCompletion() has not been implemented.');
+  }
+
+  // LoRA methods
+  Future<List<Map<String, dynamic>>?> getLoadedLoraAdapters(int contextHandle) {
+    throw UnimplementedError(
+      'getLoadedLoraAdapters() has not been implemented.',
+    );
+  }
+
+  // Model info methods
+  Future<int?> getContextWindowSize(int contextHandle) {
+    throw UnimplementedError(
+      'getContextWindowSize() has not been implemented.',
+    );
+  }
+
+  Future<int?> getEmbeddingDimension(int contextHandle) {
+    throw UnimplementedError(
+      'getEmbeddingDimension() has not been implemented.',
+    );
+  }
+
+  Future<String?> getModelDescription(int contextHandle) {
+    throw UnimplementedError('getModelDescription() has not been implemented.');
+  }
+
+  Future<int?> getModelSize(int contextHandle) {
+    throw UnimplementedError('getModelSize() has not been implemented.');
+  }
+
+  Future<int?> getModelParametersCount(int contextHandle) {
+    throw UnimplementedError(
+      'getModelParametersCount() has not been implemented.',
+    );
+  }
+
+  // File and model methods
+  Future<Map<String, dynamic>?> listFiles(String directoryPath) {
+    throw UnimplementedError('listFiles() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>?> listModels() {
+    throw UnimplementedError('listModels() has not been implemented.');
+  }
+
+  // Download methods
+  Future<Map<String, dynamic>?> downloadModel(Map<String, dynamic> params) {
+    throw UnimplementedError('downloadModel() has not been implemented.');
+  }
+
+  // Hugging Face download methods
+  Future<Map<String, dynamic>?> downloadHfFile(Map<String, dynamic> params) {
+    throw UnimplementedError('downloadHfFile() has not been implemented.');
+  }
+
+  // Grammar methods
+  Future<String?> getJsonGrammar() {
+    throw UnimplementedError('getJsonGrammar() has not been implemented.');
+  }
+
+  Future<String?> getArithmeticGrammar() {
+    throw UnimplementedError(
+      'getArithmeticGrammar() has not been implemented.',
+    );
+  }
+
+  Future<String?> getCGrammar() {
+    throw UnimplementedError('getCGrammar() has not been implemented.');
   }
 
   // OpenAI completion methods
@@ -164,8 +260,25 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     );
   }
 
-  // Download methods
-  Future<Map<String, dynamic>?> downloadModel(Map<String, dynamic> params) {
-    throw UnimplementedError('downloadModel() has not been implemented.');
+  // Multimodal methods
+  Future<bool> isMultimodalEnabled(int contextHandle) {
+    throw UnimplementedError('isMultimodalEnabled() has not been implemented.');
+  }
+
+  Future<bool> supportsVision(int contextHandle) {
+    throw UnimplementedError('supportsVision() has not been implemented.');
+  }
+
+  Future<bool> supportsAudio(int contextHandle) {
+    throw UnimplementedError('supportsAudio() has not been implemented.');
+  }
+
+  // TTS methods
+  Future<bool> isVocoderEnabled(int contextHandle) {
+    throw UnimplementedError('isVocoderEnabled() has not been implemented.');
+  }
+
+  Future<int?> getTTSType(int contextHandle) {
+    throw UnimplementedError('getTTSType() has not been implemented.');
   }
 }

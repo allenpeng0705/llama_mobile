@@ -8,8 +8,65 @@
 import Foundation
 import llama_mobile
 import Darwin
+import Dispatch
+
+// MARK: - Logging System
+
+public enum LogLevel: Int {
+    case debug = 0
+    case info = 1
+    case warning = 2
+    case error = 3
+    case none = 4
+}
+
+private var currentLogLevel: LogLevel = .warning
+
+public func setLogLevel(_ level: LogLevel) {
+    currentLogLevel = level
+}
+
+private func log(_ message: String, level: LogLevel = .info) {
+    guard level.rawValue >= currentLogLevel.rawValue else { return }
+    
+    let prefix: String
+    switch level {
+    case .debug: prefix = "[DEBUG]"
+    case .info: prefix = "[INFO]"
+    case .warning: prefix = "[WARNING]"
+    case .error: prefix = "[ERROR]"
+    case .none: return
+    }
+    
+    print("\(prefix) \(message)")
+}
+
+// MARK: - Memory Management Helpers
+
+private func allocateCString(from string: String) -> UnsafeMutablePointer<CChar> {
+    let pointer = UnsafeMutablePointer<CChar>.allocate(capacity: string.utf8.count + 1)
+    string.withCString { source in
+        pointer.update(from: source, count: string.utf8.count + 1)
+    }
+    return pointer
+}
+
+private func allocateCStringArray(from strings: [String]) -> (UnsafeMutablePointer<UnsafePointer<CChar>?>, [UnsafeMutablePointer<CChar>]) {
+    let count = strings.count
+    let arrayPtr = UnsafeMutablePointer<UnsafePointer<CChar>?>.allocate(capacity: count)
+    var stringPtrs: [UnsafeMutablePointer<CChar>] = []
+    
+    for (index, string) in strings.enumerated() {
+        let stringPtr = allocateCString(from: string)
+        stringPtrs.append(stringPtr)
+        arrayPtr[index] = UnsafePointer(stringPtr)
+    }
+    
+    return (arrayPtr, stringPtrs)
+}
 
 // Global callback context holders
+private let callbackQueue = DispatchQueue(label: "com.llamamobile.callbacks", attributes: .concurrent)
 private var progressCallbackContext: ((Float) -> Void)? = nil
 private var downloadProgressCallbackContext: ((Float) -> Void)? = nil
 private var tokenCallbackContext: ((String) -> Bool)? = nil
@@ -19,33 +76,47 @@ private var embeddingCallbackContext: (([Float]) -> Void)? = nil
 
 // C-compatible callback functions
 private func cProgressCallback(progress: Float) -> Void {
-    progressCallbackContext?(progress)
+    callbackQueue.sync {
+        progressCallbackContext?(progress)
+    }
 }
 
 private func cDownloadProgressCallback(progress: Float, status: UnsafePointer<CChar>?, downloadedBytes: Int64, totalBytes: Int64) -> Void {
-    downloadProgressCallbackContext?(progress)
+    callbackQueue.sync {
+        downloadProgressCallbackContext?(progress)
+    }
 }
 
 private func cTokenCallback(token: UnsafePointer<CChar>?) -> Bool {
     guard let token = token else { return true }
     let tokenString = String(cString: token)
-    return tokenCallbackContext?(tokenString) ?? true
+    var shouldContinue = true
+    callbackQueue.sync {
+        shouldContinue = tokenCallbackContext?(tokenString) ?? true
+    }
+    return shouldContinue
 }
 
 private func cCompletionCallback(text: UnsafePointer<Int8>?) -> Void {
     guard let text = text else { return }
-    completionCallbackContext?(String(cString: text))
+    callbackQueue.sync {
+        completionCallbackContext?(String(cString: text))
+    }
 }
 
 private func cChunkCallback(text: UnsafePointer<Int8>?) -> Void {
     guard let text = text else { return }
-    chunkCallbackContext?(String(cString: text))
+    callbackQueue.sync {
+        chunkCallbackContext?(String(cString: text))
+    }
 }
 
 private func cEmbeddingCallback(embedding: UnsafePointer<Float>?, count: Int) -> Void {
     guard let embedding = embedding else { return }
     let embeddingArray = Array(UnsafeBufferPointer(start: embedding, count: count))
-    embeddingCallbackContext?(embeddingArray)
+    callbackQueue.sync {
+        embeddingCallbackContext?(embeddingArray)
+    }
 }
 
 /// LlamaMobile API wrapper for iOS
@@ -75,18 +146,13 @@ public class LlamaMobile {
     /// Opaque handle to the llama_mobile context
     private var context: llama_mobile_context_handle_t?
     
-    /// Chat template used by the model
-    public var chatTemplate: String? = nil
-    
     /// Configure Metal paths before model initialization
     private func configureMetalPaths() {
-        // Get the framework bundle
         let frameworkBundle = Bundle(for: type(of: self))
         let frameworkPath = frameworkBundle.bundlePath
         
-        // Log the paths for debugging
-        print("[DEBUG] Framework bundle path: \(frameworkPath)")
-        print("[DEBUG] Framework bundle resources path: \(frameworkBundle.resourcePath ?? "nil")")
+        log("Framework bundle path: \(frameworkPath)", level: .debug)
+        log("Framework bundle resources path: \(frameworkBundle.resourcePath ?? "nil")", level: .debug)
     }
     
     /// Text-to-Speech model types
@@ -281,11 +347,7 @@ public class LlamaMobile {
         /// If provided, these will be formatted using the chat template instead of using the prompt directly
         public var chatMessages: [ChatMessage] = []
         
-        /// Whether to return the response in OpenAI-like JSON format
-        public var useJsonResponse: Bool = false
-        
-        /// Custom chat template for formatting conversations
-        public var chatTemplate: String? = nil
+        public var useJsonResponse: Bool = true
         
         /// Default initializer with minimal parameters
         public init(prompt: String) {
@@ -296,7 +358,7 @@ public class LlamaMobile {
         public init(chatMessages: [ChatMessage]) {
             self.prompt = ""
             self.chatMessages = chatMessages
-            self.maxTokens = 256
+            self.maxTokens = 1024
             self.temperature = 0.7
             self.topP = 0.95
             self.topK = 40
@@ -338,7 +400,7 @@ public class LlamaMobile {
         }
         
         /// Full initializer with all parameters
-        public init(prompt: String, maxTokens: Int32 = 128, nThreads: Int32? = nil, seed: Int32 = -1, temperature: Double = 0.8, topK: Int32 = 40, topP: Double = 0.95, minP: Double = 0.05, typicalP: Double = 1.0, penaltyLastN: Int32 = 64, penaltyRepeat: Double = 1.1, penaltyFreq: Double = 0.0, penaltyPresent: Double = 0.0, mirostat: Int32 = 0, mirostatTau: Double = 5.0, mirostatEta: Double = 0.1, ignoreEos: Bool = false, stopSequences: [String] = [], grammar: String? = nil, mediaPaths: [String] = [], chatMessages: [ChatMessage] = [], useJsonResponse: Bool = false, chatTemplate: String? = nil, tokenCallback: ((String) -> Bool)? = nil) {
+        public init(prompt: String, maxTokens: Int32 = 128, nThreads: Int32? = nil, seed: Int32 = -1, temperature: Double = 0.8, topK: Int32 = 40, topP: Double = 0.95, minP: Double = 0.05, typicalP: Double = 1.0, penaltyLastN: Int32 = 64, penaltyRepeat: Double = 1.1, penaltyFreq: Double = 0.0, penaltyPresent: Double = 0.0, mirostat: Int32 = 0, mirostatTau: Double = 5.0, mirostatEta: Double = 0.1, ignoreEos: Bool = false, stopSequences: [String] = [], grammar: String? = nil, mediaPaths: [String] = [], chatMessages: [ChatMessage] = [], tokenCallback: ((String) -> Bool)? = nil) {
             self.prompt = prompt
             self.maxTokens = maxTokens
             self.nThreads = nThreads
@@ -360,8 +422,6 @@ public class LlamaMobile {
             self.grammar = grammar
             self.mediaPaths = mediaPaths
             self.chatMessages = chatMessages
-            self.useJsonResponse = useJsonResponse
-            self.chatTemplate = chatTemplate
             self.tokenCallback = tokenCallback
         }
         
@@ -439,8 +499,7 @@ public class LlamaMobile {
             // No hardcoded stop sequences - let the caller set them explicitly
             // This allows better control over when generation stops
             
-            // Enable JSON response format for OpenAI compatibility
-            self.useJsonResponse = true
+
             
             // Set media paths if any were found
             self.mediaPaths = mediaPaths
@@ -634,12 +693,6 @@ public class LlamaMobile {
         }
     }
     
-    /// Sets the chat template for the model.
-    /// - Parameter template: The chat template to use.
-    public func setChatTemplate(_ template: String?) {
-        self.chatTemplate = template
-    }
-    
     /// Internal initialization method
     private func initialize(with params: InitParams) -> Bool {
         // Configure Metal paths before initialization
@@ -661,9 +714,8 @@ public class LlamaMobile {
         // Create and populate the C params struct
         var cParams = llama_mobile_init_params_c_t()
         memset(&cParams, 0, MemoryLayout<llama_mobile_init_params_c_t>.size)
-        cParams.model_path = params.modelPath.withCString { $0 }
-        cParams.chat_template = params.chatTemplate?.withCString { $0 }
-        cParams.system_prompt = params.systemPrompt?.withCString { $0 }
+        
+        // Set non-string parameters
         cParams.n_ctx = params.nCtx
         cParams.n_batch = params.nBatch
         cParams.n_ubatch = params.nUBatch
@@ -675,21 +727,38 @@ public class LlamaMobile {
         cParams.pooling_type = params.poolingType
         cParams.embd_normalize = params.embdNormalize
         cParams.flash_attn = params.flashAttention
-        cParams.cache_type_k = params.cacheTypeK?.withCString { $0 }
-        cParams.cache_type_v = params.cacheTypeV?.withCString { $0 }
         cParams.progress_callback = callbackWrapper
+        
+        // Use helper function to create persistent copies of the strings
+        let modelPathPtr = allocateCString(from: params.modelPath)
+        let chatTemplatePtr = params.chatTemplate.map { allocateCString(from: $0) }
+        let systemPromptPtr = params.systemPrompt.map { allocateCString(from: $0) }
+        let cacheTypeKPtr = params.cacheTypeK.map { allocateCString(from: $0) }
+        let cacheTypeVPtr = params.cacheTypeV.map { allocateCString(from: $0) }
+        
+        // Set the pointers in the params struct
+        cParams.model_path = UnsafePointer(modelPathPtr)
+        cParams.chat_template = chatTemplatePtr.map { UnsafePointer($0) }
+        cParams.system_prompt = systemPromptPtr.map { UnsafePointer($0) }
+        cParams.cache_type_k = cacheTypeKPtr.map { UnsafePointer($0) }
+        cParams.cache_type_v = cacheTypeVPtr.map { UnsafePointer($0) }
         
         // Initialize the context
         context = llama_mobile_init_context_c(&cParams)
         
-        // Store the chat template
-        if let chatTemplate = params.chatTemplate {
-            self.chatTemplate = chatTemplate
-        } else {
-            // Note: We're unable to access the built-in template from Swift due to framework limitations
-            // This functionality would require updating the binary framework's headers or modulemap
-            // For now, apps can implement their own fallback logic using the setChatTemplate method
-            self.chatTemplate = nil
+        // Free the duplicated strings
+        free(modelPathPtr)
+        if let chatTemplatePtr = chatTemplatePtr {
+            free(chatTemplatePtr)
+        }
+        if let systemPromptPtr = systemPromptPtr {
+            free(systemPromptPtr)
+        }
+        if let cacheTypeKPtr = cacheTypeKPtr {
+            free(cacheTypeKPtr)
+        }
+        if let cacheTypeVPtr = cacheTypeVPtr {
+            free(cacheTypeVPtr)
         }
         
         return context != nil
@@ -711,7 +780,7 @@ public class LlamaMobile {
         do {
             return try String(contentsOfFile: grammarPath, encoding: .utf8)
         } catch {
-            print("Error loading grammar file: \(error)")
+            log("Error loading grammar file: \(error)", level: .error)
             return nil
         }
     }
@@ -720,34 +789,31 @@ public class LlamaMobile {
     /// - Parameter grammarName: Name of the grammar file (without .gbnf extension)
     /// - Returns: Grammar content as a string, or nil if an error occurred
     public func loadGrammar(named grammarName: String) -> String? {
-        // Get the framework bundle
         let frameworkBundle = Bundle(for: type(of: self))
-        print("[DEBUG] Loading grammar '\(grammarName)' from framework bundle: \(frameworkBundle.bundlePath)")
+        log("Loading grammar '\(grammarName)' from framework bundle: \(frameworkBundle.bundlePath)", level: .debug)
         
-        // Try to find the grammar file in the framework's grammars directory
         if let grammarURL = frameworkBundle.url(forResource: grammarName, withExtension: "gbnf", subdirectory: "grammars") {
-            print("[DEBUG] Found grammar file at: \(grammarURL.path)")
+            log("Found grammar file at: \(grammarURL.path)", level: .debug)
             
             do {
                 let content = try String(contentsOf: grammarURL, encoding: .utf8)
-                print("[DEBUG] ✓ Successfully loaded grammar '\(grammarName)' (\(content.count) characters)")
+                log("Successfully loaded grammar '\(grammarName)' (\(content.count) characters)", level: .debug)
                 return content
             } catch {
-                print("[ERROR] ✗ Failed to read grammar file: \(error)")
+                log("Failed to read grammar file: \(error)", level: .error)
             }
         } else {
-            // List available grammar files for debugging
             do {
                 let grammarsDirURL = frameworkBundle.url(forResource: nil, withExtension: nil, subdirectory: "grammars")
                 if let grammarsPath = grammarsDirURL?.path {
                     let availableGrammars = try FileManager.default.contentsOfDirectory(atPath: grammarsPath)
-                    print("[DEBUG] Available grammar files in framework: \(availableGrammars)")
+                    log("Available grammar files in framework: \(availableGrammars)", level: .debug)
                 }
             } catch {
-                print("[ERROR] ✗ Failed to list available grammar files: \(error)")
+                log("Failed to list available grammar files: \(error)", level: .error)
             }
             
-            print("[ERROR] ✗ Grammar file '\(grammarName).gbnf' not found in framework's grammars directory")
+            log("Grammar file '\(grammarName).gbnf' not found in framework's grammars directory", level: .error)
         }
         
         return nil
@@ -755,18 +821,16 @@ public class LlamaMobile {
     
     /// Generate a text completion from a prompt
     /// - Parameter params: Completion parameters
+    /// - Parameter useJsonResponse: Whether to return the response in OpenAI-like JSON format
     /// - Returns: Completion result, or nil if an error occurred
     public func generateCompletion(with params: CompletionParams) -> CompletionResult? {
         guard let context = context else {
             return nil
         }
         
-        // Convert stop sequences to C array
-        let stopSequenceCount = params.stopSequences.count
-        let stopSequencesC = UnsafeMutablePointer<UnsafePointer<CChar>?>.allocate(capacity: stopSequenceCount)
-        
-        // Array to store C strings that need to be freed
-        var stopStringsToFree: [UnsafeMutablePointer<CChar>] = []
+        // Convert stop sequences to C array using helper function
+        let (stopSequencesC, stopStringsToFreeOriginal) = allocateCStringArray(from: params.stopSequences)
+        var stopStringsToFree = stopStringsToFreeOriginal
         defer {
             // Free all allocated C strings for stop sequences
             for cString in stopStringsToFree {
@@ -774,16 +838,6 @@ public class LlamaMobile {
             }
             // Free the stop sequences array
             stopSequencesC.deallocate()
-        }
-        
-        for (index, sequence) in params.stopSequences.enumerated() {
-            // Allocate permanent C string for stop sequence
-            let stopCString = UnsafeMutablePointer<CChar>.allocate(capacity: sequence.utf8.count + 1)
-            sequence.withCString { source in
-                stopCString.update(from: source, count: sequence.utf8.count + 1)
-            }
-            stopStringsToFree.append(stopCString)
-            stopSequencesC[index] = UnsafePointer(stopCString)
         }
         
         // Create token callback wrapper if needed
@@ -823,101 +877,79 @@ public class LlamaMobile {
         cParams.mirostat_tau = params.mirostatTau
         cParams.mirostat_eta = params.mirostatEta
         cParams.ignore_eos = params.ignoreEos
-        cParams.stop_sequences = stopSequenceCount > 0 ? stopSequencesC : nil
-        cParams.stop_sequence_count = Int32(stopSequenceCount)
+        cParams.stop_sequences = params.stopSequences.count > 0 ? stopSequencesC : nil
+        cParams.stop_sequence_count = Int32(params.stopSequences.count)
         
         // Log grammar usage and handle grammar string
         var grammarCString: UnsafeMutablePointer<CChar>? = nil
         if let grammar = params.grammar {
-            print("[DEBUG] Using grammar for generation")
-            print("[DEBUG] Grammar preview: \(grammar.prefix(100))...")
-            // Allocate permanent C string for grammar
-            grammarCString = UnsafeMutablePointer<CChar>.allocate(capacity: grammar.utf8.count + 1)
-            grammar.withCString { source in
-                grammarCString?.update(from: source, count: grammar.utf8.count + 1)
-            }
+            log("Using grammar for generation", level: .debug)
+            log("Grammar preview: \(grammar.prefix(100))...", level: .debug)
+            // Allocate permanent C string for grammar using helper function
+            grammarCString = allocateCString(from: grammar)
             cParams.grammar = UnsafePointer(grammarCString)
         } else {
-            print("[DEBUG] No grammar specified for generation")
+            log("No grammar specified for generation", level: .debug)
             cParams.grammar = nil
         }
         // Add grammar to cleanup list if allocated
         if let grammarCString = grammarCString {
-            stopStringsToFree.append(grammarCString) // Reuse existing cleanup list
+            stopStringsToFree.append(grammarCString)
         }
         
         cParams.token_callback = tokenCallbackPtr
         
         // Handle chat messages if provided
         if !params.chatMessages.isEmpty {
-            print("[DEBUG] Using structured chat messages instead of raw prompt")
+            log("Using structured chat messages", level: .debug)
             
-            // Manually format chat messages using the template since C API doesn't support passing template with structured messages
-            guard let chatTemplate = params.chatTemplate else {
-                print("[ERROR] Cannot format chat messages: No chat template provided")
-                return nil
+            // Convert chat messages to C array
+            let messageCount = params.chatMessages.count
+            let chatMessagesC = UnsafeMutablePointer<llama_mobile_chat_message_c>.allocate(capacity: messageCount)
+            
+            // Array to store C strings that need to be freed
+            var messageStringsToFree: [UnsafeMutablePointer<CChar>] = []
+            
+            for (index, message) in params.chatMessages.enumerated() {
+                // Allocate permanent C strings for role and content using helper function
+                let roleCString = allocateCString(from: message.role)
+                let contentCString = allocateCString(from: message.content)
+                
+                messageStringsToFree.append(roleCString)
+                messageStringsToFree.append(contentCString)
+                
+                chatMessagesC[index].role = UnsafePointer(roleCString)
+                chatMessagesC[index].content = UnsafePointer(contentCString)
             }
             
-            print("[MANUAL FORMAT] Using chat template: \(chatTemplate)")
+            cParams.chat_messages = UnsafePointer(chatMessagesC)
+            cParams.chat_message_count = Int32(messageCount)
             
-            var formattedPrompt = ""
-            
-            for message in params.chatMessages {
-                var messageTemplate = chatTemplate
-                messageTemplate = messageTemplate.replacingOccurrences(of: "{{role}}", with: message.role)
-                messageTemplate = messageTemplate.replacingOccurrences(of: "{{content}}", with: message.content)
-                formattedPrompt += messageTemplate
+            // Free all allocated C strings after completion
+            defer {
+                for cString in messageStringsToFree {
+                    cString.deallocate()
+                }
+                chatMessagesC.deallocate()
             }
-            
-            // Add the assistant prompt suffix based on the chat template
-            // This extracts the assistant turn format by replacing role with 'assistant' and removing content placeholder and closing tag
-            var assistantTurnTemplate = chatTemplate
-            assistantTurnTemplate = assistantTurnTemplate.replacingOccurrences(of: "{{role}}", with: "assistant")
-            
-            // Find the position of the content placeholder and only keep the part before it
-            if let contentPlaceholderRange = assistantTurnTemplate.range(of: "{{content}}") {
-                // Only keep the part before the content placeholder
-                assistantTurnTemplate = String(assistantTurnTemplate[..<contentPlaceholderRange.lowerBound])
-            }
-            
-            // Trim whitespace
-            assistantTurnTemplate = assistantTurnTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
-            formattedPrompt += assistantTurnTemplate + "\n"
-            
-            print("[DEBUG] Manually formatted prompt using template:")
-            print(formattedPrompt)
-            
-            // Use the manually formatted prompt instead of structured chat messages
-            // Create a persistent C string copy since withCString only keeps it valid for the closure
-            let promptCString = UnsafeMutablePointer<CChar>.allocate(capacity: formattedPrompt.utf8.count + 1)
-            formattedPrompt.withCString { source in
-                promptCString.update(from: source, count: formattedPrompt.utf8.count + 1)
-            }
-            cParams.prompt = UnsafePointer(promptCString)
-            cParams.chat_messages = nil
-            cParams.chat_message_count = 0
-            
-            // Free the C string later using the existing cleanup list
-            stopStringsToFree.append(promptCString)
         } else {
             cParams.chat_messages = nil
             cParams.chat_message_count = 0
         }
         
-        // Set JSON response flag
-        cParams.use_json_response = params.useJsonResponse
+        // Chat template is set during initialization, not during completion
+        // The completion params struct doesn't support dynamic chat template setting
+        
+        // Set JSON response flag - ensure false when grammar is set
+        cParams.use_json_response = params.grammar != nil ? false : params.useJsonResponse
         
         // Generate completion - use multimodal if media paths are provided
         var cResult = llama_mobile_completion_result_c_t()
         let status: Int32
         
         if !params.mediaPaths.isEmpty {
-            // Convert media paths to C array
-            let mediaCount = params.mediaPaths.count
-            let mediaPathsC = UnsafeMutablePointer<UnsafePointer<CChar>?>.allocate(capacity: mediaCount)
-            
-            // Array to store C strings that need to be freed
-            var mediaStringsToFree: [UnsafeMutablePointer<CChar>] = []
+            // Convert media paths to C array using helper function
+            let (mediaPathsC, mediaStringsToFree) = allocateCStringArray(from: params.mediaPaths)
             defer {
                 // Free all allocated C strings for media paths
                 for cString in mediaStringsToFree {
@@ -927,40 +959,30 @@ public class LlamaMobile {
                 mediaPathsC.deallocate()
             }
             
-            for (index, path) in params.mediaPaths.enumerated() {
-                // Allocate permanent C string for media path
-                let mediaCString = UnsafeMutablePointer<CChar>.allocate(capacity: path.utf8.count + 1)
-                path.withCString { source in
-                    mediaCString.update(from: source, count: path.utf8.count + 1)
-                }
-                mediaStringsToFree.append(mediaCString)
-                mediaPathsC[index] = UnsafePointer(mediaCString)
-            }
-            
-            status = llama_mobile_multimodal_completion_c(context, &cParams, mediaPathsC, Int32(mediaCount), &cResult)
+            status = llama_mobile_multimodal_completion_c(context, &cParams, mediaPathsC, Int32(params.mediaPaths.count), &cResult)
         } else {
             status = llama_mobile_completion_c(context, &cParams, &cResult)
         }
         
         // Log the result status
-        print("[DEBUG] Completion C API status: \(status)")
+        log("Completion C API status: \(status)", level: .debug)
         
         guard status == 0 else {
-            print("[ERROR] Completion C API failed with status: \(status)")
+            log("Completion C API failed with status: \(status)", level: .error)
             llama_mobile_free_completion_result_members_c(&cResult)
             return nil
         }
         
         guard let text = cResult.text.map({ String(cString: $0) }) else {
-            print("[ERROR] Completion result has no text")
+            log("Completion result has no text", level: .error)
             llama_mobile_free_completion_result_members_c(&cResult)
             return nil
         }
         
         // Log token statistics
-        print("[DEBUG] Tokens evaluated: \(cResult.tokens_evaluated)")
-        print("[DEBUG] Tokens generated: \(cResult.tokens_predicted)")
-        print("[DEBUG] Generation stopped because: \n  - End of sequence: \(cResult.stopped_eos)\n  - Stop word: \(cResult.stopped_word)\n  - Token limit: \(cResult.stopped_limit)")
+        log("Tokens evaluated: \(cResult.tokens_evaluated)", level: .debug)
+        log("Tokens generated: \(cResult.tokens_predicted)", level: .debug)
+        log("Generation stopped because: \n  - End of sequence: \(cResult.stopped_eos)\n  - Stop word: \(cResult.stopped_word)\n  - Token limit: \(cResult.stopped_limit)", level: .debug)
         
         // Get stopping word if available
         let stoppingWord = cResult.stopping_word != nil ? String(cString: cResult.stopping_word!) : nil
@@ -978,16 +1000,16 @@ public class LlamaMobile {
         )
         
         // Log the result for debugging
-        print("[DEBUG] Completion result: \(text)")
+        log("Completion result: \(text)", level: .debug)
         
         // Validate if generated text is different from prompt
         if text == params.prompt {
-            print("[WARNING] Generated text is identical to input prompt. This could indicate:")
-            print("          - Model may not be generating any tokens")
-            print("          - Generation parameters may be causing early stopping")
-            print("          - Model file may be corrupt or incompatible")
-            print("          - Prompt may need to be formatted differently for the model")
-            print("[DEBUG] Tokens generated: \(cResult.tokens_predicted) (should be > 0 for new content)")
+            log("Generated text is identical to input prompt. This could indicate:", level: .warning)
+            log("- Model may not be generating any tokens", level: .warning)
+            log("- Generation parameters may be causing early stopping", level: .warning)
+            log("- Model file may be corrupt or incompatible", level: .warning)
+            log("- Prompt may need to be formatted differently for the model", level: .warning)
+            log("Tokens generated: \(cResult.tokens_predicted) (should be > 0 for new content)", level: .debug)
         }
         
         // Free C result members
@@ -1001,7 +1023,7 @@ public class LlamaMobile {
     /// - Parameter openAIJSON: OpenAI format JSON string
     /// - Parameter grammar: Optional grammar content to constrain generation
     /// - Returns: The generated completion result in OpenAI format, or nil if an error occurred.
-    public func generateOpenAICompletion(with openAIJSON: String, grammar: String? = nil) -> CompletionResult? {
+    public func generateOpenAICompletion(with openAIJSON: String) -> CompletionResult? {
         guard let context = context else {
             return nil
         }
@@ -1010,25 +1032,14 @@ public class LlamaMobile {
             // Create completion params from OpenAI JSON
             var params = try CompletionParams(openAIJSON: openAIJSON)
             
-            // Only use the stored chat template if available
-            // No fallback template - template remains nil if none is available
-            params.chatTemplate = self.chatTemplate
-            print("[JSON API] Using chat template: \(params.chatTemplate ?? "(none)")")
-            
-            // Set grammar if provided
-            if let grammar = grammar {
-                params.grammar = grammar
-                print("[JSON API] Using grammar")
-            }
-            
-            // Use JSON response format for OpenAI compatibility unless a custom grammar is provided
-            // This avoids conflicts between built-in JSON formatting and custom JSON grammar
-            params.useJsonResponse = grammar == nil
-            
+
+            // we need to set grammar to nil if it is not nil
+            params.grammar = nil
+            params.useJsonResponse = true
             // Generate completion using the standard method
             return generateCompletion(with: params)
         } catch {
-            print("[ERROR] Error in generateOpenAICompletion: \(error)")
+            log("Error in generateOpenAICompletion: \(error)", level: .error)
             return nil
         }
     }
@@ -1039,12 +1050,14 @@ public class LlamaMobile {
     ///   - maxTokens: Maximum number of tokens to generate
     ///   - temperature: Sampling temperature
     ///   - tokenCallback: Optional streaming callback for generated tokens
+    ///   - useJsonResponse: Whether to return the response in OpenAI-like JSON format
     /// - Returns: Completion result, or nil if an error occurred
-    public func generateCompletion(prompt: String, maxTokens: Int32 = 128, temperature: Double = 0.8, tokenCallback: ((String) -> Bool)? = nil) -> CompletionResult? {
+    public func generateCompletion(prompt: String, maxTokens: Int32 = 512, temperature: Double = 0.8, tokenCallback: ((String) -> Bool)? = nil, useJsonResponse: Bool = true) -> CompletionResult? {
         var params = CompletionParams(prompt: prompt)
         params.maxTokens = maxTokens
         params.temperature = temperature
         params.tokenCallback = tokenCallback
+        params.useJsonResponse = useJsonResponse
         
         return generateCompletion(with: params)
     }
@@ -1053,9 +1066,7 @@ public class LlamaMobile {
     /// - Parameters:
     ///   - params: Completion parameters
     ///   - mediaPaths: Array of paths to media files (images/audio)
-    /// - Returns: Completion result, or nil if an error occurred
-    /// - Note: This method is maintained for backward compatibility. Consider using `generateCompletion` with `mediaPaths` parameter instead.
-    @available(*, deprecated, message: "Use generateCompletion(with:) with mediaPaths parameter instead")
+    /// - Returns: Completion result, or nil if an error occurred 
     public func generateMultimodalCompletion(with params: CompletionParams, mediaPaths: [String]) -> CompletionResult? {
         var paramsWithMedia = params
         paramsWithMedia.mediaPaths = mediaPaths
@@ -1152,16 +1163,12 @@ public class LlamaMobile {
     /// - Parameter tokens: Array of token IDs to detokenize
     /// - Returns: Detokenized text string, or nil if an error occurred
     public func detokenize(tokens: [Int32]) -> String? {
-        print("[LLAMA DETOKENIZE] Called with tokens: \(tokens)")
-        print("[LLAMA DETOKENIZE] Number of tokens: \(tokens.count)")
         guard let context = context else {
             return nil
         }
         
         let cString = tokens.withUnsafeBufferPointer { buffer in
-            let result = llama_mobile_detokenize_c(context, buffer.baseAddress, Int32(buffer.count))
-            print("[LLAMA DETOKENIZE] C function result: \(result != nil ? String(cString: result!) : "nil")")
-            return result
+            llama_mobile_detokenize_c(context, buffer.baseAddress, Int32(buffer.count))
         }
         
         guard let cString = cString else {

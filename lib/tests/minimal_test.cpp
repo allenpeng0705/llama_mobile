@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
     // Generate
     llama_mobile_completion_params_t comp_params = {0};
     comp_params.prompt = prompt.c_str();
-    comp_params.max_tokens = 50;
+    comp_params.n_predict = 50;
     comp_params.temperature = 0.8;
     comp_params.top_k = 40;
     comp_params.top_p = 0.95;

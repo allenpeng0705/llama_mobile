@@ -82,10 +82,6 @@ BenchmarkResults run_benchmark(const BenchmarkConfig& config) {
     init_params.use_mmap = true;
     init_params.use_mlock = false;
     init_params.embedding = false;
-    init_params.temperature = 0.7;
-    init_params.top_k = 40;
-    init_params.top_p = 0.95;
-    init_params.penalty_repeat = 1.1;
     init_params.progress_callback = progress_callback;
 
     // Initialize the context and warm up
@@ -101,7 +97,7 @@ BenchmarkResults run_benchmark(const BenchmarkConfig& config) {
     printf("Warming up...\n");
     llama_mobile_completion_params_t warmup_params = {
         .prompt = "Hello",
-        .max_tokens = 10,
+        .n_predict = 10,
         .temperature = 0.7,
         .top_k = 40,
         .top_p = 0.95,
@@ -125,7 +121,7 @@ BenchmarkResults run_benchmark(const BenchmarkConfig& config) {
     printf("Running benchmark...\n");
     llama_mobile_completion_params_t benchmark_params = {
         .prompt = config.prompt.c_str(),
-        .max_tokens = config.max_tokens,
+        .n_predict = config.max_tokens,
         .temperature = 0.7,
         .top_k = 40,
         .top_p = 0.95,

@@ -178,7 +178,7 @@ int main(int argc, char** argv) {
     
     llama_mobile_completion_params_t completion_params = {
         .prompt = prompt,
-        .max_tokens = 100,
+        .n_predict = 100,
         .temperature = 0.7,
         .top_k = 40,
         .top_p = 0.95,
@@ -295,7 +295,7 @@ int main(int argc, char** argv) {
     
     llama_mobile_completion_params_t json_params = {
         .prompt = json_prompt,
-        .max_tokens = 100,
+        .n_predict = 100,
         .temperature = 0.7,
         .top_k = 40,
         .top_p = 0.95,

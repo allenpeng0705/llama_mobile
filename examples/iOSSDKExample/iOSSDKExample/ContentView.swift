@@ -29,6 +29,15 @@ class AppState: ObservableObject {
     // Chat configuration
     @Published var systemPrompt = "You are a local AI assistant. Please respond to user queries in a polite, helpful, and clear manner. Focus on providing accurate information and maintaining a friendly tone."
     
+    // Feature switches
+    @Published var useStreaming = false
+    @Published var useCustomTemplate = false
+    @Published var useChatMode = true
+    @Published var useJsonResponse = true
+    
+    // Qwen3 chat template
+    let qwen3Template = "<|im_start|>{{role}}\n{{content}}<|im_end|>\n"
+    
     // LlamaMobile instance - optional since it requires a model path to initialize
     @Published var llamaMobile: LlamaMobile? = nil
     
@@ -316,7 +325,7 @@ struct ContentView: View {
 struct Message: Identifiable, Equatable {
     let id = UUID()
     let role: String
-    let text: String
+    var text: String
 }
 
 // Chat View
@@ -326,21 +335,34 @@ struct ChatView: View {
     @State private var messages: [Message] = []
     @State private var isLoading = false
     @State private var jsonGrammar: String? = nil
-    @State private var useOpenAIJSONAPI = true // Toggle for API approach (enabled by default)
     
     var body: some View {
         VStack(spacing: 0) {
-            // API Selection Toggle
+            // Feature Switches
             if appState.isModelLoaded {
-                HStack {
-                    Text("Use OpenAI JSON API:")
-                    Toggle(isOn: $useOpenAIJSONAPI) {}
-                        .tint(.blue)
+                VStack(spacing: 0) {
+                    // Streaming Toggle
+                    HStack {
+                        Text("Streaming:")
+                        Toggle(isOn: $appState.useStreaming) {}
+                            .tint(.blue)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(Color(.systemGroupedBackground))
+                    .border(Color.gray.opacity(0.2), width: 0.5)
+                    
+                    // JSON Response Toggle
+                    HStack {
+                        Text("JSON Response:")
+                        Toggle(isOn: $appState.useJsonResponse) {}
+                            .tint(.blue)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(Color(.systemGroupedBackground))
+                    .border(Color.gray.opacity(0.2), width: 0.5)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
-                .background(Color(.systemGroupedBackground))
-                .border(Color.gray.opacity(0.2), width: 0.5)
             }
             
             if !appState.isModelLoaded {
@@ -416,9 +438,7 @@ struct ChatView: View {
         }
     }
     
-
-    
-    
+   
     func sendMessage() {
         guard !message.isEmpty else { return }
         
@@ -438,55 +458,7 @@ struct ChatView: View {
             proxy.scrollTo("bottom", anchor: .bottom)
         }
     }
-    
-    // Demo function: Shows using the new OpenAI JSON API
-    func demoOpenAIJSONAPI(for prompt: String) async {
-        print("\n==================================================")
-        print("[OPENAI JSON API DEMO]")
-        print("==================================================")
         
-        do {
-            // Create sample OpenAI JSON
-            let openAIJSON = """
-            {
-                "messages": [
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": "\(prompt)"}
-                ]
-            }
-            """
-            
-            print("[DEMO] OpenAI JSON Input:")
-            print(openAIJSON)
-            
-            // Handle grammar if specified
-            let grammarContent = appState.selectedGrammar != nil ? appState.loadGrammarContent(grammarName: appState.selectedGrammar!) : nil
-            if let grammarContent = grammarContent {
-                print("[JSON API] Using grammar: \(appState.selectedGrammar ?? "unknown")")
-            }
-            
-            // Use the enhanced generateOpenAICompletion method with grammar support
-            if let llamaMobile = appState.llamaMobile {
-                // Generate completion using the enhanced OpenAI JSON API
-                if let result = llamaMobile.generateOpenAICompletion(with: openAIJSON, grammar: grammarContent) {
-                    print("\n[DEMO] OpenAI JSON API Response:")
-                    print(result.text)
-                    print("[DEMO] Response length: \(result.text.count) characters")
-                } else {
-                    print("[DEMO] Failed to generate response using OpenAI JSON API")
-                }
-            } else {
-                print("[DEMO] LlamaMobile instance not available")
-            }
-            
-        } catch {
-            print("[DEMO] Error using OpenAI JSON API: \(error)")
-        }
-        
-        print("==================================================")
-        print("[OPENAI JSON API DEMO END]")
-        print("==================================================\n")
-    }
     
     func generateResponse(for prompt: String) async {
         defer {
@@ -496,41 +468,53 @@ struct ChatView: View {
         }
         
         do {
-            // Create chat messages from conversation history
-            var chatMessages: [LlamaMobile.ChatMessage] = []
+            // Create completion parameters based on Chat switch
+            var params: LlamaMobile.CompletionParams
             
-            // Add system message
-            chatMessages.append(LlamaMobile.ChatMessage(role: "system", content: appState.systemPrompt))
-            
-            // Add all conversation messages
-            for message in messages {
-                chatMessages.append(LlamaMobile.ChatMessage(role: message.role, content: message.text))
-            }
-            
-            // Use the selected grammar from appState if available
-            let selectedGrammar = appState.selectedGrammar
-            var grammarContent: String? = nil
-            
-            // Load grammar content if a grammar is selected
-            if let selectedGrammarName = selectedGrammar {
-                print("[DEBUG] Attempting to load grammar: \(selectedGrammarName)")
-                grammarContent = appState.loadGrammarContent(grammarName: selectedGrammarName)
+            if appState.useChatMode {
+                // Chat mode: use chatMessages with history
+                print("[INFO] Using Chat mode with message history")
                 
-                if grammarContent != nil {
-                    print("[DEBUG] ✓ Grammar will be used for generation: \(selectedGrammarName)")
-                } else {
-                    print("[DEBUG] ✗ Grammar not loaded, generation will proceed without grammar constraints")
-                    grammarContent = nil // Ensure grammar is nil if not loaded
+                // Create chat messages from conversation history
+                var chatMessages: [LlamaMobile.ChatMessage] = []
+                
+                // Add system message
+                chatMessages.append(LlamaMobile.ChatMessage(role: "system", content: appState.systemPrompt))
+                
+                // Add all conversation messages
+                for message in messages {
+                    chatMessages.append(LlamaMobile.ChatMessage(role: message.role, content: message.text))
                 }
+                
+                // Debug: Log chat messages
+                print("[DEBUG] Total chat messages: \(chatMessages.count)")
+                for (index, msg) in chatMessages.enumerated() {
+                    print("[DEBUG] Message \(index): role=\(msg.role), content=\(msg.content.prefix(50))...")
+                }
+                
+                // Create completion parameters with structured chat messages
+                params = LlamaMobile.CompletionParams(chatMessages: chatMessages)
             } else {
-                print("[DEBUG] No grammar selected, generation will proceed without grammar constraints")
-                grammarContent = nil // Explicitly clear grammar when none selected
+                // Direct prompt mode: use prompt only
+                print("[INFO] Using Direct Prompt mode")
+                print("[DEBUG] Prompt content: \(prompt)")
+                print("[DEBUG] System prompt: \(appState.systemPrompt)")
+                
+                // Create completion parameters with direct prompt
+                // System prompt is set when initializing the model
+                params = LlamaMobile.CompletionParams(prompt: prompt)
+                /*
+                if !appState.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    let fullPrompt = "\(appState.systemPrompt)\n\(prompt)"
+                    params = LlamaMobile.CompletionParams(prompt: prompt)
+                } else {
+                    params = LlamaMobile.CompletionParams(prompt: prompt)
+                }
+                */
             }
             
-            // Create completion parameters with structured chat messages
-            // This will format the messages using the chat template internally
-            var params = LlamaMobile.CompletionParams(chatMessages: chatMessages)
-            params.maxTokens = 256
+            // Set common parameters
+            params.maxTokens = 2048
             params.temperature = 0.7
             params.topK = 40
             params.topP = 0.9
@@ -539,235 +523,117 @@ struct ChatView: View {
             params.penaltyRepeat = 1.0
             params.penaltyFreq = 0.0
             params.penaltyPresent = 0.0
-            params.grammar = grammarContent
-
-            // Set stop sequences to match direct prompt approach exactly
+            params.grammar = nil // Never use grammar as requested
             params.stopSequences = ["<|im_end|>"]
-            
-            // Enable JSON response format
-            params.useJsonResponse = true
-            
-            // Log grammar usage for JSON API approach
-            if let grammarContent = params.grammar, !grammarContent.isEmpty {
-                print("[JSON API] Using grammar: \(appState.selectedGrammar ?? "unknown")")
-            } else {
-                print("[JSON API] No grammar being used")
-            }
-            
-            // For debugging, test direct prompt approach when using OpenAI JSON API (commented out)
-            // if useOpenAIJSONAPI {
-            //     print("\n[DEBUG] Calling direct prompt test...")
-            //     testDirectPromptApproach()
-            // }
+            params.useJsonResponse = appState.useJsonResponse
             
             // Log detailed LLM input parameters for debugging
             print("\n==================================================")
             print("[LLM INPUT DETAILS]")
             print("==================================================")
-            print("Using structured chat messages (OpenAI format)")
-            print("Chat Messages Count: \(params.chatMessages.count)")
+            print("Mode: \(appState.useChatMode ? "Chat" : "Direct Prompt")")
+            print("Streaming: \(appState.useStreaming)")
+            print("Template: \(appState.useCustomTemplate ? "Custom Qwen3" : "Built-in")")
+            print("JSON Response: \(appState.useJsonResponse)")
             print("Max Tokens: \(params.maxTokens)")
             print("Temperature: \(params.temperature)")
             print("Top K: \(params.topK)")
             print("Top P: \(params.topP)")
             print("Min P: \(params.minP)")
             print("Penalty Repeat: \(params.penaltyRepeat)")
-            print("Stop Sequences Count: \(params.stopSequences.count)")
-            print("Stop Sequences (exact representation with escaped newlines/tabs):")
-            for (index, sequence) in params.stopSequences.enumerated() {
-                let escapedSequence = sequence
-                    .replacingOccurrences(of: "\n", with: "\\n")
-                    .replacingOccurrences(of: "\t", with: "\\t")
-                print("  \(index): '\(escapedSequence)'")
-            }
-            print("JSON Response Enabled: \(params.useJsonResponse)")
-            print("Chat Messages Count: \(params.chatMessages.count)")
-            print("Grammar Enabled: \(params.grammar != nil)")
-            if let grammar = params.grammar {
-                print("Grammar Content: \(grammar)")
-            } else {
-                print("Grammar Content: nil")
-            }
+            print("Stop Sequences: \(params.stopSequences)")
+            print("Grammar: nil (disabled as requested)")
             print("==================================================")
             
-            // Generate completion based on selected API approach
-            var result: LlamaMobile.CompletionResult?
-            if useOpenAIJSONAPI {
-                // Use OpenAI JSON API approach
-                do {
-                    // Create OpenAI JSON request
-                    let openAIRequest = OpenAIRequest(
-                        model: "", // Model name is not required for local inference
-                        messages: chatMessages.map { OpenAIMessage(role: $0.role, content: $0.content) },
-                        temperature: params.temperature
-                    )
-                    
-                    // Convert to JSON string
-                    let jsonEncoder = JSONEncoder()
-                    let jsonData = try jsonEncoder.encode(openAIRequest)
-                    let openAIJSON = String(data: jsonData, encoding: .utf8)!
-                    
-                    print("\n==================================================")
-                    print("[OPENAI JSON REQUEST] START")
-                    print(openAIJSON)
-                    print("[OPENAI JSON REQUEST] END")
-                    print("==================================================")
-                    
-                    // Use the enhanced generateOpenAICompletion method
-                    if let llamaMobile = appState.llamaMobile {
-                        result = llamaMobile.generateOpenAICompletion(with: openAIJSON, grammar: params.grammar)
-                    }
-                } catch {
-                    print("[DEBUG] Error creating OpenAI JSON request: \(error)")
-                }
-            } else {
-                // Use standard chat completion approach
-                result = appState.llamaMobile?.generateCompletion(with: params)
-            }
-            
-            if let result = result {
-                DispatchQueue.main.async {
-                    // Log stop sequence detection results from completion result
-                    print("\n[STOP SEQUENCE DETAILS]")
-                    print("Stopped due to EOS: \(result.stoppedEos)")
-                    print("Stopped due to stop sequence: \(result.stoppedWord)")
-                    print("Stopped due to max tokens: \(result.stoppedLimit)")
-                    if let stoppingWord = result.stoppingWord {
-                        print("Stopping word detected: \(stoppingWord)")
-                    } else {
-                        print("No stopping word detected")
-                    }
-                    // Log complete raw response from LLM (no parsing)
-                    print("\n" + String(repeating: "=", count: 50))
-                    print("[RAW MODEL RESPONSE] START (length: \(result.text.count) characters)")
-                    print(result.text)
-                    print("[RAW MODEL RESPONSE] END")
-                    print(String(repeating: "=", count: 50) + "\n")
-                    
-                    // Clean and parse the JSON response from LLM
-                    // Clean up response by removing ending tags and stop sequences
-                    var cleanedText = result.text
-                    
-                    // Remove ending tags and stop sequences
-                    cleanedText = cleanedText.replacingOccurrences(of: "<|im_end|>", with: "")
-                    cleanedText = cleanedText.replacingOccurrences(of: "<|endoftext|>", with: "")
-                    
-                    // Remove stop sequences that might still be present
-                    for stopSeq in params.stopSequences {
-                        cleanedText = cleanedText.replacingOccurrences(of: stopSeq, with: "")
-                    }
-                    
-                    // Trim whitespace
-                    var jsonString = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    print("[DEBUG] Cleaned Model Response: \(jsonString)")
-                    
-                    // Initialize assistant response with empty string
-                    var assistantResponse = ""
-                    
-                    // Try simple JSON parsing to extract the response content
-                    if let data = jsonString.data(using: .utf8) {
-                        do {
-                            // First try the format used by chat_example.cpp (text field in choices)
-                            struct ResponseWithTextChoices: Codable {
-                                let choices: [ChoiceWithText]
-                            }
-                            
-                            struct ChoiceWithText: Codable {
-                                let text: String
-                            }
-                            
-                            let response = try JSONDecoder().decode(ResponseWithTextChoices.self, from: data)
-                            if let firstChoice = response.choices.first {
-                                assistantResponse = firstChoice.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                                print("[DEBUG] Successfully parsed JSON with choices.text")
-                            }
-                        } catch {
-                            // Try standard OpenAI response format
-                            do {
-                                let response = try JSONDecoder().decode(OpenAIResponse.self, from: data)
-                                if let lastChoice = response.choices.last, 
-                                   lastChoice.message.role == "assistant" {
-                                    // Handle both new array format and legacy string format
-                                    if let contentArray = lastChoice.message.content {
-                                        // Extract text from content array
-                                        let textContent = contentArray.compactMap { $0.text }.joined(separator: " ")
-                                        assistantResponse = textContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                                    } else if let legacyContent = lastChoice.message.legacyContent {
-                                        // Use legacy string content
-                                        assistantResponse = legacyContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                                    }
-                                    print("[DEBUG] Successfully parsed standard OpenAI response")
-                                }
-                            } catch {
-                                // Try parsing as single message
-                                do {
-                                    let message = try JSONDecoder().decode(OpenAIMessage.self, from: data)
-                                    
-                                    // Handle both new array format and legacy string format
-                                    if let contentArray = message.content {
-                                        // Extract text from content array
-                                        let textContent = contentArray.compactMap { $0.text }.joined(separator: " ")
-                                        assistantResponse = textContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                                    } else if let legacyContent = message.legacyContent {
-                                        // Use legacy string content
-                                        assistantResponse = legacyContent.trimmingCharacters(in: .whitespacesAndNewlines)
-                                    }
-                                    
-                                    print("[DEBUG] Successfully parsed single message format")
-                                } catch {
-                                    print("[DEBUG] All JSON parsing attempts failed: \(error)")
-                                }
-                            }
+            // Generate completion based on Streaming switch
+            if appState.useStreaming {
+                // Use streaming generation
+                print("[INFO] Using streaming generation")
+                
+                // Create a variable to accumulate the response
+                var accumulatedResponse = ""
+                var isFirstToken = true
+                
+                // Set up token callback for streaming
+                params.tokenCallback = { token in
+                    DispatchQueue.main.async {
+                        if isFirstToken {
+                            // Add initial assistant message
+                            self.messages.append(Message(role: "assistant", text: ""))
+                            isFirstToken = false
+                        }
+                        
+                        // Update the last message with the new token
+                        if var lastMessage = self.messages.last, lastMessage.role == "assistant" {
+                            lastMessage.text += token
+                            self.messages[self.messages.count - 1] = lastMessage
                         }
                     }
-                    
-                    // If no response was extracted, try simple regex fallback
-                    if assistantResponse.isEmpty {
-                        // Try to extract text field
-                        let textPattern = #""text"\s*:\s*"([^"]+)"#
-                        if let textMatch = jsonString.range(of: textPattern, options: .regularExpression) {
-                            let textContent = String(jsonString[textMatch])
-                            if let valueStart = textContent.range(of: ": \""), 
-                               let valueEnd = textContent.range(of: "\"", options: [], range: valueStart.upperBound..<textContent.endIndex) {
-                                assistantResponse = String(textContent[valueStart.upperBound..<valueEnd.lowerBound])
-                                print("[DEBUG] Extracted text via regex fallback")
-                            }
-                        } else if jsonString.contains("content") {
-                            // Try to extract content field
-                            let contentPattern = #""content"\s*:\s*"([^"]+)"#
-                            if let contentMatch = jsonString.range(of: contentPattern, options: .regularExpression) {
-                                let contentContent = String(jsonString[contentMatch])
-                                if let valueStart = contentContent.range(of: ": \""), 
-                                   let valueEnd = contentContent.range(of: "\"", options: [], range: valueStart.upperBound..<contentContent.endIndex) {
-                                    assistantResponse = String(contentContent[valueStart.upperBound..<valueEnd.lowerBound])
-                                    print("[DEBUG] Extracted content via regex fallback")
-                                }
-                            }
-                        }
+                    accumulatedResponse += token
+                    return true // Continue streaming
+                }
+                
+                // Generate completion with streaming
+                let result = appState.llamaMobile?.generateCompletion(with: params)
+                
+                if let result = result {
+                    print("[INFO] Streaming completed successfully")
+                } else {
+                    print("[ERROR] Streaming generation failed")
+                    DispatchQueue.main.async {
+                        self.appState.errorMessage = "Failed to generate response"
                     }
-                    
-                    // If still no response, use cleaned raw text as final fallback
-                    if assistantResponse.isEmpty {
-                        assistantResponse = cleanedText
-                        print("[DEBUG] Using cleaned raw text as final fallback")
-                    }
-                    
-                    // Clean the final response by removing any remaining stop sequences
-                    for stopSeq in params.stopSequences {
-                        assistantResponse = assistantResponse.replacingOccurrences(of: stopSeq, with: "")
-                    }
-                    assistantResponse = assistantResponse.trimmingCharacters(in: .whitespacesAndNewlines)
-                    
-                    // Always append the message to UI - this is the critical part!
-                    print("[DEBUG] Final assistant response: \(assistantResponse)")
-                    print("[DEBUG] Current messages count before append: \(self.messages.count)")
-                    self.messages.append(Message(role: "assistant", text: assistantResponse))
-                    print("[DEBUG] Current messages count after append: \(self.messages.count)")
-                    print("[DEBUG] Last message: \(self.messages.last?.text ?? "nil")")
                 }
             } else {
-                DispatchQueue.main.async {
-                    self.appState.errorMessage = "Failed to generate response"
+                // Use normal generation
+                print("[INFO] Using normal generation")
+                
+                // Generate completion without streaming
+                if let result = appState.llamaMobile?.generateCompletion(with: params) {
+                    DispatchQueue.main.async {
+                        // Log stop sequence detection results from completion result
+                        print("\n[STOP SEQUENCE DETAILS]")
+                        print("Stopped due to EOS: \(result.stoppedEos)")
+                        print("Stopped due to stop sequence: \(result.stoppedWord)")
+                        print("Stopped due to max tokens: \(result.stoppedLimit)")
+                        if let stoppingWord = result.stoppingWord {
+                            print("Stopping word detected: \(stoppingWord)")
+                        } else {
+                            print("No stopping word detected")
+                        }
+                        // Log complete raw response from LLM
+                        print("\n" + String(repeating: "=", count: 50))
+                        print("[RAW MODEL RESPONSE] START (length: \(result.text.count) characters)")
+                        print(result.text)
+                        print("[RAW MODEL RESPONSE] END")
+                        print(String(repeating: "=", count: 50) + "\n")
+                        
+                        // Clean response by removing ending tags and stop sequences
+                        var cleanedText = result.text
+                        
+                        // Remove ending tags and stop sequences
+                        cleanedText = cleanedText.replacingOccurrences(of: "<|im_end|>", with: "")
+                        cleanedText = cleanedText.replacingOccurrences(of: "<|endoftext|>", with: "")
+                        
+                        // Remove stop sequences that might still be present
+                        for stopSeq in params.stopSequences {
+                            cleanedText = cleanedText.replacingOccurrences(of: stopSeq, with: "")
+                        }
+                        
+                        // Trim whitespace
+                        let assistantResponse = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        
+                        // Always append the message to UI
+                        print("[DEBUG] Final assistant response: \(assistantResponse)")
+                        print("[DEBUG] Current messages count before append: \(self.messages.count)")
+                        self.messages.append(Message(role: "assistant", text: assistantResponse))
+                        print("[DEBUG] Current messages count after append: \(self.messages.count)")
+                        print("[DEBUG] Last message: \(self.messages.last?.text ?? "nil")")
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        self.appState.errorMessage = "Failed to generate response"
+                    }
                 }
             }
         } catch {
@@ -784,274 +650,7 @@ struct ChatView: View {
             }
         }
     }
-    
-    func testDirectPromptApproach() {
-        // Test a direct prompt approach with manually formatted Qwen3 template
-        print("\n==================================================")
-        print("[DIRECT PROMPT APPROACH DEMO]")
-        print("==================================================")
-        
-        // Manually format the prompt using Qwen3 template
-        let systemMessage = "You are a helpful assistant."
-        let userMessage = "Hello"
-        
-        // Log the template being used
-        let qwen3Template = "<|im_start|>{{role}}\n{{content}}<|im_end|>\n"
-        print("[DIRECT PROMPT] Using chat template: \(qwen3Template)")
-        
-        let formattedPrompt = "<|im_start|>system\n\(systemMessage)<|im_end|>\n<|im_start|>user\n\(userMessage)<|im_end|>\n<|im_start|>assistant\n"
-        
-        print("[DEMO] Direct formatted prompt:")
-        print(formattedPrompt)
-        print("[DEMO] Prompt length: \(formattedPrompt.count) characters")
-        
-        // Create completion parameters with direct prompt
-        var params = LlamaMobile.CompletionParams(prompt: formattedPrompt)
-        params.maxTokens = 256
-        params.temperature = 0.7
-        params.topK = 40
-        params.topP = 0.9
-        params.minP = 0.1
-        params.penaltyRepeat = 1.0
-        params.stopSequences = ["<|im_end|>"]
-        params.useJsonResponse = false // Don't use JSON response for this test
-        
-        // Generate completion
-        if let result = appState.llamaMobile?.generateCompletion(with: params) {
-            print("\n[DEMO] Direct Prompt Response:")
-            print(result.text)
-            print("[DEMO] Response length: \(result.text.count) characters")
-            print("[DEMO] Tokens evaluated: \(result.tokensEvaluated)")
-            print("[DEMO] Tokens generated: \(result.tokensGenerated)")
-        } else {
-            print("[DEMO] Failed to generate response using direct prompt approach")
-        }
-        
-        print("==================================================")
-        print("[DIRECT PROMPT APPROACH DEMO END]")
-        print("==================================================\n")
-    }
-    
-    // Define OpenAI message structure for proper JSON encoding/decoding
-    struct OpenAIMessage: Codable {
-        let role: String
-        let content: [OpenAIContent]?
-        let legacyContent: String? // For backward compatibility with simple string content
-        
-        // Custom decoder to handle both array and string content formats
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            role = try container.decode(String.self, forKey: .role)
-            
-            // Try to decode as array first (multimodal format)
-            do {
-                content = try container.decode([OpenAIContent].self, forKey: .content)
-                legacyContent = nil
-            } catch {
-                // If that fails, try to decode as string (legacy format)
-                do {
-                    legacyContent = try container.decode(String.self, forKey: .content)
-                    content = nil
-                } catch {
-                    // If both fail, throw error
-                    throw error
-                }
-            }
-        }
-        
-        // Custom encoder to handle both formats
-        func encode(to encoder: Encoder) throws {
-            var container = encoder.container(keyedBy: CodingKeys.self)
-            try container.encode(role, forKey: .role)
-            
-            if let content = content {
-                try container.encode(content, forKey: .content)
-            } else if let legacyContent = legacyContent {
-                try container.encode(legacyContent, forKey: .content)
-            }
-        }
-        
-        // For creating messages manually
-        init(role: String, content: String) {
-            self.role = role
-            self.content = nil
-            self.legacyContent = content
-        }
-        
-        // For creating multimodal messages
-        init(role: String, content: [OpenAIContent]) {
-            self.role = role
-            self.content = content
-            self.legacyContent = nil
-        }
-        
-        private enum CodingKeys: String, CodingKey {
-            case role
-            case content
-        }
-    }
-    
-    struct OpenAIContent: Codable {
-        let type: String
-        let text: String?
-        let imageUrl: String?
-        
-        private enum CodingKeys: String, CodingKey {
-            case type
-            case text
-            case imageUrl = "image_url"
-        }
-    }
-    
-    // Define OpenAI request structure
-    struct OpenAIRequest: Codable {
-        let model: String
-        let messages: [OpenAIMessage]
-        let temperature: Double
-    }
-    
-    // Define OpenAI standard response structure (choices array format)
-    struct OpenAIResponse: Codable {
-        let choices: [OpenAIChoice]
-    }
-    
-    struct OpenAIChoice: Codable {
-        let message: OpenAIMessage
-    }
-    
-    // Extract assistant content from malformed JSON using regex
-    func extractAssistantContent(from text: String) -> String? {
-        // Try multiple patterns to extract meaningful content
-        
-        // Pattern 1: Find assistant role with multimodal content array
-        let assistantMultimodalPattern = "role\\s*:\\s*\"assistant\"[^\\}]*\"content\"\\s*:\\s*\\[([^\\]]+)\\]"
-        
-        // Pattern 2: Find text content in multimodal array
-        let multimodalTextPattern = "\\{\\s*\"type\"\\s*:\\s*\"text\"\\s*,\\s*\"text\"\\s*:\\s*\"([^\"]+)\""
-        
-        // Pattern 3: Find assistant role with legacy string content field
-        let assistantLegacyPattern = "role\\s*:\\s*\"assistant\"[^\\}]*\"content\"\\s*:\\s*\"([^\"]+)\""
-        
-        // Pattern 4: Find any role with content or input field (handles incorrect user role from LLM)
-        let anyContentPattern = "(content|input)\\s*:\\s*\"([^\"]+)\""
-        
-        // First try to find assistant content in multimodal format
-        if let range = text.range(of: assistantMultimodalPattern, options: .regularExpression) {
-            let match = String(text[range])
-            
-            // Extract text from the multimodal content array
-            if let textRange = match.range(of: multimodalTextPattern, options: .regularExpression) {
-                let textMatch = String(match[textRange])
-                
-                // Extract the text value
-                let textValuePattern = "\"text\"\\s*:\\s*\"([^\"]+)\""
-                if let valueRange = textMatch.range(of: textValuePattern, options: .regularExpression) {
-                    let valueMatch = String(textMatch[valueRange])
-                    if let startIndex = valueMatch.range(of: ": \"")?.upperBound,
-                       let endIndex = valueMatch.range(of: "\"", options: [], range: startIndex..<valueMatch.endIndex)?.lowerBound {
-                        return String(valueMatch[startIndex..<endIndex])
-                    }
-                }
-            }
-        }
-        
-        // If no multimodal content found, try legacy assistant content format
-        if let range = text.range(of: assistantLegacyPattern, options: .regularExpression) {
-            let match = String(text[range])
-            
-            // Extract content from the matched string
-            let contentPattern = "\"content\"\\s*:\\s*\"([^\"]+)\""
-            if let contentRange = match.range(of: contentPattern, options: .regularExpression) {
-                let contentMatch = String(match[contentRange])
-                
-                // Remove "content": " prefix and trailing "
-                if let startIndex = contentMatch.range(of: ": \"")?.upperBound,
-                   let endIndex = contentMatch.range(of: "\"", options: [], range: startIndex..<contentMatch.endIndex)?.lowerBound {
-                    return String(contentMatch[startIndex..<endIndex])
-                }
-            }
-        }
-        
-        // If assistant content not found, try to find any content or input field
-        if let range = text.range(of: anyContentPattern, options: .regularExpression) {
-            let match = String(text[range])
-            
-            // Extract value from the matched string
-            let valuePattern = "\\s*:\\s*\"([^\"]+)\""
-            if let valueRange = match.range(of: valuePattern, options: .regularExpression) {
-                let valueMatch = String(match[valueRange])
-                
-                // Remove : " prefix and trailing "
-                if let startIndex = valueMatch.range(of: ": \"")?.upperBound,
-                   let endIndex = valueMatch.range(of: "\"", options: [], range: startIndex..<valueMatch.endIndex)?.lowerBound {
-                    return String(valueMatch[startIndex..<endIndex])
-                }
-            }
-        }
-        
-        return nil
-    }
-    
-    func buildConversationHistory() -> String {
-        // Create messages array following OpenAI format
-        var messagesArray: [OpenAIMessage] = []
-        
-        // Add system message
-        messagesArray.append(OpenAIMessage(
-            role: "system",
-            content: appState.systemPrompt
-        ))
-        
-        // Add all conversation messages
-        for message in messages {
-            messagesArray.append(OpenAIMessage(
-                role: message.role,
-                content: message.text
-            ))
-        }
-        
-        // Create complete OpenAI request format
-        let openAIRequest = OpenAIRequest(
-            model: "gpt-4o",
-            messages: messagesArray,
-            temperature: 0.7
-        )
-        
-        // Convert to JSON string using JSONEncoder
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .withoutEscapingSlashes
-            let jsonData = try encoder.encode(openAIRequest)
-            if let jsonString = String(data: jsonData, encoding: .utf8) {
-                // Log the full OpenAI format input being sent to LLM
-                print("[DEBUG] OpenAI Format Input: \(jsonString)")
-                return jsonString
-            }
-        } catch {
-            print("Error encoding JSON: \(error)")
-        }
-        
-        // Fallback to complete JSON format if encoding fails
-        var fallbackBuilder = "{\"model\": \"gpt-4o\", \"messages\": ["
-        
-        // Add system message to fallback
-        let escapedSystemContent = appState.systemPrompt.replacingOccurrences(of: "\"", with: "\\\"")
-        fallbackBuilder.append("{\"role\": \"system\", \"content\": \"\(escapedSystemContent)\"}")
-        
-        // Add conversation history to fallback
-        for (index, message) in messages.enumerated() {
-            fallbackBuilder.append(",")
-            let escapedContent = message.text.replacingOccurrences(of: "\"", with: "\\\"")
-            fallbackBuilder.append("{\"role\": \"\(message.role)\", \"content\": \"\(escapedContent)\"}")
-        }
-        
-        // Complete fallback JSON
-        fallbackBuilder.append("], \"temperature\": 0.7}")
-        
-        print("[DEBUG] OpenAI Format Input (Fallback): \(fallbackBuilder)")
-        return fallbackBuilder
-    }
-}
+}    
 
 // Message Bubble View Component
 struct MessageBubble: View {
@@ -1095,7 +694,7 @@ struct MessageBubble: View {
 // Settings View
 struct SettingsView: View {
     @ObservedObject var appState: AppState
-    @State private var nGpuLayers = 8
+    @State private var nGpuLayers = 99
     @State private var nThreads = 4
     @State private var nCtx = 2048
     
@@ -1157,10 +756,23 @@ struct SettingsView: View {
                     .pickerStyle(.menu)
                     .disabled(appState.isModelLoaded)
                     
+                    // Template Toggle
+                    HStack {
+                        Text("Custom Template:")
+                        Spacer()
+                        Toggle(isOn: $appState.useCustomTemplate) {}
+                            .tint(.blue)
+                    }
+                    .disabled(appState.isModelLoaded)
+                    
+                    Text("Note: Template changes require reloading the model")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    
                     HStack {
                         Text("GPU Layers")
                         Spacer()
-                        Stepper(value: $nGpuLayers, in: 0...16, step: 1) {
+                        Stepper(value: $nGpuLayers, in: 0...99, step: 1) {
                             Text("\(nGpuLayers)")
                                 .frame(width: 50, alignment: .trailing)
                         }
@@ -1226,6 +838,19 @@ struct SettingsView: View {
                         .cornerRadius(8)
                         .disabled(appState.isModelLoaded)
                     
+                    // Chat Mode Toggle
+                    HStack {
+                        Text("Chat Mode:")
+                        Spacer()
+                        Toggle(isOn: $appState.useChatMode) {}
+                            .tint(.blue)
+                    }
+                    .disabled(appState.isModelLoaded)
+                    
+                    Text("Note: Chat mode changes require reloading the model")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    
                     Text("Note: System prompt changes require reloading the model")
                         .font(.caption)
                         .foregroundColor(.gray)
@@ -1287,6 +912,15 @@ struct SettingsView: View {
         initParams.embedding = appState.enableEmbedding
         initParams.poolingType = 0 // Mean pooling
         initParams.embdNormalize = 1 // Normalize embeddings
+        initParams.systemPrompt = appState.systemPrompt
+        
+        // Set custom chat template if Template switch is on
+        if appState.useCustomTemplate {
+            initParams.chatTemplate = appState.qwen3Template
+            print("[INFO] Using custom Qwen3 chat template")
+        } else {
+            print("[INFO] Using model's built-in chat template")
+        }
         
         // Increase batch sizes for TTS support (to handle large audio token batches)
         initParams.nBatch = 1024 // Increase from default 512
@@ -1297,17 +931,7 @@ struct SettingsView: View {
         
         appState.llamaMobile = LlamaMobile(with: initParams)
         
-        // App-level fallback logic: if model has no built-in template, use Qwen3 template
         if let llamaMobile = appState.llamaMobile {
-            // Check if model has built-in template by trying to use it for a test message
-            // Since we can't directly get the built-in template from Swift, we'll check if chatTemplate is nil
-            // If it's nil, we'll set the Qwen3 template as fallback
-            if llamaMobile.chatTemplate == nil {
-                print("[INFO] No built-in template found, using Qwen3 template as fallback")
-                llamaMobile.setChatTemplate("<|im_start|>{{role}}\n{{content}}<|im_end|>\n")
-            } else {
-                print("[INFO] Using model's built-in chat template")
-            }
             // Initialize multimodal if mmproj path is provided
             if !appState.mmprojModelPath.isEmpty && FileManager.default.fileExists(atPath: appState.mmprojModelPath) {
                 let success = appState.llamaMobile?.initMultimodal(mmprojPath: appState.mmprojModelPath, useGpu: nGpuLayers > 0)

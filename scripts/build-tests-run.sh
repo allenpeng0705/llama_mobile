@@ -59,7 +59,12 @@ select_model() {
 select_program() {
     echo -e "${BLUE}Select program to run:${NC}"
     echo -e "  1. test_api (API test program)"
-    echo -e "  2. chat_example (Interactive chat)"
+    echo -e "  2. test_advanced_chat (Advanced chat features test)"
+    echo -e "  3. test_chat_template (Chat template test)"
+    echo -e "  4. test_streaming (Streaming test)"
+    echo -e "  5. test_download (Download test)"
+    echo -e "  6. direct_test (Direct API test)"
+    echo -e "  7. chat_example (Interactive chat)"
     echo
     
     read -p "Enter selection: " PROGRAM_SELECTION
@@ -70,6 +75,26 @@ select_program() {
             echo -e "${GREEN}✓ Selected: test_api${NC}"
             ;;
         2)
+            PROGRAM="test_advanced_chat"
+            echo -e "${GREEN}✓ Selected: test_advanced_chat${NC}"
+            ;;
+        3)
+            PROGRAM="test_chat_template"
+            echo -e "${GREEN}✓ Selected: test_chat_template${NC}"
+            ;;
+        4)
+            PROGRAM="test_streaming"
+            echo -e "${GREEN}✓ Selected: test_streaming${NC}"
+            ;;
+        5)
+            PROGRAM="test_download"
+            echo -e "${GREEN}✓ Selected: test_download${NC}"
+            ;;
+        6)
+            PROGRAM="direct_test"
+            echo -e "${GREEN}✓ Selected: direct_test${NC}"
+            ;;
+        7)
             PROGRAM="chat_example"
             echo -e "${GREEN}✓ Selected: chat_example${NC}"
             ;;
@@ -89,7 +114,7 @@ run_program() {
     echo -e "${YELLOW}====================================${NC}"
     
     # Run the program with the selected model path
-    if [ "$PROGRAM" = "chat_example" ] || [ "$PROGRAM" = "test_api" ]; then
+    if [ "$PROGRAM" = "chat_example" ] || [ "$PROGRAM" = "test_api" ] || [ "$PROGRAM" = "test_advanced_chat" ] || [ "$PROGRAM" = "test_chat_template" ] || [ "$PROGRAM" = "test_streaming" ] || [ "$PROGRAM" = "test_download" ] || [ "$PROGRAM" = "direct_test" ]; then
         # Pass the model path directly to these programs
         ./$PROGRAM "$SELECTED_MODEL"
     else

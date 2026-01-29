@@ -100,6 +100,62 @@ class LlamaMobile {
     }
     return null;
   }
+
+  /// Lists files in a directory
+  Future<Map<String, dynamic>?> listFiles(String directoryPath) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.listFiles(
+      directoryPath,
+    );
+  }
+
+  /// Lists available models
+  Future<Map<String, dynamic>?> listModels() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.listModels();
+  }
+
+  /// Downloads a file from Hugging Face
+  Future<DownloadResult?> downloadHfFile({
+    required String repoId,
+    required String filename,
+    required String localPath,
+    String? bearerToken,
+    bool? offline,
+  }) async {
+    final params = {
+      'repoId': repoId,
+      'filename': filename,
+      'localPath': localPath,
+      'bearerToken': bearerToken,
+      'offline': offline,
+    };
+
+    final result = await LlamaMobileFlutterSdkPlatform.instance.downloadHfFile(
+      params,
+    );
+    if (result != null) {
+      return DownloadResult(
+        success: result['success'] as bool,
+        localPath: result['localPath'] as String,
+        errorMessage: result['errorMessage'] as String?,
+      );
+    }
+    return null;
+  }
+
+  /// Gets JSON grammar
+  Future<String?> getJsonGrammar() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.getJsonGrammar();
+  }
+
+  /// Gets arithmetic grammar
+  Future<String?> getArithmeticGrammar() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.getArithmeticGrammar();
+  }
+
+  /// Gets C grammar
+  Future<String?> getCGrammar() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.getCGrammar();
+  }
 }
 
 /// Represents a LlamaMobile context
@@ -111,6 +167,16 @@ class LlamaContext {
 
   /// Gets the context handle
   int get handle => _contextHandle;
+
+  /// Stream of tokens as they are generated
+  Stream<String> get onTokenStream {
+    return LlamaMobileFlutterSdkPlatform.instance.onTokenStream;
+  }
+
+  /// Stream of progress values during generation
+  Stream<double> get onProgressStream {
+    return LlamaMobileFlutterSdkPlatform.instance.onProgressStream;
+  }
 
   /// Frees the context
   Future<bool> free() async {
@@ -141,12 +207,223 @@ class LlamaContext {
     return null;
   }
 
-  /// Sets the chat template
-  Future<bool> setChatTemplate(String? template) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.setChatTemplate(
+  /// Generates a streaming completion using OpenAI-compatible JSON format
+  Future<CompletionResult?> generateStreamingOpenAICompletion({
+    required String openAIJSON,
+    String? grammar,
+  }) async {
+    final result = await LlamaMobileFlutterSdkPlatform.instance
+        .generateStreamingOpenAICompletion(_contextHandle, openAIJSON, grammar);
+    if (result != null) {
+      return CompletionResult(
+        text: result['text'] as String,
+        tokensGenerated: result['tokensGenerated'] as int,
+        tokensEvaluated: result['tokensEvaluated'] as int,
+        truncated: result['truncated'] as bool,
+        stoppedEos: result['stoppedEos'] as bool,
+        stoppedWord: result['stoppedWord'] as bool,
+        stoppedLimit: result['stoppedLimit'] as bool,
+        stoppingWord: result['stoppingWord'] as String?,
+      );
+    }
+    return null;
+  }
+
+  /// Generates a streaming completion from the given prompt
+  Future<CompletionResult?> generateStreamingCompletion({
+    required String prompt,
+    int maxTokens = 128,
+    int? nThreads,
+    int seed = -1,
+    double temperature = 0.8,
+    int topK = 40,
+    double topP = 0.95,
+    double minP = 0.05,
+    double typicalP = 1.0,
+    int penaltyLastN = 64,
+    double penaltyRepeat = 1.1,
+    double penaltyFreq = 0.0,
+    double penaltyPresent = 0.0,
+    int mirostat = 0,
+    double mirostatTau = 5.0,
+    double mirostatEta = 0.1,
+    bool ignoreEos = false,
+    List<String> stopSequences = const [],
+    String? grammar,
+    bool useJsonResponse = false,
+    String? chatTemplate,
+  }) async {
+    final params = {
+      'prompt': prompt,
+      'maxTokens': maxTokens,
+      'nThreads': nThreads,
+      'seed': seed,
+      'temperature': temperature,
+      'topK': topK,
+      'topP': topP,
+      'minP': minP,
+      'typicalP': typicalP,
+      'penaltyLastN': penaltyLastN,
+      'penaltyRepeat': penaltyRepeat,
+      'penaltyFreq': penaltyFreq,
+      'penaltyPresent': penaltyPresent,
+      'mirostat': mirostat,
+      'mirostatTau': mirostatTau,
+      'mirostatEta': mirostatEta,
+      'ignoreEos': ignoreEos,
+      'stopSequences': stopSequences,
+      'grammar': grammar,
+      'useJsonResponse': useJsonResponse,
+      'chatTemplate': chatTemplate,
+    };
+
+    final result = await LlamaMobileFlutterSdkPlatform.instance
+        .generateStreamingCompletion(_contextHandle, params);
+    if (result != null) {
+      return CompletionResult.fromMap(result);
+    }
+    return null;
+  }
+
+  /// Stops the current completion generation
+  Future<bool> stopCompletion() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.stopCompletion(
       _contextHandle,
-      template,
     );
+  }
+
+  /// Gets the list of loaded LoRA adapters
+  Future<List<Map<String, dynamic>>?> getLoadedLoraAdapters() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.getLoadedLoraAdapters(
+      _contextHandle,
+    );
+  }
+
+  /// Gets the context window size
+  Future<int?> getContextWindowSize() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.getContextWindowSize(
+      _contextHandle,
+    );
+  }
+
+  /// Gets the embedding dimension
+  Future<int?> getEmbeddingDimension() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.getEmbeddingDimension(
+      _contextHandle,
+    );
+  }
+
+  /// Gets the model description
+  Future<String?> getModelDescription() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.getModelDescription(
+      _contextHandle,
+    );
+  }
+
+  /// Gets the model size in bytes
+  Future<int?> getModelSize() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.getModelSize(
+      _contextHandle,
+    );
+  }
+
+  /// Gets the model parameters count
+  Future<int?> getModelParametersCount() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.getModelParametersCount(
+      _contextHandle,
+    );
+  }
+
+  /// Lists files in a directory
+  Future<Map<String, dynamic>?> listFiles(String directoryPath) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.listFiles(
+      directoryPath,
+    );
+  }
+
+  /// Lists available models
+  Future<Map<String, dynamic>?> listModels() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.listModels();
+  }
+
+  /// Downloads a file from Hugging Face
+  Future<DownloadResult?> downloadHfFile({
+    required String repoId,
+    required String filename,
+    required String localPath,
+    String? bearerToken,
+    bool? offline,
+  }) async {
+    final params = {
+      'repoId': repoId,
+      'filename': filename,
+      'localPath': localPath,
+      'bearerToken': bearerToken,
+      'offline': offline,
+    };
+
+    final result = await LlamaMobileFlutterSdkPlatform.instance.downloadHfFile(
+      params,
+    );
+    if (result != null) {
+      return DownloadResult(
+        success: result['success'] as bool,
+        localPath: result['localPath'] as String,
+        errorMessage: result['errorMessage'] as String?,
+      );
+    }
+    return null;
+  }
+
+  /// Gets JSON grammar
+  Future<String?> getJsonGrammar() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.getJsonGrammar();
+  }
+
+  /// Gets arithmetic grammar
+  Future<String?> getArithmeticGrammar() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.getArithmeticGrammar();
+  }
+
+  /// Gets C grammar
+  Future<String?> getCGrammar() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.getCGrammar();
+  }
+
+  /// Checks if multimodal is enabled
+  Future<bool> isMultimodalEnabled() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.isMultimodalEnabled(
+      _contextHandle,
+    );
+  }
+
+  /// Checks if vision is supported
+  Future<bool> supportsVision() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.supportsVision(
+      _contextHandle,
+    );
+  }
+
+  /// Checks if audio is supported
+  Future<bool> supportsAudio() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.supportsAudio(
+      _contextHandle,
+    );
+  }
+
+  /// Checks if vocoder is enabled
+  Future<bool> isVocoderEnabled() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.isVocoderEnabled(
+      _contextHandle,
+    );
+  }
+
+  /// Gets the TTS type
+  Future<TTSModelType> getTTSType() async {
+    final result = await LlamaMobileFlutterSdkPlatform.instance.getTTSType(
+      _contextHandle,
+    );
+    return TTSModelType.fromRawValue(result ?? -1);
   }
 
   /// Generates a text completion from the given prompt.

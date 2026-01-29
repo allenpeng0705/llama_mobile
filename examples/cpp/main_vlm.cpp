@@ -11,7 +11,7 @@ int main(int argc, char **argv) {
     // Local VLM models from top-level models directory
     const std::string local_model_path = "../../models/SmolVLM-256M-Instruct-Q8_0.gguf";
     const std::string local_mmproj_path = "../../models/mmproj-SmolVLM-256M-Instruct-Q8_0.gguf";
-    const std::string image_path = "../files/image.jpg";
+    const std::string image_path = "files/image.jpg";
 
     // Fallback download URLs if local models are not available
     const std::string default_model_url = "https://huggingface.co/ggml-org/SmolVLM-256M-Instruct-GGUF/resolve/main/SmolVLM-256M-Instruct-Q8_0.gguf";

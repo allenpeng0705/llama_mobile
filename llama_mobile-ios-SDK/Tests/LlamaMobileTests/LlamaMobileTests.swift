@@ -345,7 +345,8 @@ final class LlamaMobileTests: XCTestCase {
             truncated: false,
             stoppedEos: true,
             stoppedWord: false,
-            stoppedLimit: false
+            stoppedLimit: false,
+            stoppingWord: nil
         )
         XCTAssertEqual(completionResult.text, "Test response")
         XCTAssertEqual(completionResult.tokensGenerated, 10)

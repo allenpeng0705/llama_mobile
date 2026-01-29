@@ -96,6 +96,7 @@ llama_mobile_context_handle_t llama_mobile_init_context_c(const llama_mobile_ini
         cpp_params.embedding = params->embedding;
         cpp_params.pooling_type = static_cast<enum llama_pooling_type>(params->pooling_type);
         cpp_params.embd_normalize = params->embd_normalize;
+        context->params.enable_chat_template = params->enable_chat_template;
 
         if (params->cache_type_k) {
              std::cout << "[FFI] Processing cache_type_k: " << params->cache_type_k << std::endl;
@@ -193,6 +194,12 @@ int llama_mobile_completion_c(
              context->params.sampling.grammar = params->grammar;
         }
         
+        // Advanced parameters for Jinja template engine
+        context->params.json_schema = params->json_schema ? params->json_schema : "";
+        context->params.tools = params->tools ? params->tools : "";
+        context->params.parallel_tool_calls = params->parallel_tool_calls;
+        context->params.tool_choice = params->tool_choice ? params->tool_choice : "";
+
         // Handle chat messages if provided
         context->params.chat_messages.clear();
         if (params->chat_messages && params->chat_message_count > 0) {

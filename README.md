@@ -31,432 +31,32 @@ A lightweight, high-performance framework for running AI models on mobile device
 
 llama_mobile is a mobile-first AI framework that brings the power of llama.cpp to various mobile platforms and development frameworks. The project focuses on providing native SDKs and plugins for seamless integration of large language models (LLMs) into mobile and web applications.
 
-## Text-to-Speech (TTS) Support
+## Current Status
 
-llama_mobile provides comprehensive TTS capabilities for generating speech from text. Here's how to use the TTS APIs effectively:
+The project is currently in active development with the following components completed:
 
-### Basic TTS Workflow
+- ✅ Core C++ library (based on llama.cpp)
+- ✅ iOS framework
+- ✅ Android library (llama_mobile-android)
+- ✅ Android SDK wrapper (llama_mobile-android-SDK)
+- ✅ Basic test infrastructure
+- ✅ Build scripts for core library, iOS, Android, and Flutter
+- ✅ Example apps for iOS, Android, and Flutter
+- ✅ Flutter plugin (llama_mobile-flutter-SDK)
 
-1. **Load Models**: Load both the main TTS model and the vocoder model
-2. **Text Formatting**: Format your text for TTS generation
-3. **Token Generation**: Generate tokens from the formatted text
-4. **Token Filtering**: **Important!** Filter to include only audio tokens
-5. **Audio Decoding**: Decode the audio tokens to raw audio samples
-6. **Save/Play Audio**: Save the audio to a WAV file or play it directly
+Planned development:
 
-### Important: Token Filtering
+- ⏳ ReactNative plugin
+- ⏳ Capacitor plugin
 
-A critical step in the TTS workflow that's easy to overlook: **only send audio tokens to the decoder**.
+## Supported Models
 
-**Audio Token Range**: 151672-155772
-**Audio End Token**: 151668 `<|audio_end|>`
+The framework supports various GGUF model types:
 
-```cpp
-// Example token filtering (from C++ example)
-for (token in generated_tokens) {
-    // Check if token is in audio range
-    if (token >= 151672 && token <= 155772) {
-        audio_tokens.push_back(token);
-    }
-    
-    // Check for end token
-    if (token == 151668) {
-        break; // Found audio end token
-    }
-}
-```
-
-**Why this matters**: Sending non-audio tokens to the decoder will cause crashes or invalid audio output.
-
-### Important: Batch Size Configuration
-
-When working with TTS, you may encounter this error:
-```
-LM_GGML_ASSERT(cparams.n_ubatch >= n_tokens && "encoder requires n_ubatch >= n_tokens")
-```
-
-**Solution**: Increase the `nUBatch` parameter when initializing the model:
-
-```swift
-// iOS example
-var initParams = LlamaMobile.InitParams(modelPath: modelPath)
-initParams.nUBatch = 1024 // Increase to handle large audio token batches
-```
-
-**Why this matters**: TTS models often generate large batches of audio tokens (500-1000+), and the unbounded batch size (`nUBatch`) must be larger than or equal to the number of generated audio tokens.
-
-### Example Implementations
-
-- **C++**: `examples/cpp/main_tts.cpp` - Full TTS workflow with token filtering
-- **iOS**: `examples/iOSSDKExample` - Swift implementation with token filtering
-
-### Key TTS Functions
-
-- `generateAudioFromText()`: Single-call TTS generation (handles all steps internally)
-- `formatTextForAudioCompletion()`: Format text for TTS
-- `getAudioCompletionGuideTokens()`: Get guide tokens for better TTS quality
-- `decodeAudioTokens()`: Decode audio tokens to samples (requires filtered tokens)
-- `saveAudioToWav()`: Save audio samples to WAV file
-
-### Important: Guide Tokens
-
-Guide tokens are a critical feature for improving TTS quality and preventing unexpected audio output. They help the model focus on generating audio for your actual text rather than template content.
-
-**What are guide tokens?**
-- Special tokens that guide the TTS model to focus on your input text
-- Prevent the model from speaking template/example content
-- Available through `getAudioCompletionGuideTokens()` function
-
-**How to use guide tokens (C++ example):**
-```cpp
-// Get guide tokens for your text
-std::vector<llama_token> guide_tokens = context.getAudioCompletionGuideTokens(text_to_speak);
-// Set guide tokens before generation
-context.setGuideTokens(guide_tokens);
-```
-
-**How to use guide tokens (iOS example):**
-```swift
-// Get guide tokens for your text
-guard let guideTokens = llamaMobile.getAudioGuideTokens(textToSpeak: text) else {
-    print("Failed to get guide tokens")
-}
-// Set guide tokens before generation
-if let guideTokens = guideTokens {
-    llamaMobile.setGuideTokens(tokens: guideTokens)
-}
-```
-
-**Why guide tokens matter:** Without guide tokens, the model may generate audio for template content (example text included in the model) before your actual input text, resulting in "weird words" at the beginning of the audio output.
-
-### Template-Based TTS Generation
-
-llama_mobile uses template data to format prompts for the TTS model. These templates provide examples of how text and audio should be structured:
-
-#### Template Components
-
-- **`default_audio_text`**: Example text sequence with special tokens
-  - Format: `<|text_start|>word1<|text_sep|>word2<|text_sep|>...<|text_sep|>`
-  - Purpose: Shows the model how to structure text with separators
-
-- **`default_audio_data`**: Example audio data with timestamps and code tokens
-  - Format: `word<|t_0.08|><|code_start|>audio_token1<|audio_token2|>...<|code_end|>`
-  - Purpose: Demonstrates the expected audio output format with timing and code tokens
-
-#### Template Usage in Prompt Construction
-
-The `getFormattedAudioCompletion()` function constructs prompts by:
-1. Starting with the template text
-2. Inserting your processed text in the appropriate position
-3. Appending the template audio data
-4. Adjusting format based on TTS version (V0_2 vs V0_3)
-
-**Example formatted prompt:**
-```
-<|im_start|>
-<|text_start|>example<|text_sep|>template<|text_sep|>YOUR_PROCESSED_TEXT<|text_sep|><|text_end|>
-example<|t_0.08|><|code_start|><|257|><|740|>...<|code_end|>
-```
-
-#### Avoiding Template Audio in Output
-
-**Critical issue**: Without proper handling, the model may generate audio for the template content too.
-
-**Solutions:**
-1. **Use guide tokens**: Guide the model to focus only on your text
-2. **Only tokenize completion**: When templates are present, tokenize only the completion result
-3. **Token filtering**: Only decode audio tokens (151672-155772) and skip template-related tokens
-
-**Example implementation (iOS):**
-```swift
-// Check if prompt contains template markers
-let useOnlyCompletion = formattedPrompt.contains("<|audio_start|") || formattedPrompt.contains("<|text_start|")
-
-// Only tokenize completion result when templates are present
-let contentToTokenize = useOnlyCompletion ? completionResult.text : formattedPrompt + completionResult.text
-```
-
-This ensures you only get audio for your actual text, not the template content.
-
-## JSON Output Support
-
-llama_mobile supports returning responses in an OpenAI-like JSON format. This feature is **disabled by default** for backward compatibility but can be easily enabled.
-
-### C++ API
-
-#### Enable JSON Output
-
-In the C++ API, set the `use_json_response` parameter to `true` in the `llama_mobile_completion_params_t` struct:
-
-```cpp
-#include "llama_mobile_api.h"
-
-// Initialize completion parameters
-llama_mobile_completion_params_t params;
-memset(&params, 0, sizeof(params));
-
-// Set basic parameters
-params.prompt = "Hello, who are you?";
-params.max_tokens = 128;
-params.temperature = 0.7;
-
-// Enable JSON response format
-params.use_json_response = true;
-
-// Call the completion API
-llama_mobile_completion_result_t result;
-int status = llama_mobile_completion(ctx, &params, &result);
-
-if (status == 0 && result.text) {
-    // result.text contains JSON output
-    printf("JSON Response: %s\n", result.text);
-    llama_mobile_free_string(result.text);
-}
-```
-
-#### Set Stop Sequences
-
-Stop sequences can be configured to terminate generation when specific patterns are detected. They work with both JSON and regular text output formats:
-
-```cpp
-#include "llama_mobile_api.h"
-
-// Initialize completion parameters
-llama_mobile_completion_params_t params;
-memset(&params, 0, sizeof(params));
-
-// Set basic parameters
-params.prompt = "Hello, who are you?";
-params.max_tokens = 128;
-params.temperature = 0.7;
-
-// Set stop sequences
-const char* stop_sequences[] = {"\n\n", "<|im_end|>", "<|endoftext|>", "\nUser:"};
-params.stop_sequences = stop_sequences;
-params.stop_sequence_count = 4;
-
-// Enable JSON response format
-params.use_json_response = true;
-
-// Call the completion API
-llama_mobile_completion_result_t result;
-int status = llama_mobile_completion(ctx, &params, &result);
-
-if (status == 0 && result.text) {
-    // result.text contains JSON output truncated at the first stop sequence
-    printf("JSON Response: %s\n", result.text);
-    llama_mobile_free_string(result.text);
-}
-```
-
-#### Disable JSON Output
-
-To disable JSON output (default behavior), set the parameter to `false`:
-
-```cpp
-params.use_json_response = false;
-```
-
-### iOS SDK
-
-#### Objective-C
-
-```objective-c
-// Create completion parameters
-LlamaMobileCompletionParams *params = [[LlamaMobileCompletionParams alloc] init];
-params.prompt = @"Hello, who are you?";
-params.maxTokens = 128;
-params.temperature = 0.7;
-
-// Enable JSON output
-params.useJsonResponse = YES;
-
-// Call completion API
-[llamaMobile completionWithContext:ctx params:params completion:^(LlamaMobileCompletionResult *result, NSError *error) {
-    if (result && result.text) {
-        // result.text contains JSON output
-        NSLog(@"JSON Response: %@", result.text);
-    }
-}];
-```
-
-#### Set Stop Sequences (Objective-C)
-
-```objective-c
-// Create completion parameters
-LlamaMobileCompletionParams *params = [[LlamaMobileCompletionParams alloc] init];
-params.prompt = @"Hello, who are you?";
-params.maxTokens = 128;
-params.temperature = 0.7;
-
-// Set stop sequences
-params.stopSequences = @[@"\n\n", @"<|im_end|>", @"<|endoftext|>", @"\nUser:"];
-
-// Enable JSON output
-params.useJsonResponse = YES;
-
-// Call completion API
-[llamaMobile completionWithContext:ctx params:params completion:^(LlamaMobileCompletionResult *result, NSError *error) {
-    if (result && result.text) {
-        // result.text contains JSON output truncated at the first stop sequence
-        NSLog(@"JSON Response: %@", result.text);
-    }
-}];
-```
-
-#### Swift
-
-```swift
-// Create completion parameters
-var params = LlamaMobileCompletionParams()
-params.prompt = "Hello, who are you?"
-params.maxTokens = 128
-params.temperature = 0.7
-
-// Enable JSON output
-params.useJsonResponse = true
-
-// Call completion API
-llamaMobile.completion(with: ctx, params: params) { result, error in
-    if let result = result, let text = result.text {
-        // text contains JSON output
-        print("JSON Response: \(text)")
-    }
-}
-```
-
-#### Set Stop Sequences (Swift)
-
-```swift
-// Create completion parameters
-var params = LlamaMobileCompletionParams()
-params.prompt = "Hello, who are you?"
-params.maxTokens = 128
-params.temperature = 0.7
-
-// Set stop sequences
-params.stopSequences = ["\n\n", "<|im_end|>", "<|endoftext|>", "\nUser:"]
-
-// Enable JSON output
-params.useJsonResponse = true
-
-// Call completion API
-llamaMobile.completion(with: ctx, params: params) { result, error in
-    if let result = result, let text = result.text {
-        // text contains JSON output truncated at the first stop sequence
-        print("JSON Response: \(text)")
-    }
-}
-```
-
-### Android SDK
-
-```java
-// Create completion parameters
-CompletionParams params = new CompletionParams.Builder()
-    .setPrompt("Hello, who are you?")
-    .setMaxTokens(128)
-    .setTemperature(0.7f)
-    .setUseJsonResponse(true)  // Enable JSON output
-    .build();
-
-// Call completion API
-try {
-    CompletionResult result = llamaMobile.completion(ctx, params);
-    if (result.getText() != null) {
-        // result.getText() contains JSON output
-        Log.d("LlamaMobile", "JSON Response: " + result.getText());
-    }
-} catch (LlamaMobileException e) {
-    e.printStackTrace();
-}
-```
-
-#### Set Stop Sequences (Android)
-
-```java
-// Create completion parameters with stop sequences
-CompletionParams params = new CompletionParams.Builder()
-    .setPrompt("Hello, who are you?")
-    .setMaxTokens(128)
-    .setTemperature(0.7f)
-    .setStopSequences(new String[] {"\n\n", "<|im_end|>", "<|endoftext|>", "\nUser:"})
-    .setUseJsonResponse(true)  // Enable JSON output
-    .build();
-
-// Call completion API
-try {
-    CompletionResult result = llamaMobile.completion(ctx, params);
-    if (result.getText() != null) {
-        // result.getText() contains JSON output truncated at the first stop sequence
-        Log.d("LlamaMobile", "JSON Response: " + result.getText());
-    }
-} catch (LlamaMobileException e) {
-    e.printStackTrace();
-}
-```
-
-### JSON Output Format
-
-When enabled, the API returns responses in this format:
-
-```json
-{
-  "id": "cmpl-1234567890abcdef",
-  "object": "text_completion",
-  "created": 1620000000,
-  "model": "your-model-name",
-  "choices": [
-    {
-      "text": "Hello! I'm a helpful assistant...",
-      "index": 0,
-      "logprobs": null,
-      "finish_reason": "stop"
-    }
-  ],
-  "usage": {
-    "prompt_tokens": 5,
-    "completion_tokens": 15,
-    "total_tokens": 20
-  }
-}
-```
-
-### Backward Compatibility
-
-- **Default behavior**: JSON output is disabled by default
-- **Existing code**: All existing code will continue to work without changes
-- **Explicit control**: Users can enable/disable JSON output on a per-request basis
-- **Performance**: JSON output has minimal performance impact
-
-### Troubleshooting
-
-#### JSON output is not working
-
-1. **Check parameter spelling**: Ensure you're using `use_json_response` (C++), `useJsonResponse` (Swift/Objective-C), or `setUseJsonResponse()` (Java)
-
-2. **Verify parameter is set**: Double-check that the parameter is being set before calling the completion API
-
-3. **Check API version**: Ensure you're using a version of the API that supports JSON output (latest version)
-
-4. **Inspect response**: If JSON output is enabled, the response should contain `{"id":"cmpl-` at the beginning
-
-#### Want to enable JSON by default in your application
-
-To enable JSON output by default in your application, simply set the parameter to `true` whenever you create completion parameters:
-
-```cpp
-// Create a helper function to create default parameters
-llama_mobile_completion_params_t create_default_params(const char* prompt) {
-    llama_mobile_completion_params_t params;
-    memset(&params, 0, sizeof(params));
-    params.prompt = prompt;
-    params.max_tokens = 128;
-    params.temperature = 0.7;
-    params.use_json_response = true; // Enable JSON by default
-    return params;
-}
-```
+- Standard language models
+- Embedding models
+- Vision-Language Models (VLM)
+- Multimodal models
 
 ## Plugins and SDKs
 
@@ -528,7 +128,26 @@ Each SDK and plugin comes with example applications that demonstrate basic usage
 - **llama_mobile_reactnative/**: ReactNative plugin
 - **llama_mobile_capacitor/**: Capacitor plugin for web-based apps
 
-## Build Configuration
+## Getting Started
+
+### Prerequisites
+
+#### Common Requirements
+- CMake 3.20 or later
+- Python 3.x (for some utility scripts)
+
+#### iOS Build Requirements
+- macOS with Xcode installed
+- iOS 13.0+ deployment target for mobile apps
+
+#### Android Build Requirements
+- Android Studio installed
+- Java Development Kit (JDK) 8 or later
+- Android SDK (API level 21 or higher)
+- Android NDK version 29.0.14206865 (required for building native libraries)
+- Set ANDROID_HOME environment variable pointing to your Android SDK directory
+
+### Build Configuration
 
 All build scripts now use a **centralized configuration system** through the `scripts/config.env` file. This file contains all environment variables needed for building different SDKs and plugins, with auto-detection and default values for most parameters.
 
@@ -541,7 +160,7 @@ All build scripts now use a **centralized configuration system** through the `sc
 
 For detailed configuration information, see the [Build Scripts README](scripts/README.md).
 
-## Build Scripts
+### Build Scripts
 
 The project contains various build scripts in the `scripts/` directory:
 
@@ -556,13 +175,18 @@ The project contains various build scripts in the `scripts/` directory:
 
 All scripts use the centralized configuration system in `scripts/config.env`. For detailed information, see the [Build Scripts README](scripts/README.md).
 
-## Getting Started
+## Building Instructions
 
 ### Build Core Library
 
 ```bash
 # Build core library using the build script (uses config.env)
 ./scripts/build-lib.sh
+
+# Or manually build
+mkdir build && cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
 ```
 
 ### Build iOS Framework
@@ -686,282 +310,6 @@ Each SDK has its own test suite. Please refer to the respective SDK README files
 - **Flutter SDK**: `llama_mobile-flutter-SDK/README.md`
 - **ReactNative SDK**: `llama_mobile-react-native-SDK/README.md`
 - **Capacitor Plugin**: `llama_mobile-capacitor-plugin/CONTRIBUTING.md`
-
-## Current Status
-
-The project is currently in active development with the following components completed:
-
-- ✅ Core C++ library (based on llama.cpp)
-- ✅ iOS framework
-- ✅ Android library (llama_mobile-android)
-- ✅ Android SDK wrapper (llama_mobile-android-SDK)
-- ✅ Basic test infrastructure
-- ✅ Build scripts for core library, iOS, Android, and Flutter
-- ✅ Example apps for iOS, Android, and Flutter
-- ✅ Flutter plugin (llama_mobile-flutter-SDK)
-
-Planned development:
-
-- ⏳ ReactNative plugin
-- ⏳ Capacitor plugin
-
-## Supported Models
-
-The framework supports various GGUF model types:
-
-- Standard language models
-- Embedding models
-- Vision-Language Models (VLM)
-- Multimodal models
-
-## Integration Plans
-
-The framework currently supports integration with
-
-1. **Native Applications**: 
-   - iOS apps via `llama_mobile-ios-SDK` SDK
-   - Android apps via `llama_mobile-android-SDK` SDK and `llama_mobile-android-java-SDK` SDK
-
-2. **Cross-Platform Frameworks**:
-   - ✅ Flutter via Flutter plugin (`llama_mobile-flutter-SDK`)
-   - ⏳ ReactNative via ReactNative SDK
-
-3. **Web-Based Applications**:
-   - Capacitor plugin for web apps using (`llama_mobile-capacitor-plugin`)
-
-## Contributing
-
-Contributions are welcome! Please feel free to:
-
-- Submit bug fixes
-- Propose new features
-- Improve documentation
-- Add support for additional platforms
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- Based on [llama.cpp](https://github.com/ggerganov/llama.cpp) by Georgi Gerganov
-- Built with inspiration from various mobile AI frameworks
-
-## Roadmap
-
-1. ✅ Create Flutter plugin
-2. Create ReactNative plugin
-3. Develop Capacitor plugin for web apps
-4. Add comprehensive documentation and examples
-5. Optimize performance for mobile devices
-6. Expand model support and compatibility
-
-Stay tuned for updates as we continue to develop and expand the framework!
-
-## Building Instructions
-
-### Prerequisites
-
-#### Common Requirements
-- CMake 3.20 or later
-- Python 3.x (for some utility scripts)
-
-#### iOS Build Requirements
-- macOS with Xcode installed
-- iOS 13.0+ deployment target for mobile apps
-
-#### Android Build Requirements
-- Android Studio installed
-- Java Development Kit (JDK) 8 or later
-- Android SDK (API level 21 or higher)
-- Android NDK version 29.0.14206865 (required for building native libraries)
-- Set ANDROID_HOME environment variable pointing to your Android SDK directory
-
-### Core Library
-
-```bash
-# Build core library
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
-```
-
-####### iOS SDK
-
-The iOS SDK requires precompiled Metal libraries for optimal performance. The build process handles this automatically.
-
-```bash
-# Build iOS SDK with precompiled Metal libraries
-./scripts/build-ios.sh
-```
-
-#### Metal Library Compilation Details
-
-The iOS SDK relies on precompiled Metal shader libraries (`ggml-llama.metallib` for devices and `ggml-llama-sim.metallib` for simulators). These are automatically generated during the build process with:
-
-- **Metal Language Version**: `ios-metal2.3` (compatible with iOS 13.0+)
-- **Deployment Target**: iOS 14.0 (compatible with the core library requirements)
-
-The build script (`scripts/build-ios.sh`) handles:
-1. Compiling Metal shaders from `lib/llama_cpp/ggml-metal.metal`
-2. Generating device and simulator-specific metallib files
-3. Assembling the `llama_mobile.xcframework`
-4. Copying necessary resources
-
-#### Verifying Metal Libraries
-
-To verify the deployment target of the generated metallib files:
-
-```bash
-# Check device metallib deployment target
-strings lib/llama_cpp/ggml-llama.metallib | grep -i "apple-ios"
-
-# Check simulator metallib deployment target
-strings lib/llama_cpp/ggml-llama-sim.metallib | grep -i "apple-ios"
-```
-
-### iOS Example App
-
-To run the iOS example app:
-
-1. Open `examples/iOSFrameworkExample/iOSFrameworkExample.xcodeproj` in Xcode
-2. Select a target device or simulator
-3. Build and run the project
-
-### Future Building Instructions (Planned)
-
-#### Android Library and SDK
-
-Before building for Android, you need to ensure your development environment is properly configured:
-
-#### Finding SDK and NDK Paths from Android Studio
-
-You can find your SDK and NDK paths directly from Android Studio:
-
-1. **Open Android Studio Preferences/Settings**:
-   - On macOS: Android Studio → Preferences
-   - On Windows/Linux: File → Settings
-
-2. **Find Android SDK Path**:
-   - Navigate to: Appearance & Behavior → System Settings → Android SDK
-   - Your SDK path is displayed at the top of the window
-   - Example: `/Users/yourname/Library/Android/sdk` (macOS)
-
-3. **Find NDK Path**:
-   - Still in the Android SDK settings, select the "SDK Tools" tab
-   - Check the "Show Package Details" box
-   - Expand the "NDK (Side by side)" section
-   - Installed NDK versions are shown with their paths
-   - You can also see the overall NDK location at the top
-   - Example: `/Users/yourname/Library/Android/sdk/ndk/29.0.14206865`
-
-#### Setting ANDROID_HOME
-
-The build script will attempt to automatically detect your Android SDK path from common locations:
-- macOS: `~/Library/Android/sdk` or `~/android-sdk`
-- Linux: `~/Android/Sdk`, `~/android-sdk`, or `/opt/android-sdk`
-- Windows (Git Bash): `%USERPROFILE%/AppData/Local/Android/Sdk` or `%USERPROFILE%/Android/Sdk`
-
-If automatic detection fails, set ANDROID_HOME manually:
-
-### Temporary Setting (Current Terminal Session Only)
-
-```bash
-# On macOS/Linux
-
-export ANDROID_HOME=/path/to/your/android/sdk
-./scripts/build-android.sh
-
-# On Windows (Git Bash)
-export ANDROID_HOME=C:/path/to/your/android/sdk
-./scripts/build-android.sh
-```
-
-### Permanent Setting
-
-#### On macOS/Linux
-
-**For Bash shell:**
-1. Open `~/.bash_profile` or `~/.bashrc` in a text editor
-2. Add the line: `export ANDROID_HOME=/path/to/your/android/sdk`
-3. Save the file
-4. Run: `source ~/.bash_profile` or `source ~/.bashrc` to apply changes
-
-**For Zsh shell (default on macOS Catalina and later):**
-1. Open `~/.zshrc` in a text editor
-2. Add the line: `export ANDROID_HOME=/path/to/your/android/sdk`
-3. Save the file
-4. Run: `source ~/.zshrc` to apply changes
-
-**To verify the setting:**
-```bash
-echo $ANDROID_HOME
-```
-This should display the path to your Android SDK directory.
-
-#### Setting NDK Path
-
-The build script uses NDK version 29.0.14206865 by default. If you need to use a different NDK version, you can specify it:
-
-```bash
-# Build Android library with a specific NDK version
-./scripts/build-android.sh --ndk-version=29.0.14206865
-```
-
-#### Building Android Library
-
-```bash
-# Build Android library and SDK
-./scripts/build-android.sh
-```
-
-### Arm Neon Support for Android
-
-llama_mobile fully supports Arm Neon SIMD (Single Instruction, Multiple Data) technology for Android devices, providing significant performance improvements for AI model inference on Arm-based architectures.
-
-#### Key Features
-
-- **Default Enabled**: Neon support is automatically enabled for `arm64-v8a` builds when using the Android NDK toolchain
-- **Runtime Detection**: Neon capabilities are detected at runtime using Android's `getauxval()` system call
-- **Optimized Operations**: Various performance-critical operations including matrix multiplication, tensor operations, and quantization/dequantization are optimized using Neon instructions
-- **AArch64 Architecture**: Neon is guaranteed to be available on all AArch64 (ARM64) devices, and the framework leverages this guarantee for optimal performance
-
-#### Neon Detection and Usage
-
-The framework automatically detects and uses Neon capabilities:
-
-1. **Hardware Feature Detection**: The code checks for Neon and related extensions (dotprod, fp16, i8mm) at runtime
-2. **Optimized Path Selection**: For each supported operation, the fastest available implementation (Neon vs. generic) is selected
-3. **Fallback Support**: In cases where specific Neon extensions are not available, the framework gracefully falls back to generic implementations
-
-#### Performance Benefits
-
-Using Neon acceleration provides significant performance improvements:
-- **2-4x faster** matrix multiplication operations
-- **30-50% overall performance boost** for AI model inference
-- **Reduced battery consumption** due to faster computation
-
-#### Verifying Neon Support
-
-Neon support is automatically enabled and used by the framework. The build process includes optimized Neon code paths for all supported operations.
-
-#### Flutter Plugin
-```bash
-# Flutter build script
-./scripts/build-flutter.sh
-```
-
-#### ReactNative Plugin
-```bash
-# Planned ReactNative build script
-./scripts/build-reactnative.sh
-```
-
-#### Capacitor Plugin
-```bash
-# Planned Capacitor build script
-./scripts/build-capacitor.sh
-```
 
 ## Integration Guide
 
@@ -1255,458 +603,651 @@ class ViewController: UIViewController {
 
 #### Step 4: Add Required Permissions
 1. Open `app/src/main/AndroidManifest.xml`
-2. Add the following permissions above the `<application>` tag:
-   ```xml
-   <uses-permission android:name="android.permission.INTERNET" />
-   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-   <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-   ```
-3. For Android 6.0+ (API 23+), you'll need to request runtime permissions
 
-#### Step 5: Basic Usage Example
+## JSON Output Support
 
-```kotlin
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Bundle
-import android.widget.Button
-import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import com.llamamobile.LlamaMobile
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
-import java.io.InputStream
+llama_mobile supports returning responses in an OpenAI-like JSON format. This feature is **disabled by default** for backward compatibility but can be easily enabled.
 
-class MainActivity : AppCompatActivity() {
-    private lateinit var generateButton: Button
-    private lateinit var resultText: TextView
-    private var modelPath: String? = null
-    private var modelContext: Long? = null
-    
-    private val REQUEST_PERMISSIONS = 1001
-    private val requiredPermissions = arrayOf(
-        Manifest.permission.READ_EXTERNAL_STORAGE,
-        Manifest.permission.WRITE_EXTERNAL_STORAGE
-    )
-    
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-        
-        generateButton = findViewById(R.id.generateButton)
-        resultText = findViewById(R.id.resultText)
-        
-        // Request permissions
-        if (checkPermissions()) {
-            setupModel()
-        } else {
-            requestPermissions()
-        }
-        
-        generateButton.setOnClickListener {
-            generateText()
-        }
+### C++ API
+
+#### Enable JSON Output
+
+In the C++ API, set the `use_json_response` parameter to `true` in the `llama_mobile_completion_params_t` struct:
+
+```cpp
+#include "llama_mobile_api.h"
+
+// Initialize completion parameters
+llama_mobile_completion_params_t params;
+memset(&params, 0, sizeof(params));
+
+// Set basic parameters
+params.prompt = "Hello, who are you?";
+params.max_tokens = 128;
+params.temperature = 0.7;
+
+// Enable JSON response format
+params.use_json_response = true;
+
+// Call the completion API
+llama_mobile_completion_result_t result;
+int status = llama_mobile_completion(ctx, &params, &result);
+
+if (status == 0 && result.text) {
+    // result.text contains JSON output
+    printf("JSON Response: %s\n", result.text);
+    llama_mobile_free_string(result.text);
+}
+```
+
+#### Set Stop Sequences
+
+Stop sequences can be configured to terminate generation when specific patterns are detected. They work with both JSON and regular text output formats:
+
+```cpp
+#include "llama_mobile_api.h"
+
+// Initialize completion parameters
+llama_mobile_completion_params_t params;
+memset(&params, 0, sizeof(params));
+
+// Set basic parameters
+params.prompt = "Hello, who are you?";
+params.max_tokens = 128;
+params.temperature = 0.7;
+
+// Set stop sequences
+const char* stop_sequences[] = {"\n\n", "<|im_end|>", "<|endoftext|>", "\nUser:"};
+params.stop_sequences = stop_sequences;
+params.stop_sequence_count = 4;
+
+// Enable JSON response format
+params.use_json_response = true;
+
+// Call the completion API
+llama_mobile_completion_result_t result;
+int status = llama_mobile_completion(ctx, &params, &result);
+
+if (status == 0 && result.text) {
+    // result.text contains JSON output truncated at the first stop sequence
+    printf("JSON Response: %s\n", result.text);
+    llama_mobile_free_string(result.text);
+}
+```
+
+#### Disable JSON Output
+
+To disable JSON output (default behavior), set the parameter to `false`:
+
+```cpp
+params.use_json_response = false;
+```
+
+### iOS SDK
+
+#### Objective-C
+
+```objective-c
+// Create completion parameters
+LlamaMobileCompletionParams *params = [[LlamaMobileCompletionParams alloc] init];
+params.prompt = @"Hello, who are you?";
+params.maxTokens = 128;
+params.temperature = 0.7;
+
+// Enable JSON output
+params.useJsonResponse = YES;
+
+// Call completion API
+[llamaMobile completionWithContext:ctx params:params completion:^(LlamaMobileCompletionResult *result, NSError *error) {
+    if (result && result.text) {
+        // result.text contains JSON output
+        NSLog(@"JSON Response: %@", result.text);
     }
-    
-    private fun checkPermissions(): Boolean {
-        return requiredPermissions.all {
-            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
-        }
+}];
+```
+
+#### Set Stop Sequences (Objective-C)
+
+```objective-c
+// Create completion parameters
+LlamaMobileCompletionParams *params = [[LlamaMobileCompletionParams alloc] init];
+params.prompt = @"Hello, who are you?";
+params.maxTokens = 128;
+params.temperature = 0.7;
+
+// Set stop sequences
+params.stopSequences = @[@"\n\n", @"<|im_end|>", @"<|endoftext|>", @"\nUser:"];
+
+// Enable JSON output
+params.useJsonResponse = YES;
+
+// Call completion API
+[llamaMobile completionWithContext:ctx params:params completion:^(LlamaMobileCompletionResult *result, NSError *error) {
+    if (result && result.text) {
+        // result.text contains JSON output truncated at the first stop sequence
+        NSLog(@"JSON Response: %@", result.text);
     }
-    
-    private fun requestPermissions() {
-        ActivityCompat.requestPermissions(this, requiredPermissions, REQUEST_PERMISSIONS)
-    }
-    
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_PERMISSIONS) {
-            if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                setupModel()
-            }
-        }
-    }
-    
-    private fun setupModel() {
-        // Copy model from assets to internal storage
-        try {
-            val inputStream: InputStream = assets.open("your-model.gguf")
-            val outputFile = File(filesDir, "your-model.gguf")
-            val outputStream = FileOutputStream(outputFile)
-            
-            val buffer = ByteArray(1024)
-            var bytesRead: Int
-            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                outputStream.write(buffer, 0, bytesRead)
-            }
-            
-            inputStream.close()
-            outputStream.close()
-            
-            modelPath = outputFile.absolutePath
-            loadModel()
-            
-        } catch (e: IOException) {
-            e.printStackTrace()
-            resultText.text = "Failed to copy model: \${e.message}"
-        }
-    }
-    
-    private fun loadModel() {
-        try {
-            if (modelPath != null) {
-                // Initialize model context with default parameters
-                val params = LlamaMobile.InitParams(
-                    modelPath = modelPath!!,
-                    nThreads = 4,
-                    nCtx = 1024
-                )
-                
-                modelContext = LlamaMobile.initContext(params)
-                
-                if (modelContext != null && modelContext != 0L) {
-                    resultText.text = "Model loaded successfully!"
-                } else {
-                    resultText.text = "Failed to load model"
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            resultText.text = "Error loading model: \${e.message}"
-        }
-    }
-    
-    private fun generateText() {
-        try {
-            if (modelContext != null && modelContext != 0L) {
-                // Create completion parameters
-                val params = LlamaMobile.CompletionParams(
-                    prompt = "Hello, how are you?",
-                    maxTokens = 50,
-                    temperature = 0.7f,
-                    topK = 40,
-                    topP = 0.9f
-                )
-                
-                // Generate text
-                val result = LlamaMobile.generateCompletion(modelContext!!, params)
-                
-                if (result != null) {
-                    resultText.text = "Generated: \n{result.text}"
-                } else {
-                    resultText.text = "Failed to generate text"
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            resultText.text = "Error generating text: \${e.message}"
-        }
-    }
-    
-    override fun onDestroy() {
-        super.onDestroy()
-        
-        // Clean up resources
-        if (modelContext != null && modelContext != 0L) {
-            LlamaMobile.releaseContext(modelContext!!)
-            modelContext = null
-        }
+}];
+```
+
+#### Swift
+
+```swift
+// Create completion parameters
+var params = LlamaMobileCompletionParams()
+params.prompt = "Hello, who are you?"
+params.maxTokens = 128
+params.temperature = 0.7
+
+// Enable JSON output
+params.useJsonResponse = true
+
+// Call completion API
+llamaMobile.completion(with: ctx, params: params) { result, error in
+    if let result = result, let text = result.text {
+        // text contains JSON output
+        print("JSON Response: \(text)")
     }
 }
 ```
 
-### Flutter App
+#### Set Stop Sequences (Swift)
 
-#### Step 1: Create a New Flutter Project
-1. Open your terminal and run:
-   ```bash
-   flutter create llama_mobile_demo
-   cd llama_mobile_demo
-   ```
-2. Open the project in your preferred IDE (VS Code or Android Studio)
+```swift
+// Create completion parameters
+var params = LlamaMobileCompletionParams()
+params.prompt = "Hello, who are you?"
+params.maxTokens = 128
+params.temperature = 0.7
 
-#### Step 2: Add the Self-Contained Plugin
-1. Open `pubspec.yaml` in your Flutter project
-2. Add the plugin dependency:
-   ```yaml
-dependencies:
-  flutter:
-    sdk: flutter
-  llama_mobile_flutter_sdk:
-    path: /path/to/llama_mobile/llama_mobile-flutter-SDK
-  path_provider: ^2.1.1
-  permission_handler: ^11.3.1
-```
-3. Run `flutter pub get` to install dependencies
+// Set stop sequences
+params.stopSequences = ["\n\n", "<|im_end|>", "<|endoftext|>", "\nUser:"]
 
-#### Step 3: Configure Platform-Specific Settings
+// Enable JSON output
+params.useJsonResponse = true
 
-##### iOS Configuration
-1. Open `ios/Runner/Info.plist`
-2. Add required permissions:
-   ```xml
-   <key>NSDocumentDirectoryUsageDescription</key>
-   <string>Access to documents directory for model storage</string>
-   <key>NSNetworkUsageDescription</key>
-   <string>Network access for model downloads</string>
-   ```
-
-##### Android Configuration
-1. Open `android/app/src/main/AndroidManifest.xml`
-2. Add required permissions:
-   ```xml
-   <uses-permission android:name="android.permission.INTERNET" />
-   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-   ```
-
-#### Step 4: Basic Usage Example
-
-```dart
-import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
-
-void main() {
-  runApp(const MyApp());
-}
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Llama Mobile Demo',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      home: const MyHomePage(title: 'Llama Mobile Flutter Demo'),
-    );
-  }
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  final LlamaMobileFlutterSdk _llamaSdk = LlamaMobileFlutterSdk();
-  bool _isModelLoaded = false;
-  String _result = '';
-  bool _isGenerating = false;
-  String _modelPath = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _setupModel();
-  }
-
-  Future<void> _setupModel() async {
-    // Request permissions
-    if (Platform.isAndroid) {
-      await Permission.storage.request();
-      await Permission.manageExternalStorage.request();
+// Call completion API
+llamaMobile.completion(with: ctx, params: params) { result, error in
+    if let result = result, let text = result.text {
+        // text contains JSON output truncated at the first stop sequence
+        print("JSON Response: \(text)")
     }
+}
+```
 
-    // Copy model from assets to app directory
-    await _copyModelFromAssets();
+### Android SDK
+
+```java
+// Create completion parameters
+CompletionParams params = new CompletionParams.Builder()
+    .setPrompt("Hello, who are you?")
+    .setMaxTokens(128)
+    .setTemperature(0.7f)
+    .setUseJsonResponse(true)  // Enable JSON output
+    .build();
+
+// Call completion API
+try {
+    CompletionResult result = llamaMobile.completion(ctx, params);
+    if (result.getText() != null) {
+        // result.getText() contains JSON output
+        Log.d("LlamaMobile", "JSON Response: " + result.getText());
+    }
+} catch (LlamaMobileException e) {
+    e.printStackTrace();
+}
+```
+
+#### Set Stop Sequences (Android)
+
+```java
+// Create completion parameters with stop sequences
+CompletionParams params = new CompletionParams.Builder()
+    .setPrompt("Hello, who are you?")
+    .setMaxTokens(128)
+    .setTemperature(0.7f)
+    .setStopSequences(new String[] {"\n\n", "<|im_end|>", "<|endoftext|>", "\nUser:"})
+    .setUseJsonResponse(true)  // Enable JSON output
+    .build();
+
+// Call completion API
+try {
+    CompletionResult result = llamaMobile.completion(ctx, params);
+    if (result.getText() != null) {
+        // result.getText() contains JSON output truncated at the first stop sequence
+        Log.d("LlamaMobile", "JSON Response: " + result.getText());
+    }
+} catch (LlamaMobileException e) {
+    e.printStackTrace();
+}
+```
+
+### JSON Output Format
+
+When enabled, the API returns responses in this format:
+
+```json
+{
+  "id": "cmpl-1234567890abcdef",
+  "object": "text_completion",
+  "created": 1620000000,
+  "model": "your-model-name",
+  "choices": [
+    {
+      "text": "Hello! I'm a helpful assistant...",
+      "index": 0,
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 5,
+    "completion_tokens": 15,
+    "total_tokens": 20
+  }
+}
+```
+
+### Backward Compatibility
+
+- **Default behavior**: JSON output is disabled by default
+- **Existing code**: All existing code will continue to work without changes
+- **Explicit control**: Users can enable/disable JSON output on a per-request basis
+- **Performance**: JSON output has minimal performance impact
+
+### Troubleshooting
+
+#### JSON output is not working
+
+1. **Check parameter spelling**: Ensure you're using `use_json_response` (C++), `useJsonResponse` (Swift/Objective-C), or `setUseJsonResponse()` (Java)
+
+2. **Verify parameter is set**: Double-check that the parameter is being set before calling the completion API
+
+3. **Check API version**: Ensure you're using a version of the API that supports JSON output (latest version)
+
+4. **Inspect response**: If JSON output is enabled, the response should contain `{"id":"cmpl-` at the beginning
+
+#### Want to enable JSON by default in your application
+
+To enable JSON output by default in your application, simply set the parameter to `true` whenever you create completion parameters:
+
+```cpp
+// Create a helper function to create default parameters
+llama_mobile_completion_params_t create_default_params(const char* prompt) {
+    llama_mobile_completion_params_t params;
+    memset(&params, 0, sizeof(params));
+    params.prompt = prompt;
+    params.max_tokens = 128;
+    params.temperature = 0.7;
+    params.use_json_response = true; // Enable JSON by default
+    return params;
+}
+```
+
+## Text-to-Speech (TTS) Support
+
+llama_mobile provides comprehensive TTS capabilities for generating speech from text. Here's how to use the TTS APIs effectively:
+
+### Basic TTS Workflow
+
+1. **Load Models**: Load both the main TTS model and the vocoder model
+2. **Text Formatting**: Format your text for TTS generation
+3. **Token Generation**: Generate tokens from the formatted text
+4. **Token Filtering**: **Important!** Filter to include only audio tokens
+5. **Audio Decoding**: Decode the audio tokens to raw audio samples
+6. **Save/Play Audio**: Save the audio to a WAV file or play it directly
+
+### Important: Token Filtering
+
+A critical step in the TTS workflow that's easy to overlook: **only send audio tokens to the decoder**.
+
+**Audio Token Range**: 151672-155772
+**Audio End Token**: 151668 `<|audio_end|>`
+
+```cpp
+// Example token filtering (from C++ example)
+for (token in generated_tokens) {
+    // Check if token is in audio range
+    if (token >= 151672 && token <= 155772) {
+        audio_tokens.push_back(token);
+    }
     
-    // Load the model
-    await _loadModel();
-  }
-
-  Future<void> _copyModelFromAssets() async {
-    try {
-      final directory = await getApplicationDocumentsDirectory();
-      final destination = File('\${directory.path}/your-model.gguf');
-
-      if (!await destination.exists()) {
-        final byteData = await rootBundle.load('assets/your-model.gguf');
-        await destination.writeAsBytes(byteData.buffer.asUint8List());
-      }
-
-      setState(() {
-        _modelPath = destination.path;
-      });
-    } catch (e) {
-      setState(() {
-        _result = 'Error copying model: \$e';
-      });
+    // Check for end token
+    if (token == 151668) {
+        break; // Found audio end token
     }
-  }
-
-  Future<void> _loadModel() async {
-    try {
-      if (_modelPath.isNotEmpty) {
-        final config = ModelConfig(
-          modelPath: _modelPath,
-          nThreads: 4,
-          nGpuLayers: 4,
-        );
-
-        final success = await _llamaSdk.loadModel(config);
-        setState(() {
-          _isModelLoaded = success;
-          _result = success ? 'Model loaded successfully!' : 'Failed to load model';
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _result = 'Error loading model: \$e';
-      });
-    }
-  }
-
-  Future<void> _generateText() async {
-    if (!_isModelLoaded || _isGenerating) return;
-
-    setState(() {
-      _isGenerating = true;
-      _result = 'Generating...';
-    });
-
-    try {
-      final generationConfig = GenerationConfig(
-        prompt: 'Hello, how are you today?',
-        maxNewTokens: 100,
-        temperature: 0.7,
-        topP: 0.9,
-      );
-
-      final completion = await _llamaSdk.generateCompletion(generationConfig);
-      setState(() {
-        _result = 'Generated:\n\$completion';
-      });
-    } catch (e) {
-      setState(() {
-        _result = 'Error generating text: \$e';
-      });
-    } finally {
-      setState(() {
-        _isGenerating = false;
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _llamaSdk.release();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Text(
-                'Model Status: \${_isModelLoaded ? 'Loaded' : 'Not Loaded'}',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _isModelLoaded ? _generateText : null,
-                child: _isGenerating
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Generate Text'),
-              ),
-              const SizedBox(height: 20),
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Text(
-                    _result,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 ```
 
-### Adding Model Files
+**Why this matters**: Sending non-audio tokens to the decoder will cause crashes or invalid audio output.
 
-For all platforms, you'll need to add your GGUF model files:
+### Important: Batch Size Configuration
 
-#### iOS
-1. Drag your `your-model.gguf` file into Xcode
-2. Select "Copy items if needed" and add to your target
-
-#### Android
-1. Create an `assets` directory in `app/src/main/` if it doesn't exist
-2. Copy your `your-model.gguf` file into the `assets` directory
-
-#### Flutter
-1. Create an `assets` directory at the root of your Flutter project
-2. Add your `your-model.gguf` file to the `assets` directory
-3. Update `pubspec.yaml` to include the asset:
-   ```yaml
-   flutter:
-     assets:
-       - assets/your-model.gguf
-   ```
-
-### Error Handling Best Practices
-
-1. **Model Loading Errors:**
-   - Check if the model file exists and is accessible
-   - Verify model format is compatible (GGUF)
-   - Ensure sufficient device resources (memory, storage)
-
-2. **Inference Errors:**
-   - Handle timeouts for long-running generation tasks
-   - Implement progress callbacks to provide user feedback
-   - Catch exceptions related to insufficient memory
-
-3. **Permission Issues:**
-   - Always request necessary permissions before accessing files
-   - Provide clear error messages when permissions are denied
-   - Follow platform-specific permission guidelines
-
-## Troubleshooting
-
-### Metal Library Deployment Target Errors
-
-If you encounter errors like:
+When working with TTS, you may encounter this error:
 ```
-This library is using a deployment target (0x00020008) that is not supported on this OS
+LM_GGML_ASSERT(cparams.n_ubatch >= n_tokens && "encoder requires n_ubatch >= n_tokens")
 ```
 
-This indicates incompatible Metal library deployment targets. The build script ensures compatibility by:
-- Using `ios-metal2.3` language version (iOS 13.0+ compatible)
-- Setting explicit deployment targets for both device and simulator builds
+**Solution**: Increase the `nUBatch` parameter when initializing the model:
 
-### Build Script Issues
+```swift
+// iOS example
+var initParams = LlamaMobile.InitParams(modelPath: modelPath)
+initParams.nUBatch = 1024 // Increase to handle large audio token batches
+```
 
-Ensure all dependencies are installed and that you're running the scripts from the project root directory.
+**Why this matters**: TTS models often generate large batches of audio tokens (500-1000+), and the unbounded batch size (`nUBatch`) must be larger than or equal to the number of generated audio tokens.
+
+### Example Implementations
+
+- **C++**: `examples/cpp/main_tts.cpp` - Full TTS workflow with token filtering
+- **iOS**: `examples/iOSSDKExample` - Swift implementation with token filtering
+
+### Key TTS Functions
+
+- `generateAudioFromText()`: Single-call TTS generation (handles all steps internally)
+- `formatTextForAudioCompletion()`: Format text for TTS
+- `getAudioCompletionGuideTokens()`: Get guide tokens for better TTS quality
+- `decodeAudioTokens()`: Decode audio tokens to samples (requires filtered tokens)
+- `saveAudioToWav()`: Save audio samples to WAV file
+
+### Important: Guide Tokens
+
+Guide tokens are a critical feature for improving TTS quality and preventing unexpected audio output. They help the model focus on generating audio for your actual text rather than template content.
+
+**What are guide tokens?**
+- Special tokens that guide the TTS model to focus on your input text
+- Prevent the model from speaking template/example content
+- Available through `getAudioCompletionGuideTokens()` function
+
+**How to use guide tokens (C++ example):**
+```cpp
+// Get guide tokens for your text
+std::vector<llama_token> guide_tokens = context.getAudioCompletionGuideTokens(text_to_speak);
+// Set guide tokens before generation
+context.setGuideTokens(guide_tokens);
+```
+
+**How to use guide tokens (iOS example):**
+```swift
+// Get guide tokens for your text
+guard let guideTokens = llamaMobile.getAudioGuideTokens(textToSpeak: text) else {
+    print("Failed to get guide tokens")
+}
+// Set guide tokens before generation
+if let guideTokens = guideTokens {
+    llamaMobile.setGuideTokens(tokens: guideTokens)
+}
+```
+
+**Why guide tokens matter:** Without guide tokens, the model may generate audio for template content (example text included in the model) before your actual input text, resulting in "weird words" at the beginning of the audio output.
+
+### Template-Based TTS Generation
+
+llama_mobile uses template data to format prompts for the TTS model. These templates provide examples of how text and audio should be structured:
+
+#### Template Components
+
+- **`default_audio_text`**: Example text sequence with special tokens
+  - Format: `<|text_start|>word1<|text_sep|>word2<|text_sep|>...<|text_sep|>`
+  - Purpose: Shows the model how to structure text with separators
+
+- **`default_audio_data`**: Example audio data with timestamps and code tokens
+  - Format: `word<|t_0.08|><|code_start|>audio_token1<|audio_token2|>...<|code_end|>`
+  - Purpose: Demonstrates the expected audio output format with timing and code tokens
+
+#### Template Usage in Prompt Construction
+
+The `getFormattedAudioCompletion()` function constructs prompts by:
+1. Starting with the template text
+2. Inserting your processed text in the appropriate position
+3. Appending the template audio data
+4. Adjusting format based on TTS version (V0_2 vs V0_3)
+
+**Example formatted prompt:**
+```
+<|im_start|>
+<|text_start|>example<|text_sep|>template<|text_sep|>YOUR_PROCESSED_TEXT<|text_sep|><|text_end|>
+example<|t_0.08|><|code_start|><|257|><|740|>...<|code_end|>
+```
+
+#### Avoiding Template Audio in Output
+
+**Critical issue**: Without proper handling, the model may generate audio for the template content too.
+
+**Solutions:**
+1. **Use guide tokens**: Guide the model to focus only on your text
+2. **Only tokenize completion**: When templates are present, tokenize only the completion result
+3. **Token filtering**: Only decode audio tokens (151672-155772) and skip template-related tokens
+
+**Example implementation (iOS):**
+```swift
+// Check if prompt contains template markers
+let useOnlyCompletion = formattedPrompt.contains("<|audio_start|") || formattedPrompt.contains("<|text_start|")
+
+// Only tokenize completion result when templates are present
+let contentToTokenize = useOnlyCompletion ? completionResult.text : formattedPrompt + completionResult.text
+```
+
+This ensures you only get audio for your actual text, not the template content.
+
+## Integration Plans
+
+The framework currently supports integration with
+
+1. **Native Applications**: 
+   - iOS apps via `llama_mobile-ios-SDK` SDK
+   - Android apps via `llama_mobile-android-SDK` SDK and `llama_mobile-android-java-SDK` SDK
+
+2. **Cross-Platform Frameworks**:
+   - ✅ Flutter via Flutter plugin (`llama_mobile-flutter-SDK`)
+   - ⏳ ReactNative via ReactNative SDK
+
+3. **Web-Based Applications**:
+   - Capacitor plugin for web apps using (`llama_mobile-capacitor-plugin`)
+
+## Arm Neon Support for Android
+
+llama_mobile fully supports Arm Neon SIMD (Single Instruction, Multiple Data) technology for Android devices, providing significant performance improvements for AI model inference on Arm-based architectures.
+
+### Key Features
+
+- **Default Enabled**: Neon support is automatically enabled for `arm64-v8a` builds when using the Android NDK toolchain
+- **Runtime Detection**: Neon capabilities are detected at runtime using Android's `getauxval()` system call
+- **Optimized Operations**: Various performance-critical operations including matrix multiplication, tensor operations, and quantization/dequantization are optimized using Neon instructions
+- **AArch64 Architecture**: Neon is guaranteed to be available on all AArch64 (ARM64) devices, and the framework leverages this guarantee for optimal performance
+
+### Neon Detection and Usage
+
+The framework automatically detects and uses Neon capabilities:
+
+1. **Hardware Feature Detection**: The code checks for Neon and related extensions (dotprod, fp16, i8mm) at runtime
+2. **Optimized Path Selection**: For each supported operation, the fastest available implementation (Neon vs. generic) is selected
+3. **Fallback Support**: In cases where specific Neon extensions are not available, the framework gracefully falls back to generic implementations
+
+### Performance Benefits
+
+Using Neon acceleration provides significant performance improvements:
+- **2-4x faster** matrix multiplication operations
+- **30-50% overall performance boost** for AI model inference
+- **Reduced battery consumption** due to faster computation
+
+### Verifying Neon Support
+
+Neon support is automatically enabled and used by the framework. The build process includes optimized Neon code paths for all supported operations.
+
+## iOS SDK
+
+The iOS SDK requires precompiled Metal libraries for optimal performance. The build process handles this automatically.
+
+```bash
+# Build iOS SDK with precompiled Metal libraries
+./scripts/build-ios.sh
+```
+
+### Metal Library Compilation Details
+
+The iOS SDK relies on precompiled Metal shader libraries (`ggml-llama.metallib` for devices and `ggml-llama-sim.metallib` for simulators). These are automatically generated during the build process with:
+
+- **Metal Language Version**: `ios-metal2.3` (compatible with iOS 13.0+)
+- **Deployment Target**: iOS 14.0 (compatible with the core library requirements)
+
+The build script (`scripts/build-ios.sh`) handles:
+1. Compiling Metal shaders from `lib/llama_cpp/ggml-metal.metal`
+2. Generating device and simulator-specific metallib files
+3. Assembling the `llama_mobile.xcframework`
+4. Copying necessary resources
+
+### Verifying Metal Libraries
+
+To verify the deployment target of the generated metallib files:
+
+```bash
+# Check device metallib deployment target
+strings lib/llama_cpp/ggml-llama.metallib | grep -i "apple-ios"
+
+# Check simulator metallib deployment target
+strings lib/llama_cpp/ggml-llama-sim.metallib | grep -i "apple-ios"
+```
+
+### iOS Example App
+
+To run the iOS example app:
+
+1. Open `examples/iOSFrameworkExample/iOSFrameworkExample.xcodeproj` in Xcode
+2. Select a target device or simulator
+3. Build and run the project
+
+## Future Building Instructions (Planned)
+
+### Android Library and SDK
+
+Before building for Android, you need to ensure your development environment is properly configured:
+
+#### Finding SDK and NDK Paths from Android Studio
+
+You can find your SDK and NDK paths directly from Android Studio:
+
+1. **Open Android Studio Preferences/Settings**:
+   - On macOS: Android Studio → Preferences
+   - On Windows/Linux: File → Settings
+
+2. **Find Android SDK Path**:
+   - Navigate to: Appearance & Behavior → System Settings → Android SDK
+   - Your SDK path is displayed at the top of the window
+   - Example: `/Users/yourname/Library/Android/sdk` (macOS)
+
+3. **Find NDK Path**:
+   - Still in the Android SDK settings, select the "SDK Tools" tab
+   - Check the "Show Package Details" box
+   - Expand the "NDK (Side by side)" section
+   - Installed NDK versions are shown with their paths
+   - You can also see the overall NDK location at the top
+   - Example: `/Users/yourname/Library/Android/sdk/ndk/29.0.14206865`
+
+#### Setting ANDROID_HOME
+
+The build script will attempt to automatically detect your Android SDK path from common locations:
+- macOS: `~/Library/Android/sdk` or `~/android-sdk`
+- Linux: `~/Android/Sdk`, `~/android-sdk`, or `/opt/android-sdk`
+- Windows (Git Bash): `%USERPROFILE%/AppData/Local/Android/Sdk` or `%USERPROFILE%/Android/Sdk`
+
+If automatic detection fails, set ANDROID_HOME manually:
+
+### Temporary Setting (Current Terminal Session Only)
+
+```bash
+# On macOS/Linux
+
+export ANDROID_HOME=/path/to/your/android/sdk
+./scripts/build-android.sh
+
+# On Windows (Git Bash)
+export ANDROID_HOME=C:/path/to/your/android/sdk
+./scripts/build-android.sh
+```
+
+### Permanent Setting
+
+#### On macOS/Linux
+
+**For Bash shell:**
+1. Open `~/.bash_profile` or `~/.bashrc` in a text editor
+2. Add the line: `export ANDROID_HOME=/path/to/your/android/sdk`
+3. Save the file
+4. Run: `source ~/.bash_profile` or `source ~/.bashrc` to apply changes
+
+**For Zsh shell (default on macOS Catalina and later):**
+1. Open `~/.zshrc` in a text editor
+2. Add the line: `export ANDROID_HOME=/path/to/your/android/sdk`
+3. Save the file
+4. Run: `source ~/.zshrc` to apply changes
+
+**To verify the setting:**
+```bash
+echo $ANDROID_HOME
+```
+This should display the path to your Android SDK directory.
+
+#### Setting NDK Path
+
+The build script uses NDK version 29.0.14206865 by default. If you need to use a different NDK version, you can specify it:
+
+```bash
+# Build Android library with a specific NDK version
+./scripts/build-android.sh --ndk-version=29.0.14206865
+```
+
+#### Building Android Library
+
+```bash
+# Build Android library and SDK
+./scripts/build-android.sh
+```
+
+### Flutter Plugin
+```bash
+# Flutter build script
+./scripts/build-flutter.sh
+```
+
+### ReactNative Plugin
+```bash
+# Planned ReactNative build script
+./scripts/build-reactnative.sh
+```
+
+### Capacitor Plugin
+```bash
+# Planned Capacitor build script
+./scripts/build-capacitor.sh
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to:
+
+- Submit bug fixes
+- Propose new features
+- Improve documentation
+- Add support for additional platforms
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgments
+
+- Based on [llama.cpp](https://github.com/ggerganov/llama.cpp) by Georgi Gerganov
+- Built with inspiration from various mobile AI frameworks
+
+## Roadmap
+
+1. ✅ Create Flutter plugin
+2. Create ReactNative plugin
+3. Develop Capacitor plugin for web apps
+4. Add comprehensive documentation and examples
+5. Optimize performance for mobile devices
+6. Expand model support and compatibility
+
+Stay tuned for updates as we continue to develop and expand the framework!

@@ -14,30 +14,7 @@ import org.json.JSONArray;
  */
 public class LlamaMobile {
     /**
-     * Chat template to use for structured input
-     */
-    public static String chatTemplate = null;
-    
-    /**
-     * Sets the chat template to use for structured input
-     * 
-     * @param template Chat template string with {{role}} and {{content}} placeholders
-     */
-    public static void setChatTemplate(String template) {
-        chatTemplate = template;
-    }
-    
-    /**
-     * Formats chat messages using the specified template
-     * 
-     * @param contextHandle Context handle obtained from initContext
-     * @param messagesJson JSON string containing chat messages
-     * @param chatTemplate Chat template to use (optional)
-     * @return Formatted prompt string, or null if an error occurred
-     */
-    public static native String formatChatMessages(long contextHandle, String messagesJson, String chatTemplate);
-
-    /**
+    /** 
      * Error types for LlamaMobile operations
      */
     public enum ErrorType {
@@ -797,76 +774,7 @@ public class LlamaMobile {
      * @return Generated text result, or null if generation failed
      */
     public static CompletionResult generateCompletion(long contextHandle, CompletionParams params) {
-        // Handle chat messages formatting (same as iOS)
-        CompletionParams processedParams = params;
-        
-        if (params.chatMessages != null && !params.chatMessages.isEmpty()) {
-            try {
-                // Convert chat messages to JSON format
-                StringBuilder messagesJson = new StringBuilder();
-                messagesJson.append("[");
-                for (int i = 0; i < params.chatMessages.size(); i++) {
-                    ChatMessage message = params.chatMessages.get(i);
-                    if (i > 0) {
-                        messagesJson.append(",");
-                    }
-                    messagesJson.append("{\"role\":\"").append(message.role)
-                              .append("\",\"content\":\"").append(message.content.replace("\"", "\\\""))
-                              .append("\"}");
-                }
-                messagesJson.append("]");
-                
-                // Determine which chat template to use:
-                // 1. First check if params has a custom template
-                // 2. If not, check if we have a globally set template
-                // 3. If either is available, use it; otherwise let the native function use the built-in one
-                String templateToUse = params.chatTemplate != null ? params.chatTemplate : chatTemplate;
-                
-                // Format the chat messages using the appropriate template
-                String formattedPrompt = formatChatMessages(contextHandle, messagesJson.toString(), templateToUse);
-                
-                if (formattedPrompt != null) {
-                    System.out.println("LlamaMobile: Successfully formatted chat messages");
-                    // Update params to use formatted prompt instead of chat messages
-                    processedParams = new CompletionParams(
-                        formattedPrompt,                    // prompt
-                        params.temperature,                 // temperature
-                        params.maxTokens,                   // maxTokens
-                        params.nThreads,                    // nThreads
-                        params.seed,                        // seed
-                        params.topK,                        // topK
-                        params.topP,                        // topP
-                        params.minP,                        // minP
-                        params.typicalP,                    // typicalP
-                        params.penaltyLastN,                // penaltyLastN
-                        params.penaltyRepeat,               // penaltyRepeat
-                        params.penaltyFreq,                 // penaltyFreq
-                        params.penaltyPresent,              // penaltyPresent
-                        params.mirostat,                    // mirostat
-                        params.mirostatTau,                 // mirostatTau
-                        params.mirostatEta,                 // mirostatEta
-                        params.ignoreEos,                   // ignoreEos
-                        params.nProbs,                      // nProbs
-                        params.grammar,                     // grammar
-                        params.stopSequences,               // stopSequences
-                        params.mediaPaths,                  // mediaPaths
-                        params.tokenCallback,               // tokenCallback
-                        null,                               // chatMessages (empty)
-                        params.useJsonResponse,             // useJsonResponse
-                        params.chatTemplate                 // chatTemplate
-                    );
-                } else {
-                    System.err.println("LlamaMobile: Cannot format chat messages: Formatting failed");
-                    // Fall back to original params
-                    return nativeGenerateCompletion(contextHandle, processedParams);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-                // Fall back to original params if formatting fails
-            }
-        }
-        
-        return nativeGenerateCompletion(contextHandle, processedParams);
+        return nativeGenerateCompletion(contextHandle, params);
     }
     
     /**
@@ -968,7 +876,7 @@ public class LlamaMobile {
                 params.getTokenCallback(),
                 params.getChatMessages(),
                 grammar != null ? false : params.isUseJsonResponse(),
-                chatTemplate
+                params.getChatTemplate()
             );
             return generateCompletion(contextHandle, params);
         } catch (Exception e) {

@@ -1,0 +1,12 @@
+platform :ios, '15.0'
+
+use_frameworks!
+
+workspace 'App/App.xcworkspace'
+
+target 'App' do
+  project 'App/App.xcodeproj'
+  pod 'Capacitor', :path => '../node_modules/@capacitor/ios'
+  pod 'CapacitorCordova', :path => '../node_modules/@capacitor/ios'
+  pod 'LlamaMobileCapacitorPlugin', :path => '../../../llama_mobile-capacitor-plugin'
+end

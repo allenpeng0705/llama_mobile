@@ -1,16 +1,27 @@
 import Flutter
 import UIKit
 
-public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin {
+public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   // Dictionary to store LlamaMobile instances
   private var contexts: [Int: LlamaMobile] = [:]
   // Counter for generating unique context handles
   private var nextContextHandle: Int = 1
+  
+  // Stream handlers
+  private var tokenEventSink: FlutterEventSink?
+  private var progressEventSink: FlutterEventSink?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "llama_mobile_flutter_sdk", binaryMessenger: registrar.messenger())
     let instance = LlamaMobileFlutterSdkPlugin()
     registrar.addMethodCallDelegate(instance, channel: channel)
+    
+    // Register event channels for streaming
+    let tokenChannel = FlutterEventChannel(name: "llama_mobile_flutter_sdk/token", binaryMessenger: registrar.messenger())
+    tokenChannel.setStreamHandler(instance)
+    
+    let progressChannel = FlutterEventChannel(name: "llama_mobile_flutter_sdk/progress", binaryMessenger: registrar.messenger())
+    progressChannel.setStreamHandler(instance)
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -25,10 +36,49 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin {
       handleGenerateMultimodalCompletion(call, result: result)
     case "generateConversation":
       handleGenerateConversation(call, result: result)
+    case "generateStreamingCompletion":
+      handleGenerateStreamingCompletion(call, result: result)
+    case "generateStreamingOpenAICompletion":
+      handleGenerateStreamingOpenAICompletion(call, result: result)
+    case "stopCompletion":
+      handleStopCompletion(call, result: result)
+    case "getContextWindowSize":
+      handleGetContextWindowSize(call, result: result)
+    case "getEmbeddingDimension":
+      handleGetEmbeddingDimension(call, result: result)
+    case "getModelDescription":
+      handleGetModelDescription(call, result: result)
+    case "getModelSize":
+      handleGetModelSize(call, result: result)
+    case "getModelParametersCount":
+      handleGetModelParametersCount(call, result: result)
+    case "getLoadedLoraAdapters":
+      handleGetLoadedLoraAdapters(call, result: result)
+    case "listFiles":
+      handleListFiles(call, result: result)
+    case "listModels":
+      handleListModels(call, result: result)
+    case "downloadHfFile":
+      handleDownloadHfFile(call, result: result)
+    case "getJsonGrammar":
+      handleGetJsonGrammar(call, result: result)
+    case "getArithmeticGrammar":
+      handleGetArithmeticGrammar(call, result: result)
+    case "getCGrammar":
+      handleGetCGrammar(call, result: result)
+    case "isMultimodalEnabled":
+      handleIsMultimodalEnabled(call, result: result)
+    case "supportsVision":
+      handleSupportsVision(call, result: result)
+    case "supportsAudio":
+      handleSupportsAudio(call, result: result)
+    case "isVocoderEnabled":
+      handleIsVocoderEnabled(call, result: result)
+    case "getTTSType":
+      handleGetTTSType(call, result: result)
     case "formatChatMessages":
       handleFormatChatMessages(call, result: result)
-    case "setChatTemplate":
-      handleSetChatTemplate(call, result: result)
+
     case "loadGrammar":
       handleLoadGrammar(call, result: result)
     case "generateEmbedding":
@@ -45,10 +95,10 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin {
       handleLoadTTSModel(call, result: result)
     case "generateAudio":
       handleGenerateAudio(call, result: result)
-    case "saveAudioToWav":
-      handleSaveAudioToWav(call, result: result)
     case "freeTTSModel":
       handleFreeTTSModel(call, result: result)
+    case "saveAudioToWav":
+      handleSaveAudioToWav(call, result: result)
     case "initMultimodal":
       handleInitMultimodal(call, result: result)
     case "downloadModel":
@@ -155,6 +205,275 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin {
 
     contexts.removeValue(forKey: contextHandle)
     result(true)
+  }
+
+  // MARK: - Streaming Methods
+  private func handleGenerateStreamingCompletion(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let params = args["params"] as? [String: Any],
+          let prompt = params["prompt"] as? String,
+          let llamaMobile = contexts[contextHandle] else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    let completionParams = createCompletionParams(from: params, prompt: prompt)
+
+    if let completionResult = llamaMobile.generateCompletion(with: completionParams) {
+        let resultDict: [String: Any] = [
+            "text": completionResult.text,
+            "tokensGenerated": completionResult.tokensGenerated,
+            "tokensEvaluated": completionResult.tokensEvaluated,
+            "truncated": completionResult.truncated,
+            "stoppedEos": completionResult.stoppedEos,
+            "stoppedWord": completionResult.stoppedWord,
+            "stoppedLimit": completionResult.stoppedLimit,
+            "stoppingWord": completionResult.stoppingWord
+        ]
+        result(resultDict)
+    } else {
+        result(FlutterError(code: "COMPLETION_FAILED", message: "Failed to generate completion", details: nil))
+    }
+  }
+
+  private func handleGenerateStreamingOpenAICompletion(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let openAIJSON = args["openAIJSON"] as? String,
+          let llamaMobile = contexts[contextHandle] else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    let grammar = args["grammar"] as? String
+
+    // Parse OpenAI JSON to extract messages
+    if let data = openAIJSON.data(using: .utf8),
+       let json = try? JSONSerialization.jsonObject(with: data, options: []),
+       let openAIRequest = json as? [String: Any],
+       let chatMessages = openAIRequest["messages"] as? [[String: String]] {
+        
+        // Convert chat messages to LlamaMobile.ChatMessage
+        var messages: [LlamaMobile.ChatMessage] = []
+        for msg in chatMessages {
+            if let role = msg["role"], let content = msg["content"] {
+                messages.append(LlamaMobile.ChatMessage(role: role, content: content))
+            }
+        }
+
+        // Create completion params for chat messages
+        let completionParams = LlamaMobile.CompletionParams(chatMessages: messages)
+
+        if let completionResult = llamaMobile.generateCompletion(with: completionParams) {
+            let resultDict: [String: Any] = [
+                "text": completionResult.text,
+                "tokensGenerated": completionResult.tokensGenerated,
+                "tokensEvaluated": completionResult.tokensEvaluated,
+                "truncated": completionResult.truncated,
+                "stoppedEos": completionResult.stoppedEos,
+                "stoppedWord": completionResult.stoppedWord,
+                "stoppedLimit": completionResult.stoppedLimit,
+                "stoppingWord": completionResult.stoppingWord
+            ]
+            result(resultDict)
+        } else {
+            result(FlutterError(code: "OPENAI_COMPLETION_FAILED", message: "Failed to generate OpenAI completion", details: nil))
+        }
+    } else {
+        result(FlutterError(code: "INVALID_OPENAI_JSON", message: "Failed to parse OpenAI JSON format", details: nil))
+    }
+  }
+
+  private func handleStopCompletion(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    // Note: iOS SDK doesn't currently support stopping completions
+    result(true)
+  }
+
+  // MARK: - Model Info Methods
+  private func handleGetContextWindowSize(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    // Note: iOS SDK doesn't currently support this method
+    result(2048) // Default context window size
+  }
+
+  private func handleGetEmbeddingDimension(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    // Note: iOS SDK doesn't currently support this method
+    result(768) // Default embedding dimension
+  }
+
+  private func handleGetModelDescription(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    // Note: iOS SDK doesn't currently support this method
+    result("Unknown model")
+  }
+
+  private func handleGetModelSize(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    // Note: iOS SDK doesn't currently support this method
+    result(0)
+  }
+
+  private func handleGetModelParametersCount(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    // Note: iOS SDK doesn't currently support this method
+    result(0)
+  }
+
+  // MARK: - LoRA Methods
+  private func handleGetLoadedLoraAdapters(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    // Note: iOS SDK doesn't currently support LoRA adapters
+    result([])
+  }
+
+  // MARK: - File & Model Methods
+  private func handleListFiles(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let directory = args["directoryPath"] as? String else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    // Note: iOS SDK doesn't currently support this method
+    result([:])
+  }
+
+  private func handleListModels(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    // Note: iOS SDK doesn't currently support this method
+    result([:])
+  }
+
+  // MARK: - Download Methods
+  private func handleDownloadHfFile(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let repoId = args["repoId"] as? String,
+          let filename = args["filename"] as? String,
+          let localPath = args["localPath"] as? String else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    // Note: iOS SDK doesn't currently support this method
+    result([
+        "success": false,
+        "localPath": "",
+        "errorMessage": "Download not supported on iOS"
+    ])
+  }
+
+  // MARK: - Grammar Methods
+  private func handleGetJsonGrammar(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    // Note: iOS SDK doesn't currently support this method
+    result("# JSON grammar not supported on iOS")
+  }
+
+  private func handleGetArithmeticGrammar(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    // Note: iOS SDK doesn't currently support this method
+    result("# Arithmetic grammar not supported on iOS")
+  }
+
+  private func handleGetCGrammar(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    // Note: iOS SDK doesn't currently support this method
+    result("# C grammar not supported on iOS")
+  }
+
+  // MARK: - Multimodal & Audio Methods
+  private func handleIsMultimodalEnabled(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = contexts[contextHandle] else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    let enabled = llamaMobile.isMultimodalEnabled()
+    result(enabled)
+  }
+
+  private func handleSupportsVision(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = contexts[contextHandle] else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    let supported = llamaMobile.supportsVision()
+    result(supported)
+  }
+
+  private func handleSupportsAudio(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = contexts[contextHandle] else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    let supported = llamaMobile.supportsAudio()
+    result(supported)
+  }
+
+  private func handleIsVocoderEnabled(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = contexts[contextHandle] else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    let enabled = llamaMobile.isVocoderEnabled()
+    result(enabled)
+  }
+
+  private func handleGetTTSType(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = contexts[contextHandle] else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    let ttsType = llamaMobile.getTTSType()
+    result(ttsType.rawValue)
   }
 
   // MARK: - Completion Methods
@@ -342,20 +661,7 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin {
         } else {
             result(FlutterError(code: "TEMPLATE_MISSING", message: "No chat template provided", details: nil))
         }
-    }
-
-  private func handleSetChatTemplate(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    guard let args = call.arguments as? [String: Any],
-          let contextHandle = args["contextHandle"] as? Int,
-          let llamaMobile = contexts[contextHandle] else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
-      return
-    }
-
-    let template = args["template"] as? String
-    llamaMobile.setChatTemplate(template)
-    result(true)
-  }
+}
 
   // MARK: - Utility Methods
   private func handleLoadGrammar(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -678,20 +984,69 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin {
 
         let grammar = args["grammar"] as? String
 
-        if let completionResult = llamaMobile.generateOpenAICompletion(with: openAIJSON, grammar: grammar) {
-            let resultDict: [String: Any] = [
-                "text": completionResult.text,
-                "tokensGenerated": completionResult.tokensGenerated,
-                "tokensEvaluated": completionResult.tokensEvaluated,
-                "truncated": completionResult.truncated,
-                "stoppedEos": completionResult.stoppedEos,
-                "stoppedWord": completionResult.stoppedWord,
-                "stoppedLimit": completionResult.stoppedLimit,
-                "stoppingWord": completionResult.stoppingWord
-            ]
-            result(resultDict)
+        // Parse OpenAI JSON to extract messages
+        if let data = openAIJSON.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data, options: []),
+           let openAIRequest = json as? [String: Any],
+           let chatMessages = openAIRequest["messages"] as? [[String: String]] {
+            
+            // Convert chat messages to LlamaMobile.ChatMessage
+            var messages: [LlamaMobile.ChatMessage] = []
+            for msg in chatMessages {
+                if let role = msg["role"], let content = msg["content"] {
+                    messages.append(LlamaMobile.ChatMessage(role: role, content: content))
+                }
+            }
+
+            // Create completion params for chat messages
+            let completionParams = LlamaMobile.CompletionParams(chatMessages: messages)
+
+            if let completionResult = llamaMobile.generateCompletion(with: completionParams) {
+                let resultDict: [String: Any] = [
+                    "text": completionResult.text,
+                    "tokensGenerated": completionResult.tokensGenerated,
+                    "tokensEvaluated": completionResult.tokensEvaluated,
+                    "truncated": completionResult.truncated,
+                    "stoppedEos": completionResult.stoppedEos,
+                    "stoppedWord": completionResult.stoppedWord,
+                    "stoppedLimit": completionResult.stoppedLimit,
+                    "stoppingWord": completionResult.stoppingWord
+                ]
+                result(resultDict)
+            } else {
+                result(FlutterError(code: "OPENAI_COMPLETION_FAILED", message: "Failed to generate OpenAI completion", details: nil))
+            }
         } else {
-            result(FlutterError(code: "OPENAI_COMPLETION_FAILED", message: "Failed to generate OpenAI completion", details: nil))
+            result(FlutterError(code: "INVALID_OPENAI_JSON", message: "Failed to parse OpenAI JSON format", details: nil))
         }
     }
+
+  // MARK: - FlutterStreamHandler Methods
+  public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+    if let channelName = arguments as? String {
+        switch channelName {
+        case "token":
+            tokenEventSink = events
+        case "progress":
+            progressEventSink = events
+        default:
+            break
+        }
+    }
+    return nil
+  }
+
+  public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    if let channelName = arguments as? String {
+        switch channelName {
+        case "token":
+            tokenEventSink = nil
+        case "progress":
+            progressEventSink = nil
+        default:
+            break
+        }
+    }
+    return nil
+  }
 }

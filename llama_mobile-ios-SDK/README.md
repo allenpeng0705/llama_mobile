@@ -359,33 +359,277 @@ let llamaWithLora = LlamaMobile(
 ```
 
 #### Token Streaming
+The iOS SDK supports real-time token streaming through callback mechanisms. This allows you to receive tokens as they're generated, enabling interactive UIs and progress tracking.
+
+**Basic Streaming Example:**
 ```swift
 // Generate with token callback
-llama.generateCompletion(
+let result = llama.generateCompletion(
     prompt: "Write a poem about AI:",
     maxTokens: 256,
-    temperature: 0.8
-) { token, isDone in
-    if let token = token {
+    temperature: 0.8,
+    tokenCallback: { token in
         print(token, terminator: "")
+        return true // Return false to stop generation
     }
-    return true // Return false to stop generation
+)
+```
+
+**Advanced Streaming with CompletionParams:**
+```swift
+// Create completion parameters with token callback
+let params = CompletionParams(
+    prompt: "Explain quantum computing in simple terms",
+    maxTokens: 256,
+    temperature: 0.7,
+    tokenCallback: { token in
+        print("Generated token: \(token)")
+        // Return true to continue, false to stop
+        return true
+    }
+)
+
+// Generate completion with streaming
+if let result = llama.generateCompletion(with: params) {
+    print("\nFinal result length: \(result.text.count) characters")
+    print("Tokens generated: \(result.tokensGenerated)")
 }
 ```
 
-### 7. Available API Methods
-The Swift wrapper provides these main functionalities:
-- `init(modelPath: nGpuLayers: nCtx: nThreads:)` - Initialize with model
-- `generateCompletion(prompt: maxTokens: temperature: tokenCallback:)` - Generate text
-- `generateCompletion(prompt: imagePath: maxTokens: temperature: tokenCallback:)` - Multimodal generation
-- `generateEmbeddings(for:)` - Generate embeddings
-- `tokenize(text:)` - Tokenize text
-- `detokenize(tokens:)` - Detokenize tokens
-- `download(with:)` - Download models
+**Streaming with Early Stopping:**
+```swift
+var generatedText = ""
+let params = CompletionParams(
+    prompt: "Write a short story about a robot:",
+    maxTokens: 512,
+    temperature: 0.9,
+    tokenCallback: { token in
+        generatedText += token
+        print("Current text: \(generatedText)")
+        
+        // Stop early if we reach a certain condition
+        if generatedText.contains("The end") {
+            print("\nStopping early - found ending marker")
+            return false
+        }
+        return true
+    }
+)
+
+if let result = llama.generateCompletion(with: params) {
+    print("\nFinal result: \(result.text)")
+}
+```
+
+**Streaming Support Across Functions:**
+Streaming is available in all generation functions:
+- `generateCompletion(with: params)` - via `tokenCallback` in params
+- `generateOpenAICompletion(with: openAIJSON, grammar: String?)` - internally supports streaming
+- `generateCompletion(prompt: String, maxTokens: Int32, temperature: Double, tokenCallback: ((String) -> Bool)?)` - direct parameter
+- `generateMultimodalCompletion(with: params, mediaPaths: [String])` - supports streaming for multimodal inputs
+
+**Callback Signature:**
+The token callback has the signature `((String) -> Bool)?` where:
+- `token`: The newly generated token as a string
+- Return value: `true` to continue generation, `false` to stop early
+
+**Key Features:**
+- ✅ Real-time token delivery
+- ✅ Early stopping capability
+- ✅ Support for all generation types
+- ✅ Works with both standard and OpenAI format requests
+- ✅ Compatible with multimodal inputs
+
+### 7. Initialization Methods
+The iOS SDK provides multiple initialization methods to suit different use cases, all of which offer full parameter access through the `InitParams` struct.
+
+#### 7.1 Simplified Initialization
+**Basic Initialization:**
+```swift
+// Minimal initialization
+let llama = LlamaMobile(modelPath: "/path/to/model.gguf")
+
+// Initialization with GPU acceleration
+let llama = LlamaMobile(
+    modelPath: "/path/to/model.gguf",
+    nGpuLayers: 10  // Offload 10 layers to GPU
+)
+
+// Initialization with custom context size and progress tracking
+let llama = LlamaMobile(
+    modelPath: "/path/to/model.gguf",
+    nCtx: 4096,      // Larger context window
+    nGpuLayers: 10,  // GPU layers
+    nThreads: 8,     // CPU threads
+    progressCallback: { progress in
+        print("Loading: \(progress * 100)%")
+    }
+)
+```
+
+#### 7.2 Full Parameter Initialization
+**Using InitParams for complete control:**
+```swift
+// Create init parameters with full configuration
+var initParams = LlamaMobile.InitParams(modelPath: "/path/to/model.gguf")
+
+// Core settings
+initParams.nCtx = 4096                // Context window size
+initParams.nGpuLayers = 10            // GPU layers
+initParams.nThreads = 8               // CPU threads
+initParams.nBatch = 1024              // Batch size
+initParams.nUBatch = 1024             // Micro-batch size
+
+// Memory management
+initParams.useMmap = true             // Memory mapping for faster loading
+initParams.useMlock = false           // Memory locking
+
+// Embedding settings
+initParams.embedding = true           // Enable embedding generation
+initParams.poolingType = 0            // Pooling type (0=mean, 1=max, 2=cls)
+initParams.embdNormalize = 1          // Normalize embeddings
+
+// Performance settings
+initParams.flashAttention = true      // Enable flash attention
+initParams.cacheTypeK = "fp16"        // K cache type
+initParams.cacheTypeV = "fp16"        // V cache type
+
+// Chat settings
+initParams.chatTemplate = "custom template..." // Custom chat template
+initParams.systemPrompt = "You are a helpful assistant" // System prompt
+
+// Progress tracking
+initParams.progressCallback = { progress in
+    print("Loading: \(progress * 100)%")
+}
+
+// Initialize with full configuration
+let llama = LlamaMobile(with: initParams)
+```
+
+### 8. Completion API Methods
+The SDK provides flexible completion methods for text generation, all supporting streaming and full parameter control.
+
+#### 8.1 Simplified Completion
+**Basic Text Generation:**
+```swift
+// Simple completion
+let result = llama.generateCompletion(
+    prompt: "Write a poem about AI",
+    maxTokens: 256,
+    temperature: 0.7
+)
+
+// Completion with streaming
+let result = llama.generateCompletion(
+    prompt: "Write a story about robots",
+    maxTokens: 512,
+    temperature: 0.8,
+    tokenCallback: { token in
+        print(token, terminator: "")
+        return true // Return false to stop
+    }
+)
+```
+
+#### 8.2 Full Parameter Completion
+**Using CompletionParams for complete control:**
+```swift
+// Create completion parameters with full configuration
+var params = LlamaMobile.CompletionParams(prompt: "Write a detailed essay")
+
+// Core generation settings
+params.maxTokens = 1024        // Max tokens to generate
+params.nThreads = 8            // Override thread count
+params.seed = 42               // Random seed
+
+// Sampling settings
+params.temperature = 0.7       // Sampling temperature
+params.topK = 40               // Top-k sampling
+params.topP = 0.95             // Nucleus sampling
+params.minP = 0.05             // Minimum probability
+params.typicalP = 1.0          // Typical sampling
+
+// Repetition penalties
+params.penaltyLastN = 64       // Repetition penalty window
+params.penaltyRepeat = 1.1     // Repetition penalty
+params.penaltyFreq = 0.0       // Frequency penalty
+params.penaltyPresent = 0.0    // Presence penalty
+
+// Mirostat sampling
+params.mirostat = 1            // Mirostat mode (0=disabled, 1=mirostat, 2=mirostat 2.0)
+params.mirostatTau = 5.0       // Mirostat target entropy
+params.mirostatEta = 0.1       // Mirostat learning rate
+
+// Stop conditions
+params.ignoreEos = false       // Ignore end-of-sequence tokens
+params.stopSequences = ["\n\n", "###"] // Custom stop sequences
+
+// Structured output
+params.grammar = jsonGrammar   // Grammar for structured output
+
+// Multimodal inputs
+params.mediaPaths = ["/path/to/image.jpg"] // Image inputs
+
+// Chat format
+params.chatMessages = chatMessages // Structured chat messages
+// Note: Chat template is set during initialization, not during completion
+
+// Response format
+params.useJsonResponse = true  // OpenAI-like JSON response
+
+// Streaming
+params.tokenCallback = { token in
+    print(token, terminator: "")
+    return true
+}
+
+// Generate with full configuration
+let result = llama.generateCompletion(with: params)
+```
+
+#### 8.3 Specialized Completion Methods
+**OpenAI Format Completion:**
+```swift
+// Generate completion from OpenAI format JSON
+let openAIJSON = """
+{
+  "messages": [
+    {"role": "system", "content": "You are a helpful assistant"},
+    {"role": "user", "content": "Hello, how are you?"}
+  ]
+}
+"""
+
+let result = llama.generateOpenAICompletion(with: openAIJSON)
+```
+
+**Multimodal Completion:**
+```swift
+// Generate completion with image input
+let result = llama.generateCompletion(
+    prompt: "Describe this image:",
+    mediaPaths: ["/path/to/image.jpg"],
+    maxTokens: 256
+)
+```
+
+### 9. Additional API Methods
+The Swift wrapper provides these additional functionalities:
+- `generateEmbeddings(for:)` - Generate embeddings for text
+- `tokenize(text:)` - Convert text to tokens
+- `detokenize(tokens:)` - Convert tokens back to text
+- `download(with:)` - Download models from Hugging Face
 - `speak(text:)` - Text-to-Speech conversion
 - `stopGeneration()` - Stop ongoing generation
 - `loadGrammar(from:)` - Load grammar from file path
 - `loadGrammar(named:)` - Load grammar from framework bundle
+- `initVocoder(vocoderModelPath:)` - Initialize TTS vocoder
+- `generateAudioFromText(text:)` - Convert text to speech audio
+- `applyLoraAdapters(_:)` - Apply LoRA adapters to the model
+- `removeLoraAdapters()` - Remove all LoRA adapters
+- `getModelDescription()` - Get model description
+- `getContextWindowSize()` - Get context window size
 
 ## 8. Troubleshooting
 

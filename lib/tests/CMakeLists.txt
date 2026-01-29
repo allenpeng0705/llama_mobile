@@ -88,7 +88,7 @@ target_compile_definitions(test_download PRIVATE
 # Add chat template test executable
 add_executable(test_chat_template test_chat_template.cpp)
 
-# Link against the core library
+# Link againsts core library
 target_link_libraries(test_chat_template PRIVATE llama_mobile_core_lib)
 
 # Set C++ standard
@@ -96,6 +96,21 @@ target_compile_features(test_chat_template PRIVATE cxx_std_17)
 
 # Add definitions from main CMakeLists.txt
 target_compile_definitions(test_chat_template PRIVATE
+    LM_GGML_USE_CPU
+    LLAMA_MOBILE_VERBOSE=0
+)
+
+# Add advanced chat test executable
+add_executable(test_advanced_chat test_advanced_chat.cpp)
+
+# Link againsts core library
+target_link_libraries(test_advanced_chat PRIVATE llama_mobile_core_lib)
+
+# Set C++ standard
+target_compile_features(test_advanced_chat PRIVATE cxx_std_17)
+
+# Add definitions from main CMakeLists.txt
+target_compile_definitions(test_advanced_chat PRIVATE
     LM_GGML_USE_CPU
     LLAMA_MOBILE_VERBOSE=0
 )
@@ -143,6 +158,14 @@ if(APPLE)
             ${METALKIT_LIBRARY}
         )
         target_link_libraries(test_download PUBLIC
+            ${METAL_LIBRARY}
+            ${METALKIT_LIBRARY}
+        )
+        target_link_libraries(test_chat_template PUBLIC
+            ${METAL_LIBRARY}
+            ${METALKIT_LIBRARY}
+        )
+        target_link_libraries(test_advanced_chat PUBLIC
             ${METAL_LIBRARY}
             ${METALKIT_LIBRARY}
         )

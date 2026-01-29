@@ -116,7 +116,7 @@ bool parse_input(const std::string& input, std::string& prompt, llama_mobile_com
     // Initialize default values
     params = {0};
     params.prompt = nullptr;
-    params.max_tokens = 200;
+    params.n_predict = 200;
     params.temperature = 0.8;
     params.top_k = 40;
     params.top_p = 0.95;
@@ -172,7 +172,7 @@ bool parse_input(const std::string& input, std::string& prompt, llama_mobile_com
 
             // Extract optional parameters
             if (input_json.contains("max_tokens")) {
-                params.max_tokens = input_json["max_tokens"].get<int32_t>();
+                params.n_predict = input_json["max_tokens"].get<int32_t>();
             }
             if (input_json.contains("temperature")) {
                 params.temperature = input_json["temperature"].get<double>();
@@ -399,7 +399,7 @@ int main(int argc, char* argv[]) {
                 
                 // Set default params for plain text input
                 params = {0};
-                params.max_tokens = 200;
+                params.n_predict = 200;
                 params.temperature = 0.8;
                 params.top_k = 40;
                 params.top_p = 0.95;

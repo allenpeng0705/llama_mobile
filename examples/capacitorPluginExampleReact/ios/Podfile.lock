@@ -1,0 +1,28 @@
+PODS:
+  - Capacitor (8.0.1):
+    - CapacitorCordova
+  - CapacitorCordova (8.0.1)
+  - LlamaMobileCapacitorPlugin (0.0.1):
+    - Capacitor
+
+DEPENDENCIES:
+  - "Capacitor (from `../node_modules/@capacitor/ios`)"
+  - "CapacitorCordova (from `../node_modules/@capacitor/ios`)"
+  - LlamaMobileCapacitorPlugin (from `../../../llama_mobile-capacitor-plugin`)
+
+EXTERNAL SOURCES:
+  Capacitor:
+    :path: "../node_modules/@capacitor/ios"
+  CapacitorCordova:
+    :path: "../node_modules/@capacitor/ios"
+  LlamaMobileCapacitorPlugin:
+    :path: "../../../llama_mobile-capacitor-plugin"
+
+SPEC CHECKSUMS:
+  Capacitor: 2d8b1a05870ddb600b0e1e32b83fcf0890c244e1
+  CapacitorCordova: 0d65b9bb74e995dcecb9463f34f1af2aba6f955c
+  LlamaMobileCapacitorPlugin: 06c23bae25b89dc449d52199acbb827891c5c1ad
+
+PODFILE CHECKSUM: 93e08dfaff91969e4a2bf4b847f0479cfffabb15
+
+COCOAPODS: 1.16.2

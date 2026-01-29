@@ -36,7 +36,9 @@ static llama_mobile_completion_params_c_t convert_completion_params(const llama_
     
     if (api_params) {
         ffi_params.prompt = api_params->prompt;
-        ffi_params.n_predict = api_params->max_tokens;
+        ffi_params.n_predict = api_params->n_predict;
+        ffi_params.n_threads = api_params->n_threads;
+        ffi_params.seed = api_params->seed;
         ffi_params.temperature = api_params->temperature;
         ffi_params.top_k = api_params->top_k;
         ffi_params.top_p = api_params->top_p;
@@ -50,11 +52,22 @@ static llama_mobile_completion_params_c_t convert_completion_params(const llama_
         ffi_params.mirostat_tau = api_params->mirostat_tau;
         ffi_params.mirostat_eta = api_params->mirostat_eta;
         ffi_params.ignore_eos = api_params->ignore_eos;
+        ffi_params.n_probs = api_params->n_probs;
         ffi_params.stop_sequences = api_params->stop_sequences;
         ffi_params.stop_sequence_count = api_params->stop_sequence_count;
         ffi_params.grammar = api_params->grammar;
-        ffi_params.use_json_response = api_params->use_json_response;
         ffi_params.token_callback = api_params->token_callback;
+        
+        // New fields for chat support
+        ffi_params.chat_messages = api_params->chat_messages;
+        ffi_params.chat_message_count = api_params->chat_message_count;
+        ffi_params.use_json_response = api_params->use_json_response;
+        
+        // Advanced parameters for Jinja template engine
+        ffi_params.json_schema = api_params->json_schema;
+        ffi_params.tools = api_params->tools;
+        ffi_params.parallel_tool_calls = api_params->parallel_tool_calls;
+        ffi_params.tool_choice = api_params->tool_choice;
     }
     
     return ffi_params;

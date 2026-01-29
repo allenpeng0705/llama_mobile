@@ -34,18 +34,217 @@ void llama_mobile_context::truncatePrompt(std::vector<llama_token> &prompt_token
     prompt_tokens = new_tokens;
 }
 
+// Helper function to detect if a template is Jinja format
+static bool is_jinja_template(const std::string& template_str) {
+    // Jinja templates use {{ }} for variables and {% %} for control structures
+    return template_str.find("{{") != std::string::npos || 
+           template_str.find("{%") != std::string::npos;
+}
+
+// Helper function to check if any advanced parameters are set
+static bool has_advanced_parameters(const common_params& params) {
+    return !params.json_schema.empty() || 
+           !params.tools.empty() || 
+           params.parallel_tool_calls || 
+           !params.tool_choice.empty();
+}
+
 void llama_mobile_context::loadPrompt() {
     std::vector<llama_token> prompt_tokens;
     
-    // Always use the regular prompt (chat messages are now formatted on the client side)
-    prompt_tokens = ::common_tokenize(ctx, params.prompt, true, true);
+    // Validate context before proceeding
+    if (!ctx) {
+        LOG_ERROR("Context is null, cannot load prompt");
+        num_prompt_tokens = 0;
+        return;
+    }
+    
+    // Check if chat_messages are provided and format them using chat template
+    if (!params.chat_messages.empty()) {
+        LOG_INFO("Formatting %zu chat messages (enable_chat_template=%s)", 
+                 params.chat_messages.size(), 
+                 params.enable_chat_template ? "true" : "false");
+        
+        // Helper function to escape JSON special characters
+        auto escape_json = [](const std::string& s) -> std::string {
+            std::string result;
+            result.reserve(s.size() * 1.2); // Reserve some extra space
+            for (char c : s) {
+                if (c == '"') {
+                    result += "\\\"";
+                } else if (c == '\\') {
+                    result += "\\\\";
+                } else if (c == '\n') {
+                    result += "\\n";
+                } else if (c == '\r') {
+                    result += "\\r";
+                } else if (c == '\t') {
+                    result += "\\t";
+                } else {
+                    result += c;
+                }
+            }
+            return result;
+        };
+        
+        // Convert chat messages to JSON array string with proper escaping
+        std::string messages_json = "[";
+        for (size_t i = 0; i < params.chat_messages.size(); ++i) {
+            const auto& msg = params.chat_messages[i];
+            
+            // Get role and content strings, defaulting to empty if null
+            std::string role = msg.role ? msg.role : "";
+            std::string content = msg.content ? msg.content : "";
+            
+            messages_json += "{\"role\":\"";
+            messages_json += escape_json(role);
+            messages_json += "\",\"content\":\"";
+            messages_json += escape_json(content);
+            messages_json += "\"}";
+            if (i < params.chat_messages.size() - 1) {
+                messages_json += ",";
+            }
+        }
+        messages_json += "]";
+        
+        // Check if chat templates are available (either built-in or custom)
+        bool has_chat_template = templates && templates.get() && common_chat_templates_was_explicit(templates.get());
+        bool has_custom_template = !params.chat_template.empty();
+        
+        if (params.enable_chat_template && (has_chat_template || has_custom_template)) {
+            // Determine template format
+            bool use_jinja;
+            std::string template_to_use;
+            
+            if (has_custom_template) {
+                // Use custom template and detect its format
+                template_to_use = params.chat_template;
+                use_jinja = is_jinja_template(params.chat_template);
+                LOG_INFO("Using custom template (Jinja: %s)", use_jinja ? "yes" : "no");
+            } else {
+                // Use built-in template
+                // Built-in templates are typically Jinja format for modern models
+                use_jinja = true;
+                template_to_use = "";  // Empty means use built-in
+                LOG_INFO("Using built-in template (Jinja: yes)");
+            }
+            
+            // Format chat messages using appropriate method based on detected format
+            std::string formatted_prompt;
+            try {
+                if (use_jinja) {
+                    // Use Jinja template engine with full feature support
+                    
+                    // Check if template supports tools by looking for tool-related placeholders
+                    bool template_supports_tools = template_to_use.empty() || 
+                                                 template_to_use.find("tools") != std::string::npos ||
+                                                 template_to_use.find("tool_choice") != std::string::npos ||
+                                                 template_to_use.find("json_schema") != std::string::npos;
+                    
+                    // Determine which parameters to use based on template support
+                    std::string json_schema_to_use = template_supports_tools ? params.json_schema : "";
+                    std::string tools_to_use = template_supports_tools ? params.tools : "";
+                    bool parallel_tool_calls_to_use = template_supports_tools && params.parallel_tool_calls;
+                    std::string tool_choice_to_use = template_supports_tools ? params.tool_choice : "";
+                    
+                    LOG_INFO("Template tool support: %s", template_supports_tools ? "true" : "false");
+                    LOG_INFO("Using advanced parameters: json_schema=%s, tools=%s, parallel_tool_calls=%s, tool_choice=%s",
+                             !json_schema_to_use.empty() ? "yes" : "no",
+                             !tools_to_use.empty() ? "yes" : "no",
+                             parallel_tool_calls_to_use ? "yes" : "no",
+                             !tool_choice_to_use.empty() ? "yes" : "no");
+                    
+                    common_chat_params chat_result = getFormattedChatWithJinja(
+                        messages_json,
+                        template_to_use,
+                        json_schema_to_use,
+                        tools_to_use,
+                        parallel_tool_calls_to_use,
+                        tool_choice_to_use
+                    );
+                    formatted_prompt = chat_result.prompt;
+                    
+                    // Apply grammar if provided by chat template or json_schema
+                    if (!chat_result.grammar.empty()) {
+                        params.sampling.grammar = chat_result.grammar;
+                        LOG_INFO("Applied grammar from chat template");
+                    }
+                } else {
+                    // Use legacy template engine
+                    if (has_advanced_parameters(params)) {
+                        LOG_WARNING("Legacy template engine doesn't support advanced parameters (tools, json_schema, etc.). These parameters will be ignored.");
+                    }
+                    formatted_prompt = getFormattedChat(messages_json, template_to_use);
+                }
+                
+                if (!formatted_prompt.empty()) {
+                    LOG_INFO("Successfully formatted chat messages into prompt (%zu chars)", formatted_prompt.size());
+                    prompt_tokens = ::common_tokenize(ctx, formatted_prompt, true, true);
+                } else {
+                    LOG_ERROR("Failed to format chat messages, falling back to direct prompt");
+                    prompt_tokens = ::common_tokenize(ctx, params.prompt, true, true);
+                }
+            } catch (const std::exception& e) {
+                LOG_ERROR("Exception during chat formatting: %s", e.what());
+                LOG_INFO("Falling back to using messages_json directly as prompt");
+                formatted_prompt = getFormattedChat(messages_json, "");
+                if (!formatted_prompt.empty()) {
+                    LOG_INFO("Successfully formatted chat messages into prompt (%zu chars)", formatted_prompt.size());
+                    prompt_tokens = ::common_tokenize(ctx, formatted_prompt, true, true);
+                } else {
+                    LOG_ERROR("Failed to format chat messages, falling back to direct prompt");
+                    prompt_tokens = ::common_tokenize(ctx, messages_json, true, true);
+                }
+            } catch (...) {
+                LOG_ERROR("Unknown exception during chat formatting");
+                LOG_INFO("Falling back to using messages_json directly as prompt");
+                formatted_prompt = getFormattedChat(messages_json, "");
+                if (!formatted_prompt.empty()) {
+                    LOG_INFO("Successfully formatted chat messages into prompt (%zu chars)", formatted_prompt.size());
+                    prompt_tokens = ::common_tokenize(ctx, formatted_prompt, true, true);
+                } else {
+                    LOG_ERROR("Failed to format chat messages, falling back to direct prompt");
+                    prompt_tokens = ::common_tokenize(ctx, messages_json, true, true);
+                }
+            }
+        } else {
+            // No chat template available (no built-in and no custom)
+            // Simply use the messages_json as the prompt
+            if (has_advanced_parameters(params)) {
+                LOG_WARNING("No chat template available. Advanced parameters (tools, json_schema, etc.) will be ignored.");
+            }
+            LOG_INFO("No chat template available, using messages_json directly as prompt");
+
+            std::string prompt = getFormattedChat(messages_json, "");
+            if (!prompt.empty()) {
+                LOG_INFO("Successfully formatted chat messages into prompt (%zu chars)", prompt.size());
+                prompt_tokens = ::common_tokenize(ctx, prompt, true, true);
+            } else {
+                LOG_ERROR("Failed to format chat messages, falling back to direct prompt");
+                prompt_tokens = ::common_tokenize(ctx, messages_json, true, true);
+            }
+        }
+    } else {
+        // No chat messages provided, use the regular prompt directly
+        if (has_advanced_parameters(params)) {
+            LOG_WARNING("No chat messages provided. Advanced parameters (tools, json_schema, etc.) only apply to chat messages and will be ignored.");
+        }
+        prompt_tokens = ::common_tokenize(ctx, params.prompt, true, true);
+    }
+    
     num_prompt_tokens = prompt_tokens.size();
 
     // Ensure we have at least one token to avoid crashes
     if (prompt_tokens.empty()) {
         LOG_WARNING("Tokenization returned empty vector, adding BOS token manually");
-        prompt_tokens.push_back(llama_vocab_bos(llama_model_get_vocab(llama_get_model(ctx))));
-        num_prompt_tokens = 1;
+        const llama_vocab* vocab = llama_model_get_vocab(llama_get_model(ctx));
+        if (vocab) {
+            prompt_tokens.push_back(llama_vocab_bos(vocab));
+            num_prompt_tokens = 1;
+        } else {
+            LOG_ERROR("Failed to get vocabulary for BOS token");
+            num_prompt_tokens = 0;
+        }
     }
 
     std::stringstream ss;
@@ -54,6 +253,7 @@ void llama_mobile_context::loadPrompt() {
         ss << token << " ";
     }
     LOG_INFO("%s\n", ss.str().c_str());
+    ss << "\n" << __func__ << ": num_prompt_tokens = " << num_prompt_tokens << "\n";
 
     if (params.n_keep < 0)
     {
@@ -324,6 +524,23 @@ completion_token_output llama_mobile_context::doCompletion()
     // Check for stop sequences after adding each token
     size_t last_token_size = token_text.size();
     findStoppingStrings(generated_text, last_token_size, STOP_FULL);
+    
+    // If stopped by stop sequence, truncate generated text and return immediately
+    if (stopped_word && !stopping_word.empty()) {
+        size_t stop_pos = generated_text.rfind(stopping_word);
+        if (stop_pos != std::string::npos) {
+            generated_text.erase(stop_pos);
+            // Remove any trailing whitespace
+            while (!generated_text.empty() && 
+                   (generated_text.back() == ' ' || 
+                   generated_text.back() == '\n' || 
+                   generated_text.back() == '\t')) {
+                generated_text.pop_back();
+            }
+        }
+        // Return immediately when stop sequence is detected
+        return token_with_probs;
+    }
 
     if (isVocoderEnabled()) {
         tts_type type = getTTSType();

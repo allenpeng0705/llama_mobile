@@ -26,8 +26,15 @@ struct GenerationResult {
     int tokens_generated;
 };
 
+void addStopSequences(llama_mobile::llama_mobile_context& context) {
+    context.params.antiprompt.push_back("<|im_end|>");
+}
+
 GenerationResult generateText(llama_mobile::llama_mobile_context& context, const std::string& prompt, int max_tokens = 100) {
     auto start_time = std::chrono::high_resolution_clock::now();
+    
+    context.rewind();
+    addStopSequences(context);
     
     context.params.prompt = prompt;
     context.params.n_predict = max_tokens;
