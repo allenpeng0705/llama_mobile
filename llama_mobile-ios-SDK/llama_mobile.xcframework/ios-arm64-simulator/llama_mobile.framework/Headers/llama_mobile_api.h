@@ -98,8 +98,10 @@ typedef struct {
     const char* model_path;          /**< Path to the model file (required) */
     const char* chat_template;       /**< Chat template to use (optional, NULL for default) */
     const char* system_prompt;       /**< System prompt to use (optional, NULL for default) */
+
     int32_t n_ctx;                   /**< Context window size (default: 512) */
     int32_t n_batch;                 /**< Batch size for inference (default: 512) */
+    int32_t n_ubatch;                /**< Micro batch size for inference (default: 512) */
     int32_t n_gpu_layers;            /**< Number of layers to offload to GPU (default: 0) */
     int32_t n_threads;               /**< Number of CPU threads to use (default: 4) */
     bool use_mmap;                   /**< Use memory-mapped I/O for model loading (default: true) */
@@ -108,14 +110,10 @@ typedef struct {
     int32_t pooling_type;            /**< Pooling type for embeddings (default: 0) */
     int32_t embd_normalize;          /**< Normalize embeddings (default: 0) */
     bool flash_attn;                 /**< Enable flash attention (default: false) */
-    double temperature;              /**< Sampling temperature (default: 0.8) */
-    int32_t top_k;                   /**< Top-K sampling parameter (default: 40) */
-    double top_p;                    /**< Top-P sampling parameter (default: 0.95) */
-    double min_p;                    /**< Min-P sampling parameter (default: 0.05) */
-    double penalty_repeat;           /**< Repeat penalty (default: 1.1) */
     const char* cache_type_k;        /**< Cache type for key (optional, NULL for default) */
     const char* cache_type_v;        /**< Cache type for value (optional, NULL for default) */
     void (*progress_callback)(float progress);  /**< Model loading progress callback (optional) */
+    bool enable_chat_template;        /**< Enable chat template (default: false) */
 } llama_mobile_init_params_t;
 
 /**
@@ -126,7 +124,9 @@ typedef struct {
  */
 typedef struct {
     const char* prompt;               /**< Input prompt text (required) */
-    int32_t max_tokens;               /**< Maximum number of tokens to generate (default: 128) */
+    int32_t n_predict;              /**< Maximum number of tokens to generate (default: 128) */
+    int32_t n_threads;              /**< Number of CPU threads to use (default: 4) */
+    int32_t seed;                   /**< Random seed for generation (default: -1 for random) */
     double temperature;               /**< Sampling temperature (default: 0.8) */
     int32_t top_k;                    /**< Top-K sampling parameter (default: 40) */
     double top_p;                     /**< Top-P sampling parameter (default: 0.95) */
@@ -140,11 +140,22 @@ typedef struct {
     double mirostat_tau;              /**< Mirostat target entropy (default: 5.0) */
     double mirostat_eta;              /**< Mirostat learning rate (default: 0.1) */
     bool ignore_eos;                  /**< Ignore end-of-sequence tokens (default: false) */
+    int32_t n_probs;                 /**< Number of probabilities to return (default: 0) */
     const char** stop_sequences;      /**< Array of stop sequences to terminate generation (optional) */
     int stop_sequence_count;          /**< Number of stop sequences (optional, 0 for none) */
     const char* grammar;              /**< Path to grammar file (optional, NULL for no grammar) */
-    bool use_json_response;           /**< Generate response in OpenAI-like JSON format (default: false) */
     bool (*token_callback)(const char* token);  /**< Streaming callback for generated tokens (optional) */
+    
+    // New fields for chat support
+    const llama_mobile_chat_message_c* chat_messages;
+    int32_t chat_message_count;
+    bool use_json_response;           /**< Generate response in OpenAI-like JSON format (default: false) */
+    
+    // Advanced parameters for Jinja template engine
+    const char* json_schema;       /**< JSON schema for structured output (optional) */
+    const char* tools;            /**< JSON string defining available tools for function calling (optional) */
+    bool parallel_tool_calls;  /**< Whether to support parallel tool calls (default: false) */
+    const char* tool_choice;       /**< Tool choice strategy (auto, required, none, or specific tool) (optional) */
 } llama_mobile_completion_params_t;
 
 /**

@@ -1,6 +1,7 @@
 #ifndef LLAMA_MOBILE_H
 #define LLAMA_MOBILE_H
 
+#include "llama_mobile_version.h"
 #include <sstream>
 #include <iostream>
 #include <chrono>

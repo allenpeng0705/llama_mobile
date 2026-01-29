@@ -35,8 +35,13 @@ class AppState: ObservableObject {
     @Published var useChatMode = true
     @Published var useJsonResponse = true
     
-    // Qwen3 chat template
-    let qwen3Template = "<|im_start|>{{role}}\n{{content}}<|im_end|>\n"
+    // Qwen3 chat template - using proper Jinja format
+    let qwen3Template = "{%- for message in messages -%}\n" +
+                       "  {{- '<|im_start|>' + message.role + '\n' + message.content + '<|im_end|>\n' -}}\n" +
+                       "{%- endfor -%}\n" +
+                       "{%- if add_generation_prompt -%}\n" +
+                       "  {{- '<|im_start|>assistant\n' -}}\n" +
+                       "{%- endif -%}"
     
     // LlamaMobile instance - optional since it requires a model path to initialize
     @Published var llamaMobile: LlamaMobile? = nil
@@ -494,6 +499,7 @@ struct ChatView: View {
                 
                 // Create completion parameters with structured chat messages
                 params = LlamaMobile.CompletionParams(chatMessages: chatMessages)
+                params.useJsonResponse = appState.useJsonResponse
             } else {
                 // Direct prompt mode: use prompt only
                 print("[INFO] Using Direct Prompt mode")
@@ -514,7 +520,7 @@ struct ChatView: View {
             }
             
             // Set common parameters
-            params.maxTokens = 2048
+            params.maxTokens = 200
             params.temperature = 0.7
             params.topK = 40
             params.topP = 0.9
@@ -574,10 +580,22 @@ struct ChatView: View {
                 }
                 
                 // Generate completion with streaming
-                let result = appState.llamaMobile?.generateCompletion(with: params)
+                let result = await Task.detached {
+                    appState.llamaMobile?.generateCompletion(with: params)
+                }.value
                 
                 if let result = result {
                     print("[INFO] Streaming completed successfully")
+                    
+                    // If JSON response is enabled, replace the accumulated text with the JSON-wrapped text
+                    if appState.useJsonResponse {
+                        DispatchQueue.main.async {
+                            if var lastMessage = self.messages.last, lastMessage.role == "assistant" {
+                                lastMessage.text = result.text
+                                self.messages[self.messages.count - 1] = lastMessage
+                            }
+                        }
+                    }
                 } else {
                     print("[ERROR] Streaming generation failed")
                     DispatchQueue.main.async {
@@ -589,7 +607,11 @@ struct ChatView: View {
                 print("[INFO] Using normal generation")
                 
                 // Generate completion without streaming
-                if let result = appState.llamaMobile?.generateCompletion(with: params) {
+                let result = await Task.detached {
+                    appState.llamaMobile?.generateCompletion(with: params)
+                }.value
+                
+                if let result = result {
                     DispatchQueue.main.async {
                         // Log stop sequence detection results from completion result
                         print("\n[STOP SEQUENCE DETAILS]")
@@ -694,7 +716,7 @@ struct MessageBubble: View {
 // Settings View
 struct SettingsView: View {
     @ObservedObject var appState: AppState
-    @State private var nGpuLayers = 99
+    @State private var nGpuLayers = 50
     @State private var nThreads = 4
     @State private var nCtx = 2048
     
@@ -1063,8 +1085,15 @@ struct TTSTestView: View {
     @State private var isGenerating = false
     @State private var isPlaying = false
     @State private var ttsResult = ""
-    @State private var audioSamples: [Float]? = nil
+    @State private var audioSamples: [Int16]? = nil
     @State private var sampleRate: Int = 24000 // Default sample rate for TTS models
+    @State private var progress: Float = 0.0
+    @State private var saveToFile = true
+    @State private var outputFilePath = ""
+    // Audio playback objects (need to be class-level to persist during playback)
+    @State private var audioEngine: AVAudioEngine? = nil
+    @State private var playerNode: AVAudioPlayerNode? = nil
+    @State private var audioSession: AVAudioSession? = nil
     
     var body: some View {
         Form {
@@ -1098,11 +1127,27 @@ struct TTSTestView: View {
                 }
             }
             
+            Section(header: Text("Options")) {
+                Toggle("Save to File", isOn: $saveToFile)
+                    .disabled(isGenerating)
+            }
+            
+            if isGenerating {
+                Section(header: Text("Progress")) {
+                    ProgressView(value: progress)
+                        .padding(.vertical, 8)
+                    Text(String(format: "%.0f%%", progress * 100))
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                }
+            }
+            
             Section {
-                Button(action: generateSpeech) {
+                Button(action: generateSpeechAsync) {
                     HStack {
                         Spacer()
-                        Text(isGenerating ? "Generating Speech..." : "Generate Speech")
+                        Text(isGenerating ? "Generating Speech..." : "Generate Speech (Async)")
                             .foregroundColor(.white)
                         Spacer()
                     }
@@ -1115,6 +1160,23 @@ struct TTSTestView: View {
                 )
                 .buttonStyle(.borderedProminent)
                 .tint(.blue)
+                
+                Button(action: generateSpeechSync) {
+                    HStack {
+                        Spacer()
+                        Text(isGenerating ? "Generating Speech..." : "Generate Speech (Sync)")
+                            .foregroundColor(.white)
+                        Spacer()
+                    }
+                }
+                .disabled(
+                    text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || 
+                    appState.llamaMobile?.isVocoderEnabled() == false || 
+                    !appState.isModelLoaded || 
+                    isGenerating
+                )
+                .buttonStyle(.borderedProminent)
+                .tint(.purple)
                 
                 Button(action: playAudio) {
                     HStack {
@@ -1138,23 +1200,32 @@ struct TTSTestView: View {
         .navigationTitle("TTS Test")
     }
     
-    func generateSpeech() {
+    func generateSpeechAsync() {
         guard !text.isEmpty, appState.llamaMobile?.isVocoderEnabled() == true else { return }
         
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         isGenerating = true
+        progress = 0.0
         
         Task {
-            await performTTS(for: trimmedText)
+            await performTTSAsync(for: trimmedText)
         }
     }
     
-    func performTTS(for text: String) async {
-        defer { DispatchQueue.main.async { self.isGenerating = false } }
+    func generateSpeechSync() {
+        guard !text.isEmpty, appState.llamaMobile?.isVocoderEnabled() == true else { return }
         
-        DispatchQueue.main.async {
-            self.ttsResult = "Generating audio from text..."
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        isGenerating = true
+        progress = 0.0
+        
+        Task {
+            performTTSSync(for: trimmedText)
         }
+    }
+    
+    func performTTSAsync(for text: String) async {
+        defer { DispatchQueue.main.async { self.isGenerating = false } }
         
         // Get the llama mobile instance
         guard let llamaMobile = appState.llamaMobile else {
@@ -1164,301 +1235,215 @@ struct TTSTestView: View {
             return
         }
         
-        // Debug step 0: Check TTS model type and vocoder status
-        DispatchQueue.main.async {
-            let ttsType = llamaMobile.getTTSType()
-            let vocoderEnabled = llamaMobile.isVocoderEnabled()
-            self.ttsResult = "Step 0: TTS Type - \(ttsType), Vocoder Enabled - \(vocoderEnabled)"
-        }
-        
-        // Check if vocoder is enabled
-        guard llamaMobile.isVocoderEnabled() else {
-            DispatchQueue.main.async {
-                self.ttsResult = "❌ Vocoder is not enabled. Please check the vocoder model path."
-            }
-            return
-        }
-        
-        // Check TTS model type
-        let ttsType = llamaMobile.getTTSType()
-        let isKnownTTSModel = ttsType != .unknown
-        
-        DispatchQueue.main.async {
-            self.ttsResult = "TTS Model Info: Type - \(ttsType), Known - \(isKnownTTSModel)"
-        }
-        
-        // Debug step 1: Try using the built-in generateAudioFromText method if we have a proper TTS model
-        if isKnownTTSModel {
-            DispatchQueue.main.async {
-                self.ttsResult = "Step 1: Using built-in generateAudioFromText method..."
-            }
-            
-            // Try the built-in TTS method first
-            if let samples = llamaMobile.generateAudioFromText(text: text) {
-                DispatchQueue.main.async {
-                    // Save audio to WAV file automatically (fixed name for overwriting)
-                    let tempDir = NSTemporaryDirectory()
-                    let tempFileName = "tts_output_latest.wav"
-                    let tempFilePath = tempDir.appending(tempFileName)
-                    
-                    // Save using the new API
-                    let saveSuccess = llamaMobile.saveAudioToWav(filePath: tempFilePath, audioData: samples, sampleRate: Int32(sampleRate))
-                    
-                    self.audioSamples = samples
-                    
-                    if saveSuccess {
-                        self.ttsResult = "✅ TTS generation completed successfully.\n"
-                        self.ttsResult += "   - Generated \(samples.count) audio samples at \(sampleRate) Hz\n"
-                        self.ttsResult += "   - Audio saved to: \(tempFilePath)"
-                    } else {
-                        self.ttsResult = "⚠️ TTS generation completed but failed to save audio to file.\n"
-                        self.ttsResult += "   - Generated \(samples.count) audio samples at \(sampleRate) Hz"
-                    }
-                }
-                return
-            }
-        }
-        
-        // If built-in method fails or we don't have a proper TTS model, implement custom workflow
-        DispatchQueue.main.async {
-            self.ttsResult = "Using custom TTS workflow: formatting + completion + audio decoding..."
-        }
-        
-        // Debug step 2: Try to format text for TTS
-        DispatchQueue.main.async {
-            self.ttsResult = "Step 2: Formatting text for TTS..."
-        }
-        
-        guard let formattedPrompt = llamaMobile.getFormattedAudioCompletion(speakerJson: "{\"speaker\": \"default\"}", textToSpeak: text) else {
-            DispatchQueue.main.async {
-                self.ttsResult = "❌ Failed at Step 2: Cannot format text for TTS. Check if your model supports TTS formatting."
-            }
-            return
-        }
-        
-        // Debug: Check what's in the formatted prompt
-        print("[DEBUG] Formatted Prompt: \(formattedPrompt)")
-        print("[DEBUG] Formatted Prompt Length: \(formattedPrompt.count)")
-        
-        // If formatted prompt contains audio template markers, we should only tokenize the completion result
-        // This prevents generating audio from the template content
-        let useOnlyCompletion = formattedPrompt.contains("<|audio_start|") || formattedPrompt.contains("<|text_start|")
-        print("[DEBUG] useOnlyCompletion: \(useOnlyCompletion)")
-        
-        // Debug step 3: Generate audio content using text completion
-        DispatchQueue.main.async {
-            self.ttsResult = "Step 3: Generating audio content using text completion..."
-        }
-        
-        // Get guide tokens - note: the built-in method passes formattedPrompt, not original text
-        print("[DEBUG] Getting audio guide tokens using formatted prompt...")
-        if let guideTokens = llamaMobile.getAudioGuideTokens(textToSpeak: formattedPrompt) {
-            print("[DEBUG] Setting guide tokens: \(guideTokens.count) tokens")
-            llamaMobile.setGuideTokens(tokens: guideTokens)
-        } else {
-            print("[DEBUG] Failed to get guide tokens, proceeding without...")
-        }
-        
-        // Generate audio content using text completion
-        var completionParams = LlamaMobile.CompletionParams(prompt: formattedPrompt)
-        completionParams.maxTokens = 200 // Generate appropriate audio content
-        completionParams.temperature = 0.0 // Deterministic output
-        completionParams.ignoreEos = true // Don't stop at end-of-sequence
-        
-        guard let completionResult = llamaMobile.generateCompletion(with: completionParams) else {
-            DispatchQueue.main.async {
-                self.ttsResult = "❌ Failed at Step 3: Cannot generate audio content via text completion."
-            }
-            return
-        }
-        
-        // Debug: Print actual text content
-        print("[DEBUG] Formatted Prompt Content:")
-        print("\"\(formattedPrompt)\"")
-        print("[DEBUG] Completion Result Content:")
-        print("\"\(completionResult.text)\"")
-        
-        // Combine prompt and completion for full audio tokens - or just use completion if prompt contains template markers
-        let contentToTokenize: String
-        if useOnlyCompletion {
-            // If prompt contains template markers, only use the completion result (prevents audio from template)
-            contentToTokenize = completionResult.text
-            print("[DEBUG] Using only completion result for tokenization (skipping template)")
-        } else {
-            // Otherwise combine both
-            contentToTokenize = formattedPrompt + completionResult.text
-            print("[DEBUG] Combining prompt and completion for tokenization")
-        }
-        
-        print("[DEBUG] Final Content to Tokenize:")
-        print("\"\(contentToTokenize)\"")
-        
-        // Debug step 4: Tokenize the audio content
-        DispatchQueue.main.async {
-            self.ttsResult = "Step 4: Tokenizing audio content..."
-        }
-        
-        // Tokenize the audio content
-        guard let tokens = llamaMobile.tokenize(text: contentToTokenize) else {
-            DispatchQueue.main.async {
-                self.ttsResult = "❌ Failed at Step 4: Cannot tokenize audio content."
-            }
-            return
-        }
-        
-        // Debug: Show first few tokens and their values
-        print("[DEBUG] Total tokens generated: \(tokens.count)")
-        print("[DEBUG] First 10 tokens: \(tokens.prefix(10))")
-        print("[DEBUG] Last 10 tokens: \(tokens.suffix(10))")
-        
-        // Check if formatted prompt itself contains audio tokens
-        if let promptTokens = llamaMobile.tokenize(text: formattedPrompt) {
-            print("[DEBUG] Prompt tokens count: \(promptTokens.count)")
-            print("[DEBUG] Prompt first 10 tokens: \(promptTokens.prefix(10))")
-        }
-        
-        // Debug step 4.5: Filter audio tokens (following C++ example)
-        DispatchQueue.main.async {
-            self.ttsResult = "Step 4.5: Filtering audio tokens..."
-        }
-        
-        // Filter tokens to only include audio tokens (151672-155772) and look for end token
-        var audioTokens: [Int32] = []
-        let audioStartToken = 151672
-        let audioEndToken = 151668 // <|audio_end|>
-        
-        // Debug: Track token filtering
-        var nonAudioTokens = 0
-        
-        for token in tokens {
-            // Check if token is in audio range
-            if token >= 151672 && token <= 155772 {
-                audioTokens.append(token)
-            } else {
-                nonAudioTokens += 1
-            }
-            
-            // Check for end token
-            if token == audioEndToken {
-                print("Found audio end token")
-                break
-            }
-        }
-        
-        print("[DEBUG] Generated \(audioTokens.count) audio tokens (skipped non-audio: \(nonAudioTokens))")
-        
-        if audioTokens.isEmpty {
-            DispatchQueue.main.async {
-                self.ttsResult = "❌ No audio tokens found in the generated content."
-            }
-            return
-        }
-        
-        // Debug step 5: Try to decode audio tokens
-        DispatchQueue.main.async {
-            self.ttsResult = "Step 5: Decoding audio tokens to samples..."
-        }
-        
-        guard let samples = llamaMobile.decodeAudioTokens(tokens: audioTokens) else {
-            DispatchQueue.main.async {
-                self.ttsResult = "❌ Failed at Step 5: Cannot decode audio tokens. Check vocoder model."
-            }
-            return
-        }
-        
-        // Success! All steps completed
-        DispatchQueue.main.async {
-            // Save audio to WAV file automatically (fixed name for overwriting)
+        // Prepare TTS options
+        var options = LlamaMobile.TTSOptions()
+        options.sampleRate = sampleRate
+        options.saveToFile = saveToFile
+        if saveToFile {
             let tempDir = NSTemporaryDirectory()
-            let tempFileName = "tts_output_latest.wav"
-            let tempFilePath = tempDir.appending(tempFileName)
-            
-            // Save using the new API
-            let saveSuccess = llamaMobile.saveAudioToWav(filePath: tempFilePath, audioData: samples, sampleRate: Int32(sampleRate))
-            
-            self.audioSamples = samples
-            
-            if saveSuccess {
-                self.ttsResult = "✅ TTS generation completed successfully.\n"
-                self.ttsResult += "   - Generated \(samples.count) audio samples at \(sampleRate) Hz\n"
-                self.ttsResult += "   - Audio saved to: \(tempFilePath)"
-            } else {
-                self.ttsResult = "⚠️ TTS generation completed but failed to save audio to file.\n"
-                self.ttsResult += "   - Generated \(samples.count) audio samples at \(sampleRate) Hz"
+            let tempFileName = "tts_output_async.wav"
+            options.outputFilePath = tempDir.appending(tempFileName)
+        }
+        
+        // Generate speech using async API
+        let result = await llamaMobile.generateSpeech(
+            text: text,
+            options: options,
+            progressHandler: { value in
+                DispatchQueue.main.async {
+                    self.progress = value
+                }
+            }
+        )
+        
+        // Handle result
+        switch result {
+        case .success(let speechResult):
+            DispatchQueue.main.async {
+                self.audioSamples = speechResult.audioSamples
+                self.sampleRate = speechResult.sampleRate
+                self.outputFilePath = speechResult.outputFilePath ?? ""
+                
+                var resultText = "✅ TTS generation completed successfully.\n"
+                resultText += "   - Generated \(speechResult.audioSamples.count) audio samples at \(speechResult.sampleRate) Hz\n"
+                resultText += "   - Duration: \(String(format: "%.2f", speechResult.duration)) seconds\n"
+                resultText += "   - Method used: \(speechResult.methodUsed)"
+                
+                if let filePath = speechResult.outputFilePath {
+                    resultText += "\n   - Audio saved to: \(filePath)"
+                }
+                
+                self.ttsResult = resultText
+            }
+        case .failure(let error):
+            DispatchQueue.main.async {
+                self.ttsResult = "❌ Error generating speech: \(error)"
+            }
+        }
+    }
+    
+    func performTTSSync(for text: String) {
+        defer { DispatchQueue.main.async { self.isGenerating = false } }
+        
+        // Get the llama mobile instance
+        guard let llamaMobile = appState.llamaMobile else {
+            DispatchQueue.main.async {
+                self.ttsResult = "❌ LlamaMobile instance not available"
+            }
+            return
+        }
+        
+        // Prepare TTS options
+        var options = LlamaMobile.TTSOptions()
+        options.sampleRate = sampleRate
+        options.saveToFile = saveToFile
+        if saveToFile {
+            let tempDir = NSTemporaryDirectory()
+            let tempFileName = "tts_output_sync.wav"
+            options.outputFilePath = tempDir.appending(tempFileName)
+        }
+        
+        // Generate speech using sync API
+        let result = llamaMobile.generateSpeechSync(text: text, options: options)
+        
+        // Handle result
+        switch result {
+        case .success(let speechResult):
+            DispatchQueue.main.async {
+                self.audioSamples = speechResult.audioSamples
+                self.sampleRate = speechResult.sampleRate
+                self.outputFilePath = speechResult.outputFilePath ?? ""
+                
+                var resultText = "✅ TTS generation completed successfully.\n"
+                resultText += "   - Generated \(speechResult.audioSamples.count) audio samples at \(speechResult.sampleRate) Hz\n"
+                resultText += "   - Duration: \(String(format: "%.2f", speechResult.duration)) seconds\n"
+                resultText += "   - Method used: \(speechResult.methodUsed)"
+                
+                if let filePath = speechResult.outputFilePath {
+                    resultText += "\n   - Audio saved to: \(filePath)"
+                }
+                
+                self.ttsResult = resultText
+            }
+        case .failure(let error):
+            DispatchQueue.main.async {
+                self.ttsResult = "❌ Error generating speech: \(error)"
             }
         }
     }
     
     func playAudio() {
-        guard let samples = audioSamples else { return }
+        guard let samples = audioSamples else {
+            DispatchQueue.main.async {
+                self.ttsResult += "\n❌ No audio samples available for playback."
+            }
+            return 
+        }
         
         isPlaying = true
         
         Task {
             do {
+                print("[DEBUG] Starting audio playback with", samples.count, "samples at", sampleRate, "Hz")
+                
                 // Set up audio session
                 let audioSession = AVAudioSession.sharedInstance()
+                print("[DEBUG] Setting up audio session")
                 try audioSession.setCategory(.playback, mode: .default, options: [])
-                try audioSession.setActive(true)
+                try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+                self.audioSession = audioSession
+                print("[DEBUG] Audio session active")
                 
-                // Configure audio format
-                let audioFormat = AVAudioFormat(standardFormatWithSampleRate: Double(sampleRate), channels: 1)!
+                // Convert Int16 samples to Float samples (normalized to -1.0 to 1.0)
+                print("[DEBUG] Converting Int16 samples to Float")
+                let floatSamples = samples.map { Float($0) / Float(Int16.max) }
+                print("[DEBUG] Converted", floatSamples.count, "samples")
+                
+                // Configure audio engine first
+                let audioEngine = AVAudioEngine()
+                let playerNode = AVAudioPlayerNode()
+                self.audioEngine = audioEngine
+                self.playerNode = playerNode
+                print("[DEBUG] Created audio engine and player node")
+                
+                // Create mono audio format for our buffer
+                let monoFormat = AVAudioFormat(standardFormatWithSampleRate: Double(sampleRate), channels: 1)! 
+                print("[DEBUG] Created mono audio format:", monoFormat)
                 
                 // Create buffer
-                let buffer = AVAudioPCMBuffer(pcmFormat: audioFormat, frameCapacity: AVAudioFrameCount(samples.count))!
+                let buffer = AVAudioPCMBuffer(pcmFormat: monoFormat, frameCapacity: AVAudioFrameCount(floatSamples.count))!
                 buffer.frameLength = buffer.frameCapacity
+                print("[DEBUG] Created buffer with capacity:", buffer.frameCapacity, "length:", buffer.frameLength, "channels:", monoFormat.channelCount)
                 
                 // Copy samples to buffer
                 if let floatBuffer = buffer.floatChannelData?[0] {
-                    for (index, sample) in samples.enumerated() {
+                    print("[DEBUG] Copying samples to buffer")
+                    for (index, sample) in floatSamples.enumerated() {
                         floatBuffer[index] = sample
                     }
+                    print("[DEBUG] Samples copied successfully")
                 } else {
+                    print("[DEBUG] Failed to get floatChannelData")
                     throw NSError(domain: "TTSError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to create audio buffer"])
                 }
                 
-                // Configure audio engine
-                let audioEngine = AVAudioEngine()
-                let playerNode = AVAudioPlayerNode()
-                
                 // Attach player node to engine
                 audioEngine.attach(playerNode)
-                audioEngine.connect(playerNode, to: audioEngine.mainMixerNode, format: audioFormat)
+                
+                // Connect player node to main mixer with explicit mono format
+                audioEngine.connect(playerNode, to: audioEngine.mainMixerNode, format: monoFormat)
+                print("[DEBUG] Attached and connected player node with mono format")
                 
                 // Start engine
                 try audioEngine.start()
+                print("[DEBUG] Audio engine started")
                 
-                // Play the audio
-                playerNode.play()
+                // Schedule the buffer first
+                print("[DEBUG] Scheduling buffer for playback")
                 playerNode.scheduleBuffer(buffer) { 
+                    print("[DEBUG] Buffer playback completed")
                     DispatchQueue.main.async {
                         self.isPlaying = false
                         self.ttsResult += "\n✅ Audio playback completed."
+                        
+                        // Clean up on main thread
+                        self.cleanupAudioResources()
                     }
-                    
-                    // Clean up
-                    audioEngine.stop()
-                    do {
-                        try audioSession.setActive(false)
-                    } catch {
-                        print("Error deactivating audio session: \(error)")
-                    }
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.isPlaying = false
-                    self.ttsResult += "\n❌ Error playing audio: \(error.localizedDescription)"
                 }
                 
-                // Clean up
-                do {
-                    let audioSession = AVAudioSession.sharedInstance()
-                    try audioSession.setActive(false)
-                } catch {
-                    print("Error deactivating audio session: \(error)")
+                // Then start playback
+                print("[DEBUG] Starting player node playback")
+                playerNode.play()
+                print("[DEBUG] Player node playback started")
+            } catch {
+                print("[DEBUG] Audio playback error:", error.localizedDescription)
+                DispatchQueue.main.async {
+                    self.isPlaying = false
+                    self.ttsResult += "\n❌ Error playing audio: " + error.localizedDescription
+                    
+                    // Clean up on main thread
+                    self.cleanupAudioResources()
                 }
             }
         }
+    }
+    
+    private func cleanupAudioResources() {
+        // Stop and clean up audio resources
+        playerNode?.stop()
+        audioEngine?.stop()
+        
+        // Deactivate audio session
+        do {
+            try audioSession?.setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            print("Error deactivating audio session: \(error)")
+        }
+        
+        // Reset references
+        playerNode = nil
+        audioEngine = nil
+        audioSession = nil
     }
 }
 
@@ -2008,7 +1993,7 @@ struct MultimodalTestView: View {
             )
             params.mediaPaths = [imagePath]
             
-            if let result = appState.llamaMobile?.generateCompletion(with: params) {
+            if let result = await Task.detached { appState.llamaMobile?.generateCompletion(with: params) }.value {
                 DispatchQueue.main.async {
                     self.completionResult = result.text
                 }

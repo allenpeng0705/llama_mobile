@@ -480,6 +480,12 @@ struct common_params {
     bool prefill_assistant = true; // if true, any trailing assistant message will be prefilled into the response
     int sleep_idle_seconds = -1;   // if >0, server will sleep after this many seconds of idle time
 
+    // Advanced chat parameters for Jinja template engine
+    std::string json_schema = "";       // JSON schema for structured output                                    // NOLINT
+    std::string tools = "";            // JSON string defining available tools for function calling        // NOLINT
+    bool parallel_tool_calls = false;  // Whether to support parallel tool calls                              // NOLINT
+    std::string tool_choice = "";       // Tool choice strategy (auto, required, none, or specific tool)    // NOLINT
+
     std::vector<std::string> api_keys;
 
     std::string ssl_file_key  = "";                                                                         // NOLINT

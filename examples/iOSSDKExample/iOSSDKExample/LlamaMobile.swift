@@ -10,6 +10,22 @@ import llama_mobile
 import Darwin
 import Dispatch
 
+// MARK: - Version Information
+
+/// llama_mobile iOS SDK version information
+public struct LlamaMobileVersion {
+    /// Major version number
+    public static let major = Int(LLAMA_MOBILE_VERSION_MAJOR)
+    /// Minor version number
+    public static let minor = Int(LLAMA_MOBILE_VERSION_MINOR)
+    /// Patch version number
+    public static let patch = Int(LLAMA_MOBILE_VERSION_PATCH)
+    /// Full version string
+    public static let versionString = String(cString: LLAMA_MOBILE_VERSION_STRING)
+    /// Version integer for comparison
+    public static let version = Int(LLAMA_MOBILE_VERSION)
+}
+
 // MARK: - Logging System
 
 public enum LogLevel: Int {
@@ -252,6 +268,9 @@ public class LlamaMobile {
         /// V cache type (e.g., "fp16", "q4_0")
         public var cacheTypeV: String? = nil
         
+        /// Enable chat template functionality
+        public var enableChatTemplate: Bool = true
+        
         /// Callback for model loading progress (0.0 to 1.0)
         public var progressCallback: ((Float) -> Void)? = nil
         
@@ -265,6 +284,7 @@ public class LlamaMobile {
             self.modelPath = modelPath
             self.nGpuLayers = nGpuLayers
             self.nCtx = nCtx
+            self.enableChatTemplate = true
         }
         
         /// Convenience initializer for embedding generation
@@ -272,6 +292,7 @@ public class LlamaMobile {
             self.modelPath = modelPath
             self.embedding = embedding
             self.poolingType = poolingType
+            self.enableChatTemplate = true
         }
     }
     
@@ -284,7 +305,7 @@ public class LlamaMobile {
         public var prompt: String
         
         /// Maximum number of tokens to generate (0 = no limit)
-        public var maxTokens: Int32 = 128
+        public var maxTokens: Int32 = 1024
         
         /// Override the number of CPU threads to use (nil = use initialization value)
         public var nThreads: Int32? = nil
@@ -349,6 +370,21 @@ public class LlamaMobile {
         
         public var useJsonResponse: Bool = true
         
+        /// Number of token probabilities to generate
+        public var nProbs: Int32 = 0
+        
+        /// JSON schema for structured output
+        public var jsonSchema: String? = nil
+        
+        /// JSON string defining available tools for function calling
+        public var tools: String? = nil
+        
+        /// Whether to support parallel tool calls
+        public var parallelToolCalls: Bool = false
+        
+        /// Tool choice strategy (auto, required, none, or specific tool)
+        public var toolChoice: String? = nil
+        
         /// Default initializer with minimal parameters
         public init(prompt: String) {
             self.prompt = prompt
@@ -366,7 +402,7 @@ public class LlamaMobile {
         }
         
         /// Convenience initializer for creative writing
-        public init(creativePrompt: String, maxTokens: Int32 = 512) {
+        public init(creativePrompt: String, maxTokens: Int32 = 1024) {
             self.init(prompt: creativePrompt)
             self.maxTokens = maxTokens
             self.temperature = 1.0
@@ -383,7 +419,7 @@ public class LlamaMobile {
         }
         
         /// Convenience initializer for chat-like responses
-        public init(chatPrompt: String, maxTokens: Int32 = 256) {
+        public init(chatPrompt: String, maxTokens: Int32 = 1024) {
             self.init(prompt: chatPrompt)
             self.maxTokens = maxTokens
             self.temperature = 0.7
@@ -393,14 +429,14 @@ public class LlamaMobile {
         }
         
         /// Convenience initializer for multimodal inputs
-        public init(multimodalPrompt: String, mediaPaths: [String], maxTokens: Int32 = 256) {
+        public init(multimodalPrompt: String, mediaPaths: [String], maxTokens: Int32 = 1024) {
             self.init(prompt: multimodalPrompt)
             self.maxTokens = maxTokens
             self.mediaPaths = mediaPaths
         }
         
         /// Full initializer with all parameters
-        public init(prompt: String, maxTokens: Int32 = 128, nThreads: Int32? = nil, seed: Int32 = -1, temperature: Double = 0.8, topK: Int32 = 40, topP: Double = 0.95, minP: Double = 0.05, typicalP: Double = 1.0, penaltyLastN: Int32 = 64, penaltyRepeat: Double = 1.1, penaltyFreq: Double = 0.0, penaltyPresent: Double = 0.0, mirostat: Int32 = 0, mirostatTau: Double = 5.0, mirostatEta: Double = 0.1, ignoreEos: Bool = false, stopSequences: [String] = [], grammar: String? = nil, mediaPaths: [String] = [], chatMessages: [ChatMessage] = [], tokenCallback: ((String) -> Bool)? = nil) {
+        public init(prompt: String, maxTokens: Int32 = 128, nThreads: Int32? = nil, seed: Int32 = -1, temperature: Double = 0.8, topK: Int32 = 40, topP: Double = 0.95, minP: Double = 0.05, typicalP: Double = 1.0, penaltyLastN: Int32 = 64, penaltyRepeat: Double = 1.1, penaltyFreq: Double = 0.0, penaltyPresent: Double = 0.0, mirostat: Int32 = 0, mirostatTau: Double = 5.0, mirostatEta: Double = 0.1, ignoreEos: Bool = false, stopSequences: [String] = [], grammar: String? = nil, mediaPaths: [String] = [], chatMessages: [ChatMessage] = [], useJsonResponse: Bool = true, nProbs: Int32 = 0, jsonSchema: String? = nil, tools: String? = nil, parallelToolCalls: Bool = false, toolChoice: String? = nil, tokenCallback: ((String) -> Bool)? = nil) {
             self.prompt = prompt
             self.maxTokens = maxTokens
             self.nThreads = nThreads
@@ -422,6 +458,12 @@ public class LlamaMobile {
             self.grammar = grammar
             self.mediaPaths = mediaPaths
             self.chatMessages = chatMessages
+            self.useJsonResponse = useJsonResponse
+            self.nProbs = nProbs
+            self.jsonSchema = jsonSchema
+            self.tools = tools
+            self.parallelToolCalls = parallelToolCalls
+            self.toolChoice = toolChoice
             self.tokenCallback = tokenCallback
         }
         
@@ -495,6 +537,8 @@ public class LlamaMobile {
             self.penaltyFreq = 0.0
             self.penaltyPresent = 0.0
             self.penaltyLastN = 64
+            self.useJsonResponse = true
+            self.grammar = nil
             
             // No hardcoded stop sequences - let the caller set them explicitly
             // This allows better control over when generation stops
@@ -715,6 +759,20 @@ public class LlamaMobile {
         var cParams = llama_mobile_init_params_c_t()
         memset(&cParams, 0, MemoryLayout<llama_mobile_init_params_c_t>.size)
         
+        // Use helper function to create persistent copies of the strings
+        let modelPathPtr = allocateCString(from: params.modelPath)
+        let chatTemplatePtr = params.chatTemplate.map { allocateCString(from: $0) }
+        let systemPromptPtr = params.systemPrompt.map { allocateCString(from: $0) }
+        let cacheTypeKPtr = params.cacheTypeK.map { allocateCString(from: $0) }
+        let cacheTypeVPtr = params.cacheTypeV.map { allocateCString(from: $0) }
+        
+        // Set string parameters first
+        cParams.model_path = UnsafePointer(modelPathPtr)
+        cParams.chat_template = chatTemplatePtr.map { UnsafePointer($0) }
+        cParams.system_prompt = systemPromptPtr.map { UnsafePointer($0) }
+        cParams.cache_type_k = cacheTypeKPtr.map { UnsafePointer($0) }
+        cParams.cache_type_v = cacheTypeVPtr.map { UnsafePointer($0) }
+        
         // Set non-string parameters
         cParams.n_ctx = params.nCtx
         cParams.n_batch = params.nBatch
@@ -727,21 +785,12 @@ public class LlamaMobile {
         cParams.pooling_type = params.poolingType
         cParams.embd_normalize = params.embdNormalize
         cParams.flash_attn = params.flashAttention
+        
+        // Set callback
         cParams.progress_callback = callbackWrapper
         
-        // Use helper function to create persistent copies of the strings
-        let modelPathPtr = allocateCString(from: params.modelPath)
-        let chatTemplatePtr = params.chatTemplate.map { allocateCString(from: $0) }
-        let systemPromptPtr = params.systemPrompt.map { allocateCString(from: $0) }
-        let cacheTypeKPtr = params.cacheTypeK.map { allocateCString(from: $0) }
-        let cacheTypeVPtr = params.cacheTypeV.map { allocateCString(from: $0) }
-        
-        // Set the pointers in the params struct
-        cParams.model_path = UnsafePointer(modelPathPtr)
-        cParams.chat_template = chatTemplatePtr.map { UnsafePointer($0) }
-        cParams.system_prompt = systemPromptPtr.map { UnsafePointer($0) }
-        cParams.cache_type_k = cacheTypeKPtr.map { UnsafePointer($0) }
-        cParams.cache_type_v = cacheTypeVPtr.map { UnsafePointer($0) }
+        // Set enable_chat_template at the end (matches C struct order)
+        cParams.enable_chat_template = params.enableChatTemplate
         
         // Initialize the context
         context = llama_mobile_init_context_c(&cParams)
@@ -831,6 +880,11 @@ public class LlamaMobile {
         // Convert stop sequences to C array using helper function
         let (stopSequencesC, stopStringsToFreeOriginal) = allocateCStringArray(from: params.stopSequences)
         var stopStringsToFree = stopStringsToFreeOriginal
+        
+        // Variables for chat message memory management
+        var chatMessagesC: UnsafeMutablePointer<llama_mobile_chat_message_c>? = nil
+        var messageStringsToFree: [UnsafeMutablePointer<CChar>] = []
+        
         defer {
             // Free all allocated C strings for stop sequences
             for cString in stopStringsToFree {
@@ -838,6 +892,14 @@ public class LlamaMobile {
             }
             // Free the stop sequences array
             stopSequencesC.deallocate()
+            
+            // Free chat message memory if allocated
+            for cString in messageStringsToFree {
+                cString.deallocate()
+            }
+            if let chatMessagesC = chatMessagesC {
+                chatMessagesC.deallocate()
+            }
         }
         
         // Create token callback wrapper if needed
@@ -905,10 +967,10 @@ public class LlamaMobile {
             
             // Convert chat messages to C array
             let messageCount = params.chatMessages.count
-            let chatMessagesC = UnsafeMutablePointer<llama_mobile_chat_message_c>.allocate(capacity: messageCount)
+            chatMessagesC = UnsafeMutablePointer<llama_mobile_chat_message_c>.allocate(capacity: messageCount)
+            memset(chatMessagesC, 0, MemoryLayout<llama_mobile_chat_message_c>.size * messageCount)
             
             // Array to store C strings that need to be freed
-            var messageStringsToFree: [UnsafeMutablePointer<CChar>] = []
             
             for (index, message) in params.chatMessages.enumerated() {
                 // Allocate permanent C strings for role and content using helper function
@@ -918,20 +980,17 @@ public class LlamaMobile {
                 messageStringsToFree.append(roleCString)
                 messageStringsToFree.append(contentCString)
                 
-                chatMessagesC[index].role = UnsafePointer(roleCString)
-                chatMessagesC[index].content = UnsafePointer(contentCString)
+                if let chatMessagesC = chatMessagesC {
+                    chatMessagesC[index].role = UnsafePointer(roleCString)
+                    chatMessagesC[index].content = UnsafePointer(contentCString)
+                }
             }
             
-            cParams.chat_messages = UnsafePointer(chatMessagesC)
+            if let chatMessagesC = chatMessagesC {
+                cParams.chat_messages = UnsafePointer(chatMessagesC)
+            }
             cParams.chat_message_count = Int32(messageCount)
             
-            // Free all allocated C strings after completion
-            defer {
-                for cString in messageStringsToFree {
-                    cString.deallocate()
-                }
-                chatMessagesC.deallocate()
-            }
         } else {
             cParams.chat_messages = nil
             cParams.chat_message_count = 0
@@ -942,6 +1001,31 @@ public class LlamaMobile {
         
         // Set JSON response flag - ensure false when grammar is set
         cParams.use_json_response = params.grammar != nil ? false : params.useJsonResponse
+        
+        // Set additional parameters
+        cParams.n_probs = params.nProbs
+        
+        // Set tool-related parameters if available
+        let jsonSchemaCString = params.jsonSchema.map { allocateCString(from: $0) }
+        let toolsCString = params.tools.map { allocateCString(from: $0) }
+        let toolChoiceCString = params.toolChoice.map { allocateCString(from: $0) }
+        
+        // Add to cleanup list if allocated
+        if let jsonSchemaCString = jsonSchemaCString {
+            stopStringsToFree.append(jsonSchemaCString)
+        }
+        if let toolsCString = toolsCString {
+            stopStringsToFree.append(toolsCString)
+        }
+        if let toolChoiceCString = toolChoiceCString {
+            stopStringsToFree.append(toolChoiceCString)
+        }
+        
+        // Set the parameters in the C struct
+        cParams.json_schema = jsonSchemaCString.map { UnsafePointer($0) }
+        cParams.tools = toolsCString.map { UnsafePointer($0) }
+        cParams.tool_choice = toolChoiceCString.map { UnsafePointer($0) }
+        cParams.parallel_tool_calls = params.parallelToolCalls
         
         // Generate completion - use multimodal if media paths are provided
         var cResult = llama_mobile_completion_result_c_t()
@@ -1052,7 +1136,7 @@ public class LlamaMobile {
     ///   - tokenCallback: Optional streaming callback for generated tokens
     ///   - useJsonResponse: Whether to return the response in OpenAI-like JSON format
     /// - Returns: Completion result, or nil if an error occurred
-    public func generateCompletion(prompt: String, maxTokens: Int32 = 512, temperature: Double = 0.8, tokenCallback: ((String) -> Bool)? = nil, useJsonResponse: Bool = true) -> CompletionResult? {
+    public func generateCompletion(prompt: String, maxTokens: Int32 = 1024, temperature: Double = 0.8, tokenCallback: ((String) -> Bool)? = nil, useJsonResponse: Bool = true) -> CompletionResult? {
         var params = CompletionParams(prompt: prompt)
         params.maxTokens = maxTokens
         params.temperature = temperature
@@ -1415,13 +1499,613 @@ public class LlamaMobile {
             return nil
         }
         
-        // Generate audio tokens
-        guard let audioTokens = getAudioGuideTokens(textToSpeak: formattedPrompt) else {
+        // Get audio guide tokens (this likely sets guide tokens internally)
+        guard let guideTokens = getAudioGuideTokens(textToSpeak: formattedPrompt) else {
             return nil
         }
         
+        // Set guide tokens for audio generation
+        setGuideTokens(tokens: guideTokens)
+        
+        // Generate audio content using text completion (same as custom workflow)
+        var completionParams = CompletionParams(prompt: formattedPrompt)
+        completionParams.maxTokens = 200
+        completionParams.temperature = 0.0
+        completionParams.ignoreEos = false // Don't ignore EOS, let model stop naturally
+        
+        guard let completionResult = generateCompletion(with: completionParams) else {
+            return nil
+        }
+        
+        // Tokenize only the completion (not the prompt + completion)
+        // The prompt is already represented by the guide tokens
+        guard let audioTokens = tokenize(text: completionResult.text) else {
+            return nil
+        }
+        
+        // Filter audio tokens - match Android implementation
+        var filteredTokens = [Int32]()
+        let audioEndToken: Int32 = 151668 // <|audio_end|>
+        let minAudioToken: Int32 = 151672
+        let maxAudioToken: Int32 = 155772
+        
+        // Debug logging
+        print("[TTS] Built-in - Original tokens count: \(audioTokens.count)")
+        if !audioTokens.isEmpty {
+            print("[TTS] Built-in - First 20 tokens: \(audioTokens.prefix(20))")
+            print("[TTS] Built-in - Last 10 tokens: \(audioTokens.suffix(10))")
+        }
+        
+        var nonAudioTokens = 0
+        for token in audioTokens {
+            // Check if token is in audio range
+            if token >= minAudioToken && token <= maxAudioToken {
+                filteredTokens.append(token)
+            } else {
+                nonAudioTokens += 1
+            }
+            
+            // Check for end token
+            if token == audioEndToken {
+                print("[TTS] Built-in - Found audio end token")
+                break
+            }
+        }
+        
+        // Debug logging
+        print("[TTS] Built-in - Filtered tokens count: \(filteredTokens.count)")
+        print("[TTS] Built-in - Non-audio tokens skipped: \(nonAudioTokens)")
+        if !filteredTokens.isEmpty {
+            print("[TTS] Built-in - First 10 filtered tokens: \(filteredTokens.prefix(10))")
+        }
+        
         // Decode audio tokens to samples
-        return decodeAudioTokens(tokens: audioTokens)
+        return decodeAudioTokens(tokens: filteredTokens)
+    }
+    
+    // MARK: - TTS Related Types
+    
+    /// TTS configuration options
+    public struct TTSOptions {
+        public var sampleRate: Int = 24000
+        public var voice: String? = nil
+        public var speed: Float = 1.0
+        public var saveToFile: Bool = false
+        public var outputFilePath: String? = nil
+        
+        public init() {
+        }
+        
+        public init(
+            sampleRate: Int = 24000,
+            voice: String? = nil,
+            speed: Float = 1.0,
+            saveToFile: Bool = false,
+            outputFilePath: String? = nil
+        ) {
+            self.sampleRate = sampleRate
+            self.voice = voice
+            self.speed = speed
+            self.saveToFile = saveToFile
+            self.outputFilePath = outputFilePath
+        }
+    }
+    
+    /// Result of successful speech generation
+    public struct SpeechResult {
+        public var audioSamples: [Int16]
+        public var sampleRate: Int
+        public var duration: TimeInterval
+        public var outputFilePath: String?
+        public var methodUsed: TTSMethod
+        
+        public init(
+            audioSamples: [Int16],
+            sampleRate: Int,
+            duration: TimeInterval,
+            outputFilePath: String?,
+            methodUsed: TTSMethod
+        ) {
+            self.audioSamples = audioSamples
+            self.sampleRate = sampleRate
+            self.duration = duration
+            self.outputFilePath = outputFilePath
+            self.methodUsed = methodUsed
+        }
+    }
+    
+    /// Metadata for streaming speech generation
+    public struct SpeechMetadata {
+        public var sampleRate: Int
+        public var duration: TimeInterval
+        public var methodUsed: TTSMethod
+        public var outputFilePath: String?
+        
+        public init(
+            sampleRate: Int,
+            duration: TimeInterval,
+            methodUsed: TTSMethod,
+            outputFilePath: String?
+        ) {
+            self.sampleRate = sampleRate
+            self.duration = duration
+            self.methodUsed = methodUsed
+            self.outputFilePath = outputFilePath
+        }
+    }
+    
+    /// Error types for TTS operations
+    public enum TTSError: Swift.Error {
+        case noModelLoaded
+        case noVocoderEnabled
+        case invalidText
+        case generationFailed
+        case formattingFailed
+        case tokenizationFailed
+        case audioDecodingFailed
+        case fileSaveFailed
+        case unknownError(String)
+    }
+    
+    /// Method used for TTS generation
+    public enum TTSMethod {
+        case builtIn
+        case customWorkflow
+    }
+    
+    // MARK: - Simplified TTS Methods
+    
+    /// Generates speech from text using the best available method
+    /// - Parameters:
+    ///   - text: Text to convert to speech
+    ///   - options: TTS configuration options
+    ///   - progressHandler: Optional callback for progress updates
+    /// - Returns: Result containing the generated audio samples and metadata
+    public func generateSpeech(
+        text: String,
+        options: TTSOptions = TTSOptions(),
+        progressHandler: ((Float) -> Void)? = nil
+    ) async -> Result<SpeechResult, TTSError> {
+        // Check if model is loaded
+        guard let context = self.context else {
+            return .failure(.noModelLoaded)
+        }
+        
+        // Check if vocoder is enabled
+        guard self.isVocoderEnabled() else {
+            return .failure(.noVocoderEnabled)
+        }
+        
+        progressHandler?(0.1) // Initial progress
+        
+        // Check TTS model type
+        let ttsType = self.getTTSType()
+        let isKnownTTSModel = ttsType != .unknown
+        
+        progressHandler?(0.2) // Model check completed
+        
+        var audioSamples: [Float]?
+        var methodUsed: TTSMethod = .builtIn
+        
+        if isKnownTTSModel {
+            // Try Path 1: Built-in TTS method
+            progressHandler?(0.3) // Starting built-in method
+            audioSamples = await Task.detached { 
+                self.generateAudioFromText(text: text)
+            }.value
+            methodUsed = .builtIn
+            
+            progressHandler?(0.6) // Built-in method completed
+        }
+        
+        if audioSamples == nil {
+            // Try Path 2: Custom TTS workflow
+            progressHandler?(0.4) // Starting custom workflow
+            audioSamples = await self.performCustomTTSWorkflow(text: text, progressHandler: progressHandler)
+            methodUsed = .customWorkflow
+        }
+        
+        guard let floatSamples = audioSamples else {
+            return .failure(.generationFailed)
+        }
+        
+        progressHandler?(0.8) // Audio generation completed
+        
+        // Calculate duration
+        let duration = TimeInterval(floatSamples.count) / TimeInterval(options.sampleRate)
+        
+        // Save to file if requested
+        var outputFilePath: String? = nil
+        if options.saveToFile {
+            let filePath = options.outputFilePath ?? NSTemporaryDirectory().appending("tts_output_\(UUID().uuidString).wav")
+            let saveSuccess = self.saveAudioToWav(
+                filePath: filePath,
+                audioData: floatSamples,
+                sampleRate: Int32(options.sampleRate)
+            )
+            if saveSuccess {
+                outputFilePath = filePath
+            } else {
+                return .failure(.fileSaveFailed)
+            }
+        }
+        
+        progressHandler?(1.0) // Process completed
+        
+        // Convert Float samples to Int16 for return
+        let int16Samples = floatSamples.map { Int16(clamping: Int($0 * Float(Int16.max))) }
+        
+        let result = SpeechResult(
+            audioSamples: int16Samples,
+            sampleRate: options.sampleRate,
+            duration: duration,
+            outputFilePath: outputFilePath,
+            methodUsed: methodUsed
+        )
+        
+        return .success(result)
+    }
+    
+    /// Generates speech from text synchronously
+    /// - Parameters:
+    ///   - text: Text to convert to speech
+    ///   - options: TTS configuration options
+    /// - Returns: Result containing the generated audio samples and metadata
+    public func generateSpeechSync(
+        text: String,
+        options: TTSOptions = TTSOptions()
+    ) -> Result<SpeechResult, TTSError> {
+        // Check if model is loaded
+        guard let context = self.context else {
+            return .failure(.noModelLoaded)
+        }
+        
+        // Check if vocoder is enabled
+        guard self.isVocoderEnabled() else {
+            return .failure(.noVocoderEnabled)
+        }
+        
+        // Check TTS model type
+        let ttsType = self.getTTSType()
+        let isKnownTTSModel = ttsType != .unknown
+        
+        var audioSamples: [Float]?
+        var methodUsed: TTSMethod = .builtIn
+        
+        if isKnownTTSModel {
+            // Try Path 1: Built-in TTS method
+            audioSamples = self.generateAudioFromText(text: text)
+            methodUsed = .builtIn
+        }
+        
+        if audioSamples == nil {
+            // Try Path 2: Custom TTS workflow
+            audioSamples = self.performCustomTTSWorkflowSync(text: text)
+            methodUsed = .customWorkflow
+        }
+        
+        guard let floatSamples = audioSamples else {
+            return .failure(.generationFailed)
+        }
+        
+        // Calculate duration
+        let duration = TimeInterval(floatSamples.count) / TimeInterval(options.sampleRate)
+        
+        // Save to file if requested
+        var outputFilePath: String? = nil
+        if options.saveToFile {
+            let filePath = options.outputFilePath ?? NSTemporaryDirectory().appending("tts_output_\(UUID().uuidString).wav")
+            let saveSuccess = self.saveAudioToWav(
+                filePath: filePath,
+                audioData: floatSamples,
+                sampleRate: Int32(options.sampleRate)
+            )
+            if saveSuccess {
+                outputFilePath = filePath
+            } else {
+                return .failure(.fileSaveFailed)
+            }
+        }
+        
+        // Convert Float samples to Int16 for return
+        let int16Samples = floatSamples.map { Int16(clamping: Int($0 * Float(Int16.max))) }
+        
+        let result = SpeechResult(
+            audioSamples: int16Samples,
+            sampleRate: options.sampleRate,
+            duration: duration,
+            outputFilePath: outputFilePath,
+            methodUsed: methodUsed
+        )
+        
+        return .success(result)
+    }
+    
+    /// Generates speech from text with streaming support (for long text)
+    /// - Parameters:
+    ///   - text: Text to convert to speech (can be long)
+    ///   - options: TTS configuration options
+    ///   - progressHandler: Optional callback for progress updates (0.0 to 1.0)
+    ///   - audioChunkHandler: Callback for receiving audio chunks as they're generated
+    /// - Returns: Result containing final metadata (duration, method used, etc.)
+    public func generateSpeechStreamForLongText(
+        text: String,
+        options: TTSOptions = TTSOptions(),
+        progressHandler: ((Float) -> Void)? = nil,
+        audioChunkHandler: @escaping ([Int16]) -> Void
+    ) async -> Result<SpeechMetadata, TTSError> {
+        // Check if model is loaded
+        guard let context = self.context else {
+            return .failure(.noModelLoaded)
+        }
+        
+        // Check if vocoder is enabled
+        guard self.isVocoderEnabled() else {
+            return .failure(.noVocoderEnabled)
+        }
+        
+        progressHandler?(0.1) // Initial progress
+        
+        // Split text into chunks for streaming
+        let textChunks = splitTextIntoChunks(text)
+        let totalChunks = textChunks.count
+        if totalChunks == 0 {
+            return .failure(.invalidText)
+        }
+        
+        progressHandler?(0.2) // Text splitting completed
+        
+        // Track total duration and method used
+        var totalDuration: TimeInterval = 0
+        var methodUsed: TTSMethod = .builtIn
+        var firstMethodUsed: TTSMethod? = nil
+        
+        // Process each chunk in sequence
+        for (index, chunk) in textChunks.enumerated() {
+            let chunkProgress = Float(index) / Float(totalChunks) * 0.7
+            progressHandler?(0.2 + chunkProgress) // Update progress
+            
+            // Generate speech for this chunk
+            let chunkResult = await self.generateSpeech(
+                text: chunk,
+                options: options,
+                progressHandler: { _ in }
+            )
+            
+            switch chunkResult {
+            case .success(let speechResult):
+                // Send this chunk for playback
+                audioChunkHandler(speechResult.audioSamples)
+                
+                // Accumulate metrics
+                totalDuration += speechResult.duration
+                if firstMethodUsed == nil {
+                    firstMethodUsed = speechResult.methodUsed
+                }
+                
+            case .failure(let error):
+                return .failure(error)
+            }
+        }
+        
+        progressHandler?(1.0) // Process completed
+        
+        // Use the first method used for the entire operation
+        if let firstMethod = firstMethodUsed {
+            methodUsed = firstMethod
+        }
+        
+        let metadata = SpeechMetadata(
+            sampleRate: options.sampleRate,
+            duration: totalDuration,
+            methodUsed: methodUsed,
+            outputFilePath: nil
+        )
+        
+        return .success(metadata)
+    }
+    
+    /// Splits text into smaller chunks for streaming
+    private func splitTextIntoChunks(_ text: String) -> [String] {
+        // Split by sentences (period, exclamation, question mark) and newlines
+        var chunks: [String] = []
+        var currentChunk = ""
+        
+        for char in text {
+            currentChunk.append(char)
+            
+            // Split on sentence boundaries
+            if ".!?\n".contains(char) {
+                let trimmedChunk = currentChunk.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedChunk.isEmpty {
+                    chunks.append(trimmedChunk)
+                    currentChunk = ""
+                }
+            }
+            
+            // Also split if chunk gets too long (fallback for long sentences)
+            if currentChunk.count > 200 {
+                let trimmedChunk = currentChunk.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedChunk.isEmpty {
+                    chunks.append(trimmedChunk)
+                    currentChunk = ""
+                }
+            }
+        }
+        
+        // Add any remaining text
+        let trimmedChunk = currentChunk.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedChunk.isEmpty {
+            chunks.append(trimmedChunk)
+        }
+        
+        return chunks
+    }
+    
+    // MARK: - Private TTS Helper Methods
+    
+    /// Performs custom TTS workflow asynchronously
+    private func performCustomTTSWorkflow(text: String, progressHandler: ((Float) -> Void)?) async -> [Float]? {
+        // Format text for TTS
+        guard let formattedPrompt = self.getFormattedAudioCompletion(speakerJson: "{\"speaker\": \"default\"}", textToSpeak: text) else {
+            return nil
+        }
+        
+        progressHandler?(0.5) // Text formatting completed
+        
+        // Get audio guide tokens
+        guard let guideTokens = self.getAudioGuideTokens(textToSpeak: formattedPrompt) else {
+            return nil
+        }
+        
+        // Set guide tokens for audio generation
+        self.setGuideTokens(tokens: guideTokens)
+        
+        progressHandler?(0.6) // Guide tokens generated
+        
+        // Generate audio content using text completion
+        var completionParams = CompletionParams(prompt: formattedPrompt)
+        completionParams.maxTokens = 200
+        completionParams.temperature = 0.0
+        completionParams.ignoreEos = false // Don't ignore EOS, let model stop naturally
+        
+        let completionResult = await Task.detached { 
+            self.generateCompletion(with: completionParams)
+        }.value
+        
+        guard let completionResult = completionResult else {
+            return nil
+        }
+        
+        progressHandler?(0.7) // Text completion generated
+        
+        // Tokenize only the completion (not the prompt + completion)
+        // The prompt is already represented by the guide tokens
+        guard let tokens = self.tokenize(text: completionResult.text) else {
+            return nil
+        }
+        
+        progressHandler?(0.8) // Content tokenized
+        
+        // Filter audio tokens - match Android implementation
+        var filteredTokens = [Int32]()
+        let audioEndToken: Int32 = 151668 // <|audio_end|>
+        let minAudioToken: Int32 = 151672
+        let maxAudioToken: Int32 = 155772
+        
+        // Debug logging
+        print("[TTS] Custom - Original tokens count: \(tokens.count)")
+        if !tokens.isEmpty {
+            print("[TTS] Custom - First 20 tokens: \(tokens.prefix(20))")
+            print("[TTS] Custom - Last 10 tokens: \(tokens.suffix(10))")
+        }
+        
+        var nonAudioTokens = 0
+        for token in tokens {
+            // Check if token is in audio range
+            if token >= minAudioToken && token <= maxAudioToken {
+                filteredTokens.append(token)
+            } else {
+                nonAudioTokens += 1
+            }
+            
+            // Check for end token
+            if token == audioEndToken {
+                print("[TTS] Found audio end token")
+                break
+            }
+        }
+        
+        // Debug logging
+        print("[TTS] Filtered tokens count: \(filteredTokens.count)")
+        print("[TTS] Non-audio tokens skipped: \(nonAudioTokens)")
+        if !filteredTokens.isEmpty {
+            print("[TTS] First 10 filtered tokens: \(filteredTokens.prefix(10))")
+        }
+        
+        // Decode audio tokens
+        guard let audioSamples = self.decodeAudioTokens(tokens: filteredTokens) else {
+            return nil
+        }
+        
+        progressHandler?(0.9) // Audio decoded
+        
+        return audioSamples
+    }
+    
+    /// Performs custom TTS workflow synchronously
+    private func performCustomTTSWorkflowSync(text: String) -> [Float]? {
+        // Format text for TTS
+        guard let formattedPrompt = self.getFormattedAudioCompletion(speakerJson: "{\"speaker\": \"default\"}", textToSpeak: text) else {
+            return nil
+        }
+        
+        // Get audio guide tokens
+        guard let guideTokens = self.getAudioGuideTokens(textToSpeak: formattedPrompt) else {
+            return nil
+        }
+        
+        // Set guide tokens for audio generation
+        self.setGuideTokens(tokens: guideTokens)
+        
+        // Generate audio content using text completion
+        var completionParams = CompletionParams(prompt: formattedPrompt)
+        completionParams.maxTokens = 200
+        completionParams.temperature = 0.0
+        completionParams.ignoreEos = false // Don't ignore EOS, let model stop naturally
+        
+        guard let completionResult = self.generateCompletion(with: completionParams) else {
+            return nil
+        }
+        
+        // Tokenize only the completion (not the prompt + completion)
+        // The prompt is already represented by the guide tokens
+        guard let tokens = self.tokenize(text: completionResult.text) else {
+            return nil
+        }
+        
+        // Filter audio tokens - match Android implementation
+        var filteredTokens = [Int32]()
+        let audioEndToken: Int32 = 151668 // <|audio_end|>
+        let minAudioToken: Int32 = 151672
+        let maxAudioToken: Int32 = 155772
+        
+        // Debug logging
+        print("[TTS] Original tokens count: \(tokens.count)")
+        if !tokens.isEmpty {
+            print("[TTS] First 10 tokens: \(tokens.prefix(10))")
+            print("[TTS] Last 10 tokens: \(tokens.suffix(10))")
+        }
+        
+        var nonAudioTokens = 0
+        for token in tokens {
+            // Check if token is in audio range
+            if token >= minAudioToken && token <= maxAudioToken {
+                filteredTokens.append(token)
+            } else {
+                nonAudioTokens += 1
+            }
+            
+            // Check for end token
+            if token == audioEndToken {
+                print("[TTS] Found audio end token")
+                break
+            }
+        }
+        
+        // Debug logging
+        print("[TTS] Filtered tokens count: \(filteredTokens.count)")
+        print("[TTS] Non-audio tokens skipped: \(nonAudioTokens)")
+        if !filteredTokens.isEmpty {
+            print("[TTS] First 10 filtered tokens: \(filteredTokens.prefix(10))")
+        }
+        
+        // Decode audio tokens
+        guard let audioSamples = self.decodeAudioTokens(tokens: filteredTokens) else {
+            return nil
+        }
+        
+        return audioSamples
     }
     
     // MARK: - LoRA Adapter Methods
@@ -1534,7 +2218,7 @@ public class LlamaMobile {
     ///   - maxTokens: Maximum number of tokens to generate
     ///   - tokenCallback: Streaming callback for generated tokens
     /// - Returns: Conversation result, or nil if an error occurred
-    public func generateResponse(userMessage: String, maxTokens: Int32 = 128, tokenCallback: ((String) -> Bool)?) -> ConversationResult? {
+    public func generateResponse(userMessage: String, maxTokens: Int32 = 1024, tokenCallback: ((String) -> Bool)?) -> ConversationResult? {
         guard let context = context else {
             return nil
         }

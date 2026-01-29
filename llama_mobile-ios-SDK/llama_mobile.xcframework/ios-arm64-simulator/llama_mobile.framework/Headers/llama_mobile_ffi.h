@@ -56,13 +56,16 @@ typedef struct llama_mobile_init_params_c {
     const char* cache_type_k; 
     const char* cache_type_v; 
     void (*progress_callback)(float progress); 
-
+    bool enable_chat_template;  
 } llama_mobile_init_params_c_t;
 
 // Chat message structure for structured input
 typedef struct llama_mobile_chat_message_c {
     const char* role;
     const char* content;
+    const char* reasoning_content;  // For reasoning/thinking content (optional, NULL if not present)
+    const char* tool_name;         // For tool calls (optional, NULL if not present)
+    const char* tool_call_id;      // For tool call IDs (optional, NULL if not present)
 } llama_mobile_chat_message_c;
 
 typedef struct llama_mobile_completion_params_c {
@@ -93,6 +96,12 @@ typedef struct llama_mobile_completion_params_c {
     const llama_mobile_chat_message_c* chat_messages;
     int32_t chat_message_count;
     bool use_json_response;
+    
+    // Advanced parameters for Jinja template engine
+    const char* json_schema;       // JSON schema for structured output
+    const char* tools;            // JSON string defining available tools for function calling
+    bool parallel_tool_calls;  // Whether to support parallel tool calls
+    const char* tool_choice;       // Tool choice strategy (auto, required, none, or specific tool)
 
 } llama_mobile_completion_params_c_t;
 

@@ -88,6 +88,7 @@ final class LlamaMobileTests: XCTestCase {
         XCTAssertFalse(defaultParams.flashAttention)
         XCTAssertNil(defaultParams.cacheTypeK)
         XCTAssertNil(defaultParams.cacheTypeV)
+        XCTAssertTrue(defaultParams.enableChatTemplate)
         XCTAssertNil(defaultParams.progressCallback)
         
         // Test GPU constructor
@@ -117,7 +118,7 @@ final class LlamaMobileTests: XCTestCase {
         // Test default constructor
         let defaultParams = LlamaMobile.CompletionParams(prompt: testPrompt)
         XCTAssertEqual(defaultParams.prompt, testPrompt)
-        XCTAssertEqual(defaultParams.maxTokens, 128)
+        XCTAssertEqual(defaultParams.maxTokens, 1024)
         XCTAssertNil(defaultParams.nThreads)
         XCTAssertEqual(defaultParams.seed, -1)
         XCTAssertEqual(defaultParams.temperature, 0.8)
@@ -137,6 +138,12 @@ final class LlamaMobileTests: XCTestCase {
         XCTAssertEqual(defaultParams.stopSequences.count, 0)
         XCTAssertNil(defaultParams.tokenCallback)
         XCTAssertEqual(defaultParams.mediaPaths.count, 0)
+        XCTAssertTrue(defaultParams.useJsonResponse)
+        XCTAssertEqual(defaultParams.nProbs, 0)
+        XCTAssertNil(defaultParams.jsonSchema)
+        XCTAssertNil(defaultParams.tools)
+        XCTAssertFalse(defaultParams.parallelToolCalls)
+        XCTAssertNil(defaultParams.toolChoice)
         
         // Test creative constructor
         let creativeParams = LlamaMobile.CompletionParams(
@@ -463,7 +470,13 @@ final class LlamaMobileTests: XCTestCase {
             ignoreEos: true,
             stopSequences: [],
             grammar: nil,
-            mediaPaths: []
+            mediaPaths: [],
+            useJsonResponse: false,
+            nProbs: 0,
+            jsonSchema: nil,
+            tools: nil,
+            parallelToolCalls: false,
+            toolChoice: nil
         )
         
         XCTAssertEqual(params.prompt, "")
@@ -484,6 +497,12 @@ final class LlamaMobileTests: XCTestCase {
         XCTAssertTrue(params.stopSequences.isEmpty)
         XCTAssertNil(params.grammar)
         XCTAssertTrue(params.mediaPaths.isEmpty)
+        XCTAssertFalse(params.useJsonResponse)
+        XCTAssertEqual(params.nProbs, 0)
+        XCTAssertNil(params.jsonSchema)
+        XCTAssertNil(params.tools)
+        XCTAssertFalse(params.parallelToolCalls)
+        XCTAssertNil(params.toolChoice)
     }
     
     // MARK: - Real Model Integration Tests
