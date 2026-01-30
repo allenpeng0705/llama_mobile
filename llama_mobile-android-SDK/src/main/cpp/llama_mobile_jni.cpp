@@ -828,11 +828,6 @@ JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_isVocoderEnabled(JNI
 
 // Gets the TTS model type
 JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_getTTSType(JNIEnv* env, jobject obj, jlong contextHandle) {
-    // Check if context is invalid
-    if (contextHandle == 0) {
-        return nullptr;
-    }
-    
     // Get the TTSModelType enum class
     jclass ttsModelTypeClass = env->FindClass("com/llamamobile/LlamaMobile$TTSModelType");
     if (ttsModelTypeClass == nullptr) {

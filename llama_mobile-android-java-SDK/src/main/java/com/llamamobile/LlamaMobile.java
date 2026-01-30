@@ -288,10 +288,56 @@ public class LlamaMobile {
     }
 
     /**
-     * Progress callback interface for download operations
+     * Progress callback interface for operations
      */
     public interface ProgressCallback {
         void onProgress(float progress);
+    }
+
+    /**
+     * Audio chunk callback interface for streaming TTS
+     */
+    public interface AudioChunkCallback {
+        void onAudioChunk(short[] audioChunk);
+    }
+
+    /**
+     * Result class for operations
+     */
+    public static class Result<S, E> {
+        private final S value;
+        private final E error;
+        private final boolean isSuccess;
+
+        private Result(S value, E error, boolean isSuccess) {
+            this.value = value;
+            this.error = error;
+            this.isSuccess = isSuccess;
+        }
+
+        public static <S, E> Result<S, E> success(S value) {
+            return new Result<>(value, null, true);
+        }
+
+        public static <S, E> Result<S, E> failure(E error) {
+            return new Result<>(null, error, false);
+        }
+
+        public boolean isSuccess() {
+            return isSuccess;
+        }
+
+        public boolean isFailure() {
+            return !isSuccess;
+        }
+
+        public S getValue() {
+            return value;
+        }
+
+        public E getError() {
+            return error;
+        }
     }
 
     /**
@@ -503,10 +549,6 @@ public class LlamaMobile {
         }
     }
 
-    public interface ProgressCallback {
-        void onProgress(float progress);
-    }
-
     /**
      * Completion parameters for generating text
      */
@@ -560,7 +602,7 @@ public class LlamaMobile {
             this.prompt = prompt;
             this.temperature = temperature;
             this.maxTokens = maxTokens;
-            this.nThreads = nThreads;
+            this.nThreads = nThreads != null ? nThreads : 4;
             this.seed = seed;
             this.topK = topK;
             this.topP = topP;
@@ -752,25 +794,7 @@ public class LlamaMobile {
         return grammarContent(context, GrammarName.C);
     }
 
-    /**
-     * LoRA adapter configuration
-     */
-    public static class LoraAdapter {
-        private final String path;
-        private final float scale;
 
-        public LoraAdapter(String path) {
-            this(path, 1.0f);
-        }
-
-        public LoraAdapter(String path, float scale) {
-            this.path = path;
-            this.scale = scale;
-        }
-
-        public String getPath() { return path; }
-        public float getScale() { return scale; }
-    }
 
     /**
      * Result of a conversation generation
@@ -793,6 +817,8 @@ public class LlamaMobile {
         public long getTotalTime() { return totalTime; }
         public int getTokensGenerated() { return tokensGenerated; }
     }
+
+
 
     /**
      * Loads the native libraries
@@ -971,6 +997,26 @@ public class LlamaMobile {
      * @param contextHandle Context handle obtained from initContext
      */
     public static native void releaseVocoder(long contextHandle);
+
+    /**
+     * LoRA adapter configuration
+     */
+    public static class LoraAdapter {
+        private final String path;
+        private final float scale;
+
+        public LoraAdapter(String path) {
+            this(path, 1.0f);
+        }
+
+        public LoraAdapter(String path, float scale) {
+            this.path = path;
+            this.scale = scale;
+        }
+
+        public String getPath() { return path; }
+        public float getScale() { return scale; }
+    }
 
     /**
      * Applies LoRA adapters to the model
@@ -1313,13 +1359,6 @@ public class LlamaMobile {
     }
 
     /**
-     * Audio chunk callback interface for streaming TTS
-     */
-    public interface AudioChunkCallback {
-        void onAudioChunk(short[] audioChunk);
-    }
-
-    /**
      * Generates speech from text with streaming support (simplified implementation)
      *
      * @param contextHandle Context handle obtained from initContext
@@ -1457,44 +1496,7 @@ public class LlamaMobile {
         return generateSpeechStreamForLongText(contextHandle, text, new TTSOptions(), null, audioChunkHandler);
     }
 
-    /**
-     * Result class for TTS operations
-     */
-    public static class Result<S, E> {
-        private final S value;
-        private final E error;
-        private final boolean isSuccess;
 
-        private Result(S value, E error, boolean isSuccess) {
-            this.value = value;
-            this.error = error;
-            this.isSuccess = isSuccess;
-        }
-
-        public static <S, E> Result<S, E> success(S value) {
-            return new Result<>(value, null, true);
-        }
-
-        public static <S, E> Result<S, E> failure(E error) {
-            return new Result<>(null, error, false);
-        }
-
-        public boolean isSuccess() {
-            return isSuccess;
-        }
-
-        public boolean isFailure() {
-            return !isSuccess;
-        }
-
-        public S getValue() {
-            return value;
-        }
-
-        public E getError() {
-            return error;
-        }
-    }
 
     /**
      * Gets the number of parameters in the loaded model
@@ -1622,7 +1624,10 @@ public class LlamaMobile {
                 params.getTokenCallback(),
                 params.getChatMessages(),
                 grammar != null ? false : params.isUseJsonResponse(),
-                params.getChatTemplate()
+                null,
+                null,
+                false,
+                null
             );
             return generateCompletion(contextHandle, params);
         } catch (Exception e) {
@@ -1639,46 +1644,6 @@ public class LlamaMobile {
      */
     public static CompletionResult generateOpenAICompletion(long contextHandle, String openAIJSON) {
         return generateOpenAICompletion(contextHandle, openAIJSON, null);
-    }
-
-    /**
-     * Generates audio samples from text using TTS
-     *
-     * @param contextHandle Context handle obtained from initContext
-     * @param text Text to convert to speech
-     * @param speakerJson JSON string with speaker configuration (optional, defaults to default speaker)
-     * @return Array of floating-point audio samples, or null if an error occurred
-     */
-    public static float[] generateAudioFromText(long contextHandle, String text, String speakerJson) {
-        if (!isVocoderEnabled(contextHandle)) {
-            return null;
-        }
-        
-        // Get formatted audio completion
-        String formattedPrompt = getFormattedAudioCompletion(contextHandle, speakerJson, text);
-        if (formattedPrompt == null) {
-            return null;
-        }
-        
-        // Generate audio tokens
-        int[] audioTokens = getAudioGuideTokens(contextHandle, formattedPrompt);
-        if (audioTokens == null) {
-            return null;
-        }
-        
-        // Decode audio tokens to samples
-        return decodeAudioTokens(contextHandle, audioTokens);
-    }
-
-    /**
-     * Convenience method for generating audio samples from text using default speaker
-     *
-     * @param contextHandle Context handle obtained from initContext
-     * @param text Text to convert to speech
-     * @return Array of floating-point audio samples, or null if an error occurred
-     */
-    public static float[] generateAudioFromText(long contextHandle, String text) {
-        return generateAudioFromText(contextHandle, text, "{\"speaker\": \"default\"}");
     }
 
     /**

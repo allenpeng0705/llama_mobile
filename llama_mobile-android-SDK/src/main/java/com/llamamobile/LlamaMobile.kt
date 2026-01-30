@@ -109,7 +109,7 @@ object LlamaMobile {
     /**
      * Error types for TTS operations
      */
-    class TTSError private constructor(private val message: String) : Exception(message) {
+    class TTSError private constructor(message: String) : Exception(message) {
         companion object {
             @JvmStatic
             fun noModelLoaded(): TTSError = TTSError("No model loaded")
@@ -138,6 +138,45 @@ object LlamaMobile {
             @JvmStatic
             fun unknownError(message: String): TTSError = TTSError(message)
         }
+    }
+
+    /**
+     * Result class for operations that can fail
+     */
+    data class Result<S, E>(
+        private val value: S?,
+        private val error: E?,
+        private val isSuccess: Boolean
+    ) {
+        companion object {
+            @JvmStatic
+            fun <S, E> success(value: S): Result<S, E> {
+                return Result(value, null, true)
+            }
+            
+            @JvmStatic
+            fun <S, E> failure(error: E): Result<S, E> {
+                return Result(null, error, false)
+            }
+        }
+        
+        fun isSuccess(): Boolean = isSuccess
+        
+        fun isFailure(): Boolean = !isSuccess
+        
+        fun getValue(): S? = value
+        
+        fun getError(): E? = error
+        
+        fun getOrThrow(): S {
+            if (isSuccess) {
+                return value!!
+            } else {
+                throw error as Throwable
+            }
+        }
+        
+        fun exceptionOrNull(): E? = error
     }
     
     /**
@@ -893,7 +932,7 @@ object LlamaMobile {
         
         // Convert FloatArray to ShortArray
         val shortSamples = ShortArray(audioSamples.size) {
-            (audioSamples[it] * Short.MAX_VALUE).toShort()
+            ((audioSamples[it] * Short.MAX_VALUE).toInt()).toShort()
         }
         
         // Save to file if requested
@@ -1118,7 +1157,7 @@ object LlamaMobile {
         
         // Convert FloatArray to ShortArray
         val shortSamples = ShortArray(audioSamples.size) {
-            (audioSamples[it] * Short.MAX_VALUE).toShort()
+            ((audioSamples[it] * Short.MAX_VALUE).toInt()).toShort()
         }
         
         // Save to file if requested
@@ -1182,7 +1221,7 @@ object LlamaMobile {
         // Generate full audio first (simplified streaming)
         val result = generateSpeech(contextHandle, text, options, progressHandler)
         
-        if (result.isFailure) {
+        if (result.isFailure()) {
             return Result.failure(result.exceptionOrNull() as TTSError)
         }
         
@@ -1248,7 +1287,7 @@ object LlamaMobile {
             // Generate speech for this sentence
             val sentenceResult = generateSpeechSync(contextHandle, sentence, options)
             
-            if (sentenceResult.isFailure) {
+            if (sentenceResult.isFailure()) {
                 return Result.failure(sentenceResult.exceptionOrNull() as TTSError)
             }
             

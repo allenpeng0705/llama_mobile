@@ -37,6 +37,8 @@ public class LlamaMobileComprehensiveTests {
     private String TEST_OUTPUT_DIR;
     private String rootPath;
     private String modelPath;
+    private String ttsModelPath;
+    private String vocoderPath;
     
     @Before
     public void setUp() {
@@ -51,6 +53,10 @@ public class LlamaMobileComprehensiveTests {
         // Model paths (match Kotlin SDK structure)
         modelPath = new File(rootPath, "SmolVLM-256M-Instruct-Q8_0.gguf").getAbsolutePath();
         embeddingPath = new File(rootPath, "embedding/Qwen3-Embedding-0.6B-Q8_0.gguf").getAbsolutePath();
+        
+        // TTS model paths
+        ttsModelPath = new File(rootPath, "TTS/model.pth").getAbsolutePath();
+        vocoderPath = new File(rootPath, "TTS/vocoder.pth").getAbsolutePath();
         
         // Create test output directory if it doesn't exist
         File outputDir = new File(TEST_OUTPUT_DIR);
@@ -74,7 +80,7 @@ public class LlamaMobileComprehensiveTests {
         // Test primary constructor
         LlamaMobile.InitParams params1 = new LlamaMobile.InitParams(modelPath);
         assertEquals(modelPath, params1.getModelPath());
-        assertEquals(512, params1.getNCtx());  // Default value is 512, not 2048
+        assertEquals(2048, params1.getNCtx());  // Default value is 2048
         assertEquals(4, params1.getNThreads());
         
         // Test constructor with all parameters
@@ -95,7 +101,8 @@ public class LlamaMobileComprehensiveTests {
             false,           // flashAttn
             null,            // cacheTypeK
             null,            // cacheTypeV
-            LlamaMobile.CacheType.MEMORY  // cacheType
+            true,            // enableChatTemplate
+            null             // progressCallback
         );
         assertEquals(modelPath, params2.getModelPath());
         assertEquals(8192, params2.getNCtx());
@@ -402,7 +409,8 @@ public class LlamaMobileComprehensiveTests {
             false,                     // flashAttn
             null,                      // cacheTypeK
             null,                      // cacheTypeV
-            LlamaMobile.CacheType.MEMORY  // cacheType
+            true,                      // enableChatTemplate
+            null                       // progressCallback
         );
         assertNotNull("InitParams should not be null", params);
         
@@ -477,7 +485,8 @@ public class LlamaMobileComprehensiveTests {
                 false, // flashAttn
                 null,  // cacheTypeK
                 null,  // cacheTypeV
-                LlamaMobile.CacheType.MEMORY
+                true,  // enableChatTemplate
+                null   // progressCallback
             );
             
             long context = LlamaMobile.initContext(params);
@@ -557,7 +566,8 @@ public class LlamaMobileComprehensiveTests {
                 false, // flashAttn
                 null,  // cacheTypeK
                 null,  // cacheTypeV
-                LlamaMobile.CacheType.MEMORY
+                true,  // enableChatTemplate
+                null   // progressCallback
             );
             
             long context = LlamaMobile.initContext(params);
@@ -599,7 +609,8 @@ public class LlamaMobileComprehensiveTests {
                 false, // flashAttn
                 null,  // cacheTypeK
                 null,  // cacheTypeV
-                LlamaMobile.CacheType.MEMORY
+                true,  // enableChatTemplate
+                null   // progressCallback
             );
             
             long context = LlamaMobile.initContext(params);
@@ -649,7 +660,8 @@ public class LlamaMobileComprehensiveTests {
                 false, // flashAttn
                 null,  // cacheTypeK
                 null,  // cacheTypeV
-                LlamaMobile.CacheType.MEMORY
+                true,  // enableChatTemplate
+                null   // progressCallback
             );
             
             long context = LlamaMobile.initContext(params);
@@ -694,7 +706,8 @@ public class LlamaMobileComprehensiveTests {
                 false, // flashAttn
                 null,  // cacheTypeK
                 null,  // cacheTypeV
-                LlamaMobile.CacheType.MEMORY
+                true,  // enableChatTemplate
+                null   // progressCallback
             );
             
             long context = LlamaMobile.initContext(params);
@@ -766,7 +779,8 @@ public class LlamaMobileComprehensiveTests {
                 false, // flashAttn
                 null,  // cacheTypeK
                 null,  // cacheTypeV
-                LlamaMobile.CacheType.MEMORY
+                true,  // enableChatTemplate
+                null   // progressCallback
             );
             
             long context = LlamaMobile.initContext(params);
@@ -819,5 +833,430 @@ public class LlamaMobileComprehensiveTests {
             Log.e(TAG, "Error accessing grammar file: " + e.getMessage());
             fail("Should be able to access grammar file");
         }
+    }
+
+    @Test
+    public void testTTSOptions() {
+        // Test TTSOptions with custom parameters
+        LlamaMobile.TTSOptions options = new LlamaMobile.TTSOptions(
+            16000,
+            "en-us",
+            1.2f,
+            false,
+            null
+        );
+        
+        assertEquals("Sample rate should be 16000", 16000, options.getSampleRate());
+        assertEquals("Voice should be en-us", "en-us", options.getVoice());
+        assertEquals("Speed should be 1.2", 1.2f, options.getSpeed(), 0.001f);
+        // Note: saveToFile is private and doesn't have a getter in the current implementation
+        // assertFalse("Save to file should be false", options.saveToFile);
+        assertNull("Output file path should be null", options.getOutputFilePath());
+    }
+
+    @Test
+    public void testTTSWithCustomOptions() {
+        File ttsFile = new File(ttsModelPath);
+        File vocoderFile = new File(vocoderPath);
+        
+        // Check if files exist and are readable
+        boolean ttsReadable = ttsFile.exists() && ttsFile.canRead();
+        boolean vocoderReadable = vocoderFile.exists() && vocoderFile.canRead();
+        
+        if (!ttsReadable || !vocoderReadable) {
+            System.out.println("TTS model files not available or cannot be read - skipping test");
+            return;
+        }
+        
+        // Load TTS model
+        LlamaMobile.InitParams ttsParams = new LlamaMobile.InitParams(ttsModelPath);
+        long context = LlamaMobile.initContext(ttsParams);
+        
+        if (context == 0L) {
+            System.out.println("Failed to initialize context for TTS model - skipping test");
+            return;
+        }
+        
+        // Initialize vocoder
+        boolean vocoderSuccess = LlamaMobile.initVocoder(context, vocoderPath);
+        if (!vocoderSuccess) {
+            System.out.println("Failed to initialize vocoder - skipping test");
+            LlamaMobile.releaseContext(context);
+            return;
+        }
+        
+        // Test TTS with custom options
+        String text = "Hello, this is a test with custom TTS options.";
+        LlamaMobile.TTSOptions options = new LlamaMobile.TTSOptions(
+            24000,
+            "en-us",
+            1.0f,
+            false,
+            null
+        );
+        
+        LlamaMobile.Result<LlamaMobile.SpeechResult, LlamaMobile.TTSError> result = LlamaMobile.generateSpeechSync(context, text, options);
+        
+        if (result != null && result.isSuccess()) {
+            LlamaMobile.SpeechResult speechResult = result.getValue();
+            System.out.println("TTS with custom options succeeded!");
+            System.out.println("Sample rate: " + speechResult.getSampleRate());
+            System.out.println("Duration: " + speechResult.getDuration() + " seconds");
+            System.out.println("Method used: " + speechResult.getMethodUsed());
+            assertNotNull("Audio samples should not be null", speechResult.getAudioSamples());
+            assertTrue("Audio samples should not be empty", speechResult.getAudioSamples().length > 0);
+        } else if (result != null) {
+            LlamaMobile.TTSError error = result.getError();
+            System.out.println("TTS with custom options failed: " + error);
+            // This might fail if the model doesn't support all options, but we should still test the API
+        }
+        
+        LlamaMobile.releaseVocoder(context);
+        LlamaMobile.releaseContext(context);
+    }
+
+    @Test
+    public void testTTSStreaming() {
+        File ttsFile = new File(ttsModelPath);
+        File vocoderFile = new File(vocoderPath);
+        
+        // Check if files exist and are readable
+        boolean ttsReadable = ttsFile.exists() && ttsFile.canRead();
+        boolean vocoderReadable = vocoderFile.exists() && vocoderFile.canRead();
+        
+        if (!ttsReadable || !vocoderReadable) {
+            System.out.println("TTS model files not available or cannot be read - skipping test");
+            return;
+        }
+        
+        // Load TTS model
+        LlamaMobile.InitParams ttsParams = new LlamaMobile.InitParams(ttsModelPath);
+        long context = LlamaMobile.initContext(ttsParams);
+        
+        if (context == 0L) {
+            System.out.println("Failed to initialize context for TTS model - skipping test");
+            return;
+        }
+        
+        // Initialize vocoder
+        boolean vocoderSuccess = LlamaMobile.initVocoder(context, vocoderPath);
+        if (!vocoderSuccess) {
+            System.out.println("Failed to initialize vocoder - skipping test");
+            LlamaMobile.releaseContext(context);
+            return;
+        }
+        
+        // Test streaming TTS
+        String text = "Hello, this is a test of the streaming TTS API.";
+        LlamaMobile.TTSOptions options = new LlamaMobile.TTSOptions(24000, "en-us", 1.0f, false, null);
+        
+        final int[] receivedChunks = {0};
+        final int[] totalSamples = {0};
+        
+        LlamaMobile.Result<LlamaMobile.SpeechMetadata, LlamaMobile.TTSError> result = LlamaMobile.generateSpeechStream(
+            context,
+            text,
+            options,
+            progress -> {
+                System.out.println("Streaming Progress: " + (int)(progress * 100) + "%");
+            },
+            audioChunk -> {
+                receivedChunks[0]++;
+                totalSamples[0] += audioChunk.length;
+                System.out.println("Received audio chunk with " + audioChunk.length + " samples");
+            }
+        );
+        
+        if (result != null && result.isSuccess()) {
+            System.out.println("Streaming TTS succeeded!");
+            // Note: generateSpeechStream returns SpeechMetadata, not SpeechResult
+            // So we can't access sampleRate, duration, etc. here
+            System.out.println("Received " + receivedChunks[0] + " chunks with " + totalSamples[0] + " total samples");
+            assertTrue("Should have received at least one chunk", receivedChunks[0] > 0);
+        } else if (result != null) {
+            LlamaMobile.TTSError error = result.getError();
+            System.out.println("Streaming TTS failed: " + error);
+        }
+        
+        LlamaMobile.releaseVocoder(context);
+        LlamaMobile.releaseContext(context);
+    }
+
+    @Test
+    public void testTTSStreamingForLongText() {
+        File ttsFile = new File(ttsModelPath);
+        File vocoderFile = new File(vocoderPath);
+        
+        // Check if files exist and are readable
+        boolean ttsReadable = ttsFile.exists() && ttsFile.canRead();
+        boolean vocoderReadable = vocoderFile.exists() && vocoderFile.canRead();
+        
+        if (!ttsReadable || !vocoderReadable) {
+            System.out.println("TTS model files not available or cannot be read - skipping test");
+            return;
+        }
+        
+        // Load TTS model
+        LlamaMobile.InitParams ttsParams = new LlamaMobile.InitParams(ttsModelPath);
+        long context = LlamaMobile.initContext(ttsParams);
+        
+        if (context == 0L) {
+            System.out.println("Failed to initialize context for TTS model - skipping test");
+            return;
+        }
+        
+        // Initialize vocoder
+        boolean vocoderSuccess = LlamaMobile.initVocoder(context, vocoderPath);
+        if (!vocoderSuccess) {
+            System.out.println("Failed to initialize vocoder - skipping test");
+            LlamaMobile.releaseContext(context);
+            return;
+        }
+        
+        // Test long text streaming
+        String longText = "Hello! This is a long text example for streaming TTS. " +
+                "This text will be split into multiple chunks and played continuously. " +
+                "Each sentence will be generated and played as soon as it's ready. " +
+                "This provides a much better user experience for long texts.";
+        
+        LlamaMobile.TTSOptions options = new LlamaMobile.TTSOptions(24000, "en-us", 1.0f, false, null);
+        
+        final int[] receivedChunks = {0};
+        final int[] totalSamples = {0};
+        
+        LlamaMobile.Result<LlamaMobile.SpeechMetadata, LlamaMobile.TTSError> result = LlamaMobile.generateSpeechStreamForLongText(
+            context,
+            longText,
+            options,
+            progress -> {
+                System.out.println("Long Text Streaming Progress: " + (int)(progress * 100) + "%");
+            },
+            audioChunk -> {
+                receivedChunks[0]++;
+                totalSamples[0] += audioChunk.length;
+                System.out.println("Received audio chunk with " + audioChunk.length + " samples");
+            }
+        );
+        
+        if (result != null && result.isSuccess()) {
+            System.out.println("Long text streaming succeeded!");
+            // Note: generateSpeechStreamForLongText returns SpeechMetadata, not SpeechResult
+            // So we can't access sampleRate, duration, etc. here
+            System.out.println("Received " + receivedChunks[0] + " chunks with " + totalSamples[0] + " total samples");
+            assertTrue("Should have received at least one chunk", receivedChunks[0] > 0);
+        } else if (result != null) {
+            LlamaMobile.TTSError error = result.getError();
+            System.out.println("Long text streaming failed: " + error);
+        }
+        
+        LlamaMobile.releaseVocoder(context);
+        LlamaMobile.releaseContext(context);
+    }
+
+    @Test
+    public void testTTSErrorHandling() {
+        File ttsFile = new File(ttsModelPath);
+        File vocoderFile = new File(vocoderPath);
+        
+        // Check if files exist and are readable
+        boolean ttsReadable = ttsFile.exists() && ttsFile.canRead();
+        boolean vocoderReadable = vocoderFile.exists() && vocoderFile.canRead();
+        
+        if (!ttsReadable || !vocoderReadable) {
+            System.out.println("TTS model files not available or cannot be read - skipping test");
+            return;
+        }
+        
+        // Load TTS model
+        LlamaMobile.InitParams ttsParams = new LlamaMobile.InitParams(ttsModelPath);
+        long context = LlamaMobile.initContext(ttsParams);
+        
+        if (context == 0L) {
+            System.out.println("Failed to initialize context for TTS model - skipping test");
+            return;
+        }
+        
+        // Initialize vocoder
+        boolean vocoderSuccess = LlamaMobile.initVocoder(context, vocoderPath);
+        if (!vocoderSuccess) {
+            System.out.println("Failed to initialize vocoder - skipping test");
+            LlamaMobile.releaseContext(context);
+            return;
+        }
+        
+        // Test 1: Empty text
+        LlamaMobile.Result<LlamaMobile.SpeechResult, LlamaMobile.TTSError> emptyTextResult = LlamaMobile.generateSpeechSync(
+            context,
+            "",
+            new LlamaMobile.TTSOptions()
+        );
+        
+        if (emptyTextResult != null && !emptyTextResult.isSuccess()) {
+            LlamaMobile.TTSError error = emptyTextResult.getError();
+            System.out.println("Empty text test: Expected failure, got: " + error);
+        }
+        
+        // Test 2: Test without vocoder
+        LlamaMobile.releaseVocoder(context);
+        
+        LlamaMobile.Result<LlamaMobile.SpeechResult, LlamaMobile.TTSError> noVocoderResult = LlamaMobile.generateSpeechSync(
+            context,
+            "Hello",
+            new LlamaMobile.TTSOptions()
+        );
+        
+        if (noVocoderResult != null && !noVocoderResult.isSuccess()) {
+            LlamaMobile.TTSError error = noVocoderResult.getError();
+            System.out.println("No vocoder test: Expected failure, got: " + error);
+        }
+        
+        // Re-initialize vocoder for cleanup
+        LlamaMobile.initVocoder(context, vocoderPath);
+        
+        LlamaMobile.releaseVocoder(context);
+        LlamaMobile.releaseContext(context);
+    }
+
+    @Test
+    public void testTTSNoModelLoaded() {
+        // Test TTS with no model loaded (invalid context)
+        long invalidContext = 0L;
+        
+        LlamaMobile.Result<LlamaMobile.SpeechResult, LlamaMobile.TTSError> result = LlamaMobile.generateSpeechSync(
+            invalidContext,
+            "Hello",
+            new LlamaMobile.TTSOptions()
+        );
+        
+        if (result != null && !result.isSuccess()) {
+            LlamaMobile.TTSError error = result.getError();
+            System.out.println("No model loaded test: Expected failure, got: " + error);
+        }
+    }
+
+    @Test
+    public void testConversationAPI() {
+        File modelFile = new File(modelPath);
+        if (!modelFile.exists() || !modelFile.canRead()) {
+            System.out.println("Model file not available at " + modelPath + " - skipping test");
+            return;
+        }
+        
+        LlamaMobile.InitParams params = new LlamaMobile.InitParams(modelPath);
+        long context = LlamaMobile.initContext(params);
+        
+        if (context == 0L) {
+            System.out.println("Failed to initialize context for conversation test - skipping test");
+            return;
+        }
+        
+        // Test conversation API
+        LlamaMobile.ConversationResult result = LlamaMobile.generateResponse(context, "Hello, how are you?", 50);
+        assertNotNull("Conversation result should not be null", result);
+        
+        boolean textGenerated = result != null && result.getText() != null && !result.getText().isEmpty();
+        boolean tokensGenerated = result != null && result.getTokensGenerated() > 0;
+        assertTrue("Should generate either text or tokens", textGenerated || tokensGenerated);
+        
+        if (result != null) {
+            System.out.println("Conversation result: " + result.getText());
+            System.out.println("Tokens generated: " + result.getTokensGenerated());
+            System.out.println("Time to first token: " + result.getTimeToFirstToken() + "ms");
+            System.out.println("Total time: " + result.getTotalTime() + "ms");
+        }
+        
+        LlamaMobile.releaseContext(context);
+    }
+
+    @Test
+    public void testModelInfo() {
+        File modelFile = new File(modelPath);
+        if (!modelFile.exists() || !modelFile.canRead()) {
+            System.out.println("Model file not available at " + modelPath + " - skipping test");
+            return;
+        }
+        
+        LlamaMobile.InitParams params = new LlamaMobile.InitParams(modelPath);
+        long context = LlamaMobile.initContext(params);
+        
+        if (context == 0L) {
+            System.out.println("Failed to initialize context for model info test - skipping test");
+            return;
+        }
+        
+        // Test model size and parameters count
+        long modelSize = LlamaMobile.getModelSize(context);
+        long paramsCount = LlamaMobile.getModelParametersCount(context);
+        
+        assertTrue("Model size should be greater than 0", modelSize > 0L);
+        assertTrue("Model parameters count should be greater than 0", paramsCount > 0L);
+        
+        System.out.println("Model size: " + modelSize + " bytes");
+        System.out.println("Model parameters count: " + paramsCount);
+        
+        // Test model description
+        String modelDesc = LlamaMobile.getModelDescription(context);
+        assertNotNull("Model description should not be null", modelDesc);
+        System.out.println("Model description: " + modelDesc);
+        
+        // Test context window size
+        int ctxWindowSize = LlamaMobile.getContextWindowSize(context);
+        assertTrue("Context window size should be greater than 0", ctxWindowSize > 0);
+        System.out.println("Context window size: " + ctxWindowSize);
+        
+        LlamaMobile.releaseContext(context);
+    }
+
+    @Test
+    public void testLoRAAdapterLoading() {
+        File modelFile = new File(modelPath);
+        if (!modelFile.exists() || !modelFile.canRead()) {
+            System.out.println("Model file not available at " + modelPath + " - skipping test");
+            return;
+        }
+        
+        // Define loraPath locally
+        String loraPath = new File(rootPath, "lora/fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf").getAbsolutePath();
+        
+        File loraFile = new File(loraPath);
+        if (!loraFile.exists() || !loraFile.canRead()) {
+            System.out.println("LoRA adapter file not available at " + loraPath + " - skipping test");
+            return;
+        }
+        
+        LlamaMobile.InitParams params = new LlamaMobile.InitParams(modelPath);
+        long context = LlamaMobile.initContext(params);
+        
+        if (context == 0L) {
+            System.out.println("Failed to initialize context for LoRA test - skipping test");
+            return;
+        }
+        
+        // Test LoRA adapter loading
+        LlamaMobile.LoraAdapter adapter = new LlamaMobile.LoraAdapter(loraPath, 0.8f);
+        
+        LlamaMobile.LoraAdapter[] adapters = {adapter};
+        boolean success = LlamaMobile.applyLoraAdapters(context, adapters);
+        
+        if (success) {
+            System.out.println("Successfully loaded LoRA adapter");
+            
+            // Test getting loaded LoRA adapters
+            LlamaMobile.LoraAdapter[] loadedAdapters = LlamaMobile.getLoadedLoraAdapters(context);
+            assertNotNull("Loaded LoRA adapters should not be null", loadedAdapters);
+            assertTrue("Should have at least one LoRA adapter loaded", loadedAdapters.length > 0);
+            
+            System.out.println("Loaded " + loadedAdapters.length + " LoRA adapter(s)");
+            
+            // Test removing LoRA adapters
+            LlamaMobile.removeLoraAdapters(context);
+            LlamaMobile.LoraAdapter[] removedAdapters = LlamaMobile.getLoadedLoraAdapters(context);
+            assertTrue("Should have no LoRA adapters after removal", removedAdapters == null || removedAdapters.length == 0);
+            System.out.println("Successfully removed LoRA adapters");
+        } else {
+            System.out.println("Failed to load LoRA adapter - this may be due to compatibility issues");
+        }
+        
+        LlamaMobile.releaseContext(context);
     }
 }

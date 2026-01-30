@@ -35,21 +35,7 @@ llama_mobile-ios-SDK/
 - Add `Sources/LlamaMobile/LlamaMobile.swift` to your Xcode project (Copy LlamaMobile.swift to your project source code folder)
 - This provides a Swift-friendly API that wraps the C++ implementation
 
-### 3. Built-in Grammar Files
-
-The framework includes grammar files in the `grammars/` directory that can constrain the model output to specific formats (JSON, lists, etc.). These files are automatically available to your app - **no copying required!**
-
-**Available grammar files:**
-- `json.gbnf` - Valid JSON objects and values
-- `json_arr.gbnf` - Valid JSON arrays
-- `arithmetic.gbnf` - Arithmetic expressions
-- `c.gbnf` - C programming language syntax
-- `chess.gbnf` - Chess moves notation
-- `english.gbnf` - English language bias
-- `japanese.gbnf` - Japanese language bias
-- `list.gbnf` - Structured lists
-
-### 4. Basic Usage Example
+### 3. Basic Usage Example
 ```swift
 import Foundation
 import LlamaMobile
@@ -67,275 +53,7 @@ let result = llama.generateCompletion(
 print(result?.text ?? "No result")
 ```
 
-### 5. Structured Output with Grammars
-
-The framework includes grammar files in the `grammars/` directory that can constrain the model output to specific formats (JSON, lists, etc.).
-
-**Key Concepts:**
-- ✅ **No copying required**: Grammar files are built directly into the framework bundle
-- ⏱️ **Loaded at generation time**: Grammars are loaded when needed, not during model initialization
-- 📋 **Passed as a parameter**: Grammar content is passed to the `generateCompletion` method
-- 🔄 **Reusable**: Grammar content can be loaded once and reused for multiple generations
-
-**When to Load Grammars:**
-- Grammar files are **loaded at generation time**, not when loading the model
-- Load grammar files just before calling `generateCompletion` with the grammar parameter
-- For optimal performance, load each grammar once and reuse it for multiple generations
-
-**How Grammars Work:**
-1. The grammar content is passed to the model during generation
-2. The model uses the grammar rules to constrain its output to valid syntax
-3. The result will always conform to the specified grammar format
-
-**Available grammar files:**
-- `json.gbnf` - Valid JSON objects and values
-- `json_arr.gbnf` - Valid JSON arrays
-- `arithmetic.gbnf` - Arithmetic expressions
-- `c.gbnf` - C programming language syntax
-- `chess.gbnf` - Chess moves notation
-- `english.gbnf` - English language bias
-- `japanese.gbnf` - Japanese language bias
-- `list.gbnf` - Structured lists
-
-#### Option 1: Using Built-in Grammar Loading Methods (Recommended)
-
-**Important:** The grammar loading methods (`loadGrammar(named:)`) are instance methods of `LlamaMobile`, which means they can only be called **after the model is initialized**.
-
-The SDK provides convenient methods to load grammar files directly:
-
-```swift
-// Initialize the LlamaMobile instance
-let llama = LlamaMobile(modelPath: "/path/to/model.gguf", nGpuLayers: 10)
-
-// Complete workflow example: Model initialization to structured output
-class LLMAgent {
-    let llama: LlamaMobile?
-    var jsonGrammar: String?
-    var listGrammar: String?
-    
-    init() {
-        // Step 1: Initialize the model (this loads the model into memory)
-        print("Initializing model...")
-        llama = LlamaMobile(modelPath: "/path/to/model.gguf", nGpuLayers: 10)
-        
-        if llama != nil {
-            print("Model initialized successfully!")
-            
-            // Step 2: Pre-load commonly used grammars
-            // This is optional but improves performance if grammars are reused
-            loadGrammars()
-        } else {
-            print("Failed to initialize model")
-        }
-    }
-    
-    func loadGrammars() {
-        print("Pre-loading grammars...")
-        
-        // Load JSON grammar for structured data output
-        if let jsonGrammarContent = llama?.loadGrammar(named: "json") {
-            jsonGrammar = jsonGrammarContent
-            print("✓ JSON grammar loaded")
-        }
-        
-        // Load list grammar for bullet points
-        if let listGrammarContent = llama?.loadGrammar(named: "list") {
-            listGrammar = listGrammarContent
-            print("✓ List grammar loaded")
-        }
-    }
-    
-    func generateJSONResponse(prompt: String) -> String? {
-        // Step 3: Use pre-loaded grammar during generation
-        guard let jsonGrammar = jsonGrammar, let llama = llama else {
-            return nil
-        }
-        
-        print("Generating JSON response...")
-        
-        let result = llama.generateCompletion(
-            with: CompletionParams(
-                prompt: prompt,
-                maxTokens: 256,
-                temperature: 0.7,
-                grammar: jsonGrammar
-            )
-        )
-        
-        return result?.text
-    }
-    
-    func generateListResponse(prompt: String) -> String? {
-        // Step 3: Use pre-loaded grammar during generation
-        guard let listGrammar = listGrammar, let llama = llama else {
-            return nil
-        }
-        
-        print("Generating list response...")
-        
-        let result = llama.generateCompletion(
-            with: CompletionParams(
-                prompt: prompt,
-                maxTokens: 256,
-                temperature: 0.7,
-                grammar: listGrammar
-            )
-        )
-        
-        return result?.text
-    }
-}
-
-// Usage in app
-do {
-    // Initialize agent with model and pre-load grammars
-    let agent = LLMAgent()
-    
-    // Generate JSON output
-    if let jsonResult = agent.generateJSONResponse(prompt: "Create a JSON object with product details: name, price, category") {
-        print("\nJSON Response:")
-        print(jsonResult)
-        // Output: {"name": "Laptop", "price": 999.99, "category": "Electronics"}
-    }
-    
-    // Generate list output
-    if let listResult = agent.generateListResponse(prompt: "Create a list of 3 healthy breakfast options") {
-        print("\nList Response:")
-        print(listResult)
-        // Output: 1. Oatmeal with fruits and nuts
-        //         2. Greek yogurt with granola
-        //         3. Smoothie with spinach and berries
-    }
-} catch {    
-    print("Error: \(error)")
-}
-
-// Option 1b: Load grammar from a custom file path
-let customGrammarPath = "/path/to/custom.grammar.gbnf"
-if let customGrammar = llama?.loadGrammar(from: customGrammarPath) {
-    // Use the custom grammar
-    let customResult = llama?.generateCompletion(
-        with: CompletionParams(
-            prompt: "Generate something according to custom grammar:",
-            maxTokens: 128,
-            temperature: 0.7,
-            grammar: customGrammar
-        )
-    )
-    
-    print("Custom grammar result:", customResult?.text ?? "No result")
-}
-```
-
-#### Option 2: Manual Framework Bundle Access
-
-You can also access grammar files directly using the Bundle API:
-
-```swift
-// Access grammars from framework bundle
-let frameworkBundle = Bundle(for: LlamaMobile.self)
-
-if let grammarURL = frameworkBundle.url(forResource: "json", withExtension: "gbnf", subdirectory: "grammars") {
-    do {
-        let grammarContent = try String(contentsOf: grammarURL, encoding: .utf8)
-        
-        // Generate valid JSON output
-        let jsonResult = llama?.generateCompletion(
-            with: CompletionParams(
-                prompt: "Generate a JSON object with name and age fields:",
-                maxTokens: 128,
-                temperature: 0.7,
-                grammar: grammarContent
-            )
-        )
-        
-        print("JSON result:", jsonResult?.text ?? "No result")
-    } catch {
-        print("Error loading grammar:", error)
-    }
-}
-```
-
-#### Option 3: Copy Grammars to App Resources
-
-For easier access or to modify grammars, copy them to your app's resources:
-
-##### Manual Copy (One-time Setup)
-
-```bash
-# Copy grammar files to your project's Resources directory
-mkdir -p YourProject/Resources/grammars/
-cp -r llama_mobile.xcframework/ios-arm64/llama_mobile.framework/grammars/* YourProject/Resources/grammars/
-```
-
-##### Automatic Copy with Build Script
-
-Add this build script to your Xcode project (Build Phases > New Run Script Phase):
-
-```bash
-# Build script to automatically copy grammar files during build
-echo "Copying grammar files from framework to app resources..."
-
-# Path to the framework in build products
-FRAMEWORK_PATH="${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}/llama_mobile.framework"
-
-# Path to the app's resources directory
-RESOURCES_PATH="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/Resources"
-
-# Create grammars directory if it doesn't exist
-mkdir -p "${RESOURCES_PATH}/grammars"
-
-# Copy grammar files if framework directory exists
-if [ -d "${FRAMEWORK_PATH}/grammars" ]; then
-    cp "${FRAMEWORK_PATH}/grammars"/*.gbnf "${RESOURCES_PATH}/grammars/"
-    echo "✓ Successfully copied grammar files"
-    
-    # List copied files for verification
-    echo "Copied grammar files:"
-    ls -la "${RESOURCES_PATH}/grammars/"
-else
-    echo "⚠️  Grammars directory not found in framework bundle at ${FRAMEWORK_PATH}"
-fi
-```
-
-Then load from your app bundle:
-
-```swift
-// Access grammars from app bundle (after copying)
-if let grammarURL = Bundle.main.url(forResource: "json", withExtension: "gbnf", subdirectory: "grammars") {
-    do {
-        let grammarContent = try String(contentsOf: grammarURL, encoding: .utf8)
-        
-        // Generate with grammar constraint
-        let jsonResult = llama.generateCompletion(
-            prompt: "Generate a JSON object with name and age fields:",
-            maxTokens: 128,
-            temperature: 0.7,
-            grammar: grammarContent
-        )
-        
-        print("JSON result:", jsonResult?.text ?? "No result")
-    } catch {
-        print("Error loading grammar:", error)
-    }
-}
-```
-
-#### Available Grammars
-
-The framework includes these grammar files:
-- `json.gbnf` - Valid JSON objects and values
-- `json_arr.gbnf` - Valid JSON arrays
-- `arithmetic.gbnf` - Arithmetic expressions
-- `c.gbnf` - C programming language syntax
-- `chess.gbnf` - Chess moves notation
-- `english.gbnf` - English language bias
-- `japanese.gbnf` - Japanese language bias
-- `list.gbnf` - Structured lists
-
-You can also create custom grammar files following the GBNF (Gradio BNF) format.
-
-### 6. Advanced Features
+### 4. Advanced Features
 
 #### Multimodal Support
 ```swift
@@ -440,10 +158,10 @@ The token callback has the signature `((String) -> Bool)?` where:
 - ✅ Works with both standard and OpenAI format requests
 - ✅ Compatible with multimodal inputs
 
-### 7. Initialization Methods
+### 5. Initialization Methods
 The iOS SDK provides multiple initialization methods to suit different use cases, all of which offer full parameter access through the `InitParams` struct.
 
-#### 7.1 Simplified Initialization
+#### 5.1 Simplified Initialization
 **Basic Initialization:**
 ```swift
 // Minimal initialization
@@ -467,7 +185,7 @@ let llama = LlamaMobile(
 )
 ```
 
-#### 7.2 Full Parameter Initialization
+#### 5.2 Full Parameter Initialization
 **Using InitParams for complete control:**
 ```swift
 // Create init parameters with full configuration
@@ -507,10 +225,10 @@ initParams.progressCallback = { progress in
 let llama = LlamaMobile(with: initParams)
 ```
 
-### 8. Completion API Methods
+### 6. Completion API Methods
 The SDK provides flexible completion methods for text generation, all supporting streaming and full parameter control.
 
-#### 8.1 Simplified Completion
+#### 6.1 Simplified Completion
 **Basic Text Generation:**
 ```swift
 // Simple completion
@@ -532,7 +250,7 @@ let result = llama.generateCompletion(
 )
 ```
 
-#### 8.2 Full Parameter Completion
+#### 6.2 Full Parameter Completion
 **Using CompletionParams for complete control:**
 ```swift
 // Create completion parameters with full configuration
@@ -588,7 +306,7 @@ params.tokenCallback = { token in
 let result = llama.generateCompletion(with: params)
 ```
 
-#### 8.3 Specialized Completion Methods
+#### 6.3 Specialized Completion Methods
 **OpenAI Format Completion:**
 ```swift
 // Generate completion from OpenAI format JSON
@@ -614,24 +332,7 @@ let result = llama.generateCompletion(
 )
 ```
 
-### 9. Additional API Methods
-The Swift wrapper provides these additional functionalities:
-- `generateEmbeddings(for:)` - Generate embeddings for text
-- `tokenize(text:)` - Convert text to tokens
-- `detokenize(tokens:)` - Convert tokens back to text
-- `download(with:)` - Download models from Hugging Face
-- `speak(text:)` - Text-to-Speech conversion
-- `stopGeneration()` - Stop ongoing generation
-- `loadGrammar(from:)` - Load grammar from file path
-- `loadGrammar(named:)` - Load grammar from framework bundle
-- `initVocoder(vocoderModelPath:)` - Initialize TTS vocoder
-- `generateAudioFromText(text:)` - Convert text to speech audio
-- `applyLoraAdapters(_:)` - Apply LoRA adapters to the model
-- `removeLoraAdapters()` - Remove all LoRA adapters
-- `getModelDescription()` - Get model description
-- `getContextWindowSize()` - Get context window size
-
-## 8. Troubleshooting
+## 7. Troubleshooting
 
 ### Model Returns the Same Input
 
@@ -1005,71 +706,3 @@ brew install cmake
 - Modify `build-ios-framework.sh` to set a lower deployment target
 - Update the Metal compilation command to use an older Metal language version
 - Note that performance may be reduced on older devices
-
-## Testing Tools
-
-### Package.swift
-A Swift Package Manager manifest file that enables building and testing the LlamaMobile library using SPM.
-
-**Purpose:**
-- Defines the library structure and dependencies
-- Configures xcframework integration
-- Sets up test targets for automated testing
-
-**Key Features:**
-```swift
-// Binary target for the llama_mobile xcframework
-.binaryTarget(
-    name: "llama_mobile",
-    path: "./llama_mobile.xcframework"
-)
-
-// Test target configuration
-.testTarget(
-    name: "LlamaMobileTests",
-    dependencies: ["LlamaMobile"]
-)
-```
-
-### run-tests.sh
-A shell script that simplifies the process of running LlamaMobile iOS SDK tests.
-
-**Purpose:**
-- Automates framework availability checks
-- Creates Package.swift if missing
-- Runs tests with proper configuration
-- Provides troubleshooting information
-
-**Usage:**
-```bash
-# Make the script executable (if needed)
-chmod +x run-tests.sh
-
-# Run the tests
-./run-tests.sh
-```
-
-**What the script does:**
-1. Verifies the presence of `llama_mobile.xcframework`
-2. Ensures Package.swift is properly configured
-3. Executes tests using Swift Package Manager
-4. Displays test results and helpful tips
-
-**Output example:**
-```
-=== LlamaMobile iOS SDK Test Runner ===
-✅ Found llama_mobile.xcframework
-✅ Created Package.swift
-=== Running tests ===
-Note: Tests may fail because they require actual model files at specific paths
-```
-
-## Using the Testing Tools Together
-
-The Package.swift and run-tests.sh files work together to provide a seamless testing experience:
-
-1. **run-tests.sh** provides a user-friendly interface for test execution
-2. **Package.swift** provides the technical configuration for SPM
-3. Together, they eliminate the need for manual Xcode project setup
-
-These tools are particularly useful for CI/CD pipelines and automated testing workflows.

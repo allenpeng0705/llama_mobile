@@ -738,7 +738,47 @@ public static class Result<S, E> {
 
 ### iOS
 
-#### Asynchronous API Example
+#### Asynchronous API Example with Custom TTSOptions
+
+```swift
+func speakAsyncWithCustomOptions() async {
+    let text = "Hello, this is a test of the asynchronous TTS API with custom options."
+    
+    let options = TTSOptions(
+        sampleRate: 16000,  // Lower sample rate for smaller file size
+        voice: "en-us",     // Specify voice (if supported)
+        speed: 1.2,         // Slightly faster speech
+        saveToFile: true,
+        outputFilePath: NSTemporaryDirectory().appending("tts_output.wav")
+    )
+    
+    let result = await llamaMobile.generateSpeech(
+        text: text,
+        options: options,
+        progressHandler: { progress in
+            print("TTS Progress: \(Int(progress * 100))%")
+        }
+    )
+    
+    switch result {
+    case .success(let speechResult):
+        print("Speech generated successfully!")
+        print("Sample rate: \(speechResult.sampleRate)")
+        print("Duration: \(speechResult.duration) seconds")
+        print("Method used: \(speechResult.methodUsed)")
+        if let filePath = speechResult.outputFilePath {
+            print("Saved to: \(filePath)")
+        }
+        // Play the audio samples
+        playAudio(speechResult.audioSamples, sampleRate: speechResult.sampleRate)
+        
+    case .failure(let error):
+        print("Error generating speech: \(error)")
+    }
+}
+```
+
+#### Asynchronous API Example (Basic)
 
 ```swift
 func speakAsync() async {
@@ -798,15 +838,21 @@ func speakSync() {
 }
 ```
 
-#### Streaming API Example
+#### Streaming API Example with Custom Options
 
 ```swift
 func speakWithStreaming() async {
-    let text = "Hello, this is a test of the streaming TTS API."
+    let text = "Hello, this is a test of the streaming TTS API with custom options."
+    
+    let options = TTSOptions(
+        sampleRate: 24000,
+        voice: "en-us",
+        speed: 1.0
+    )
     
     let result = await llamaMobile.generateSpeechStream(
         text: text,
-        options: TTSOptions(sampleRate: 24000),
+        options: options,
         progressHandler: { progress in
             print("Streaming Progress: \(Int(progress * 100))%")
         },
@@ -829,7 +875,7 @@ func speakWithStreaming() async {
 }
 ```
 
-#### Real Streaming for Long Text Example
+#### Real Streaming for Long Text Example with Custom Options
 
 ```swift
 func speakLongTextWithStreaming() async {
@@ -840,9 +886,15 @@ func speakLongTextWithStreaming() async {
     This provides a much better user experience for long texts.
     """
     
+    let options = TTSOptions(
+        sampleRate: 24000,
+        voice: "en-us",
+        speed: 0.9  // Slightly slower for better comprehension
+    )
+    
     let result = await llamaMobile.generateSpeechStreamForLongText(
         text: longText,
-        options: TTSOptions(sampleRate: 24000),
+        options: options,
         progressHandler: { progress in
             print("Long Text Streaming Progress: \(Int(progress * 100))%")
         },
@@ -867,7 +919,49 @@ func speakLongTextWithStreaming() async {
 
 ### Android Kotlin
 
-#### Asynchronous API Example
+#### Asynchronous API Example with Custom TTSOptions
+
+```kotlin
+suspend fun speakAsyncWithCustomOptions() {
+    val text = "Hello, this is a test of the asynchronous TTS API with custom options."
+    val contextHandle = LlamaMobile.getContext()
+    
+    val options = TTSOptions(
+        sampleRate = 16000,  // Lower sample rate for smaller file size
+        voice = "en-us",     // Specify voice (if supported)
+        speed = 1.2f,         // Slightly faster speech
+        saveToFile = true,
+        outputFilePath = "${context.cacheDir.path}/tts_output.wav"
+    )
+    
+    val result = LlamaMobile.generateSpeech(
+        contextHandle,
+        text,
+        options,
+        progressHandler = { progress ->
+            println("TTS Progress: ${(progress * 100).toInt()}%")
+        }
+    )
+    
+    if (result.isSuccess) {
+        val speechResult = result.value
+        println("Speech generated successfully!")
+        println("Sample rate: ${speechResult.sampleRate}")
+        println("Duration: ${speechResult.duration} seconds")
+        println("Method used: ${speechResult.methodUsed}")
+        if (speechResult.outputFilePath != null) {
+            println("Saved to: ${speechResult.outputFilePath}")
+        }
+        // Play the audio samples
+        playAudio(speechResult.audioSamples, speechResult.sampleRate)
+    } else {
+        val error = result.error
+        println("Error generating speech: $error")
+    }
+}
+```
+
+#### Asynchronous API Example (Basic)
 
 ```kotlin
 suspend fun speakAsync() {
@@ -931,17 +1025,23 @@ fun speakSync() {
 }
 ```
 
-#### Streaming API Example
+#### Streaming API Example with Custom Options
 
 ```kotlin
 suspend fun speakWithStreaming() {
-    val text = "Hello, this is a test of the streaming TTS API."
+    val text = "Hello, this is a test of the streaming TTS API with custom options."
     val contextHandle = LlamaMobile.getContext()
+    
+    val options = TTSOptions(
+        sampleRate = 24000,
+        voice = "en-us",
+        speed = 1.0f
+    )
     
     val result = LlamaMobile.generateSpeechStream(
         contextHandle,
         text,
-        TTSOptions(sampleRate = 24000),
+        options,
         progressHandler = { progress ->
             println("Streaming Progress: ${(progress * 100).toInt()}%")
         },
@@ -964,7 +1064,7 @@ suspend fun speakWithStreaming() {
 }
 ```
 
-#### Real Streaming for Long Text Example
+#### Real Streaming for Long Text Example with Custom Options
 
 ```kotlin
 suspend fun speakLongTextWithStreaming() {
@@ -976,10 +1076,16 @@ suspend fun speakLongTextWithStreaming() {
     """
     val contextHandle = LlamaMobile.getContext()
     
+    val options = TTSOptions(
+        sampleRate = 24000,
+        voice = "en-us",
+        speed = 0.9f  // Slightly slower for better comprehension
+    )
+    
     val result = LlamaMobile.generateSpeechStreamForLongText(
         contextHandle,
         longText,
-        TTSOptions(sampleRate = 24000),
+        options,
         progressHandler = { progress ->
             println("Long Text Streaming Progress: ${(progress * 100).toInt()}%")
         },
@@ -1004,7 +1110,50 @@ suspend fun speakLongTextWithStreaming() {
 
 ### Android Java
 
-#### Asynchronous API Example
+#### Asynchronous API Example with Custom TTSOptions
+
+```java
+public void speakAsyncWithCustomOptions() {
+    String text = "Hello, this is a test of the asynchronous TTS API with custom options.";
+    long contextHandle = LlamaMobile.getContext();
+    
+    LlamaMobile.TTSOptions options = new LlamaMobile.TTSOptions.Builder()
+        .sampleRate(16000)  // Lower sample rate for smaller file size
+        .voice("en-us")     // Specify voice (if supported)
+        .speed(1.2f)         // Slightly faster speech
+        .saveToFile(true)
+        .outputFilePath(getCacheDir().getPath() + "/tts_output.wav")
+        .build();
+    
+    LlamaMobile.generateSpeech(
+        contextHandle,
+        text,
+        options,
+        progress -> {
+            System.out.println("TTS Progress: " + (int)(progress * 100) + "%");
+        },
+        result -> {
+            if (result.isSuccess()) {
+                LlamaMobile.SpeechResult speechResult = result.getValue();
+                System.out.println("Speech generated successfully!");
+                System.out.println("Sample rate: " + speechResult.getSampleRate());
+                System.out.println("Duration: " + speechResult.getDuration() + " seconds");
+                System.out.println("Method used: " + speechResult.getMethodUsed());
+                if (speechResult.getOutputFilePath() != null) {
+                    System.out.println("Saved to: " + speechResult.getOutputFilePath());
+                }
+                // Play the audio samples
+                playAudio(speechResult.getAudioSamples(), speechResult.getSampleRate());
+            } else {
+                LlamaMobile.TTSError error = result.getError();
+                System.out.println("Error generating speech: " + error);
+            }
+        }
+    );
+}
+```
+
+#### Asynchronous API Example (Basic)
 
 ```java
 public void speakAsync() {
@@ -1072,19 +1221,23 @@ public void speakSync() {
 }
 ```
 
-#### Streaming API Example
+#### Streaming API Example with Custom Options
 
 ```java
 public void speakWithStreaming() {
-    String text = "Hello, this is a test of the streaming TTS API.";
+    String text = "Hello, this is a test of the streaming TTS API with custom options.";
     long contextHandle = LlamaMobile.getContext();
+    
+    LlamaMobile.TTSOptions options = new LlamaMobile.TTSOptions.Builder()
+        .sampleRate(24000)
+        .voice("en-us")
+        .speed(1.0f)
+        .build();
     
     LlamaMobile.generateSpeechStream(
         contextHandle,
         text,
-        new LlamaMobile.TTSOptions.Builder()
-            .sampleRate(24000)
-            .build(),
+        options,
         progress -> {
             System.out.println("Streaming Progress: " + (int)(progress * 100) + "%");
         },
@@ -1108,7 +1261,7 @@ public void speakWithStreaming() {
 }
 ```
 
-#### Real Streaming for Long Text Example
+#### Real Streaming for Long Text Example with Custom Options
 
 ```java
 public void speakLongTextWithStreaming() {
@@ -1120,12 +1273,16 @@ public void speakLongTextWithStreaming() {
     """;
     long contextHandle = LlamaMobile.getContext();
     
+    LlamaMobile.TTSOptions options = new LlamaMobile.TTSOptions.Builder()
+        .sampleRate(24000)
+        .voice("en-us")
+        .speed(0.9f)  // Slightly slower for better comprehension
+        .build();
+    
     LlamaMobile.generateSpeechStreamForLongText(
         contextHandle,
         longText,
-        new LlamaMobile.TTSOptions.Builder()
-            .sampleRate(24000)
-            .build(),
+        options,
         progress -> {
             System.out.println("Long Text Streaming Progress: " + (int)(progress * 100) + "%");
         },
@@ -1222,6 +1379,153 @@ The TTS system provides comprehensive error handling through the `TTSError` enum
 - **audioDecodingFailed**: Failed to decode audio tokens
 - **fileSaveFailed**: Failed to save audio to file
 - **unknownError**: An unknown error occurred
+
+### Error Handling Examples
+
+#### iOS
+
+```swift
+func testErrorHandling() async {
+    let text = "Hello, world!"
+    
+    // Test with empty text
+    let emptyTextResult = await llamaMobile.generateSpeech(
+        text: "",
+        options: TTSOptions()
+    )
+    
+    switch emptyTextResult {
+    case .success(_):
+        print("Unexpected success with empty text")
+    case .failure(let error):
+        print("Expected error with empty text: \(error)")
+    }
+    
+    // Test with invalid context (simulating no model loaded)
+    let invalidContextResult = await llamaMobile.generateSpeech(
+        text: text,
+        options: TTSOptions()
+    )
+    
+    switch invalidContextResult {
+    case .success(_):
+        print("Speech generated successfully")
+    case .failure(let error):
+        print("Error generating speech: \(error)")
+        // Handle specific error types
+        switch error {
+        case .noModelLoaded:
+            print("Please load a model first")
+        case .noVocoderEnabled:
+            print("Please enable vocoder for TTS")
+        case .invalidText:
+            print("Please provide valid text")
+        default:
+            print("An error occurred: \(error)")
+        }
+    }
+}
+```
+
+#### Android Kotlin
+
+```kotlin
+suspend fun testErrorHandling() {
+    val text = "Hello, world!"
+    val contextHandle = LlamaMobile.getContext()
+    
+    // Test with empty text
+    val emptyTextResult = LlamaMobile.generateSpeech(
+        contextHandle,
+        ""
+    )
+    
+    if (emptyTextResult.isSuccess) {
+        println("Unexpected success with empty text")
+    } else {
+        val error = emptyTextResult.error
+        println("Expected error with empty text: $error")
+    }
+    
+    // Test with invalid context (simulating no model loaded)
+    val invalidContext = 0L
+    val invalidContextResult = LlamaMobile.generateSpeech(
+        invalidContext,
+        text
+    )
+    
+    if (invalidContextResult.isSuccess) {
+        println("Speech generated successfully")
+    } else {
+        val error = invalidContextResult.error
+        println("Error generating speech: $error")
+        // Handle specific error scenarios
+        when {
+            error.message?.contains("No model loaded") == true -> {
+                println("Please load a model first")
+            }
+            error.message?.contains("No vocoder enabled") == true -> {
+                println("Please enable vocoder for TTS")
+            }
+            error.message?.contains("Invalid text") == true -> {
+                println("Please provide valid text")
+            }
+            else -> {
+                println("An error occurred: $error")
+            }
+        }
+    }
+}
+```
+
+#### Android Java
+
+```java
+public void testErrorHandling() {
+    String text = "Hello, world!";
+    long contextHandle = LlamaMobile.getContext();
+    
+    // Test with empty text
+    LlamaMobile.generateSpeech(
+        contextHandle,
+        "",
+        result -> {
+            if (result.isSuccess()) {
+                System.out.println("Unexpected success with empty text");
+            } else {
+                LlamaMobile.TTSError error = result.getError();
+                System.out.println("Expected error with empty text: " + error);
+            }
+        }
+    );
+    
+    // Test with invalid context (simulating no model loaded)
+    long invalidContext = 0L;
+    LlamaMobile.generateSpeech(
+        invalidContext,
+        text,
+        result -> {
+            if (result.isSuccess()) {
+                System.out.println("Speech generated successfully");
+            } else {
+                LlamaMobile.TTSError error = result.getError();
+                System.out.println("Error generating speech: " + error);
+                // Handle specific error scenarios
+                String errorMessage = error.getMessage();
+                if (errorMessage.contains("No model loaded")) {
+                    System.out.println("Please load a model first");
+                } else if (errorMessage.contains("No vocoder enabled")) {
+                    System.out.println("Please enable vocoder for TTS");
+                } else if (errorMessage.contains("Invalid text")) {
+                    System.out.println("Please provide valid text");
+                } else {
+                    System.out.println("An error occurred: " + error);
+                }
+            }
+        }
+    );
+}
+```
 
 ## Best Practices
 

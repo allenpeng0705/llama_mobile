@@ -51,7 +51,6 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     jfieldID flashAttnField = env->GetFieldID(paramsClass, "flashAttention", "Z");
     jfieldID cacheTypeKField = env->GetFieldID(paramsClass, "cacheTypeK", "Ljava/lang/String;");
     jfieldID cacheTypeVField = env->GetFieldID(paramsClass, "cacheTypeV", "Ljava/lang/String;");
-    jfieldID cacheTypeField = env->GetFieldID(paramsClass, "cacheType", "Lcom/llamamobile/LlamaMobile$CacheType;");
     jfieldID enableChatTemplateField = env->GetFieldID(paramsClass, "enableChatTemplate", "Z");
     jfieldID progressCallbackField = env->GetFieldID(paramsClass, "progressCallback", "Lcom/llamamobile/LlamaMobile$ProgressCallback;");
     
@@ -79,21 +78,6 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     jobject progressCallbackObj = (progressCallbackField != nullptr) ? env->GetObjectField(initParamsObj, progressCallbackField) : nullptr;
     jstring cacheTypeKStr = (cacheTypeKField != nullptr) ? (jstring)env->GetObjectField(initParamsObj, cacheTypeKField) : nullptr;
     jstring cacheTypeVStr = (cacheTypeVField != nullptr) ? (jstring)env->GetObjectField(initParamsObj, cacheTypeVField) : nullptr;
-    
-    // Get cache type enum value
-    jint cacheType = 0; // Default to NONE
-    if (cacheTypeField != nullptr) {
-        jobject cacheTypeObj = env->GetObjectField(initParamsObj, cacheTypeField);
-        if (cacheTypeObj != nullptr) {
-            jclass cacheTypeClass = env->GetObjectClass(cacheTypeObj);
-            jmethodID ordinalMethod = env->GetMethodID(cacheTypeClass, "ordinal", "()I");
-            if (ordinalMethod != nullptr) {
-                cacheType = env->CallIntMethod(cacheTypeObj, ordinalMethod);
-            }
-            env->DeleteLocalRef(cacheTypeClass);
-            env->DeleteLocalRef(cacheTypeObj);
-        }
-    }
     
     // Convert strings
     modelPath = getStringUTFChars(env, modelPathStr);
@@ -626,21 +610,6 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_nativeGenerateComplet
         releaseStringUTFChars(env, (jstring)env->GetObjectField(completionParamsObj, grammarField), grammar);
     }
     
-    jfieldID jsonSchemaField = env->GetFieldID(paramsClass, "jsonSchema", "Ljava/lang/String;");
-    if (jsonSchemaField != nullptr && jsonSchema != nullptr) {
-        releaseStringUTFChars(env, (jstring)env->GetObjectField(completionParamsObj, jsonSchemaField), jsonSchema);
-    }
-    
-    jfieldID toolsField = env->GetFieldID(paramsClass, "tools", "Ljava/lang/String;");
-    if (toolsField != nullptr && tools != nullptr) {
-        releaseStringUTFChars(env, (jstring)env->GetObjectField(completionParamsObj, toolsField), tools);
-    }
-    
-    jfieldID toolChoiceField = env->GetFieldID(paramsClass, "toolChoice", "Ljava/lang/String;");
-    if (toolChoiceField != nullptr && toolChoice != nullptr) {
-        releaseStringUTFChars(env, (jstring)env->GetObjectField(completionParamsObj, toolChoiceField), toolChoice);
-    }
-    
     // Free stop sequences
     if (params.stop_sequences != nullptr) {
         for (size_t i = 0; params.stop_sequences[i] != nullptr; i++) {
@@ -666,8 +635,6 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_nativeGenerateComplet
         }
         delete[] params.chat_messages;
     }
-    
-
     
     env->DeleteLocalRef(paramsClass);
     
@@ -918,11 +885,6 @@ JNIEXPORT jboolean JNICALL Java_com_llamamobile_LlamaMobile_isVocoderEnabled(JNI
 
 // Gets the TTS model type
 JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_getTTSType(JNIEnv* env, jclass clazz, jlong contextHandle) {
-    // Check if context is invalid
-    if (contextHandle == 0) {
-        return nullptr;
-    }
-    
     // Get the TTSModelType enum class
     jclass ttsModelTypeClass = env->FindClass("com/llamamobile/LlamaMobile$TTSModelType");
     if (ttsModelTypeClass == nullptr) {
@@ -943,20 +905,24 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_getTTSType(JNIEnv* en
         return nullptr;
     }
     
+    // Check if context is invalid
+    if (contextHandle == 0) {
+        // Return UNKNOWN (index 0)
+        jobject unknownEnum = env->GetObjectArrayElement(enumValues, 0);
+        env->DeleteLocalRef(ttsModelTypeClass);
+        env->DeleteLocalRef(enumValues);
+        return unknownEnum;
+    }
+    
     // Get the index based on context
     int index;
-    if (contextHandle == 0) {
-        // For invalid context, return UNKNOWN which is index 0
-        index = 0;
-    } else {
-        llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
-        int ttsType = static_cast<int>(llama_mobile_get_tts_type_c(context));
-        // Map TTS type to enum index
-        switch (ttsType) {
-            case 1: index = 1; break;  // OUT_ETTS_V02
-            case 2: index = 2; break;  // OUT_ETTS_V03
-            default: index = 0; break; // UNKNOWN
-        }
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
+    int ttsType = static_cast<int>(llama_mobile_get_tts_type_c(context));
+    // Map TTS type to enum index
+    switch (ttsType) {
+        case 1: index = 1; break;  // OUT_ETTS_V02
+        case 2: index = 2; break;  // OUT_ETTS_V03
+        default: index = 0; break; // UNKNOWN
     }
     
     // Get the enum object at the calculated index
