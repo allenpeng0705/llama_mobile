@@ -1,22 +1,34 @@
-# TTS (Text-to-Speech) API Documentation for iOS
+# TTS (Text-to-Speech) API Documentation
 
 ## Overview
 
-This document provides comprehensive documentation for the Text-to-Speech (TTS) capabilities in the Llama Mobile iOS SDK. The SDK offers multiple API options for generating speech from text, including asynchronous, synchronous, and streaming interfaces.
+This document provides comprehensive documentation for the Text-to-Speech (TTS) capabilities in the Llama Mobile SDK across multiple platforms. The SDK offers consistent API options for generating speech from text, including asynchronous, synchronous, and streaming interfaces, with platform-specific implementations for iOS, Android Kotlin, and Android Java.
 
 ## Table of Contents
 
 1. [Core TTS APIs](#core-tts-apis)
+   - [iOS](#ios)
+   - [Android Kotlin](#android-kotlin)
+   - [Android Java](#android-java)
 2. [Supporting Types](#supporting-types)
+   - [iOS](#ios-1)
+   - [Android Kotlin](#android-kotlin-1)
+   - [Android Java](#android-java-1)
 3. [API Usage Examples](#api-usage-examples)
+   - [iOS](#ios-2)
+   - [Android Kotlin](#android-kotlin-2)
+   - [Android Java](#android-java-2)
 4. [Implementation Details](#implementation-details)
 5. [Streaming Implementation](#streaming-implementation)
 6. [Error Handling](#error-handling)
 7. [Best Practices](#best-practices)
+8. [Platform-Specific Notes](#platform-specific-notes)
 
 ## Core TTS APIs
 
-### 1. Asynchronous API: `generateSpeech`
+### iOS
+
+#### 1. Asynchronous API: `generateSpeech`
 
 Generates speech from text asynchronously with progress tracking.
 
@@ -36,7 +48,7 @@ func generateSpeech(
 **Returns:**
 - `Result<SpeechResult, TTSError>`: Contains generated audio samples and metadata on success, or error on failure
 
-### 2. Synchronous API: `generateSpeechSync`
+#### 2. Synchronous API: `generateSpeechSync`
 
 Generates speech from text synchronously (blocks the calling thread).
 
@@ -54,7 +66,7 @@ func generateSpeechSync(
 **Returns:**
 - `Result<SpeechResult, TTSError>`: Contains generated audio samples and metadata on success, or error on failure
 
-### 3. Streaming API: `generateSpeechStream`
+#### 3. Streaming API: `generateSpeechStream`
 
 Generates speech from text with streaming support (simplified implementation).
 
@@ -76,7 +88,7 @@ func generateSpeechStream(
 **Returns:**
 - `Result<SpeechMetadata, TTSError>`: Contains metadata on success, or error on failure
 
-### 4. Real Streaming for Long Text: `generateSpeechStreamForLongText`
+#### 4. Real Streaming for Long Text: `generateSpeechStreamForLongText`
 
 Generates speech from long text with real streaming capabilities.
 
@@ -98,9 +110,184 @@ func generateSpeechStreamForLongText(
 **Returns:**
 - `Result<SpeechMetadata, TTSError>`: Contains metadata on success, or error on failure
 
+### Android Kotlin
+
+#### 1. Asynchronous API: `generateSpeech`
+
+Generates speech from text asynchronously with progress tracking.
+
+```kotlin
+@JvmStatic
+fun generateSpeech(
+    contextHandle: Long,
+    text: String,
+    options: TTSOptions = TTSOptions(),
+    progressHandler: ((Float) -> Unit)? = null
+): Result<SpeechResult, TTSError>
+```
+
+**Parameters:**
+- `contextHandle`: Context handle obtained from `initContext`
+- `text`: Text to convert to speech
+- `options`: Configuration options for TTS (sample rate, file saving, etc.)
+- `progressHandler`: Optional callback for progress updates (0.0 to 1.0)
+
+**Returns:**
+- `Result<SpeechResult, TTSError>`: Contains generated audio samples and metadata on success, or error on failure
+
+#### 2. Synchronous API: `generateSpeechSync`
+
+Generates speech from text synchronously (blocks the calling thread).
+
+```kotlin
+@JvmStatic
+fun generateSpeechSync(
+    contextHandle: Long,
+    text: String,
+    options: TTSOptions = TTSOptions()
+): Result<SpeechResult, TTSError>
+```
+
+**Parameters:**
+- `contextHandle`: Context handle obtained from `initContext`
+- `text`: Text to convert to speech
+- `options`: Configuration options for TTS
+
+**Returns:**
+- `Result<SpeechResult, TTSError>`: Contains generated audio samples and metadata on success, or error on failure
+
+#### 3. Streaming API: `generateSpeechStream`
+
+Generates speech from text with streaming support (simplified implementation).
+
+```kotlin
+@JvmStatic
+fun generateSpeechStream(
+    contextHandle: Long,
+    text: String,
+    options: TTSOptions = TTSOptions(),
+    progressHandler: ((Float) -> Unit)? = null,
+    audioChunkHandler: AudioChunkCallback
+): Result<SpeechMetadata, TTSError>
+```
+
+**Parameters:**
+- `contextHandle`: Context handle obtained from `initContext`
+- `text`: Text to convert to speech
+- `options`: Configuration options for TTS
+- `progressHandler`: Optional callback for progress updates
+- `audioChunkHandler`: Callback for receiving audio chunks
+
+**Returns:**
+- `Result<SpeechMetadata, TTSError>`: Contains metadata on success, or error on failure
+
+#### 4. Real Streaming for Long Text: `generateSpeechStreamForLongText`
+
+Generates speech from long text with real streaming capabilities.
+
+```kotlin
+@JvmStatic
+fun generateSpeechStreamForLongText(
+    contextHandle: Long,
+    text: String,
+    options: TTSOptions = TTSOptions(),
+    progressHandler: ((Float) -> Unit)? = null,
+    audioChunkHandler: AudioChunkCallback
+): Result<SpeechMetadata, TTSError>
+```
+
+**Parameters:**
+- `contextHandle`: Context handle obtained from `initContext`
+- `text`: Long text to convert to speech
+- `options`: Configuration options for TTS
+- `progressHandler`: Optional callback for progress updates
+- `audioChunkHandler`: Callback for receiving audio chunks as they're generated
+
+**Returns:**
+- `Result<SpeechMetadata, TTSError>`: Contains metadata on success, or error on failure
+
+### Android Java
+
+#### 1. Asynchronous API: `generateSpeech`
+
+Generates speech from text asynchronously with progress tracking.
+
+```java
+public static Result<SpeechResult, TTSError> generateSpeech(long contextHandle, String text, TTSOptions options, ProgressCallback progressHandler)
+public static Result<SpeechResult, TTSError> generateSpeech(long contextHandle, String text)
+public static Result<SpeechResult, TTSError> generateSpeech(long contextHandle, String text, ProgressCallback progressHandler)
+public static Result<SpeechResult, TTSError> generateSpeech(long contextHandle, String text, TTSOptions options)
+```
+
+**Parameters:**
+- `contextHandle`: Context handle obtained from `initContext`
+- `text`: Text to convert to speech
+- `options`: Configuration options for TTS (sample rate, file saving, etc.)
+- `progressHandler`: Optional callback for progress updates (0.0 to 1.0)
+
+**Returns:**
+- `Result<SpeechResult, TTSError>`: Contains generated audio samples and metadata on success, or error on failure
+
+#### 2. Synchronous API: `generateSpeechSync`
+
+Generates speech from text synchronously (blocks the calling thread).
+
+```java
+public static Result<SpeechResult, TTSError> generateSpeechSync(long contextHandle, String text, TTSOptions options)
+public static Result<SpeechResult, TTSError> generateSpeechSync(long contextHandle, String text)
+```
+
+**Parameters:**
+- `contextHandle`: Context handle obtained from `initContext`
+- `text`: Text to convert to speech
+- `options`: Configuration options for TTS
+
+**Returns:**
+- `Result<SpeechResult, TTSError>`: Contains generated audio samples and metadata on success, or error on failure
+
+#### 3. Streaming API: `generateSpeechStream`
+
+Generates speech from text with streaming support (simplified implementation).
+
+```java
+public static Result<SpeechMetadata, TTSError> generateSpeechStream(long contextHandle, String text, TTSOptions options, ProgressCallback progressHandler, AudioChunkCallback audioChunkHandler)
+public static Result<SpeechMetadata, TTSError> generateSpeechStream(long contextHandle, String text, AudioChunkCallback audioChunkHandler)
+```
+
+**Parameters:**
+- `contextHandle`: Context handle obtained from `initContext`
+- `text`: Text to convert to speech
+- `options`: Configuration options for TTS
+- `progressHandler`: Optional callback for progress updates
+- `audioChunkHandler`: Callback for receiving audio chunks
+
+**Returns:**
+- `Result<SpeechMetadata, TTSError>`: Contains metadata on success, or error on failure
+
+#### 4. Real Streaming for Long Text: `generateSpeechStreamForLongText`
+
+Generates speech from long text with real streaming capabilities.
+
+```java
+public static Result<SpeechMetadata, TTSError> generateSpeechStreamForLongText(long contextHandle, String text, TTSOptions options, ProgressCallback progressHandler, AudioChunkCallback audioChunkHandler)
+public static Result<SpeechMetadata, TTSError> generateSpeechStreamForLongText(long contextHandle, String text, AudioChunkCallback audioChunkHandler)
+```
+
+**Parameters:**
+- `contextHandle`: Context handle obtained from `initContext`
+- `text`: Long text to convert to speech
+- `options`: Configuration options for TTS
+- `progressHandler`: Optional callback for progress updates
+- `audioChunkHandler`: Callback for receiving audio chunks as they're generated
+
+**Returns:**
+- `Result<SpeechMetadata, TTSError>`: Contains metadata on success, or error on failure
+
 ## Supporting Types
 
-### TTSOptions
+### iOS
+
+#### TTSOptions
 
 Configuration options for TTS operations.
 
@@ -114,7 +301,7 @@ struct TTSOptions {
 }
 ```
 
-### SpeechResult
+#### SpeechResult
 
 Result of successful speech generation.
 
@@ -128,7 +315,7 @@ struct SpeechResult {
 }
 ```
 
-### SpeechMetadata
+#### SpeechMetadata
 
 Metadata for speech generation (used in streaming).
 
@@ -141,7 +328,7 @@ struct SpeechMetadata {
 }
 ```
 
-### TTSError
+#### TTSError
 
 Error types for TTS operations.
 
@@ -159,7 +346,7 @@ enum TTSError: Error {
 }
 ```
 
-### TTSMethod
+#### TTSMethod
 
 Method used for speech generation.
 
@@ -170,9 +357,388 @@ enum TTSMethod {
 }
 ```
 
+### Android Kotlin
+
+#### TTSOptions
+
+Configuration options for TTS operations.
+
+```kotlin
+data class TTSOptions(
+    val sampleRate: Int = 24000,
+    val voice: String? = null,
+    val speed: Float = 1.0f,
+    val saveToFile: Boolean = false,
+    val outputFilePath: String? = null
+) {
+    companion object {
+        @JvmStatic
+        fun create(): TTSOptions = TTSOptions()
+    }
+}
+```
+
+#### SpeechResult
+
+Result of successful speech generation.
+
+```kotlin
+data class SpeechResult(
+    val audioSamples: ShortArray,
+    val sampleRate: Int,
+    val duration: Double,
+    val outputFilePath: String?,
+    val methodUsed: TTSMethod
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as SpeechResult
+
+        if (!audioSamples.contentEquals(other.audioSamples)) return false
+        if (sampleRate != other.sampleRate) return false
+        if (duration != other.duration) return false
+        if (outputFilePath != other.outputFilePath) return false
+        if (methodUsed != other.methodUsed) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = audioSamples.contentHashCode()
+        result = 31 * result + sampleRate
+        result = 31 * result + duration.hashCode()
+        result = 31 * result + (outputFilePath?.hashCode() ?: 0)
+        result = 31 * result + methodUsed.hashCode()
+        return result
+    }
+}
+```
+
+#### SpeechMetadata
+
+Metadata for speech generation (used in streaming).
+
+```kotlin
+data class SpeechMetadata(
+    val sampleRate: Int,
+    val duration: Double,
+    val methodUsed: TTSMethod,
+    val outputFilePath: String?
+)
+```
+
+#### TTSError
+
+Error types for TTS operations.
+
+```kotlin
+class TTSError private constructor(private val message: String) : Exception(message) {
+    companion object {
+        @JvmStatic
+        fun noModelLoaded(): TTSError = TTSError("No model loaded")
+        
+        @JvmStatic
+        fun noVocoderEnabled(): TTSError = TTSError("No vocoder enabled")
+        
+        @JvmStatic
+        fun invalidText(): TTSError = TTSError("Invalid text")
+        
+        @JvmStatic
+        fun generationFailed(): TTSError = TTSError("Generation failed")
+        
+        @JvmStatic
+        fun formattingFailed(): TTSError = TTSError("Formatting failed")
+        
+        @JvmStatic
+        fun tokenizationFailed(): TTSError = TTSError("Tokenization failed")
+        
+        @JvmStatic
+        fun audioDecodingFailed(): TTSError = TTSError("Audio decoding failed")
+        
+        @JvmStatic
+        fun fileSaveFailed(): TTSError = TTSError("File save failed")
+        
+        @JvmStatic
+        fun unknownError(message: String): TTSError = TTSError(message)
+    }
+}
+```
+
+#### TTSMethod
+
+Method used for speech generation.
+
+```kotlin
+enum class TTSMethod {
+    BUILT_IN,
+    CUSTOM_WORKFLOW
+}
+```
+
+#### AudioChunkCallback
+
+Callback interface for receiving audio chunks in streaming mode.
+
+```kotlin
+fun interface AudioChunkCallback {
+    fun onAudioChunk(audioChunk: ShortArray)
+}
+```
+
+### Android Java
+
+#### TTSOptions
+
+Configuration options for TTS operations.
+
+```java
+public static class TTSOptions {
+    private final int sampleRate;
+    private final String voice;
+    private final float speed;
+    private final boolean saveToFile;
+    private final String outputFilePath;
+
+    public TTSOptions() {
+        this(24000, null, 1.0f, false, null);
+    }
+
+    public TTSOptions(int sampleRate, String voice, float speed, boolean saveToFile, String outputFilePath) {
+        this.sampleRate = sampleRate;
+        this.voice = voice;
+        this.speed = speed;
+        this.saveToFile = saveToFile;
+        this.outputFilePath = outputFilePath;
+    }
+
+    public int getSampleRate() { return sampleRate; }
+    public String getVoice() { return voice; }
+    public float getSpeed() { return speed; }
+    public boolean isSaveToFile() { return saveToFile; }
+    public String getOutputFilePath() { return outputFilePath; }
+
+    public static class Builder {
+        private int sampleRate = 24000;
+        private String voice = null;
+        private float speed = 1.0f;
+        private boolean saveToFile = false;
+        private String outputFilePath = null;
+
+        public Builder() {}
+
+        public Builder sampleRate(int sampleRate) {
+            this.sampleRate = sampleRate;
+            return this;
+        }
+
+        public Builder voice(String voice) {
+            this.voice = voice;
+            return this;
+        }
+
+        public Builder speed(float speed) {
+            this.speed = speed;
+            return this;
+        }
+
+        public Builder saveToFile(boolean saveToFile) {
+            this.saveToFile = saveToFile;
+            return this;
+        }
+
+        public Builder outputFilePath(String outputFilePath) {
+            this.outputFilePath = outputFilePath;
+            return this;
+        }
+
+        public TTSOptions build() {
+            return new TTSOptions(sampleRate, voice, speed, saveToFile, outputFilePath);
+        }
+    }
+}
+```
+
+#### SpeechResult
+
+Result of successful speech generation.
+
+```java
+public static class SpeechResult {
+    private final short[] audioSamples;
+    private final int sampleRate;
+    private final double duration;
+    private final String outputFilePath;
+    private final TTSMethod methodUsed;
+
+    public SpeechResult(short[] audioSamples, int sampleRate, double duration, String outputFilePath, TTSMethod methodUsed) {
+        this.audioSamples = audioSamples;
+        this.sampleRate = sampleRate;
+        this.duration = duration;
+        this.outputFilePath = outputFilePath;
+        this.methodUsed = methodUsed;
+    }
+
+    public short[] getAudioSamples() { return audioSamples; }
+    public int getSampleRate() { return sampleRate; }
+    public double getDuration() { return duration; }
+    public String getOutputFilePath() { return outputFilePath; }
+    public TTSMethod getMethodUsed() { return methodUsed; }
+}
+```
+
+#### SpeechMetadata
+
+Metadata for speech generation (used in streaming).
+
+```java
+public static class SpeechMetadata {
+    private final int sampleRate;
+    private final double duration;
+    private final TTSMethod methodUsed;
+    private final String outputFilePath;
+
+    public SpeechMetadata(int sampleRate, double duration, TTSMethod methodUsed, String outputFilePath) {
+        this.sampleRate = sampleRate;
+        this.duration = duration;
+        this.methodUsed = methodUsed;
+        this.outputFilePath = outputFilePath;
+    }
+
+    public int getSampleRate() { return sampleRate; }
+    public double getDuration() { return duration; }
+    public TTSMethod getMethodUsed() { return methodUsed; }
+    public String getOutputFilePath() { return outputFilePath; }
+}
+```
+
+#### TTSError
+
+Error types for TTS operations.
+
+```java
+public static class TTSError extends Exception {
+    private TTSError(String message) {
+        super(message);
+    }
+
+    public static TTSError noModelLoaded() {
+        return new TTSError("No model loaded");
+    }
+
+    public static TTSError noVocoderEnabled() {
+        return new TTSError("No vocoder enabled");
+    }
+
+    public static TTSError invalidText() {
+        return new TTSError("Invalid text");
+    }
+
+    public static TTSError generationFailed() {
+        return new TTSError("Generation failed");
+    }
+
+    public static TTSError formattingFailed() {
+        return new TTSError("Formatting failed");
+    }
+
+    public static TTSError tokenizationFailed() {
+        return new TTSError("Tokenization failed");
+    }
+
+    public static TTSError audioDecodingFailed() {
+        return new TTSError("Audio decoding failed");
+    }
+
+    public static TTSError fileSaveFailed() {
+        return new TTSError("File save failed");
+    }
+
+    public static TTSError unknownError(String message) {
+        return new TTSError(message);
+    }
+}
+```
+
+#### TTSMethod
+
+Method used for speech generation.
+
+```java
+public enum TTSMethod {
+    BUILT_IN,
+    CUSTOM_WORKFLOW
+}
+```
+
+#### AudioChunkCallback
+
+Callback interface for receiving audio chunks in streaming mode.
+
+```java
+public interface AudioChunkCallback {
+    void onAudioChunk(short[] audioChunk);
+}
+```
+
+#### ProgressCallback
+
+Callback interface for receiving progress updates.
+
+```java
+public interface ProgressCallback {
+    void onProgress(float progress);
+}
+```
+
+#### Result
+
+Result class for TTS operations.
+
+```java
+public static class Result<S, E> {
+    private final S value;
+    private final E error;
+    private final boolean isSuccess;
+
+    private Result(S value, E error, boolean isSuccess) {
+        this.value = value;
+        this.error = error;
+        this.isSuccess = isSuccess;
+    }
+
+    public static <S, E> Result<S, E> success(S value) {
+        return new Result<>(value, null, true);
+    }
+
+    public static <S, E> Result<S, E> failure(E error) {
+        return new Result<>(null, error, false);
+    }
+
+    public boolean isSuccess() {
+        return isSuccess;
+    }
+
+    public boolean isFailure() {
+        return !isSuccess;
+    }
+
+    public S getValue() {
+        return value;
+    }
+
+    public E getError() {
+        return error;
+    }
+}
+```
+
 ## API Usage Examples
 
-### Asynchronous API Example
+### iOS
+
+#### Asynchronous API Example
 
 ```swift
 func speakAsync() async {
@@ -208,7 +774,7 @@ func speakAsync() async {
 }
 ```
 
-### Synchronous API Example
+#### Synchronous API Example
 
 ```swift
 func speakSync() {
@@ -232,7 +798,7 @@ func speakSync() {
 }
 ```
 
-### Streaming API Example
+#### Streaming API Example
 
 ```swift
 func speakWithStreaming() async {
@@ -263,7 +829,7 @@ func speakWithStreaming() async {
 }
 ```
 
-### Real Streaming for Long Text Example
+#### Real Streaming for Long Text Example
 
 ```swift
 func speakLongTextWithStreaming() async {
@@ -296,6 +862,290 @@ func speakLongTextWithStreaming() async {
     case .failure(let error):
         print("Error: \(error)")
     }
+}
+```
+
+### Android Kotlin
+
+#### Asynchronous API Example
+
+```kotlin
+suspend fun speakAsync() {
+    val text = "Hello, this is a test of the asynchronous TTS API."
+    val contextHandle = LlamaMobile.getContext()
+    
+    val result = LlamaMobile.generateSpeech(
+        contextHandle,
+        text,
+        TTSOptions(
+            sampleRate = 24000,
+            saveToFile = true,
+            outputFilePath = "${context.cacheDir.path}/tts_output.wav"
+        ),
+        progressHandler = { progress ->
+            println("TTS Progress: ${(progress * 100).toInt()}%")
+        }
+    )
+    
+    if (result.isSuccess) {
+        val speechResult = result.value
+        println("Speech generated successfully!")
+        println("Sample rate: ${speechResult.sampleRate}")
+        println("Duration: ${speechResult.duration} seconds")
+        println("Method used: ${speechResult.methodUsed}")
+        if (speechResult.outputFilePath != null) {
+            println("Saved to: ${speechResult.outputFilePath}")
+        }
+        // Play the audio samples
+        playAudio(speechResult.audioSamples, speechResult.sampleRate)
+    } else {
+        val error = result.error
+        println("Error generating speech: $error")
+    }
+}
+```
+
+#### Synchronous API Example
+
+```kotlin
+fun speakSync() {
+    val text = "Hello, this is a test of the synchronous TTS API."
+    val contextHandle = LlamaMobile.getContext()
+    
+    val result = LlamaMobile.generateSpeechSync(
+        contextHandle,
+        text,
+        TTSOptions(sampleRate = 24000)
+    )
+    
+    if (result.isSuccess) {
+        val speechResult = result.value
+        println("Speech generated successfully!")
+        println("Duration: ${speechResult.duration} seconds")
+        // Play the audio samples
+        playAudio(speechResult.audioSamples, speechResult.sampleRate)
+    } else {
+        val error = result.error
+        println("Error generating speech: $error")
+    }
+}
+```
+
+#### Streaming API Example
+
+```kotlin
+suspend fun speakWithStreaming() {
+    val text = "Hello, this is a test of the streaming TTS API."
+    val contextHandle = LlamaMobile.getContext()
+    
+    val result = LlamaMobile.generateSpeechStream(
+        contextHandle,
+        text,
+        TTSOptions(sampleRate = 24000),
+        progressHandler = { progress ->
+            println("Streaming Progress: ${(progress * 100).toInt()}%")
+        },
+        audioChunkHandler = { audioChunk ->
+            println("Received audio chunk with ${audioChunk.size} samples")
+            // Play the audio chunk
+            playAudioChunk(audioChunk, 24000)
+        }
+    )
+    
+    if (result.isSuccess) {
+        val metadata = result.value
+        println("Streaming completed successfully!")
+        println("Sample rate: ${metadata.sampleRate}")
+        println("Method used: ${metadata.methodUsed}")
+    } else {
+        val error = result.error
+        println("Error: $error")
+    }
+}
+```
+
+#### Real Streaming for Long Text Example
+
+```kotlin
+suspend fun speakLongTextWithStreaming() {
+    val longText = """
+    Hello! This is a long text example for streaming TTS. 
+    This text will be split into multiple chunks and played continuously.
+    Each sentence will be generated and played as soon as it's ready.
+    This provides a much better user experience for long texts.
+    """
+    val contextHandle = LlamaMobile.getContext()
+    
+    val result = LlamaMobile.generateSpeechStreamForLongText(
+        contextHandle,
+        longText,
+        TTSOptions(sampleRate = 24000),
+        progressHandler = { progress ->
+            println("Long Text Streaming Progress: ${(progress * 100).toInt()}%")
+        },
+        audioChunkHandler = { audioChunk ->
+            println("Received audio chunk with ${audioChunk.size} samples")
+            // Play the audio chunk immediately
+            playAudioChunk(audioChunk, 24000)
+        }
+    )
+    
+    if (result.isSuccess) {
+        val metadata = result.value
+        println("Long text streaming completed successfully!")
+        println("Total duration: ${metadata.duration} seconds")
+        println("Method used: ${metadata.methodUsed}")
+    } else {
+        val error = result.error
+        println("Error: $error")
+    }
+}
+```
+
+### Android Java
+
+#### Asynchronous API Example
+
+```java
+public void speakAsync() {
+    String text = "Hello, this is a test of the asynchronous TTS API.";
+    long contextHandle = LlamaMobile.getContext();
+    
+    LlamaMobile.generateSpeech(
+        contextHandle,
+        text,
+        new LlamaMobile.TTSOptions.Builder()
+            .sampleRate(24000)
+            .saveToFile(true)
+            .outputFilePath(getCacheDir().getPath() + "/tts_output.wav")
+            .build(),
+        progress -> {
+            System.out.println("TTS Progress: " + (int)(progress * 100) + "%");
+        },
+        result -> {
+            if (result.isSuccess()) {
+                LlamaMobile.SpeechResult speechResult = result.getValue();
+                System.out.println("Speech generated successfully!");
+                System.out.println("Sample rate: " + speechResult.getSampleRate());
+                System.out.println("Duration: " + speechResult.getDuration() + " seconds");
+                System.out.println("Method used: " + speechResult.getMethodUsed());
+                if (speechResult.getOutputFilePath() != null) {
+                    System.out.println("Saved to: " + speechResult.getOutputFilePath());
+                }
+                // Play the audio samples
+                playAudio(speechResult.getAudioSamples(), speechResult.getSampleRate());
+            } else {
+                LlamaMobile.TTSError error = result.getError();
+                System.out.println("Error generating speech: " + error);
+            }
+        }
+    );
+}
+```
+
+#### Synchronous API Example
+
+```java
+public void speakSync() {
+    String text = "Hello, this is a test of the synchronous TTS API.";
+    long contextHandle = LlamaMobile.getContext();
+    
+    LlamaMobile.Result<LlamaMobile.SpeechResult, LlamaMobile.TTSError> result = 
+        LlamaMobile.generateSpeechSync(
+            contextHandle,
+            text,
+            new LlamaMobile.TTSOptions.Builder()
+                .sampleRate(24000)
+                .build()
+        );
+    
+    if (result.isSuccess()) {
+        LlamaMobile.SpeechResult speechResult = result.getValue();
+        System.out.println("Speech generated successfully!");
+        System.out.println("Duration: " + speechResult.getDuration() + " seconds");
+        // Play the audio samples
+        playAudio(speechResult.getAudioSamples(), speechResult.getSampleRate());
+    } else {
+        LlamaMobile.TTSError error = result.getError();
+        System.out.println("Error generating speech: " + error);
+    }
+}
+```
+
+#### Streaming API Example
+
+```java
+public void speakWithStreaming() {
+    String text = "Hello, this is a test of the streaming TTS API.";
+    long contextHandle = LlamaMobile.getContext();
+    
+    LlamaMobile.generateSpeechStream(
+        contextHandle,
+        text,
+        new LlamaMobile.TTSOptions.Builder()
+            .sampleRate(24000)
+            .build(),
+        progress -> {
+            System.out.println("Streaming Progress: " + (int)(progress * 100) + "%");
+        },
+        audioChunk -> {
+            System.out.println("Received audio chunk with " + audioChunk.length + " samples");
+            // Play the audio chunk
+            playAudioChunk(audioChunk, 24000);
+        },
+        result -> {
+            if (result.isSuccess()) {
+                LlamaMobile.SpeechMetadata metadata = result.getValue();
+                System.out.println("Streaming completed successfully!");
+                System.out.println("Sample rate: " + metadata.getSampleRate());
+                System.out.println("Method used: " + metadata.getMethodUsed());
+            } else {
+                LlamaMobile.TTSError error = result.getError();
+                System.out.println("Error: " + error);
+            }
+        }
+    );
+}
+```
+
+#### Real Streaming for Long Text Example
+
+```java
+public void speakLongTextWithStreaming() {
+    String longText = """
+    Hello! This is a long text example for streaming TTS. 
+    This text will be split into multiple chunks and played continuously.
+    Each sentence will be generated and played as soon as it's ready.
+    This provides a much better user experience for long texts.
+    """;
+    long contextHandle = LlamaMobile.getContext();
+    
+    LlamaMobile.generateSpeechStreamForLongText(
+        contextHandle,
+        longText,
+        new LlamaMobile.TTSOptions.Builder()
+            .sampleRate(24000)
+            .build(),
+        progress -> {
+            System.out.println("Long Text Streaming Progress: " + (int)(progress * 100) + "%");
+        },
+        audioChunk -> {
+            System.out.println("Received audio chunk with " + audioChunk.length + " samples");
+            // Play the audio chunk immediately
+            playAudioChunk(audioChunk, 24000);
+        },
+        result -> {
+            if (result.isSuccess()) {
+                LlamaMobile.SpeechMetadata metadata = result.getValue();
+                System.out.println("Long text streaming completed successfully!");
+                System.out.println("Total duration: " + metadata.getDuration() + " seconds");
+                System.out.println("Method used: " + metadata.getMethodUsed());
+            } else {
+                LlamaMobile.TTSError error = result.getError();
+                System.out.println("Error: " + error);
+            }
+        }
+    );
 }
 ```
 

@@ -95,12 +95,34 @@ void llama_mobile_context::loadPrompt() {
             // Get role and content strings, defaulting to empty if null
             std::string role = msg.role ? msg.role : "";
             std::string content = msg.content ? msg.content : "";
+            std::string reasoning_content = msg.reasoning_content ? msg.reasoning_content : "";
+            std::string tool_name = msg.tool_name ? msg.tool_name : "";
+            std::string tool_call_id = msg.tool_call_id ? msg.tool_call_id : "";
             
             messages_json += "{\"role\":\"";
             messages_json += escape_json(role);
             messages_json += "\",\"content\":\"";
             messages_json += escape_json(content);
-            messages_json += "\"}";
+            messages_json += "\"";
+            
+            // Add optional fields if present
+            if (!reasoning_content.empty()) {
+                messages_json += ",\"reasoning_content\":\"";
+                messages_json += escape_json(reasoning_content);
+                messages_json += "\"";
+            }
+            if (!tool_name.empty()) {
+                messages_json += ",\"tool_name\":\"";
+                messages_json += escape_json(tool_name);
+                messages_json += "\"";
+            }
+            if (!tool_call_id.empty()) {
+                messages_json += ",\"tool_call_id\":\"";
+                messages_json += escape_json(tool_call_id);
+                messages_json += "\"";
+            }
+            
+            messages_json += "}";
             if (i < params.chat_messages.size() - 1) {
                 messages_json += ",";
             }

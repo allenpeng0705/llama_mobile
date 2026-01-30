@@ -206,7 +206,8 @@ int llama_mobile_completion_c(
             for (int i = 0; i < params->chat_message_count; ++i) {
                 const auto& msg = params->chat_messages[i];
                 if (msg.role && msg.content) {
-                    context->params.chat_messages.push_back({msg.role, msg.content});
+                    llama_chat_message chat_msg = {msg.role, msg.content, msg.reasoning_content, msg.tool_name, msg.tool_call_id};
+                    context->params.chat_messages.push_back(chat_msg);
                 }
             }
         }
@@ -377,7 +378,8 @@ int llama_mobile_multimodal_completion_c(
             for (int i = 0; i < params->chat_message_count; ++i) {
                 const auto& msg = params->chat_messages[i];
                 if (msg.role && msg.content) {
-                    context->params.chat_messages.push_back({msg.role, msg.content});
+                    llama_chat_message chat_msg = {msg.role, msg.content, msg.reasoning_content, msg.tool_name, msg.tool_call_id};
+                    context->params.chat_messages.push_back(chat_msg);
                 }
             }
         }

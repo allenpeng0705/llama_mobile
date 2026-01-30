@@ -48,7 +48,99 @@ object LlamaMobile {
     }
     
     /**
-    /**  
+     * Method used for TTS generation
+     */
+    enum class TTSMethod {
+        BUILT_IN,
+        CUSTOM_WORKFLOW
+    }
+    
+    /**
+     * TTS configuration options
+     */
+    data class TTSOptions(
+        val sampleRate: Int = 24000,
+        val voice: String? = null,
+        val speed: Float = 1.0f,
+        val saveToFile: Boolean = false,
+        val outputFilePath: String? = null
+    ) {
+        companion object {
+            @JvmStatic
+            fun create(): TTSOptions = TTSOptions()
+        }
+    }
+    
+    /**
+     * Result of successful speech generation
+     */
+    data class SpeechResult(
+        val audioSamples: ShortArray,
+        val sampleRate: Int,
+        val duration: Double,
+        val outputFilePath: String?,
+        val methodUsed: TTSMethod
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as SpeechResult
+
+            if (!audioSamples.contentEquals(other.audioSamples)) return false
+            if (sampleRate != other.sampleRate) return false
+            if (duration != other.duration) return false
+            if (outputFilePath != other.outputFilePath) return false
+            if (methodUsed != other.methodUsed) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = audioSamples.contentHashCode()
+            result = 31 * result + sampleRate
+            result = 31 * result + duration.hashCode()
+            result = 31 * result + (outputFilePath?.hashCode() ?: 0)
+            result = 31 * result + methodUsed.hashCode()
+            return result
+        }
+    }
+    
+    /**
+     * Error types for TTS operations
+     */
+    class TTSError private constructor(private val message: String) : Exception(message) {
+        companion object {
+            @JvmStatic
+            fun noModelLoaded(): TTSError = TTSError("No model loaded")
+            
+            @JvmStatic
+            fun noVocoderEnabled(): TTSError = TTSError("No vocoder enabled")
+            
+            @JvmStatic
+            fun invalidText(): TTSError = TTSError("Invalid text")
+            
+            @JvmStatic
+            fun generationFailed(): TTSError = TTSError("Generation failed")
+            
+            @JvmStatic
+            fun formattingFailed(): TTSError = TTSError("Formatting failed")
+            
+            @JvmStatic
+            fun tokenizationFailed(): TTSError = TTSError("Tokenization failed")
+            
+            @JvmStatic
+            fun audioDecodingFailed(): TTSError = TTSError("Audio decoding failed")
+            
+            @JvmStatic
+            fun fileSaveFailed(): TTSError = TTSError("File save failed")
+            
+            @JvmStatic
+            fun unknownError(message: String): TTSError = TTSError(message)
+        }
+    }
+    
+    /**
      * Grammar name enum for structured output
      */
     enum class GrammarName {
@@ -67,10 +159,16 @@ object LlamaMobile {
      * 
      * @property role Role of the message sender (e.g., "system", "user", "assistant")
      * @property content Content of the message
+     * @property reasoningContent Reasoning/thinking content for advanced models (optional)
+     * @property toolName Tool call name for function calling (optional)
+     * @property toolCallId Tool call ID for function calling (optional)
      */
     data class ChatMessage(
         val role: String,
-        val content: String
+        val content: String,
+        val reasoningContent: String? = null,
+        val toolName: String? = null,
+        val toolCallId: String? = null
     )
 
     /**
@@ -109,7 +207,9 @@ object LlamaMobile {
         val embdNormalize: Int = 0,
         val flashAttention: Boolean = false,
         val cacheTypeK: String? = null,
-        val cacheTypeV: String? = null
+        val cacheTypeV: String? = null,
+        val enableChatTemplate: Boolean = true,
+        val progressCallback: ((Float) -> Unit)? = null
     ) {
         companion object {
             /**
@@ -158,7 +258,9 @@ object LlamaMobile {
      */
     data class CompletionParams(
         val prompt: String,
-        val maxTokens: Int = 128,
+        val maxTokens: Int = 1024,
+        val nThreads: Int? = null,
+        val seed: Int = -1,
         val temperature: Float = 0.8f,
         val topK: Int = 40,
         val topP: Float = 0.95f,
@@ -176,8 +278,13 @@ object LlamaMobile {
         val grammar: String? = null,
         val mediaPaths: List<String> = emptyList(),
         val chatMessages: List<ChatMessage> = emptyList(),
-        val useJsonResponse: Boolean = false,
-        val chatTemplate: String? = null
+        val useJsonResponse: Boolean = true,
+        val nProbs: Int = 0,
+        val jsonSchema: String? = null,
+        val tools: String? = null,
+        val parallelToolCalls: Boolean = false,
+        val toolChoice: String? = null,
+        val tokenCallback: ((String) -> Boolean)? = null
     ) {
         /**
          * Initializer that accepts OpenAI format JSON
@@ -197,7 +304,23 @@ object LlamaMobile {
             penaltyLastN = 64,
             useJsonResponse = true,
             mediaPaths = parseMediaPaths(openAIJSON),
-            chatMessages = parseChatMessages(openAIJSON)
+            chatMessages = parseChatMessages(openAIJSON),
+            nThreads = null,
+            seed = -1,
+            minP = 0.05f,
+            typicalP = 1.0f,
+            mirostat = 0,
+            mirostatTau = 5.0f,
+            mirostatEta = 0.1f,
+            ignoreEos = false,
+            stopSequences = emptyList(),
+            grammar = null,
+            nProbs = 0,
+            jsonSchema = null,
+            tools = null,
+            parallelToolCalls = false,
+            toolChoice = null,
+            tokenCallback = null
         )
         
         companion object {
@@ -239,8 +362,19 @@ object LlamaMobile {
                         throw IllegalArgumentException("Invalid content format")
                     }
                     
+                    // Extract additional fields if present
+                    val reasoningContent = message.optString("reasoning_content").takeIf { it.isNotEmpty() }
+                    val toolName = message.optString("tool_name").takeIf { it.isNotEmpty() }
+                    val toolCallId = message.optString("tool_call_id").takeIf { it.isNotEmpty() }
+                    
                     // Add the text content to chat messages
-                    chatMessages.add(ChatMessage(role, textContent.trim()))
+                    chatMessages.add(ChatMessage(
+                        role = role,
+                        content = textContent.trim(),
+                        reasoningContent = reasoningContent,
+                        toolName = toolName,
+                        toolCallId = toolCallId
+                    ))
                 }
                 
                 return chatMessages
@@ -292,7 +426,7 @@ object LlamaMobile {
              * Convenience factory for creative writing
              */
             @JvmStatic
-            fun creative(prompt: String, maxTokens: Int = 512): CompletionParams = CompletionParams(
+            fun creative(prompt: String, maxTokens: Int = 1024): CompletionParams = CompletionParams(
                 prompt = prompt,
                 maxTokens = maxTokens,
                 temperature = 1.0f,
@@ -315,7 +449,7 @@ object LlamaMobile {
              * Convenience factory for chat conversations using structured messages
              */
             @JvmStatic
-            fun chat(messages: List<ChatMessage>, maxTokens: Int = 256): CompletionParams = CompletionParams(
+            fun chat(messages: List<ChatMessage>, maxTokens: Int = 1024): CompletionParams = CompletionParams(
                 prompt = "",
                 chatMessages = messages,
                 maxTokens = maxTokens,
@@ -329,7 +463,7 @@ object LlamaMobile {
              * Convenience factory for chat-like responses using raw prompt
              */
             @JvmStatic
-            fun chat(prompt: String, maxTokens: Int = 256): CompletionParams = CompletionParams(
+            fun chat(prompt: String, maxTokens: Int = 1024): CompletionParams = CompletionParams(
                 prompt = prompt,
                 maxTokens = maxTokens,
                 temperature = 0.7f,
@@ -339,23 +473,14 @@ object LlamaMobile {
             )
             
             /**
-         * Convenience factory for multimodal inputs
-         */
-        @JvmStatic
-        fun multimodal(prompt: String, mediaPaths: List<String>, maxTokens: Int = 256): CompletionParams = CompletionParams(
-            prompt = prompt,
-            maxTokens = maxTokens,
-            mediaPaths = mediaPaths
-        )
-        
-        /**
-         * Convenience factory for JSON output
-         */
-        @JvmStatic
-        fun jsonOutput(prompt: String, maxTokens: Int = 256): CompletionParams = CompletionParams(
-            prompt = prompt,
-            maxTokens = maxTokens
-        )
+             * Convenience factory for multimodal inputs
+             */
+            @JvmStatic
+            fun multimodal(prompt: String, mediaPaths: List<String>, maxTokens: Int = 1024): CompletionParams = CompletionParams(
+                prompt = prompt,
+                maxTokens = maxTokens,
+                mediaPaths = mediaPaths
+            )
         }
     }
     
@@ -412,14 +537,18 @@ object LlamaMobile {
      * 
      * @property url Hugging Face repository ID (e.g., "meta-llama/Llama-2-7B-Chat-GGUF")
      * @property localPath Local path to save the file
+     * @property username Username for authentication (optional)
      * @property password Bearer token for authentication (optional, for private repositories)
      * @property headers Additional HTTP headers (optional)
+     * @property progressCallback Callback for download progress (0.0 to 1.0)
      */
     data class DownloadParams(
         val url: String,
         val localPath: String,
+        val username: String? = null,
         val password: String? = null,
-        val headers: Map<String, String>? = null
+        val headers: Map<String, String>? = null,
+        val progressCallback: ((Float) -> Unit)? = null
     )
     
     /**
@@ -705,6 +834,94 @@ object LlamaMobile {
     }
     
     /**
+     * Generates speech from text using the best available method
+     * 
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Text to convert to speech
+     * @param options TTS configuration options
+     * @param progressHandler Optional callback for progress updates
+     * @return Result containing the generated audio samples and metadata
+     */
+    @JvmStatic
+    fun generateSpeech(
+        contextHandle: Long,
+        text: String,
+        options: TTSOptions = TTSOptions(),
+        progressHandler: ((Float) -> Unit)? = null
+    ): Result<SpeechResult, TTSError> {
+        // Check if context is valid
+        if (contextHandle == 0L) {
+            return Result.failure(TTSError.noModelLoaded())
+        }
+        
+        // Check if vocoder is enabled
+        if (!isVocoderEnabled(contextHandle)) {
+            return Result.failure(TTSError.noVocoderEnabled())
+        }
+        
+        progressHandler?.invoke(0.1f) // Initial progress
+        
+        // Check TTS model type
+        val ttsType = getTTSType(contextHandle)
+        val isKnownTTSModel = ttsType != TTSModelType.UNKNOWN
+        
+        progressHandler?.invoke(0.2f) // Model check completed
+        
+        var audioSamples: FloatArray?
+        var methodUsed: TTSMethod = TTSMethod.BUILT_IN
+        
+        if (isKnownTTSModel) {
+            // Try Path 1: Built-in TTS method
+            progressHandler?.invoke(0.3f) // Starting built-in method
+            audioSamples = generateAudioFromText(contextHandle, text)
+            methodUsed = TTSMethod.BUILT_IN
+            
+            progressHandler?.invoke(0.6f) // Built-in method completed
+        } else {
+            // Try Path 2: Custom TTS workflow
+            progressHandler?.invoke(0.4f) // Starting custom workflow
+            audioSamples = generateAudioFromText(contextHandle, text)
+            methodUsed = TTSMethod.CUSTOM_WORKFLOW
+        }
+        
+        audioSamples ?: return Result.failure(TTSError.generationFailed())
+        
+        progressHandler?.invoke(0.8f) // Audio generation completed
+        
+        // Calculate duration
+        val duration = audioSamples.size.toDouble() / options.sampleRate
+        
+        // Convert FloatArray to ShortArray
+        val shortSamples = ShortArray(audioSamples.size) {
+            (audioSamples[it] * Short.MAX_VALUE).toShort()
+        }
+        
+        // Save to file if requested
+        var savedFilePath: String? = null
+        if (options.saveToFile && options.outputFilePath != null) {
+            val saveSuccess = saveAudioToWav(contextHandle, options.outputFilePath, audioSamples, options.sampleRate)
+            if (saveSuccess) {
+                savedFilePath = options.outputFilePath
+            } else {
+                return Result.failure(TTSError.fileSaveFailed())
+            }
+        }
+        
+        progressHandler?.invoke(1.0f) // Completed
+        
+        // Create speech result
+        val speechResult = SpeechResult(
+            audioSamples = shortSamples,
+            sampleRate = options.sampleRate,
+            duration = duration,
+            outputFilePath = savedFilePath,
+            methodUsed = methodUsed
+        )
+        
+        return Result.success(speechResult)
+    }
+    
+    /**
      * Applies LoRA adapters to the model
      * 
      * @param contextHandle Context handle obtained from initContext
@@ -829,7 +1046,7 @@ object LlamaMobile {
      * @return Download result
      */
     fun download(params: DownloadParams): DownloadResult? {
-        return downloadModel(params)
+        return downloadModel(params, params.progressCallback)
     }
     
     /**
@@ -853,6 +1070,214 @@ object LlamaMobile {
     
 
     
+    /**
+     * Generates speech from text using the best available method (synchronous)
+     * 
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Text to convert to speech
+     * @param options TTS configuration options
+     * @return Result containing the generated audio samples and metadata
+     */
+    @JvmStatic
+    fun generateSpeechSync(
+        contextHandle: Long,
+        text: String,
+        options: TTSOptions = TTSOptions()
+    ): Result<SpeechResult, TTSError> {
+        // Check if context is valid
+        if (contextHandle == 0L) {
+            return Result.failure(TTSError.noModelLoaded())
+        }
+        
+        // Check if vocoder is enabled
+        if (!isVocoderEnabled(contextHandle)) {
+            return Result.failure(TTSError.noVocoderEnabled())
+        }
+        
+        // Check TTS model type
+        val ttsType = getTTSType(contextHandle)
+        val isKnownTTSModel = ttsType != TTSModelType.UNKNOWN
+        
+        var audioSamples: FloatArray?
+        var methodUsed: TTSMethod = TTSMethod.BUILT_IN
+        
+        if (isKnownTTSModel) {
+            // Try Path 1: Built-in TTS method
+            audioSamples = generateAudioFromText(contextHandle, text)
+            methodUsed = TTSMethod.BUILT_IN
+        } else {
+            // Try Path 2: Custom TTS workflow
+            audioSamples = generateAudioFromText(contextHandle, text)
+            methodUsed = TTSMethod.CUSTOM_WORKFLOW
+        }
+        
+        audioSamples ?: return Result.failure(TTSError.generationFailed())
+        
+        // Calculate duration
+        val duration = audioSamples.size.toDouble() / options.sampleRate
+        
+        // Convert FloatArray to ShortArray
+        val shortSamples = ShortArray(audioSamples.size) {
+            (audioSamples[it] * Short.MAX_VALUE).toShort()
+        }
+        
+        // Save to file if requested
+        var savedFilePath: String? = null
+        if (options.saveToFile && options.outputFilePath != null) {
+            val saveSuccess = saveAudioToWav(contextHandle, options.outputFilePath, audioSamples, options.sampleRate)
+            if (saveSuccess) {
+                savedFilePath = options.outputFilePath
+            } else {
+                return Result.failure(TTSError.fileSaveFailed())
+            }
+        }
+        
+        // Create speech result
+        val speechResult = SpeechResult(
+            audioSamples = shortSamples,
+            sampleRate = options.sampleRate,
+            duration = duration,
+            outputFilePath = savedFilePath,
+            methodUsed = methodUsed
+        )
+        
+        return Result.success(speechResult)
+    }
+
+    /**
+     * Metadata for speech generation (used in streaming)
+     */
+    data class SpeechMetadata(
+        val sampleRate: Int,
+        val duration: Double,
+        val methodUsed: TTSMethod,
+        val outputFilePath: String?
+    )
+
+    /**
+     * Audio chunk callback interface for streaming TTS
+     */
+    fun interface AudioChunkCallback {
+        fun onAudioChunk(audioChunk: ShortArray)
+    }
+
+    /**
+     * Generates speech from text with streaming support (simplified implementation)
+     * 
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Text to convert to speech
+     * @param options TTS configuration options
+     * @param progressHandler Optional callback for progress updates
+     * @param audioChunkHandler Callback for receiving audio chunks
+     * @return Result containing metadata about the generated speech
+     */
+    @JvmStatic
+    fun generateSpeechStream(
+        contextHandle: Long,
+        text: String,
+        options: TTSOptions = TTSOptions(),
+        progressHandler: ((Float) -> Unit)? = null,
+        audioChunkHandler: AudioChunkCallback
+    ): Result<SpeechMetadata, TTSError> {
+        // Generate full audio first (simplified streaming)
+        val result = generateSpeech(contextHandle, text, options, progressHandler)
+        
+        if (result.isFailure) {
+            return Result.failure(result.exceptionOrNull() as TTSError)
+        }
+        
+        val speechResult = result.getOrThrow()
+        
+        // Send the entire audio as a single chunk
+        audioChunkHandler.onAudioChunk(speechResult.audioSamples)
+        
+        // Create metadata
+        val metadata = SpeechMetadata(
+            sampleRate = speechResult.sampleRate,
+            duration = speechResult.duration,
+            methodUsed = speechResult.methodUsed,
+            outputFilePath = speechResult.outputFilePath
+        )
+        
+        return Result.success(metadata)
+    }
+
+    /**
+     * Generates speech from long text with real streaming capabilities
+     * 
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Long text to convert to speech
+     * @param options TTS configuration options
+     * @param progressHandler Optional callback for progress updates
+     * @param audioChunkHandler Callback for receiving audio chunks as they're generated
+     * @return Result containing metadata about the generated speech
+     */
+    @JvmStatic
+    fun generateSpeechStreamForLongText(
+        contextHandle: Long,
+        text: String,
+        options: TTSOptions = TTSOptions(),
+        progressHandler: ((Float) -> Unit)? = null,
+        audioChunkHandler: AudioChunkCallback
+    ): Result<SpeechMetadata, TTSError> {
+        // Check if context is valid
+        if (contextHandle == 0L) {
+            return Result.failure(TTSError.noModelLoaded())
+        }
+        
+        // Check if vocoder is enabled
+        if (!isVocoderEnabled(contextHandle)) {
+            return Result.failure(TTSError.noVocoderEnabled())
+        }
+        
+        // Split long text into sentences
+        val sentences = text.split("[.!?]+\\s*")
+        val totalSentences = sentences.size
+        
+        var totalDuration = 0.0
+        var methodUsed: TTSMethod = TTSMethod.BUILT_IN
+        var outputFilePath: String? = null
+        
+        for (i in sentences.indices) {
+            val sentence = sentences[i].trim()
+            if (sentence.isEmpty()) continue
+            
+            // Update progress
+            progressHandler?.invoke(0.1f + ((i + 1).toFloat() / totalSentences) * 0.8f) // 0.1 to 0.9
+            
+            // Generate speech for this sentence
+            val sentenceResult = generateSpeechSync(contextHandle, sentence, options)
+            
+            if (sentenceResult.isFailure) {
+                return Result.failure(sentenceResult.exceptionOrNull() as TTSError)
+            }
+            
+            val speechResult = sentenceResult.getOrThrow()
+            
+            // Send audio chunk
+            audioChunkHandler.onAudioChunk(speechResult.audioSamples)
+            
+            // Accumulate metadata
+            totalDuration += speechResult.duration
+            methodUsed = speechResult.methodUsed
+            if (outputFilePath == null) {
+                outputFilePath = speechResult.outputFilePath
+            }
+        }
+        
+        progressHandler?.invoke(1.0f) // Completed
+        
+        // Create metadata
+        val metadata = SpeechMetadata(
+            sampleRate = options.sampleRate,
+            duration = totalDuration,
+            methodUsed = methodUsed,
+            outputFilePath = outputFilePath
+        )
+        
+        return Result.success(metadata)
+    }
+
     /**
      * Releases a llama context
      * 

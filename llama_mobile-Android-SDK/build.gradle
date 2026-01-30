@@ -3,13 +3,6 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
-// Version information (synchronized with corelib)
-def versionMajor = 1
-def versionMinor = 0
-def versionPatch = 0
-def versionName = "${versionMajor}.${versionMinor}.${versionPatch}"
-def versionCode = versionMajor * 10000 + versionMinor * 100 + versionPatch
-
 android {
     namespace 'com.llamamobile'
     compileSdk 36
@@ -18,8 +11,6 @@ android {
     defaultConfig {
         minSdk 21
         targetSdk 36
-        versionCode versionCode
-        versionName versionName
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles "consumer-rules.pro"

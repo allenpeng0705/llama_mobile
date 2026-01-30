@@ -95,7 +95,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << "\nModel initialized successfully!" << std::endl << std::endl;
-/*
+
     // Example 1: Basic Chat with Messages
     std::cout << "=== Example 1: Basic Chat with Messages ===" << std::endl;
     {
@@ -310,7 +310,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "Completion failed with status: " << status << std::endl;
         }
     }
-*/
+
     // Example 6: Multi-turn Conversation
     std::cout << "\n=== Example 6: Multi-turn Conversation ===" << std::endl;
     {

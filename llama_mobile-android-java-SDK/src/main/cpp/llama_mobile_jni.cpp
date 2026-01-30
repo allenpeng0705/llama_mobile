@@ -40,7 +40,7 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     jfieldID chatTemplateField = env->GetFieldID(paramsClass, "chatTemplate", "Ljava/lang/String;");
     jfieldID systemPromptField = env->GetFieldID(paramsClass, "systemPrompt", "Ljava/lang/String;");
     jfieldID nBatchField = env->GetFieldID(paramsClass, "nBatch", "I");
-    jfieldID nUBatchField = env->GetFieldID(paramsClass, "nUbatch", "I");
+    jfieldID nUBatchField = env->GetFieldID(paramsClass, "nUBatch", "I");
     jfieldID nGpuLayersField = env->GetFieldID(paramsClass, "nGpuLayers", "I");
     jfieldID nThreadsField = env->GetFieldID(paramsClass, "nThreads", "I");
     jfieldID useMmapField = env->GetFieldID(paramsClass, "useMmap", "Z");
@@ -48,10 +48,12 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     jfieldID embeddingField = env->GetFieldID(paramsClass, "embedding", "Z");
     jfieldID poolingTypeField = env->GetFieldID(paramsClass, "poolingType", "I");
     jfieldID embdNormalizeField = env->GetFieldID(paramsClass, "embdNormalize", "I");
-    jfieldID flashAttnField = env->GetFieldID(paramsClass, "flashAttn", "Z");
+    jfieldID flashAttnField = env->GetFieldID(paramsClass, "flashAttention", "Z");
     jfieldID cacheTypeKField = env->GetFieldID(paramsClass, "cacheTypeK", "Ljava/lang/String;");
     jfieldID cacheTypeVField = env->GetFieldID(paramsClass, "cacheTypeV", "Ljava/lang/String;");
     jfieldID cacheTypeField = env->GetFieldID(paramsClass, "cacheType", "Lcom/llamamobile/LlamaMobile$CacheType;");
+    jfieldID enableChatTemplateField = env->GetFieldID(paramsClass, "enableChatTemplate", "Z");
+    jfieldID progressCallbackField = env->GetFieldID(paramsClass, "progressCallback", "Lcom/llamamobile/LlamaMobile$ProgressCallback;");
     
     if (modelPathField == nullptr || nCtxField == nullptr) {
         env->DeleteLocalRef(paramsClass);
@@ -73,6 +75,8 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     jint poolingType = (poolingTypeField != nullptr) ? env->GetIntField(initParamsObj, poolingTypeField) : 0;
     jint embdNormalize = (embdNormalizeField != nullptr) ? env->GetIntField(initParamsObj, embdNormalizeField) : 0;
     jboolean flashAttn = (flashAttnField != nullptr) ? env->GetBooleanField(initParamsObj, flashAttnField) : false;
+    jboolean enableChatTemplate = (enableChatTemplateField != nullptr) ? env->GetBooleanField(initParamsObj, enableChatTemplateField) : true;
+    jobject progressCallbackObj = (progressCallbackField != nullptr) ? env->GetObjectField(initParamsObj, progressCallbackField) : nullptr;
     jstring cacheTypeKStr = (cacheTypeKField != nullptr) ? (jstring)env->GetObjectField(initParamsObj, cacheTypeKField) : nullptr;
     jstring cacheTypeVStr = (cacheTypeVField != nullptr) ? (jstring)env->GetObjectField(initParamsObj, cacheTypeVField) : nullptr;
     
@@ -119,7 +123,16 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     params.flash_attn = flashAttn;
     params.cache_type_k = cacheTypeK;
     params.cache_type_v = cacheTypeV;
-    params.progress_callback = nullptr;
+    params.enable_chat_template = enableChatTemplate;
+    
+    // Set progress callback if provided
+    if (progressCallbackObj != nullptr) {
+        // We'll need to create a wrapper for the Java callback
+        // For now, we'll set it to nullptr as implementing the callback wrapper requires additional setup
+        params.progress_callback = nullptr;
+    } else {
+        params.progress_callback = nullptr;
+    }
     
     // Debug embedding parameter
     // printf("[JNI-JAVA] Embedding parameter set to: %d\n", embedding);
@@ -145,7 +158,7 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     jfieldID promptField = env->GetFieldID(paramsClass, "prompt", "Ljava/lang/String;");
     jfieldID temperatureField = env->GetFieldID(paramsClass, "temperature", "F");
     jfieldID maxTokensField = env->GetFieldID(paramsClass, "maxTokens", "I");
-    jfieldID nThreadsField = env->GetFieldID(paramsClass, "nThreads", "I");
+    jfieldID nThreadsField = env->GetFieldID(paramsClass, "nThreads", "Ljava/lang/Integer;");
     jfieldID seedField = env->GetFieldID(paramsClass, "seed", "I");
     jfieldID topKField = env->GetFieldID(paramsClass, "topK", "I");
     jfieldID topPField = env->GetFieldID(paramsClass, "topP", "D");
@@ -161,6 +174,10 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     jfieldID ignoreEosField = env->GetFieldID(paramsClass, "ignoreEos", "Z");
     jfieldID nProbsField = env->GetFieldID(paramsClass, "nProbs", "I");
     jfieldID grammarField = env->GetFieldID(paramsClass, "grammar", "Ljava/lang/String;");
+    jfieldID jsonSchemaField = env->GetFieldID(paramsClass, "jsonSchema", "Ljava/lang/String;");
+    jfieldID toolsField = env->GetFieldID(paramsClass, "tools", "Ljava/lang/String;");
+    jfieldID parallelToolCallsField = env->GetFieldID(paramsClass, "parallelToolCalls", "Z");
+    jfieldID toolChoiceField = env->GetFieldID(paramsClass, "toolChoice", "Ljava/lang/String;");
     
     if (promptField == nullptr || temperatureField == nullptr || maxTokensField == nullptr) {
         env->DeleteLocalRef(paramsClass);
@@ -171,10 +188,25 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     jstring promptStr = (jstring)env->GetObjectField(completionParamsObj, promptField);
     jfloat temperature = env->GetFloatField(completionParamsObj, temperatureField);
     jint maxTokens = env->GetIntField(completionParamsObj, maxTokensField);
-    jint nThreads = (nThreadsField != nullptr) ? env->GetIntField(completionParamsObj, nThreadsField) : 4;
+    
+    // Handle Integer nThreads
+    jint nThreads = 4; // Default value
+    if (nThreadsField != nullptr) {
+        jobject nThreadsObj = env->GetObjectField(completionParamsObj, nThreadsField);
+        if (nThreadsObj != nullptr) {
+            jclass integerClass = env->GetObjectClass(nThreadsObj);
+            jmethodID intValueMethod = env->GetMethodID(integerClass, "intValue", "()I");
+            if (intValueMethod != nullptr) {
+                nThreads = env->CallIntMethod(nThreadsObj, intValueMethod);
+            }
+            env->DeleteLocalRef(integerClass);
+            env->DeleteLocalRef(nThreadsObj);
+        }
+    }
+    
     jint seed = (seedField != nullptr) ? env->GetIntField(completionParamsObj, seedField) : -1;
     jint topK = (topKField != nullptr) ? env->GetIntField(completionParamsObj, topKField) : 40;
-    jdouble topP = (topPField != nullptr) ? env->GetDoubleField(completionParamsObj, topPField) : 0.9;
+    jdouble topP = (topPField != nullptr) ? env->GetDoubleField(completionParamsObj, topPField) : 0.95;
     jdouble minP = (minPField != nullptr) ? env->GetDoubleField(completionParamsObj, minPField) : 0.05;
     jdouble typicalP = (typicalPField != nullptr) ? env->GetDoubleField(completionParamsObj, typicalPField) : 1.0;
     jint penaltyLastN = (penaltyLastNField != nullptr) ? env->GetIntField(completionParamsObj, penaltyLastNField) : 64;
@@ -187,6 +219,10 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     jboolean ignoreEos = (ignoreEosField != nullptr) ? env->GetBooleanField(completionParamsObj, ignoreEosField) : false;
     jint nProbs = (nProbsField != nullptr) ? env->GetIntField(completionParamsObj, nProbsField) : 0;
     jstring grammarStr = (grammarField != nullptr) ? (jstring)env->GetObjectField(completionParamsObj, grammarField) : nullptr;
+    jstring jsonSchemaStr = (jsonSchemaField != nullptr) ? (jstring)env->GetObjectField(completionParamsObj, jsonSchemaField) : nullptr;
+    jstring toolsStr = (toolsField != nullptr) ? (jstring)env->GetObjectField(completionParamsObj, toolsField) : nullptr;
+    jboolean parallelToolCalls = (parallelToolCallsField != nullptr) ? env->GetBooleanField(completionParamsObj, parallelToolCallsField) : false;
+    jstring toolChoiceStr = (toolChoiceField != nullptr) ? (jstring)env->GetObjectField(completionParamsObj, toolChoiceField) : nullptr;
     
     // Extract stop sequences
     std::vector<std::string> stopSequences;
@@ -266,22 +302,56 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
                         jclass chatMessageClass = env->GetObjectClass(chatMessageObj);
                         jfieldID roleField = env->GetFieldID(chatMessageClass, "role", "Ljava/lang/String;");
                         jfieldID contentField = env->GetFieldID(chatMessageClass, "content", "Ljava/lang/String;");
+                        jfieldID reasoningContentField = env->GetFieldID(chatMessageClass, "reasoningContent", "Ljava/lang/String;");
+                        jfieldID toolNameField = env->GetFieldID(chatMessageClass, "toolName", "Ljava/lang/String;");
+                        jfieldID toolCallIdField = env->GetFieldID(chatMessageClass, "toolCallId", "Ljava/lang/String;");
                         
                         if (roleField != nullptr && contentField != nullptr) {
                             jstring roleStr = (jstring)env->GetObjectField(chatMessageObj, roleField);
                             jstring contentStr = (jstring)env->GetObjectField(chatMessageObj, contentField);
+                            jstring reasoningContentStr = (reasoningContentField != nullptr) ? (jstring)env->GetObjectField(chatMessageObj, reasoningContentField) : nullptr;
+                            jstring toolNameStr = (toolNameField != nullptr) ? (jstring)env->GetObjectField(chatMessageObj, toolNameField) : nullptr;
+                            jstring toolCallIdStr = (toolCallIdField != nullptr) ? (jstring)env->GetObjectField(chatMessageObj, toolCallIdField) : nullptr;
                             
                             const char* role = getStringUTFChars(env, roleStr);
                             const char* content = getStringUTFChars(env, contentStr);
+                            const char* reasoningContent = (reasoningContentStr != nullptr) ? getStringUTFChars(env, reasoningContentStr) : nullptr;
+                            const char* toolName = (toolNameStr != nullptr) ? getStringUTFChars(env, toolNameStr) : nullptr;
+                            const char* toolCallId = (toolCallIdStr != nullptr) ? getStringUTFChars(env, toolCallIdStr) : nullptr;
                             
                             if (role != nullptr && content != nullptr) {
-                                chatMessages.push_back({strdup(role), strdup(content)});
+                                llama_mobile_chat_message_c message;
+                                message.role = strdup(role);
+                                message.content = strdup(content);
+                                message.reasoning_content = (reasoningContent != nullptr) ? strdup(reasoningContent) : nullptr;
+                                message.tool_name = (toolName != nullptr) ? strdup(toolName) : nullptr;
+                                message.tool_call_id = (toolCallId != nullptr) ? strdup(toolCallId) : nullptr;
+                                chatMessages.push_back(message);
                             }
                             
                             releaseStringUTFChars(env, roleStr, role);
                             releaseStringUTFChars(env, contentStr, content);
+                            if (reasoningContentStr != nullptr) {
+                                releaseStringUTFChars(env, reasoningContentStr, reasoningContent);
+                            }
+                            if (toolNameStr != nullptr) {
+                                releaseStringUTFChars(env, toolNameStr, toolName);
+                            }
+                            if (toolCallIdStr != nullptr) {
+                                releaseStringUTFChars(env, toolCallIdStr, toolCallId);
+                            }
+                            
                             env->DeleteLocalRef(roleStr);
                             env->DeleteLocalRef(contentStr);
+                            if (reasoningContentStr != nullptr) {
+                                env->DeleteLocalRef(reasoningContentStr);
+                            }
+                            if (toolNameStr != nullptr) {
+                                env->DeleteLocalRef(toolNameStr);
+                            }
+                            if (toolCallIdStr != nullptr) {
+                                env->DeleteLocalRef(toolCallIdStr);
+                            }
                         }
                         
                         env->DeleteLocalRef(chatMessageClass);
@@ -302,22 +372,12 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
         useJsonResponse = env->GetBooleanField(completionParamsObj, useJsonResponseField);
     }
     
-    // Extract chatTemplate (not used in C API yet)
-    jfieldID chatTemplateField = env->GetFieldID(paramsClass, "chatTemplate", "Ljava/lang/String;");
-    if (chatTemplateField != nullptr) {
-        jstring chatTemplateStr = (jstring)env->GetObjectField(completionParamsObj, chatTemplateField);
-        if (chatTemplateStr != nullptr) {
-            const char* chatTemplate = getStringUTFChars(env, chatTemplateStr);
-            // Note: chatTemplate is not currently passed to C API as it doesn't support it
-            // The template is handled in the Java layer
-            releaseStringUTFChars(env, chatTemplateStr, chatTemplate);
-            env->DeleteLocalRef(chatTemplateStr);
-        }
-    }
-    
     // Convert strings
     prompt = getStringUTFChars(env, promptStr);
     grammar = (grammarField != nullptr && grammarStr != nullptr) ? getStringUTFChars(env, grammarStr) : nullptr;
+    const char* jsonSchema = (jsonSchemaField != nullptr && jsonSchemaStr != nullptr) ? getStringUTFChars(env, jsonSchemaStr) : nullptr;
+    const char* tools = (toolsField != nullptr && toolsStr != nullptr) ? getStringUTFChars(env, toolsStr) : nullptr;
+    const char* toolChoice = (toolChoiceField != nullptr && toolChoiceStr != nullptr) ? getStringUTFChars(env, toolChoiceStr) : nullptr;
     
     // Set params
     memset(&params, 0, sizeof(llama_mobile_completion_params_c_t));
@@ -355,6 +415,9 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
         for (size_t i = 0; i < chatMessages.size(); i++) {
             temp_messages[i].role = chatMessages[i].role;
             temp_messages[i].content = chatMessages[i].content;
+            temp_messages[i].reasoning_content = chatMessages[i].reasoning_content;
+            temp_messages[i].tool_name = chatMessages[i].tool_name;
+            temp_messages[i].tool_call_id = chatMessages[i].tool_call_id;
         }
         
         // Assign to the const pointer
@@ -364,6 +427,12 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     
     // Set JSON response flag
     params.use_json_response = useJsonResponse;
+    
+    // Set new fields
+    params.json_schema = jsonSchema;
+    params.tools = tools;
+    params.parallel_tool_calls = parallelToolCalls;
+    params.tool_choice = toolChoice;
     
     // Set stop sequences
     if (!stopSequences.empty()) {
@@ -557,6 +626,21 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_nativeGenerateComplet
         releaseStringUTFChars(env, (jstring)env->GetObjectField(completionParamsObj, grammarField), grammar);
     }
     
+    jfieldID jsonSchemaField = env->GetFieldID(paramsClass, "jsonSchema", "Ljava/lang/String;");
+    if (jsonSchemaField != nullptr && jsonSchema != nullptr) {
+        releaseStringUTFChars(env, (jstring)env->GetObjectField(completionParamsObj, jsonSchemaField), jsonSchema);
+    }
+    
+    jfieldID toolsField = env->GetFieldID(paramsClass, "tools", "Ljava/lang/String;");
+    if (toolsField != nullptr && tools != nullptr) {
+        releaseStringUTFChars(env, (jstring)env->GetObjectField(completionParamsObj, toolsField), tools);
+    }
+    
+    jfieldID toolChoiceField = env->GetFieldID(paramsClass, "toolChoice", "Ljava/lang/String;");
+    if (toolChoiceField != nullptr && toolChoice != nullptr) {
+        releaseStringUTFChars(env, (jstring)env->GetObjectField(completionParamsObj, toolChoiceField), toolChoice);
+    }
+    
     // Free stop sequences
     if (params.stop_sequences != nullptr) {
         for (size_t i = 0; params.stop_sequences[i] != nullptr; i++) {
@@ -570,6 +654,15 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_nativeGenerateComplet
         for (int i = 0; i < params.chat_message_count; i++) {
             free((void*)params.chat_messages[i].role);
             free((void*)params.chat_messages[i].content);
+            if (params.chat_messages[i].reasoning_content != nullptr) {
+                free((void*)params.chat_messages[i].reasoning_content);
+            }
+            if (params.chat_messages[i].tool_name != nullptr) {
+                free((void*)params.chat_messages[i].tool_name);
+            }
+            if (params.chat_messages[i].tool_call_id != nullptr) {
+                free((void*)params.chat_messages[i].tool_call_id);
+            }
         }
         delete[] params.chat_messages;
     }

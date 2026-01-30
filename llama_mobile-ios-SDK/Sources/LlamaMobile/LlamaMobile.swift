@@ -508,8 +508,19 @@ public class LlamaMobile {
                     throw Error.invalidParameter("Invalid message format - 'content' must be string or array")
                 }
                 
+                // Extract additional fields if present
+                let reasoningContent = message["reasoning_content"] as? String
+                let toolName = message["tool_name"] as? String
+                let toolCallId = message["tool_call_id"] as? String
+                
                 // Add the text content to chat messages
-                chatMessages.append(ChatMessage(role: role, content: textContent.trimmingCharacters(in: .whitespacesAndNewlines)))
+                chatMessages.append(ChatMessage(
+                    role: role,
+                    content: textContent.trimmingCharacters(in: .whitespacesAndNewlines),
+                    reasoningContent: reasoningContent,
+                    toolName: toolName,
+                    toolCallId: toolCallId
+                ))
             }
             
             // Call the existing chatMessages initializer first to ensure proper initialization
@@ -546,13 +557,28 @@ public class LlamaMobile {
         /// The content of the message
         public var content: String
         
+        /// Reasoning/thinking content for advanced models
+        public var reasoningContent: String? = nil
+        
+        /// Tool call name for function calling
+        public var toolName: String? = nil
+        
+        /// Tool call ID for function calling
+        public var toolCallId: String? = nil
+        
         /// Initialize a new chat message
         /// - Parameters:
         ///   - role: The role of the message sender
         ///   - content: The content of the message
-        public init(role: String, content: String) {
+        ///   - reasoningContent: Reasoning/thinking content (optional)
+        ///   - toolName: Tool call name (optional)
+        ///   - toolCallId: Tool call ID (optional)
+        public init(role: String, content: String, reasoningContent: String? = nil, toolName: String? = nil, toolCallId: String? = nil) {
             self.role = role
             self.content = content
+            self.reasoningContent = reasoningContent
+            self.toolName = toolName
+            self.toolCallId = toolCallId
         }
     }
     
@@ -960,13 +986,28 @@ public class LlamaMobile {
                 // Allocate permanent C strings for role and content using helper function
                 let roleCString = allocateCString(from: message.role)
                 let contentCString = allocateCString(from: message.content)
+                let reasoningContentCString = message.reasoningContent.map { allocateCString(from: $0) }
+                let toolNameCString = message.toolName.map { allocateCString(from: $0) }
+                let toolCallIdCString = message.toolCallId.map { allocateCString(from: $0) }
                 
                 messageStringsToFree.append(roleCString)
                 messageStringsToFree.append(contentCString)
+                if let reasoningContentCString = reasoningContentCString {
+                    messageStringsToFree.append(reasoningContentCString)
+                }
+                if let toolNameCString = toolNameCString {
+                    messageStringsToFree.append(toolNameCString)
+                }
+                if let toolCallIdCString = toolCallIdCString {
+                    messageStringsToFree.append(toolCallIdCString)
+                }
                 
                 if let chatMessagesC = chatMessagesC {
                     chatMessagesC[index].role = UnsafePointer(roleCString)
                     chatMessagesC[index].content = UnsafePointer(contentCString)
+                    chatMessagesC[index].reasoning_content = reasoningContentCString.map { UnsafePointer($0) }
+                    chatMessagesC[index].tool_name = toolNameCString.map { UnsafePointer($0) }
+                    chatMessagesC[index].tool_call_id = toolCallIdCString.map { UnsafePointer($0) }
                 }
             }
             

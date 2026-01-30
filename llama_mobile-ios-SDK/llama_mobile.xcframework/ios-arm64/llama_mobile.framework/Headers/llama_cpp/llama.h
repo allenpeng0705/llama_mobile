@@ -396,6 +396,9 @@ extern "C" {
     typedef struct llama_chat_message {
         const char * role;
         const char * content;
+        const char * reasoning_content;  // For reasoning/thinking content (optional)
+        const char * tool_name;         // For tool calls (optional)
+        const char * tool_call_id;      // For tool call IDs (optional)
     } llama_chat_message;
 
     // lora adapter

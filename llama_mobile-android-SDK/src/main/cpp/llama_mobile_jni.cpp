@@ -54,6 +54,8 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     jfieldID flashAttentionField = env->GetFieldID(paramsClass, "flashAttention", "Z");
     jfieldID cacheTypeKField = env->GetFieldID(paramsClass, "cacheTypeK", "Ljava/lang/String;");
     jfieldID cacheTypeVField = env->GetFieldID(paramsClass, "cacheTypeV", "Ljava/lang/String;");
+    jfieldID enableChatTemplateField = env->GetFieldID(paramsClass, "enableChatTemplate", "Z");
+    jfieldID progressCallbackField = env->GetFieldID(paramsClass, "progressCallback", "Lkotlin/jvm/functions/Function1;");
     
     if (modelPathField == nullptr || nCtxField == nullptr) {
         env->DeleteLocalRef(paramsClass);
@@ -77,6 +79,8 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     jboolean flashAttention = env->GetBooleanField(initParamsObj, flashAttentionField);
     jstring cacheTypeKStr = (jstring)env->GetObjectField(initParamsObj, cacheTypeKField);
     jstring cacheTypeVStr = (jstring)env->GetObjectField(initParamsObj, cacheTypeVField);
+    jboolean enableChatTemplate = (enableChatTemplateField != nullptr) ? env->GetBooleanField(initParamsObj, enableChatTemplateField) : true;
+    jobject progressCallbackObj = (progressCallbackField != nullptr) ? env->GetObjectField(initParamsObj, progressCallbackField) : nullptr;
     
     // Convert strings
     modelPath = getStringUTFChars(env, modelPathStr);
@@ -106,6 +110,7 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     params.flash_attn = flashAttention;
     params.cache_type_k = cacheTypeK;
     params.cache_type_v = cacheTypeV;
+    params.enable_chat_template = enableChatTemplate;
     params.progress_callback = nullptr;
     
     env->DeleteLocalRef(paramsClass);
@@ -129,6 +134,8 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     jfieldID promptField = env->GetFieldID(paramsClass, "prompt", "Ljava/lang/String;");
     jfieldID temperatureField = env->GetFieldID(paramsClass, "temperature", "F");
     jfieldID maxTokensField = env->GetFieldID(paramsClass, "maxTokens", "I");
+    jfieldID nThreadsField = env->GetFieldID(paramsClass, "nThreads", "Ljava/lang/Integer;");
+    jfieldID seedField = env->GetFieldID(paramsClass, "seed", "I");
     jfieldID topKField = env->GetFieldID(paramsClass, "topK", "I");
     jfieldID topPField = env->GetFieldID(paramsClass, "topP", "F");
     jfieldID minPField = env->GetFieldID(paramsClass, "minP", "F");
@@ -142,6 +149,12 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     jfieldID mirostatEtaField = env->GetFieldID(paramsClass, "mirostatEta", "F");
     jfieldID ignoreEosField = env->GetFieldID(paramsClass, "ignoreEos", "Z");
     jfieldID grammarField = env->GetFieldID(paramsClass, "grammar", "Ljava/lang/String;");
+    jfieldID nProbsField = env->GetFieldID(paramsClass, "nProbs", "I");
+    jfieldID jsonSchemaField = env->GetFieldID(paramsClass, "jsonSchema", "Ljava/lang/String;");
+    jfieldID toolsField = env->GetFieldID(paramsClass, "tools", "Ljava/lang/String;");
+    jfieldID parallelToolCallsField = env->GetFieldID(paramsClass, "parallelToolCalls", "Z");
+    jfieldID toolChoiceField = env->GetFieldID(paramsClass, "toolChoice", "Ljava/lang/String;");
+    jfieldID tokenCallbackField = env->GetFieldID(paramsClass, "tokenCallback", "Lkotlin/jvm/functions/Function1;");
     
     if (promptField == nullptr || temperatureField == nullptr || maxTokensField == nullptr) {
         env->DeleteLocalRef(paramsClass);
@@ -152,6 +165,23 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     jstring promptStr = (jstring)env->GetObjectField(completionParamsObj, promptField);
     jfloat temperature = env->GetFloatField(completionParamsObj, temperatureField);
     jint maxTokens = env->GetIntField(completionParamsObj, maxTokensField);
+    
+    // Extract nullable nThreads
+    jint nThreads = -1;
+    if (nThreadsField != nullptr) {
+        jobject nThreadsObj = env->GetObjectField(completionParamsObj, nThreadsField);
+        if (nThreadsObj != nullptr) {
+            jclass integerClass = env->GetObjectClass(nThreadsObj);
+            jmethodID intValueMethod = env->GetMethodID(integerClass, "intValue", "()I");
+            if (intValueMethod != nullptr) {
+                nThreads = env->CallIntMethod(nThreadsObj, intValueMethod);
+            }
+            env->DeleteLocalRef(integerClass);
+            env->DeleteLocalRef(nThreadsObj);
+        }
+    }
+    
+    jint seed = (seedField != nullptr) ? env->GetIntField(completionParamsObj, seedField) : -1;
     jint topK = (topKField != nullptr) ? env->GetIntField(completionParamsObj, topKField) : 40;
     jfloat topP = (topPField != nullptr) ? env->GetFloatField(completionParamsObj, topPField) : 0.95f;
     jfloat minP = (minPField != nullptr) ? env->GetFloatField(completionParamsObj, minPField) : 0.05f;
@@ -165,6 +195,11 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     jfloat mirostatEta = (mirostatEtaField != nullptr) ? env->GetFloatField(completionParamsObj, mirostatEtaField) : 0.1f;
     jboolean ignoreEos = (ignoreEosField != nullptr) ? env->GetBooleanField(completionParamsObj, ignoreEosField) : false;
     jstring grammarStr = (grammarField != nullptr) ? (jstring)env->GetObjectField(completionParamsObj, grammarField) : nullptr;
+    jint nProbs = (nProbsField != nullptr) ? env->GetIntField(completionParamsObj, nProbsField) : 0;
+    jstring jsonSchemaStr = (jsonSchemaField != nullptr) ? (jstring)env->GetObjectField(completionParamsObj, jsonSchemaField) : nullptr;
+    jstring toolsStr = (toolsField != nullptr) ? (jstring)env->GetObjectField(completionParamsObj, toolsField) : nullptr;
+    jboolean parallelToolCalls = (parallelToolCallsField != nullptr) ? env->GetBooleanField(completionParamsObj, parallelToolCallsField) : false;
+    jstring toolChoiceStr = (toolChoiceField != nullptr) ? (jstring)env->GetObjectField(completionParamsObj, toolChoiceField) : nullptr;
     
     // Extract stop sequences
     std::vector<std::string> stopSequences;
@@ -280,22 +315,12 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
         useJsonResponse = env->GetBooleanField(completionParamsObj, useJsonResponseField);
     }
     
-    // Extract chatTemplate (not used in C API yet)
-    jfieldID chatTemplateField = env->GetFieldID(paramsClass, "chatTemplate", "Ljava/lang/String;");
-    if (chatTemplateField != nullptr) {
-        jstring chatTemplateStr = (jstring)env->GetObjectField(completionParamsObj, chatTemplateField);
-        if (chatTemplateStr != nullptr) {
-            const char* chatTemplate = getStringUTFChars(env, chatTemplateStr);
-            // Note: chatTemplate is not currently passed to C API as it doesn't support it
-            // The template is handled in the Kotlin layer
-            releaseStringUTFChars(env, chatTemplateStr, chatTemplate);
-            env->DeleteLocalRef(chatTemplateStr);
-        }
-    }
-    
     // Convert strings
     prompt = getStringUTFChars(env, promptStr);
     grammar = (grammarField != nullptr && grammarStr != nullptr) ? getStringUTFChars(env, grammarStr) : nullptr;
+    const char* jsonSchema = (jsonSchemaField != nullptr && jsonSchemaStr != nullptr) ? getStringUTFChars(env, jsonSchemaStr) : nullptr;
+    const char* tools = (toolsField != nullptr && toolsStr != nullptr) ? getStringUTFChars(env, toolsStr) : nullptr;
+    const char* toolChoice = (toolChoiceField != nullptr && toolChoiceStr != nullptr) ? getStringUTFChars(env, toolChoiceStr) : nullptr;
     
     // Set params
     memset(&params, 0, sizeof(llama_mobile_completion_params_c_t));
@@ -307,6 +332,10 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     
     params.temperature = temperature;
     params.n_predict = maxTokens;
+    if (nThreads != -1) {
+        params.n_threads = nThreads;
+    }
+    params.seed = seed;
     params.top_k = topK;
     params.top_p = topP;
     params.min_p = minP;
@@ -320,6 +349,11 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     params.mirostat_eta = mirostatEta;
     params.ignore_eos = ignoreEos;
     params.grammar = grammar;
+    params.n_probs = nProbs;
+    params.json_schema = jsonSchema;
+    params.tools = tools;
+    params.parallel_tool_calls = parallelToolCalls;
+    params.tool_choice = toolChoice;
     
     // Set chat messages
     if (!chatMessages.empty()) {
@@ -354,6 +388,9 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     env->DeleteLocalRef(paramsClass);
     env->DeleteLocalRef(promptStr);
     if (grammarStr != nullptr) env->DeleteLocalRef(grammarStr);
+    if (jsonSchemaStr != nullptr) env->DeleteLocalRef(jsonSchemaStr);
+    if (toolsStr != nullptr) env->DeleteLocalRef(toolsStr);
+    if (toolChoiceStr != nullptr) env->DeleteLocalRef(toolChoiceStr);
     
     return true;
 }
