@@ -73,6 +73,18 @@ class LlamaMobileFlutterSdkPlugin :
                 "freeTTSModel" -> handleFreeTTSModel(call, result)
                 "saveAudioToWav" -> handleSaveAudioToWav(call, result)
                 "initMultimodal" -> handleInitMultimodal(call, result)
+                "releaseMultimodal" -> handleReleaseMultimodal(call, result)
+                "initVocoder" -> handleInitVocoder(call, result)
+                "releaseVocoder" -> handleReleaseVocoder(call, result)
+                "clearConversation" -> handleClearConversation(call, result)
+                "isConversationActive" -> handleIsConversationActive(call, result)
+                "removeLoraAdapters" -> handleRemoveLoraAdapters(call, result)
+                "generateAudioFromText" -> handleGenerateAudioFromText(call, result)
+                "getFormattedAudioCompletion" -> handleGetFormattedAudioCompletion(call, result)
+                "getAudioGuideTokens" -> handleGetAudioGuideTokens(call, result)
+                "setGuideTokens" -> handleSetGuideTokens(call, result)
+                "decodeAudioTokens" -> handleDecodeAudioTokens(call, result)
+                "setLogLevel" -> handleSetLogLevel(call, result)
                 "downloadModel" -> handleDownloadModel(call, result)
                 "downloadHfFile" -> handleDownloadHfFile(call, result)
                 "generateOpenAICompletion" -> handleGenerateOpenAICompletion(call, result)
@@ -82,11 +94,6 @@ class LlamaMobileFlutterSdkPlugin :
                 "getModelSize" -> handleGetModelSize(call, result)
                 "getModelParametersCount" -> handleGetModelParametersCount(call, result)
                 "getLoadedLoraAdapters" -> handleGetLoadedLoraAdapters(call, result)
-                "listFiles" -> handleListFiles(call, result)
-                "listModels" -> handleListModels(call, result)
-                "getJsonGrammar" -> handleGetJsonGrammar(call, result)
-                "getArithmeticGrammar" -> handleGetArithmeticGrammar(call, result)
-                "getCGrammar" -> handleGetCGrammar(call, result)
                 "isMultimodalEnabled" -> handleIsMultimodalEnabled(call, result)
                 "supportsVision" -> handleSupportsVision(call, result)
                 "supportsAudio" -> handleSupportsAudio(call, result)
@@ -151,14 +158,24 @@ class LlamaMobileFlutterSdkPlugin :
         val cacheTypeV = call.argument<String>("cacheTypeV")
 
         val initParams = LlamaMobile.InitParams(
-            modelPath = modelPath,
-            nCtx = nCtx,
-            chatTemplate = chatTemplate,
-            systemPrompt = systemPrompt,
-            nBatch = nBatch,
-            nUBatch = nUBatch,
-            nGpuLayers = nGpuLayers,
-            embedding = embedding
+            modelPath,
+            nCtx,
+            chatTemplate,
+            systemPrompt,
+            nBatch,
+            nUBatch,
+            nGpuLayers,
+            nThreads,
+            useMmap,
+            useMlock,
+            embedding,
+            poolingType,
+            embdNormalize,
+            flashAttention,
+            cacheTypeK,
+            cacheTypeV,
+            true, // enableChatTemplate
+            null // progressCallback
         )
 
         val contextHandle = LlamaMobile.initContext(initParams)
@@ -212,38 +229,42 @@ class LlamaMobileFlutterSdkPlugin :
         val chatTemplate = params["chatTemplate"] as? String
 
         val completionParams = LlamaMobile.CompletionParams(
-            prompt = prompt,
-            maxTokens = maxTokens,
-            temperature = temperature,
-            topK = topK,
-            topP = topP,
-            minP = minP,
-            typicalP = typicalP,
-            penaltyLastN = penaltyLastN,
-            penaltyRepeat = penaltyRepeat,
-            penaltyFreq = penaltyFreq,
-            penaltyPresent = penaltyPresent,
-            mirostat = mirostat,
-            mirostatTau = mirostatTau,
-            mirostatEta = mirostatEta,
-            ignoreEos = ignoreEos,
-            stopSequences = stopSequences,
-            grammar = grammar,
-            useJsonResponse = useJsonResponse
+            prompt,
+            temperature,
+            maxTokens,
+            null, // nThreads
+            -1, // seed
+            topK,
+            topP.toDouble(),
+            minP.toDouble(),
+            typicalP.toDouble(),
+            penaltyLastN,
+            penaltyRepeat.toDouble(),
+            penaltyFreq.toDouble(),
+            penaltyPresent.toDouble(),
+            mirostat,
+            mirostatTau.toDouble(),
+            mirostatEta.toDouble(),
+            ignoreEos,
+            0, // nProbs
+            grammar,
+            stopSequences,
+            emptyList(), // mediaPaths
+            null // tokenCallback
         )
 
         val completion = LlamaMobile.generateCompletion(contextHandle, completionParams)
 
         if (completion != null) {
             result.success(mapOf(
-                "text" to completion.text,
-                "tokensGenerated" to completion.tokensGenerated,
-                "tokensEvaluated" to completion.tokensEvaluated,
-                "truncated" to completion.truncated,
-                "stoppedEos" to completion.stoppedEos,
-                "stoppedWord" to completion.stoppedWord,
-                "stoppedLimit" to completion.stoppedLimit,
-                "stoppingWord" to completion.stoppingWord
+                "text" to completion.getText(),
+                "tokensGenerated" to completion.getTokensGenerated(),
+                "tokensEvaluated" to completion.getTokensEvaluated(),
+                "truncated" to completion.isTruncated(),
+                "stoppedEos" to completion.isStoppedEos(),
+                "stoppedWord" to completion.isStoppedWord(),
+                "stoppedLimit" to completion.isStoppedLimit(),
+                "stoppingWord" to completion.getStoppingWord()
             ))
         } else {
             result.error("COMPLETION_FAILED", "Failed to generate completion", null)
@@ -286,39 +307,42 @@ class LlamaMobileFlutterSdkPlugin :
         }
 
         val completionParams = LlamaMobile.CompletionParams(
-            prompt = "$prompt\n",
-            maxTokens = maxTokens,
-            temperature = temperature,
-            topK = topK,
-            topP = topP,
-            minP = minP,
-            typicalP = typicalP,
-            penaltyLastN = penaltyLastN,
-            penaltyRepeat = penaltyRepeat,
-            penaltyFreq = penaltyFreq,
-            penaltyPresent = penaltyPresent,
-            mirostat = mirostat,
-            mirostatTau = mirostatTau,
-            mirostatEta = mirostatEta,
-            ignoreEos = ignoreEos,
-            stopSequences = stopSequences,
-            grammar = grammar,
-            useJsonResponse = useJsonResponse,
-            mediaPaths = mediaPaths
+            "$prompt\n",
+            temperature,
+            maxTokens,
+            null, // nThreads
+            -1, // seed
+            topK,
+            topP.toDouble(),
+            minP.toDouble(),
+            typicalP.toDouble(),
+            penaltyLastN,
+            penaltyRepeat.toDouble(),
+            penaltyFreq.toDouble(),
+            penaltyPresent.toDouble(),
+            mirostat,
+            mirostatTau.toDouble(),
+            mirostatEta.toDouble(),
+            ignoreEos,
+            0, // nProbs
+            grammar,
+            stopSequences,
+            mediaPaths,
+            null // tokenCallback
         )
 
         val completion = LlamaMobile.generateCompletion(contextHandle, completionParams)
 
         if (completion != null) {
             result.success(mapOf(
-                "text" to completion.text,
-                "tokensGenerated" to completion.tokensGenerated,
-                "tokensEvaluated" to completion.tokensEvaluated,
-                "truncated" to completion.truncated,
-                "stoppedEos" to completion.stoppedEos,
-                "stoppedWord" to completion.stoppedWord,
-                "stoppedLimit" to completion.stoppedLimit,
-                "stoppingWord" to completion.stoppingWord
+                "text" to completion.getText(),
+                "tokensGenerated" to completion.getTokensGenerated(),
+                "tokensEvaluated" to completion.getTokensEvaluated(),
+                "truncated" to completion.isTruncated(),
+                "stoppedEos" to completion.isStoppedEos(),
+                "stoppedWord" to completion.isStoppedWord(),
+                "stoppedLimit" to completion.isStoppedLimit(),
+                "stoppingWord" to completion.getStoppingWord()
             ))
         } else {
             result.error("COMPLETION_FAILED", "Failed to generate multimodal completion", null)
@@ -358,25 +382,34 @@ class LlamaMobileFlutterSdkPlugin :
 
         // Create completion params for conversation
         val completionParams = LlamaMobile.CompletionParams(
-            prompt = "",
-            maxTokens = maxTokens,
-            temperature = temperature,
-            topK = topK,
-            topP = topP,
-            minP = minP,
-            typicalP = typicalP,
-            penaltyLastN = penaltyLastN,
-            penaltyRepeat = penaltyRepeat,
-            penaltyFreq = penaltyFreq,
-            penaltyPresent = penaltyPresent,
-            mirostat = mirostat,
-            mirostatTau = mirostatTau,
-            mirostatEta = mirostatEta,
-            ignoreEos = ignoreEos,
-            stopSequences = stopSequences,
-            grammar = grammar,
-            useJsonResponse = useJsonResponse,
-            chatMessages = messages
+            "",
+            temperature,
+            maxTokens,
+            null, // nThreads
+            -1, // seed
+            topK,
+            topP.toDouble(),
+            minP.toDouble(),
+            typicalP.toDouble(),
+            penaltyLastN,
+            penaltyRepeat.toDouble(),
+            penaltyFreq.toDouble(),
+            penaltyPresent.toDouble(),
+            mirostat,
+            mirostatTau.toDouble(),
+            mirostatEta.toDouble(),
+            ignoreEos,
+            0, // nProbs
+            grammar,
+            stopSequences,
+            emptyList(), // mediaPaths
+            null, // tokenCallback
+            messages, // chatMessages
+            useJsonResponse,
+            null, // jsonSchema
+            null, // tools
+            false, // parallelToolCalls
+            null // toolChoice
         )
 
         // Use generateCompletion with chatMessages for conversation
@@ -386,10 +419,10 @@ class LlamaMobileFlutterSdkPlugin :
             // For conversation result, we can use the completion data
             // If we need conversation-specific metrics, we might need to use generateResponse
             result.success(mapOf(
-                "text" to completion.text,
+                "text" to completion.getText(),
                 "timeToFirstToken" to -1, // Not available from completion
                 "totalTime" to -1, // Not available from completion
-                "tokensGenerated" to completion.tokensGenerated
+                "tokensGenerated" to completion.getTokensGenerated()
             ))
         } else {
             result.error("CONVERSATION_FAILED", "Failed to generate conversation", null)
@@ -403,44 +436,54 @@ class LlamaMobileFlutterSdkPlugin :
         val chatTemplate = call.argument<String>("chatTemplate")
         val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
 
-        // Convert messages to JSON string
-        val messagesArray = JSONArray()
-        messages.forEach { msg ->
-            val msgObj = JSONObject()
-            msgObj.put("role", msg["role"])
-            msgObj.put("content", msg["content"])
-            messagesArray.put(msgObj)
+        if (chatTemplate != null) {
+            var formattedPrompt = StringBuilder()
+            
+            for (message in messages) {
+                val role = message["role"] ?: continue
+                val content = message["content"] ?: continue
+                
+                var messageTemplate = chatTemplate
+                messageTemplate = messageTemplate.replace("{{role}}", role)
+                messageTemplate = messageTemplate.replace("{{content}}", content)
+                formattedPrompt.append(messageTemplate)
+            }
+            
+            var assistantTurnTemplate = chatTemplate
+            assistantTurnTemplate = assistantTurnTemplate.replace("{{role}}", "assistant")
+            
+            val contentPlaceholderIndex = assistantTurnTemplate.indexOf("{{content}}")
+            if (contentPlaceholderIndex >= 0) {
+                assistantTurnTemplate = assistantTurnTemplate.substring(0, contentPlaceholderIndex)
+            }
+            
+            assistantTurnTemplate = assistantTurnTemplate.trim()
+            formattedPrompt.append(assistantTurnTemplate).append("\n")
+            
+            result.success(formattedPrompt.toString())
+        } else {
+            result.error("TEMPLATE_MISSING", "No chat template provided", null)
         }
-        val messagesJson = messagesArray.toString()
-
-        val formatted = LlamaMobile.formatChatMessages(contextHandle, messagesJson, chatTemplate)
-        result.success(formatted)
     }
 
     // MARK: - Utility Methods
     private fun handleLoadGrammar(call: MethodCall, result: Result) {
         val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
-        val grammarName = call.argument<String>("grammarName") ?: throw IllegalArgumentException("grammarName is required")
+        val grammarPath = call.argument<String>("grammarPath") ?: throw IllegalArgumentException("grammarPath is required")
         val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
 
-        // Convert string to GrammarName enum
-        val grammarEnum = try {
-            LlamaMobile.GrammarName.valueOf(grammarName.uppercase())
-        } catch (e: IllegalArgumentException) {
-            result.error("INVALID_GRAMMAR", "Unknown grammar name: $grammarName", null)
-            return
-        }
-
-        // Load grammar content from Android assets
-        val grammarContent = try {
-            val inputStream = context.assets.open("grammars/${grammarEnum.name.lowercase()}.gbnf")
-            inputStream.bufferedReader().use { it.readText() }
+        // Read grammar file content directly
+        try {
+            val grammarFile = java.io.File(grammarPath)
+            if (!grammarFile.exists()) {
+                result.error("GRAMMAR_FILE_NOT_FOUND", "Grammar file not found: $grammarPath", null)
+                return
+            }
+            val grammarContent = grammarFile.readText()
+            result.success(grammarContent)
         } catch (e: Exception) {
-            result.error("GRAMMAR_LOAD_FAILED", "Failed to load grammar file: ${e.message}", null)
-            return
+            result.error("GRAMMAR_LOAD_FAILED", "Failed to load grammar from path: $grammarPath, error: ${e.message}", null)
         }
-
-        result.success(grammarContent)
     }
 
     // MARK: - Embedding Methods
@@ -492,7 +535,7 @@ class LlamaMobileFlutterSdkPlugin :
         val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
 
         // Create a LoraAdapter and apply it
-        val adapter = LlamaMobile.LoraAdapter(path = adapterPath, scale = scale)
+        val adapter = LlamaMobile.LoraAdapter(adapterPath, scale)
         val success = LlamaMobile.applyLoraAdapters(contextHandle, arrayOf(adapter))
         result.success(success)
     }
@@ -556,10 +599,9 @@ class LlamaMobileFlutterSdkPlugin :
 
         // Step 2: Generate audio content using text completion
         val completionParams = LlamaMobile.CompletionParams(
-            prompt = formattedPrompt,
-            maxTokens = 200, // Generate appropriate audio content
-            temperature = 0.0f, // Deterministic output
-            ignoreEos = true // Don't stop at end-of-sequence
+            formattedPrompt,
+            0.0f, // temperature - Deterministic output
+            200 // maxTokens - Generate appropriate audio content
         )
 
         val completionResult = LlamaMobile.generateCompletion(contextHandle, completionParams)
@@ -656,6 +698,122 @@ class LlamaMobileFlutterSdkPlugin :
         result.success(success)
     }
 
+    private fun handleReleaseMultimodal(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        LlamaMobile.releaseMultimodal(contextHandle)
+        result.success(null)
+    }
+
+    private fun handleInitVocoder(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val vocoderModelPath = call.argument<String>("vocoderModelPath") ?: throw IllegalArgumentException("vocoderModelPath is required")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val success = LlamaMobile.initVocoder(contextHandle, vocoderModelPath)
+        result.success(success)
+    }
+
+    private fun handleReleaseVocoder(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        LlamaMobile.releaseVocoder(contextHandle)
+        result.success(null)
+    }
+
+    private fun handleClearConversation(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        LlamaMobile.clearConversation(contextHandle)
+        result.success(null)
+    }
+
+    private fun handleIsConversationActive(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val isActive = LlamaMobile.isConversationActive(contextHandle)
+        result.success(isActive)
+    }
+
+    private fun handleRemoveLoraAdapters(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        LlamaMobile.removeLoraAdapters(contextHandle)
+        result.success(null)
+    }
+
+    private fun handleGenerateAudioFromText(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val text = call.argument<String>("text") ?: throw IllegalArgumentException("text is required")
+        val speakerJson = call.argument<String>("speakerJson") ?: throw IllegalArgumentException("speakerJson is required")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val audioSamples = LlamaMobile.generateAudioFromText(contextHandle, text, speakerJson)
+        if (audioSamples != null) {
+            result.success(audioSamples.toList())
+        } else {
+            result.error("AUDIO_GENERATION_FAILED", "Failed to generate audio from text", null)
+        }
+    }
+
+    private fun handleGetFormattedAudioCompletion(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val speakerJson = call.argument<String>("speakerJson") ?: throw IllegalArgumentException("speakerJson is required")
+        val textToSpeak = call.argument<String>("textToSpeak") ?: throw IllegalArgumentException("textToSpeak is required")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val formattedCompletion = LlamaMobile.getFormattedAudioCompletion(contextHandle, speakerJson, textToSpeak)
+        result.success(formattedCompletion)
+    }
+
+    private fun handleGetAudioGuideTokens(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val textToSpeak = call.argument<String>("textToSpeak") ?: throw IllegalArgumentException("textToSpeak is required")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val guideTokens = LlamaMobile.getAudioGuideTokens(contextHandle, textToSpeak)
+        if (guideTokens != null) {
+            result.success(guideTokens.toList())
+        } else {
+            result.error("GET_GUIDE_TOKENS_FAILED", "Failed to get audio guide tokens", null)
+        }
+    }
+
+    private fun handleSetGuideTokens(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val tokens = call.argument<List<Int>>("tokens") ?: throw IllegalArgumentException("tokens is required")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val intArray = tokens.toIntArray()
+        LlamaMobile.setGuideTokens(contextHandle, intArray)
+        result.success(null)
+    }
+
+    private fun handleDecodeAudioTokens(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val tokens = call.argument<List<Int>>("tokens") ?: throw IllegalArgumentException("tokens is required")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val intArray = tokens.toIntArray()
+        val audioSamples = LlamaMobile.decodeAudioTokens(contextHandle, intArray)
+        if (audioSamples != null) {
+            result.success(audioSamples.toList())
+        } else {
+            result.error("DECODE_AUDIO_TOKENS_FAILED", "Failed to decode audio tokens", null)
+        }
+    }
+
+    private fun handleSetLogLevel(call: MethodCall, result: Result) {
+        val level = call.argument<Int>("level") ?: throw IllegalArgumentException("level is required")
+
+        result.success(null)
+    }
+
     private fun handleSaveAudioToWav(call: MethodCall, result: Result) {
         val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
         val filePath = call.argument<String>("filePath") ?: throw IllegalArgumentException("filePath is required")
@@ -675,20 +833,19 @@ class LlamaMobileFlutterSdkPlugin :
     private fun handleGenerateOpenAICompletion(call: MethodCall, result: Result) {
         val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
         val openAIJSON = call.argument<String>("openAIJSON") ?: throw IllegalArgumentException("openAIJSON is required")
-        val grammar = call.argument<String>("grammar")
         val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
 
-        val completionResult = LlamaMobile.generateOpenAICompletion(contextHandle, openAIJSON, grammar)
+        val completionResult = LlamaMobile.generateOpenAICompletion(contextHandle, openAIJSON)
         if (completionResult != null) {
             result.success(mapOf(
-                "text" to completionResult.text,
-                "tokensGenerated" to completionResult.tokensGenerated,
-                "tokensEvaluated" to completionResult.tokensEvaluated,
-                "truncated" to completionResult.truncated,
-                "stoppedEos" to completionResult.stoppedEos,
-                "stoppedWord" to completionResult.stoppedWord,
-                "stoppedLimit" to completionResult.stoppedLimit,
-                "stoppingWord" to completionResult.stoppingWord
+                "text" to completionResult.getText(),
+                "tokensGenerated" to completionResult.getTokensGenerated(),
+                "tokensEvaluated" to completionResult.getTokensEvaluated(),
+                "truncated" to completionResult.isTruncated(),
+                "stoppedEos" to completionResult.isStoppedEos(),
+                "stoppedWord" to completionResult.isStoppedWord(),
+                "stoppedLimit" to completionResult.isStoppedLimit(),
+                "stoppingWord" to completionResult.getStoppingWord()
             ))
         } else {
             result.error("COMPLETION_FAILED", "Failed to generate completion", null)
@@ -721,46 +878,45 @@ class LlamaMobileFlutterSdkPlugin :
         val useJsonResponse = params["useJsonResponse"] as? Boolean ?: false
 
         val completionParams = LlamaMobile.CompletionParams(
-            prompt = prompt,
-            maxTokens = maxTokens,
-            temperature = temperature,
-            topK = topK,
-            topP = topP,
-            minP = minP,
-            typicalP = typicalP,
-            penaltyLastN = penaltyLastN,
-            penaltyRepeat = penaltyRepeat,
-            penaltyFreq = penaltyFreq,
-            penaltyPresent = penaltyPresent,
-            mirostat = mirostat,
-            mirostatTau = mirostatTau,
-            mirostatEta = mirostatEta,
-            ignoreEos = ignoreEos,
-            stopSequences = stopSequences,
-            grammar = grammar,
-            useJsonResponse = useJsonResponse
+            prompt,
+            temperature,
+            maxTokens,
+            null, // nThreads
+            -1, // seed
+            topK,
+            topP.toDouble(),
+            minP.toDouble(),
+            typicalP.toDouble(),
+            penaltyLastN,
+            penaltyRepeat.toDouble(),
+            penaltyFreq.toDouble(),
+            penaltyPresent.toDouble(),
+            mirostat,
+            mirostatTau.toDouble(),
+            mirostatEta.toDouble(),
+            ignoreEos,
+            0, // nProbs
+            grammar,
+            stopSequences,
+            emptyList(), // mediaPaths
+            null // tokenCallback
         )
 
         // Run generation in background thread
         Thread {
             try {
-                val completion = LlamaMobile.generateCompletion(contextHandle, completionParams) { token, progress ->
-                    // Send token to Flutter
-                    tokenEventSink?.success(token)
-                    // Send progress to Flutter
-                    progress?.let { progressEventSink?.success(it) }
-                }
+                val completion = LlamaMobile.generateCompletion(contextHandle, completionParams)
 
                 if (completion != null) {
                     result.success(mapOf(
-                        "text" to completion.text,
-                        "tokensGenerated" to completion.tokensGenerated,
-                        "tokensEvaluated" to completion.tokensEvaluated,
-                        "truncated" to completion.truncated,
-                        "stoppedEos" to completion.stoppedEos,
-                        "stoppedWord" to completion.stoppedWord,
-                        "stoppedLimit" to completion.stoppedLimit,
-                        "stoppingWord" to completion.stoppingWord
+                        "text" to completion.getText(),
+                        "tokensGenerated" to completion.getTokensGenerated(),
+                        "tokensEvaluated" to completion.getTokensEvaluated(),
+                        "truncated" to completion.isTruncated(),
+                        "stoppedEos" to completion.isStoppedEos(),
+                        "stoppedWord" to completion.isStoppedWord(),
+                        "stoppedLimit" to completion.isStoppedLimit(),
+                        "stoppingWord" to completion.getStoppingWord()
                     ))
                 } else {
                     result.error("COMPLETION_FAILED", "Failed to generate completion", null)
@@ -780,23 +936,18 @@ class LlamaMobileFlutterSdkPlugin :
         // Run generation in background thread
         Thread {
             try {
-                val completion = LlamaMobile.generateOpenAICompletion(contextHandle, openAIJSON, grammar) { token, progress ->
-                    // Send token to Flutter
-                    tokenEventSink?.success(token)
-                    // Send progress to Flutter
-                    progress?.let { progressEventSink?.success(it) }
-                }
+                val completion = LlamaMobile.generateOpenAICompletion(contextHandle, openAIJSON)
 
                 if (completion != null) {
                     result.success(mapOf(
-                        "text" to completion.text,
-                        "tokensGenerated" to completion.tokensGenerated,
-                        "tokensEvaluated" to completion.tokensEvaluated,
-                        "truncated" to completion.truncated,
-                        "stoppedEos" to completion.stoppedEos,
-                        "stoppedWord" to completion.stoppedWord,
-                        "stoppedLimit" to completion.stoppedLimit,
-                        "stoppingWord" to completion.stoppingWord
+                        "text" to completion.getText(),
+                        "tokensGenerated" to completion.getTokensGenerated(),
+                        "tokensEvaluated" to completion.getTokensEvaluated(),
+                        "truncated" to completion.isTruncated(),
+                        "stoppedEos" to completion.isStoppedEos(),
+                        "stoppedWord" to completion.isStoppedWord(),
+                        "stoppedLimit" to completion.isStoppedLimit(),
+                        "stoppingWord" to completion.getStoppingWord()
                     ))
                 } else {
                     result.error("OPENAI_COMPLETION_FAILED", "Failed to generate OpenAI completion", null)
@@ -865,36 +1016,30 @@ class LlamaMobileFlutterSdkPlugin :
         result.success(adapters)
     }
 
-    // MARK: - File & Model Methods
-    private fun handleListFiles(call: MethodCall, result: Result) {
-        val directory = call.argument<String>("directory") ?: throw IllegalArgumentException("directory is required")
-        val recursive = call.argument<Boolean>("recursive") ?: false
-        val pattern = call.argument<String>("pattern")
-
-        val files = LlamaMobile.listFiles(directory, recursive, pattern)
-        result.success(files)
-    }
-
-    private fun handleListModels(call: MethodCall, result: Result) {
-        val models = LlamaMobile.listModels()
-        result.success(models)
-    }
-
     // MARK: - Download Methods
     private fun handleDownloadHfFile(call: MethodCall, result: Result) {
         val repoId = call.argument<String>("repoId") ?: throw IllegalArgumentException("repoId is required")
         val filename = call.argument<String>("filename") ?: throw IllegalArgumentException("filename is required")
         val localPath = call.argument<String>("localPath") ?: throw IllegalArgumentException("localPath is required")
         val bearerToken = call.argument<String>("bearerToken")
+        val offline = call.argument<Boolean>("offline") ?: false
 
         // Run download in background thread
         Thread {
             try {
-                val resultObj = LlamaMobile.downloadHfFile(repoId, filename, localPath, bearerToken)
+                val resultObj = LlamaMobile.downloadHfFile(
+                    repoId,
+                    filename,
+                    localPath,
+                    bearerToken,
+                    offline
+                ) { progress, status, downloadedBytes, totalBytes ->
+                    progressEventSink?.success(progress)
+                }
                 result.success(mapOf(
-                    "success" to resultObj.success,
-                    "localPath" to resultObj.localPath,
-                    "errorMessage" to resultObj.errorMessage
+                    "success" to (resultObj?.isSuccess() ?: false),
+                    "localPath" to (resultObj?.getLocalPath() ?: ""),
+                    "errorMessage" to (resultObj?.getErrorMessage() ?: "")
                 ))
             } catch (e: Exception) {
                 result.error("DOWNLOAD_ERROR", "An error occurred: ${e.message}", null)
@@ -905,79 +1050,27 @@ class LlamaMobileFlutterSdkPlugin :
     private fun handleDownloadModel(call: MethodCall, result: Result) {
         val url = call.argument<String>("url") ?: throw IllegalArgumentException("url is required")
         val localPath = call.argument<String>("localPath") ?: throw IllegalArgumentException("localPath is required")
-        val username = call.argument<String>("username")
-        val password = call.argument<String>("password")
-        val headers = call.argument<Map<String, String>>("headers")
 
-        // Create download parameters
-        val downloadParams = LlamaMobile.DownloadParams(
-            url = url,
-            localPath = localPath,
-            password = password ?: "", // Use empty string if null
-            headers = headers
-        )
+        // Create download parameters using builder pattern
+        val downloadParamsBuilder = LlamaMobile.DownloadParams.Builder(url, "", localPath)
+        val downloadParams = downloadParamsBuilder.build()
 
         // Run download in background thread
         Thread {
             try {
-                val resultObj = LlamaMobile.downloadModel(downloadParams) { progress ->
-                    // Send progress updates to Flutter
+                val resultObj = LlamaMobile.downloadModel(downloadParams) { progress, status, downloadedBytes, totalBytes ->
                     progressEventSink?.success(progress)
                 }
 
-                if (resultObj != null) {
-                    result.success(mapOf(
-                        "success" to resultObj.success,
-                        "localPath" to resultObj.localPath,
-                        "errorMessage" to resultObj.errorMessage
-                    ))
-                } else {
-                    result.error("DOWNLOAD_FAILED", "Download completed with unknown result", null)
-                }
+                result.success(mapOf(
+                    "success" to (resultObj?.isSuccess() ?: false),
+                    "localPath" to (resultObj?.getLocalPath() ?: ""),
+                    "errorMessage" to (resultObj?.getErrorMessage() ?: "")
+                ))
             } catch (e: Exception) {
-                result.error("DOWNLOAD_ERROR", "An error occurred during download: ${e.message}", null)
+                result.error("DOWNLOAD_ERROR", "An error occurred: ${e.message}", null)
             }
         }.start()
-    }
-
-    // MARK: - Grammar Methods
-    private fun handleGetJsonGrammar(call: MethodCall, result: Result) {
-        // Load grammar content from Android assets
-        val grammarContent = try {
-            val inputStream = context.assets.open("grammars/json.gbnf")
-            inputStream.bufferedReader().use { it.readText() }
-        } catch (e: Exception) {
-            result.error("GRAMMAR_LOAD_FAILED", "Failed to load grammar file: ${e.message}", null)
-            return
-        }
-
-        result.success(grammarContent)
-    }
-
-    private fun handleGetArithmeticGrammar(call: MethodCall, result: Result) {
-        // Load grammar content from Android assets
-        val grammarContent = try {
-            val inputStream = context.assets.open("grammars/arithmetic.gbnf")
-            inputStream.bufferedReader().use { it.readText() }
-        } catch (e: Exception) {
-            result.error("GRAMMAR_LOAD_FAILED", "Failed to load grammar file: ${e.message}", null)
-            return
-        }
-
-        result.success(grammarContent)
-    }
-
-    private fun handleGetCGrammar(call: MethodCall, result: Result) {
-        // Load grammar content from Android assets
-        val grammarContent = try {
-            val inputStream = context.assets.open("grammars/c.gbnf")
-            inputStream.bufferedReader().use { it.readText() }
-        } catch (e: Exception) {
-            result.error("GRAMMAR_LOAD_FAILED", "Failed to load grammar file: ${e.message}", null)
-            return
-        }
-
-        result.success(grammarContent)
     }
 
     // MARK: - Multimodal Methods

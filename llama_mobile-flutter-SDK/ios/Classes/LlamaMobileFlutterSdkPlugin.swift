@@ -54,18 +54,8 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
       handleGetModelParametersCount(call, result: result)
     case "getLoadedLoraAdapters":
       handleGetLoadedLoraAdapters(call, result: result)
-    case "listFiles":
-      handleListFiles(call, result: result)
-    case "listModels":
-      handleListModels(call, result: result)
     case "downloadHfFile":
       handleDownloadHfFile(call, result: result)
-    case "getJsonGrammar":
-      handleGetJsonGrammar(call, result: result)
-    case "getArithmeticGrammar":
-      handleGetArithmeticGrammar(call, result: result)
-    case "getCGrammar":
-      handleGetCGrammar(call, result: result)
     case "isMultimodalEnabled":
       handleIsMultimodalEnabled(call, result: result)
     case "supportsVision":
@@ -101,6 +91,30 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
       handleSaveAudioToWav(call, result: result)
     case "initMultimodal":
       handleInitMultimodal(call, result: result)
+    case "releaseMultimodal":
+      handleReleaseMultimodal(call, result: result)
+    case "initVocoder":
+      handleInitVocoder(call, result: result)
+    case "releaseVocoder":
+      handleReleaseVocoder(call, result: result)
+    case "clearConversation":
+      handleClearConversation(call, result: result)
+    case "isConversationActive":
+      handleIsConversationActive(call, result: result)
+    case "removeLoraAdapters":
+      handleRemoveLoraAdapters(call, result: result)
+    case "generateAudioFromText":
+      handleGenerateAudioFromText(call, result: result)
+    case "getFormattedAudioCompletion":
+      handleGetFormattedAudioCompletion(call, result: result)
+    case "getAudioGuideTokens":
+      handleGetAudioGuideTokens(call, result: result)
+    case "setGuideTokens":
+      handleSetGuideTokens(call, result: result)
+    case "decodeAudioTokens":
+      handleDecodeAudioTokens(call, result: result)
+    case "setLogLevel":
+      handleSetLogLevel(call, result: result)
     case "downloadModel":
       handleDownloadModel(call, result: result)
     case "generateOpenAICompletion":
@@ -365,22 +379,6 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
   }
 
   // MARK: - File & Model Methods
-  private func handleListFiles(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    guard let args = call.arguments as? [String: Any],
-          let directory = args["directoryPath"] as? String else {
-        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
-        return
-    }
-
-    // Note: iOS SDK doesn't currently support this method
-    result([:])
-  }
-
-  private func handleListModels(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    // Note: iOS SDK doesn't currently support this method
-    result([:])
-  }
-
   // MARK: - Download Methods
   private func handleDownloadHfFile(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
@@ -391,28 +389,32 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
         return
     }
 
-    // Note: iOS SDK doesn't currently support this method
+    let bearerToken = args["bearerToken"] as? String
+    let offline = args["offline"] as? Bool ?? false
+
+    let hfParams = LlamaMobile.HuggingFaceDownloadParams(
+        repoID: repoId,
+        filename: filename,
+        destinationPath: localPath,
+        bearerToken: bearerToken,
+        offline: offline,
+        progressCallback: nil
+    )
+
+    let downloader = LlamaMobile(modelPath: "")
+    guard let downloadResult = downloader?.downloadHuggingFaceFile(with: hfParams) else {
+        result([
+            "success": false,
+            "localPath": "",
+            "errorMessage": "Failed to create downloader"
+        ])
+        return
+    }
     result([
-        "success": false,
-        "localPath": "",
-        "errorMessage": "Download not supported on iOS"
+        "success": downloadResult.success,
+        "localPath": downloadResult.localPath,
+        "errorMessage": downloadResult.errorMessage
     ])
-  }
-
-  // MARK: - Grammar Methods
-  private func handleGetJsonGrammar(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    // Note: iOS SDK doesn't currently support this method
-    result("# JSON grammar not supported on iOS")
-  }
-
-  private func handleGetArithmeticGrammar(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    // Note: iOS SDK doesn't currently support this method
-    result("# Arithmetic grammar not supported on iOS")
-  }
-
-  private func handleGetCGrammar(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    // Note: iOS SDK doesn't currently support this method
-    result("# C grammar not supported on iOS")
   }
 
   // MARK: - Multimodal & Audio Methods
@@ -591,7 +593,6 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
     let stopSequences = dict["stopSequences"] as? [String] ?? []
     let grammar = dict["grammar"] as? String
     let useJsonResponse = dict["useJsonResponse"] as? Bool ?? false
-    let chatTemplate = dict["chatTemplate"] as? String
 
     return LlamaMobile.CompletionParams(
       prompt: prompt,
@@ -613,8 +614,7 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
       ignoreEos: ignoreEos,
       stopSequences: stopSequences,
       grammar: grammar,
-      useJsonResponse: useJsonResponse,
-      chatTemplate: chatTemplate
+      useJsonResponse: useJsonResponse
     )
   }
 
@@ -667,13 +667,13 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
   private func handleLoadGrammar(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let contextHandle = args["contextHandle"] as? Int,
-          let grammarName = args["grammarName"] as? String,
+          let grammarPath = args["grammarPath"] as? String,
           let llamaMobile = contexts[contextHandle] else {
       result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
       return
     }
 
-    let grammar = llamaMobile.loadGrammar(named: grammarName)
+    let grammar = llamaMobile.loadGrammar(from: grammarPath)
     result(grammar)
   }
 
@@ -937,40 +937,206 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
         result(success)
     }
 
-  // MARK: - Download Methods
-  private func handleDownloadModel(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    private func handleReleaseMultimodal(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         guard let args = call.arguments as? [String: Any],
-              let url = args["url"] as? String,
-              let localPath = args["localPath"] as? String else {
+              let contextHandle = args["contextHandle"] as? Int,
+              let llamaMobile = contexts[contextHandle] else {
             result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
             return
         }
 
-        let username = args["username"] as? String
-        let password = args["password"] as? String
-        let headers = args["headers"] as? [String: String]
+        llamaMobile.releaseMultimodal()
+        result(nil)
+    }
 
-        let downloadParams = LlamaMobile.DownloadParams(
-            url: url,
-            localPath: localPath,
-            username: username,
-            password: password,
-            headers: headers,
-            progressCallback: nil
-        )
+    private func handleInitVocoder(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let contextHandle = args["contextHandle"] as? Int,
+              let vocoderModelPath = args["vocoderModelPath"] as? String,
+              let llamaMobile = contexts[contextHandle] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
 
-        let initParams = LlamaMobile.InitParams(modelPath: "")
-        if let llamaMobile = LlamaMobile(with: initParams) {
-            let downloadResult = llamaMobile.download(with: downloadParams)
-            result([
-                "success": downloadResult.success,
-                "localPath": downloadResult.localPath,
-                "errorMessage": downloadResult.errorMessage
-            ])
+        let success = llamaMobile.initVocoder(vocoderModelPath: vocoderModelPath)
+        result(success)
+    }
+
+    private func handleReleaseVocoder(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let contextHandle = args["contextHandle"] as? Int,
+              let llamaMobile = contexts[contextHandle] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
+
+        llamaMobile.releaseVocoder()
+        result(nil)
+    }
+
+    private func handleClearConversation(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let contextHandle = args["contextHandle"] as? Int,
+              let llamaMobile = contexts[contextHandle] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
+
+        llamaMobile.clearConversation()
+        result(nil)
+    }
+
+    private func handleIsConversationActive(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let contextHandle = args["contextHandle"] as? Int,
+              let llamaMobile = contexts[contextHandle] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
+
+        let isActive = llamaMobile.isConversationActive()
+        result(isActive)
+    }
+
+    private func handleRemoveLoraAdapters(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let contextHandle = args["contextHandle"] as? Int,
+              let llamaMobile = contexts[contextHandle] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
+
+        llamaMobile.removeLoraAdapters()
+        result(nil)
+    }
+
+    private func handleGenerateAudioFromText(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let contextHandle = args["contextHandle"] as? Int,
+              let text = args["text"] as? String,
+              let speakerJson = args["speakerJson"] as? String,
+              let llamaMobile = contexts[contextHandle] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
+
+        if let audioSamples = llamaMobile.generateAudioFromText(text: text, speakerJson: speakerJson) {
+            result(audioSamples)
         } else {
-            result(FlutterError(code: "DOWNLOAD_FAILED", message: "Failed to initialize LlamaMobile for download", details: nil))
+            result(FlutterError(code: "AUDIO_GENERATION_FAILED", message: "Failed to generate audio from text", details: nil))
         }
     }
+
+    private func handleGetFormattedAudioCompletion(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let contextHandle = args["contextHandle"] as? Int,
+              let speakerJson = args["speakerJson"] as? String,
+              let textToSpeak = args["textToSpeak"] as? String,
+              let llamaMobile = contexts[contextHandle] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
+
+        let formattedCompletion = llamaMobile.getFormattedAudioCompletion(speakerJson: speakerJson, textToSpeak: textToSpeak)
+        result(formattedCompletion)
+    }
+
+    private func handleGetAudioGuideTokens(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let contextHandle = args["contextHandle"] as? Int,
+              let textToSpeak = args["textToSpeak"] as? String,
+              let llamaMobile = contexts[contextHandle] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
+
+        if let guideTokens = llamaMobile.getAudioGuideTokens(textToSpeak: textToSpeak) {
+            result(guideTokens.map { Int($0) })
+        } else {
+            result(FlutterError(code: "GET_GUIDE_TOKENS_FAILED", message: "Failed to get audio guide tokens", details: nil))
+        }
+    }
+
+    private func handleSetGuideTokens(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let contextHandle = args["contextHandle"] as? Int,
+              let tokens = args["tokens"] as? [Int],
+              let llamaMobile = contexts[contextHandle] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
+
+        let int32Tokens = tokens.map { Int32($0) }
+        llamaMobile.setGuideTokens(tokens: int32Tokens)
+        result(nil)
+    }
+
+    private func handleDecodeAudioTokens(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let contextHandle = args["contextHandle"] as? Int,
+              let tokens = args["tokens"] as? [Int],
+              let llamaMobile = contexts[contextHandle] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
+
+        let int32Tokens = tokens.map { Int32($0) }
+        if let audioSamples = llamaMobile.decodeAudioTokens(tokens: int32Tokens) {
+            result(audioSamples)
+        } else {
+            result(FlutterError(code: "DECODE_AUDIO_TOKENS_FAILED", message: "Failed to decode audio tokens", details: nil))
+        }
+    }
+
+    private func handleSetLogLevel(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let level = args["level"] as? Int else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
+
+        let logLevel = LogLevel(rawValue: level) ?? .info
+        setLogLevel(logLevel)
+        result(nil)
+    }
+
+  // MARK: - Download Methods
+  private func handleDownloadModel(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let url = args["url"] as? String,
+          let localPath = args["localPath"] as? String else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        return
+    }
+
+    let username = args["username"] as? String
+    let password = args["password"] as? String
+    let headers = args["headers"] as? [String: String]
+
+    let downloadParams = LlamaMobile.DownloadParams(
+        url: url,
+        localPath: localPath,
+        username: username,
+        password: password,
+        headers: headers,
+        progressCallback: nil
+    )
+
+    let downloader = LlamaMobile(modelPath: "")
+    guard let downloadResult = downloader?.download(with: downloadParams) else {
+        result([
+            "success": false,
+            "localPath": "",
+            "errorMessage": "Failed to create downloader"
+        ])
+        return
+    }
+    result([
+        "success": downloadResult.success,
+        "localPath": downloadResult.localPath,
+        "errorMessage": downloadResult.errorMessage
+    ])
+  }
 
   // MARK: - OpenAI Completion Methods
   private func handleGenerateOpenAICompletion(_ call: FlutterMethodCall, result: @escaping FlutterResult) {

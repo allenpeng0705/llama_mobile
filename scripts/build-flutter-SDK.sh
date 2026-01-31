@@ -2,8 +2,54 @@
 
 # ============================================================================
 # FLUTTER SDK BUILD SCRIPT
-# Builds a self-contained Flutter SDK with bundled iOS and Android dependencies
-# Output: llama_mobile/llama_mobile-flutter-SDK/
+# ============================================================================
+# Purpose: Builds a self-contained Flutter Plugin SDK for Flutter developers
+#
+# IMPORTANT: This is a FLUTTER PLUGIN, not a Flutter Module!
+# 
+# Distribution Format:
+# - This plugin is distributed as source code to Flutter developers
+# - Flutter developers add it as a dependency in pubspec.yaml
+# - Flutter build system automatically handles AAR (Android) and xcframework (iOS) generation
+# - No manual AAR or xcframework building required
+#
+# Key Features:
+# - Persistent timestamped backups of SDK folders (keeps last 5 backups)
+# - Copies iOS framework from llama_mobile-ios (requires build-ios-framework.sh to be run first)
+# - Copies iOS Swift wrapper from llama_mobile-ios-SDK
+# - Copies Android static libraries from llama_mobile-android (requires build-android-lib.sh to be run first)
+# - Copies Android source files (Java) from llama_mobile-android-SDK
+# - Copies Android JNI files from llama_mobile-android-SDK
+# - Ensures SDKs are build-ready with proper directory structure
+# - Creates centralized output directory with all required files
+#
+# Output Directories:
+# - llama_mobile/llama_mobile-flutter-SDK/ (Self-contained Flutter plugin)
+# - llama_mobile/output/llama_mobile-flutter-SDK/ (Distribution-ready plugin)
+#
+# Backup Directory:
+# - llama_mobile/scripts/sdk_backup/ (timestamped backups)
+#
+# How Developers Use This Plugin:
+# 1. Add to pubspec.yaml:
+#    dependencies:
+#      llama_mobile_flutter_sdk:
+#        path: /path/to/llama_mobile/output/llama_mobile-flutter-SDK
+# 2. Run: flutter pub get
+# 3. Use in Flutter app:
+#    import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
+# 4. Build app: flutter build apk (Android) or flutter build ios (iOS)
+#    - Flutter automatically builds AAR for Android
+#    - Flutter automatically includes xcframework for iOS
+#
+# Notes:
+# - iOS framework must be built first using build-ios-framework.sh
+# - Android libraries must be built first using build-android-lib.sh
+# - No automatic backup restoration (backups are for manual use only)
+# - Grammar files are NOT copied (must be loaded from file paths)
+# - Kotlin extension file is NOT copied (not used by Flutter plugin)
+# - This is NOT a Flutter Module for native app integration
+# - This IS a Flutter Plugin for Flutter app development
 # ============================================================================
 
 # Load centralized configuration from config.env
@@ -273,13 +319,82 @@ log_message "[SUCCESS] All required dependencies found"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 FLUTTER_SDK_DIR="$ROOT_DIR/llama_mobile-flutter-SDK"
-IOS_FRAMEWORK_DIR="$ROOT_DIR/llama_mobile-ios"
-ANDROID_LIBS_DIR="$ROOT_DIR/output/llama_mobile-android/libs"
-ANDROID_SDK_OUTPUT_DIR="$ROOT_DIR/output/llama_mobile-android-SDK"
+ANDROID_LIBS_DIR="$ROOT_DIR/llama_mobile-android/libs/static"
+OUTPUT_DIR="$ROOT_DIR/output"
+OUTPUT_SDK_DIR="$OUTPUT_DIR/llama_mobile-flutter-SDK"
+
+# Persistent backup directory for SDK files
+PERSISTENT_BACKUP_DIR="$ROOT_DIR/scripts/sdk_backup"
+
+# iOS framework location (from output directory)
+IOS_FRAMEWORK_PATH="$ROOT_DIR/llama_mobile-ios/shared/llama_mobile.xcframework"
+
+# Function to create persistent backup of SDK directories
+create_persistent_backup() {
+    local sdk_dir="$1"
+    local sdk_name="$2"
+    
+    if [ ! -d "$sdk_dir" ]; then
+        log_message "[INFO] No $sdk_name SDK directory to backup"
+        return 0
+    fi
+    
+    # Create persistent backup directory if it doesn't exist
+    mkdir -p "$PERSISTENT_BACKUP_DIR"
+    
+    # Create timestamped backup
+    local timestamp=$(date '+%Y%m%d_%H%M%S')
+    local backup_dir="$PERSISTENT_BACKUP_DIR/llama_mobile-flutter-SDK_$timestamp"
+    
+    log_message "[INFO] Creating persistent backup of $sdk_name SDK to $backup_dir"
+    
+    # Use rsync to avoid symlink cycles
+    if command -v rsync &> /dev/null; then
+        rsync -a --exclude='.symlinks' --exclude='build' --exclude='.dart_tool' "$sdk_dir/" "$backup_dir/"
+    else
+        # Fallback to cp with exclude
+        find "$sdk_dir" -name '.symlinks' -prune -o -name 'build' -prune -o -name '.dart_tool' -prune -o -print0 | xargs -0 -I {} cp -r --parents {} "$backup_dir/" 2>/dev/null || true
+    fi
+    
+    # Keep only the last 5 backups
+    ls -t "$PERSISTENT_BACKUP_DIR/llama_mobile-flutter-SDK_"* 2>/dev/null | tail -n +6 | xargs rm -rf 2>/dev/null || true
+    
+    log_message "[INFO] Persistent backup created successfully"
+    log_message "[INFO] You can manually remove backups from: $PERSISTENT_BACKUP_DIR"
+}
+
+# Function to copy SDK to output directory
+copy_sdk_to_output() {
+    local sdk_dir="$1"
+    local output_sdk_dir="$2"
+    
+    # Remove existing output SDK directory if it exists
+    if [ -d "$output_sdk_dir" ]; then
+        rm -rf "$output_sdk_dir"
+        log_message "[INFO] Removed existing output SDK directory"
+    fi
+    
+    # Create output SDK directory
+    mkdir -p "$output_sdk_dir"
+    
+    # Copy entire SDK directory, excluding symlinks
+    if command -v rsync &> /dev/null; then
+        rsync -a --exclude='.symlinks' --exclude='build' --exclude='.dart_tool' "$sdk_dir/" "$output_sdk_dir/"
+    else
+        # Fallback to cp with exclude
+        find "$sdk_dir" -name '.symlinks' -prune -o -name 'build' -prune -o -name '.dart_tool' -prune -o -print0 | xargs -0 -I {} cp -r --parents {} "$output_sdk_dir/" 2>/dev/null || true
+    fi
+    
+    log_message "[SUCCESS] Flutter SDK copied to output directory: $output_sdk_dir"
+}
 
 log_message "[INFO] === Building Self-Contained Flutter SDK ==="
 log_message "[INFO] Build type: $BUILD_TYPE"
 log_message "[INFO] Output: $FLUTTER_SDK_DIR/"
+
+# Create persistent backup of SDK directory before cleaning
+log_message "[INFO] Creating persistent backup of SDK directory..."
+create_persistent_backup "$FLUTTER_SDK_DIR" "Flutter"
 
 # Clean Flutter SDK
 script_progress "Cleaning Flutter SDK..."
@@ -288,79 +403,95 @@ flutter clean
 flutter pub get
 log_message "[SUCCESS] Flutter SDK cleaned"
 
-# Build iOS framework if needed
+# Check iOS framework exists
 if [[ "$(uname)" == "Darwin" ]] && command -v xcodebuild &> /dev/null; then
-    if [ ! -d "$IOS_FRAMEWORK_DIR/llama_mobile.xcframework" ]; then
-        script_progress "Building iOS framework..."
-        "$SCRIPT_DIR/build-ios-framework.sh" --build-type="$BUILD_TYPE" ${VERBOSE:+--verbose}
-        log_message "[SUCCESS] iOS framework built"
-    else
-        log_message "[INFO] iOS framework already exists, skipping build"
+    if [ ! -d "$IOS_FRAMEWORK_PATH" ]; then
+        log_message "[ERROR] iOS framework not found at: $IOS_FRAMEWORK_PATH"
+        log_message "[INFO] Please run: ./scripts/build-ios-framework.sh"
+        handle_error 1 "iOS framework not found. Please run build-ios-framework.sh first."
     fi
     
-    # Copy iOS framework to Flutter SDK
+    # Copy iOS framework to Flutter SDK (sync with latest)
     script_progress "Copying iOS framework to Flutter SDK..."
+    rm -rf "$FLUTTER_SDK_DIR/ios/LlamaMobile/llama_mobile.xcframework"
     mkdir -p "$FLUTTER_SDK_DIR/ios/LlamaMobile"
-    cp -R "$IOS_FRAMEWORK_DIR/llama_mobile.xcframework" "$FLUTTER_SDK_DIR/ios/LlamaMobile/"
-    log_message "[SUCCESS] iOS framework copied to Flutter SDK"
+    cp -R "$IOS_FRAMEWORK_PATH" "$FLUTTER_SDK_DIR/ios/LlamaMobile/"
+    log_message "[SUCCESS] iOS framework copied to Flutter SDK (synced with latest)"
+    
+    # Copy iOS Swift wrapper from iOS SDK to Flutter SDK (sync with latest)
+    script_progress "Copying iOS Swift wrapper to Flutter SDK..."
+    mkdir -p "$FLUTTER_SDK_DIR/ios/Classes"
+    if [ -f "$ROOT_DIR/llama_mobile-ios-SDK/Sources/LlamaMobile/LlamaMobile.swift" ]; then
+        cp -f "$ROOT_DIR/llama_mobile-ios-SDK/Sources/LlamaMobile/LlamaMobile.swift" "$FLUTTER_SDK_DIR/ios/Classes/"
+        log_message "[SUCCESS] iOS Swift wrapper copied to Flutter SDK (synced with latest)"
+    else
+        log_message "[WARN] iOS SDK Swift wrapper not found, skipping copy"
+    fi
 fi
 
-# Build Android libraries if needed
+# Check Android libraries exist
 if [ ! -d "$ANDROID_LIBS_DIR" ] || [ -z "$(ls -A "$ANDROID_LIBS_DIR")" ]; then
-    script_progress "Building Android libraries..."
-    "$SCRIPT_DIR/build-android-lib.sh" --build-type="$BUILD_TYPE" ${VERBOSE:+--verbose}
-    log_message "[SUCCESS] Android libraries built"
-else
-    log_message "[INFO] Android libraries already exist, skipping build"
+    log_message "[ERROR] Android libraries not found at: $ANDROID_LIBS_DIR"
+    log_message "[INFO] Please run: ./scripts/build-android-lib.sh"
+    handle_error 1 "Android libraries not found. Please run build-android-lib.sh first."
 fi
 
-# Copy Android libraries to Flutter SDK
+# Copy Android libraries to Flutter SDK (sync with latest)
 script_progress "Copying Android libraries to Flutter SDK..."
 mkdir -p "$FLUTTER_SDK_DIR/android/src/main/jniLibs"
+rm -rf "$FLUTTER_SDK_DIR/android/src/main/jniLibs"/*
 for abi in $(ls "$ANDROID_LIBS_DIR"); do
     if [ -d "$ANDROID_LIBS_DIR/$abi" ]; then
-        cp -R "$ANDROID_LIBS_DIR/$abi" "$FLUTTER_SDK_DIR/android/src/main/jniLibs/"
+        cp -Rf "$ANDROID_LIBS_DIR/$abi" "$FLUTTER_SDK_DIR/android/src/main/jniLibs/"
     fi
 done
-log_message "[SUCCESS] Android libraries copied to Flutter SDK"
+log_message "[SUCCESS] Android libraries copied to Flutter SDK (synced with latest)"
 
-# Copy Android source files to Flutter SDK from output directory
+# Copy Android source files to Flutter SDK from Android SDK (sync with latest)
 script_progress "Copying Android source files to Flutter SDK..."
 mkdir -p "$FLUTTER_SDK_DIR/android/src/main/java/com/llamamobile"
-if [ -d "$ANDROID_SDK_OUTPUT_DIR/src/main/java/com/llamamobile" ]; then
-    cp -R "$ANDROID_SDK_OUTPUT_DIR/src/main/java/com/llamamobile/"* "$FLUTTER_SDK_DIR/android/src/main/java/com/llamamobile/"
-    log_message "[SUCCESS] Android source files copied to Flutter SDK from output directory"
+
+# Copy from Android SDK directory first (preferred)
+ANDROID_SDK_DIR="$ROOT_DIR/llama_mobile-android-SDK"
+if [ -d "$ANDROID_SDK_DIR/src/main/java/com/llamamobile" ]; then
+    rm -rf "$FLUTTER_SDK_DIR/android/src/main/java/com/llamamobile"/*
+    cp -Rf "$ANDROID_SDK_DIR/src/main/java/com/llamamobile/"* "$FLUTTER_SDK_DIR/android/src/main/java/com/llamamobile/"
+    log_message "[SUCCESS] Android source files copied to Flutter SDK from Android SDK directory (synced with latest)"
 else
-    log_message "[WARN] Android SDK output directory not found, skipping source file copy"
+    log_message "[WARN] Android SDK source files not found, skipping source file copy"
 fi
 
-# Copy JNI files to Flutter SDK from output directory
+# Copy JNI files to Flutter SDK from Android SDK (sync with latest)
 script_progress "Copying Android JNI files to Flutter SDK..."
 mkdir -p "$FLUTTER_SDK_DIR/android/src/main/cpp"
-if [ -d "$ANDROID_SDK_OUTPUT_DIR/src/main/cpp" ]; then
-    cp -R "$ANDROID_SDK_OUTPUT_DIR/src/main/cpp/"* "$FLUTTER_SDK_DIR/android/src/main/cpp/"
-    log_message "[SUCCESS] Android JNI files copied to Flutter SDK from output directory"
+
+# Copy from Android SDK directory first (preferred)
+if [ -d "$ANDROID_SDK_DIR/src/main/cpp" ]; then
+    rm -rf "$FLUTTER_SDK_DIR/android/src/main/cpp"/*
+    cp -Rf "$ANDROID_SDK_DIR/src/main/cpp/"* "$FLUTTER_SDK_DIR/android/src/main/cpp/"
+    log_message "[SUCCESS] Android JNI files copied to Flutter SDK from Android SDK directory (synced with latest)"
 else
-    log_message "[WARN] JNI files not found in output directory, skipping JNI file copy"
+    log_message "[WARN] Android JNI files not found, skipping JNI file copy"
 fi
 
-# Copy Android assets to Flutter SDK from output directory
-script_progress "Copying Android assets to Flutter SDK..."
-mkdir -p "$FLUTTER_SDK_DIR/android/src/main/assets/grammars"
-if [ -d "$ANDROID_SDK_OUTPUT_DIR/src/main/assets/grammars" ]; then
-    cp -R "$ANDROID_SDK_OUTPUT_DIR/src/main/assets/grammars/"* "$FLUTTER_SDK_DIR/android/src/main/assets/grammars/"
-    log_message "[SUCCESS] Android assets copied to Flutter SDK from output directory"
+# Copy include directory to Flutter SDK for self-contained builds
+script_progress "Copying include directory to Flutter SDK..."
+mkdir -p "$FLUTTER_SDK_DIR/android/include"
+
+# Copy include directory from llama_mobile-android
+if [ -d "$ROOT_DIR/llama_mobile-android/include" ]; then
+    rm -rf "$FLUTTER_SDK_DIR/android/include"/*
+    cp -Rf "$ROOT_DIR/llama_mobile-android/include/"* "$FLUTTER_SDK_DIR/android/include/"
+    log_message "[SUCCESS] Include directory copied to Flutter SDK for self-contained builds"
 else
-    log_message "[WARN] Android assets not found in output directory, skipping asset copy"
+    log_message "[WARN] Include directory not found at $ROOT_DIR/llama_mobile-android/include"
 fi
 
-# Build Android SDK if needed
-if [ ! -d "$ANDROID_SDK_OUTPUT_DIR/src/main/java/com/llamamobile/" ] || [ ! -f "$ANDROID_SDK_OUTPUT_DIR/src/main/java/com/llamamobile/LlamaMobile.kt" ]; then
-    script_progress "Building Android SDK..."
-    "$SCRIPT_DIR/build-android-SDK.sh" ${VERBOSE:+--verbose}
-    log_message "[SUCCESS] Android SDK built"
-else
-    log_message "[INFO] Android SDK output already exists, skipping build"
+# Update CMakeLists.txt to use local include directory
+if [ -f "$FLUTTER_SDK_DIR/android/src/main/cpp/CMakeLists.txt" ]; then
+    sed -i.bak 's|../../../../llama_mobile-android/include|../../../include|g' "$FLUTTER_SDK_DIR/android/src/main/cpp/CMakeLists.txt"
+    rm -f "$FLUTTER_SDK_DIR/android/src/main/cpp/CMakeLists.txt.bak"
+    log_message "[SUCCESS] CMakeLists.txt updated to use local include directory"
 fi
 
 # Build Flutter plugin
@@ -369,11 +500,6 @@ cd "$FLUTTER_SDK_DIR"
 # For Flutter plugins, we don't need to build ios-framework or aar directly
 # The Flutter tool handles plugin building when integrating into apps
 log_message "[SUCCESS] Flutter plugin build completed"
-
-# Run Flutter tests (optional)
-# script_progress "Running Flutter tests..."
-# flutter test
-# log_message "[SUCCESS] Flutter tests passed"
 
 # Verify the build
 script_progress "Verifying Flutter SDK build..."
@@ -394,10 +520,134 @@ fi
 
 if [ "$IOS_SUCCESS" = true ] || [ "$ANDROID_SUCCESS" = true ]; then
     log_message "[SUCCESS] Self-contained Flutter SDK build completed successfully!"
+    
+    # Copy SDK to output directory
+    script_progress "Copying SDK to output directory..."
+    copy_sdk_to_output "$FLUTTER_SDK_DIR" "$OUTPUT_SDK_DIR"
+    
+    # Build the example app for both platforms
+    script_progress "Building example app..."
+    EXAMPLE_DIR="$FLUTTER_SDK_DIR/example"
+    
+    if [ -d "$EXAMPLE_DIR" ]; then
+        cd "$EXAMPLE_DIR"
+        
+        # Clean the example app
+        log_message "[INFO] Cleaning example app..."
+        flutter clean > /dev/null 2>&1
+        
+        # Get dependencies
+        log_message "[INFO] Getting example app dependencies..."
+        flutter pub get > /dev/null 2>&1
+        
+        # Build for Android
+        ANDROID_BUILD_SUCCESS=false
+        if command -v flutter &> /dev/null; then
+            log_message "[INFO] Building example app for Android..."
+            if flutter build apk --debug --no-pub > /tmp/flutter_android_build.log 2>&1; then
+                ANDROID_BUILD_SUCCESS=true
+                log_message "[SUCCESS] Android example app built successfully!"
+                log_message "[INFO] APK location: $EXAMPLE_DIR/build/app/outputs/flutter-apk/app-debug.apk"
+            else
+                log_message "[WARN] Android build failed. Check /tmp/flutter_android_build.log for details."
+            fi
+        fi
+        
+        # Build for iOS (only on macOS)
+        IOS_BUILD_SUCCESS=false
+        if [[ "$(uname)" == "Darwin" ]] && command -v flutter &> /dev/null; then
+            log_message "[INFO] Building example app for iOS..."
+            if flutter build ios --debug --no-codesign --no-pub > /tmp/flutter_ios_build.log 2>&1; then
+                IOS_BUILD_SUCCESS=true
+                log_message "[SUCCESS] iOS example app built successfully!"
+                log_message "[INFO] iOS build location: $EXAMPLE_DIR/build/ios/iphoneos/Runner.app"
+            else
+                log_message "[WARN] iOS build failed. Check /tmp/flutter_ios_build.log for details."
+            fi
+        fi
+        
+        # Summary of example app build
+        if [ "$ANDROID_BUILD_SUCCESS" = true ] || [ "$IOS_BUILD_SUCCESS" = true ]; then
+            log_message "[SUCCESS] Example app build completed successfully!"
+        else
+            log_message "[WARN] Example app build failed for both platforms."
+            log_message "[WARN] Check the build logs for more information:"
+            log_message "[WARN]   Android: /tmp/flutter_android_build.log"
+            log_message "[WARN]   iOS: /tmp/flutter_ios_build.log"
+        fi
+        
+        cd "$FLUTTER_SDK_DIR"
+    else
+        log_message "[WARN] Example app not found at: $EXAMPLE_DIR"
+        log_message "[WARN] Skipping example app build."
+    fi
+    
     log_message "[INFO] To use this SDK in a Flutter app, add it to your pubspec.yaml:"
     log_message "[INFO] dependencies:"
     log_message "[INFO]   llama_mobile_flutter_sdk:"
     log_message "[INFO]     path: $FLUTTER_SDK_DIR"
 else
     handle_error 1 "Build verification failed. No components were built."
+fi
+
+# Run Flutter tests
+script_progress "Running Flutter tests..."
+cd "$FLUTTER_SDK_DIR"
+
+# Create test output directory
+TEST_OUTPUT_DIR="$FLUTTER_SDK_DIR/test_output"
+mkdir -p "$TEST_OUTPUT_DIR"
+
+# Run tests with JSON output for reporting
+if flutter test --reporter json > "$TEST_OUTPUT_DIR/test_results.json" 2>&1; then
+    TEST_PASSED=true
+    log_message "[SUCCESS] Flutter tests passed!"
+else
+    TEST_PASSED=false
+    log_message "[WARN] Flutter tests failed. Check test output for details."
+fi
+
+# Parse test results and generate summary
+if [ -f "$TEST_OUTPUT_DIR/test_results.json" ]; then
+    TOTAL_TESTS=$(grep -o '"testID"' "$TEST_OUTPUT_DIR/test_results.json" | wc -l | tr -d ' ')
+    PASSED_TESTS=$(grep -o '"result":"success"' "$TEST_OUTPUT_DIR/test_results.json" | wc -l | tr -d ' ')
+    FAILED_TESTS=$(grep -o '"result":"error"' "$TEST_OUTPUT_DIR/test_results.json" | wc -l | tr -d ' ')
+    
+    log_message "[INFO] Test Summary:"
+    log_message "[INFO]   Total Tests: $TOTAL_TESTS"
+    log_message "[INFO]   Passed: $PASSED_TESTS"
+    log_message "[INFO]   Failed: $FAILED_TESTS"
+    
+    # Save test summary to file
+    cat > "$TEST_OUTPUT_DIR/test_summary.txt" << EOF
+Flutter SDK Test Summary
+=======================
+Build Type: $BUILD_TYPE
+Timestamp: $(date)
+Total Tests: $TOTAL_TESTS
+Passed: $PASSED_TESTS
+Failed: $FAILED_TESTS
+Test Results: $TEST_OUTPUT_DIR/test_results.json
+EOF
+    
+    log_message "[INFO] Test summary saved to: $TEST_OUTPUT_DIR/test_summary.txt"
+fi
+
+# Final summary
+log_message "[INFO] === Build Complete ==="
+log_message "[INFO] Flutter SDK location: $FLUTTER_SDK_DIR"
+log_message "[INFO] Output SDK location: $OUTPUT_SDK_DIR"
+
+if [ "$TEST_PASSED" = true ]; then
+    log_message "[SUCCESS] All tests passed!"
+else
+    log_message "[WARN] Some tests failed. Please review test output."
+fi
+
+if [ "$IOS_SUCCESS" = true ] && [ "$ANDROID_SUCCESS" = true ]; then
+    log_message "[SUCCESS] Both iOS and Android components built successfully!"
+elif [ "$IOS_SUCCESS" = true ]; then
+    log_message "[SUCCESS] iOS component built successfully!"
+elif [ "$ANDROID_SUCCESS" = true ]; then
+    log_message "[SUCCESS] Android component built successfully!"
 fi

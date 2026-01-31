@@ -1,11 +1,508 @@
-import 'dart:convert';
 import 'llama_mobile_flutter_sdk_platform_interface.dart';
+
+/// Log levels for the SDK
+enum LogLevel {
+  debug(0),
+  info(1),
+  warning(2),
+  error(3),
+  none(4);
+
+  final int value;
+  const LogLevel(this.value);
+
+  int get rawValue => value;
+
+  factory LogLevel.fromRawValue(int value) {
+    switch (value) {
+      case 0:
+        return debug;
+      case 1:
+        return info;
+      case 2:
+        return warning;
+      case 3:
+        return error;
+      case 4:
+        return none;
+      default:
+        return info;
+    }
+  }
+}
+
+/// Method used for TTS generation
+enum TTSMethod {
+  builtIn,
+  customWorkflow;
+
+  int get rawValue {
+    switch (this) {
+      case builtIn:
+        return 0;
+      case customWorkflow:
+        return 1;
+    }
+  }
+
+  factory TTSMethod.fromRawValue(int value) {
+    switch (value) {
+      case 0:
+        return builtIn;
+      case 1:
+        return customWorkflow;
+      default:
+        return builtIn;
+    }
+  }
+}
+
+/// Error types for TTS operations
+enum TTSError {
+  noModelLoaded,
+  noVocoderEnabled,
+  invalidText,
+  generationFailed,
+  formattingFailed,
+  tokenizationFailed,
+  audioDecodingFailed,
+  fileSaveFailed,
+  unknownError;
+
+  String get message {
+    switch (this) {
+      case noModelLoaded:
+        return 'No model loaded';
+      case noVocoderEnabled:
+        return 'No vocoder enabled';
+      case invalidText:
+        return 'Invalid text';
+      case generationFailed:
+        return 'Generation failed';
+      case formattingFailed:
+        return 'Formatting failed';
+      case tokenizationFailed:
+        return 'Tokenization failed';
+      case audioDecodingFailed:
+        return 'Audio decoding failed';
+      case fileSaveFailed:
+        return 'File save failed';
+      case unknownError:
+        return 'Unknown error';
+    }
+  }
+}
+
+/// Parameters for initializing a LlamaMobile context
+class InitParams {
+  final String modelPath;
+  final String? chatTemplate;
+  final String? systemPrompt;
+  final int nCtx;
+  final int nBatch;
+  final int nUBatch;
+  final int nGpuLayers;
+  final int nThreads;
+  final bool useMmap;
+  final bool useMlock;
+  final bool embedding;
+  final int poolingType;
+  final int embdNormalize;
+  final bool flashAttention;
+  final String? cacheTypeK;
+  final String? cacheTypeV;
+  final bool enableChatTemplate;
+
+  InitParams({
+    required this.modelPath,
+    this.chatTemplate,
+    this.systemPrompt,
+    this.nCtx = 2048,
+    this.nBatch = 512,
+    this.nUBatch = 512,
+    this.nGpuLayers = 0,
+    this.nThreads = 4,
+    this.useMmap = true,
+    this.useMlock = false,
+    this.embedding = false,
+    this.poolingType = 0,
+    this.embdNormalize = 0,
+    this.flashAttention = false,
+    this.cacheTypeK,
+    this.cacheTypeV,
+    this.enableChatTemplate = true,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'modelPath': modelPath,
+      'chatTemplate': chatTemplate,
+      'systemPrompt': systemPrompt,
+      'nCtx': nCtx,
+      'nBatch': nBatch,
+      'nUBatch': nUBatch,
+      'nGpuLayers': nGpuLayers,
+      'nThreads': nThreads,
+      'useMmap': useMmap,
+      'useMlock': useMlock,
+      'embedding': embedding,
+      'poolingType': poolingType,
+      'embdNormalize': embdNormalize,
+      'flashAttention': flashAttention,
+      'cacheTypeK': cacheTypeK,
+      'cacheTypeV': cacheTypeV,
+      'enableChatTemplate': enableChatTemplate,
+    };
+  }
+}
+
+/// Parameters for text completion
+class CompletionParams {
+  final String prompt;
+  final int maxTokens;
+  final int? nThreads;
+  final int seed;
+  final double temperature;
+  final int topK;
+  final double topP;
+  final double minP;
+  final double typicalP;
+  final int penaltyLastN;
+  final double penaltyRepeat;
+  final double penaltyFreq;
+  final double penaltyPresent;
+  final int mirostat;
+  final double mirostatTau;
+  final double mirostatEta;
+  final bool ignoreEos;
+  final List<String> stopSequences;
+  final String? grammar;
+  final bool useJsonResponse;
+  final int nProbs;
+  final String? jsonSchema;
+  final String? tools;
+  final bool parallelToolCalls;
+  final String? toolChoice;
+  final List<String> mediaPaths;
+  final List<ChatMessage> chatMessages;
+  final String? chatTemplate;
+
+  CompletionParams({
+    required this.prompt,
+    this.maxTokens = 1024,
+    this.nThreads,
+    this.seed = -1,
+    this.temperature = 0.8,
+    this.topK = 40,
+    this.topP = 0.95,
+    this.minP = 0.05,
+    this.typicalP = 1.0,
+    this.penaltyLastN = 64,
+    this.penaltyRepeat = 1.1,
+    this.penaltyFreq = 0.0,
+    this.penaltyPresent = 0.0,
+    this.mirostat = 0,
+    this.mirostatTau = 5.0,
+    this.mirostatEta = 0.1,
+    this.ignoreEos = false,
+    this.stopSequences = const [],
+    this.grammar,
+    this.useJsonResponse = true,
+    this.nProbs = 0,
+    this.jsonSchema,
+    this.tools,
+    this.parallelToolCalls = false,
+    this.toolChoice,
+    this.mediaPaths = const [],
+    this.chatMessages = const [],
+    this.chatTemplate,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'prompt': prompt,
+      'maxTokens': maxTokens,
+      'nThreads': nThreads,
+      'seed': seed,
+      'temperature': temperature,
+      'topK': topK,
+      'topP': topP,
+      'minP': minP,
+      'typicalP': typicalP,
+      'penaltyLastN': penaltyLastN,
+      'penaltyRepeat': penaltyRepeat,
+      'penaltyFreq': penaltyFreq,
+      'penaltyPresent': penaltyPresent,
+      'mirostat': mirostat,
+      'mirostatTau': mirostatTau,
+      'mirostatEta': mirostatEta,
+      'ignoreEos': ignoreEos,
+      'stopSequences': stopSequences,
+      'grammar': grammar,
+      'useJsonResponse': useJsonResponse,
+      'nProbs': nProbs,
+      'jsonSchema': jsonSchema,
+      'tools': tools,
+      'parallelToolCalls': parallelToolCalls,
+      'toolChoice': toolChoice,
+      'mediaPaths': mediaPaths,
+      'chatMessages': chatMessages.map((m) => m.toMap()).toList(),
+      'chatTemplate': chatTemplate,
+    };
+  }
+
+  factory CompletionParams.fromPrompt(String prompt) {
+    return CompletionParams(prompt: prompt);
+  }
+
+  factory CompletionParams.fromChatMessages(List<ChatMessage> chatMessages) {
+    return CompletionParams(
+      prompt: '',
+      chatMessages: chatMessages,
+      maxTokens: 1024,
+      temperature: 0.7,
+      topP: 0.95,
+      topK: 40,
+      penaltyRepeat: 1.2,
+    );
+  }
+
+  factory CompletionParams.fromCreativePrompt(
+    String creativePrompt, {
+    int maxTokens = 1024,
+  }) {
+    return CompletionParams(
+      prompt: creativePrompt,
+      maxTokens: maxTokens,
+      temperature: 1.0,
+      topP: 0.98,
+      topK: 100,
+    );
+  }
+
+  factory CompletionParams.fromFactualPrompt(String factualPrompt) {
+    return CompletionParams(
+      prompt: factualPrompt,
+      temperature: 0.1,
+      topP: 0.9,
+      topK: 20,
+    );
+  }
+
+  factory CompletionParams.fromChatPrompt(
+    String chatPrompt, {
+    int maxTokens = 1024,
+  }) {
+    return CompletionParams(
+      prompt: chatPrompt,
+      maxTokens: maxTokens,
+      temperature: 0.7,
+      topP: 0.95,
+      topK: 40,
+      penaltyRepeat: 1.2,
+    );
+  }
+
+  factory CompletionParams.fromMultimodalPrompt(
+    String multimodalPrompt,
+    List<String> mediaPaths, {
+    int maxTokens = 1024,
+  }) {
+    return CompletionParams(
+      prompt: multimodalPrompt,
+      maxTokens: maxTokens,
+      mediaPaths: mediaPaths,
+    );
+  }
+}
+
+/// Parameters for downloading files
+class DownloadParams {
+  final String url;
+  final String localPath;
+  final String? username;
+  final String? password;
+  final Map<String, String>? headers;
+
+  DownloadParams({
+    required this.url,
+    required this.localPath,
+    this.username,
+    this.password,
+    this.headers,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'url': url,
+      'localPath': localPath,
+      'username': username,
+      'password': password,
+      'headers': headers,
+    };
+  }
+}
+
+/// Parameters for downloading Hugging Face files
+class HuggingFaceDownloadParams {
+  final String repoId;
+  final String filename;
+  final String localPath;
+  final String? bearerToken;
+  final bool offline;
+
+  HuggingFaceDownloadParams({
+    required this.repoId,
+    required this.filename,
+    required this.localPath,
+    this.bearerToken,
+    this.offline = false,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'repoId': repoId,
+      'filename': filename,
+      'localPath': localPath,
+      'bearerToken': bearerToken,
+      'offline': offline,
+    };
+  }
+}
+
+/// Options for TTS generation
+class TTSOptions {
+  final int sampleRate;
+  final String? voice;
+  final double speed;
+  final bool saveToFile;
+  final String? outputFilePath;
+
+  TTSOptions({
+    this.sampleRate = 24000,
+    this.voice,
+    this.speed = 1.0,
+    this.saveToFile = false,
+    this.outputFilePath,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'sampleRate': sampleRate,
+      'voice': voice,
+      'speed': speed,
+      'saveToFile': saveToFile,
+      'outputFilePath': outputFilePath,
+    };
+  }
+}
+
+/// Result of TTS speech generation
+class SpeechResult {
+  final List<int> audioSamples;
+  final int sampleRate;
+  final double duration;
+  final String? outputFilePath;
+  final TTSMethod methodUsed;
+
+  SpeechResult({
+    required this.audioSamples,
+    required this.sampleRate,
+    required this.duration,
+    this.outputFilePath,
+    required this.methodUsed,
+  });
+
+  factory SpeechResult.fromMap(Map<String, dynamic> map) {
+    return SpeechResult(
+      audioSamples: List<int>.from(map['audioSamples'] as List),
+      sampleRate: map['sampleRate'] as int,
+      duration: map['duration'] as double,
+      outputFilePath: map['outputFilePath'] as String?,
+      methodUsed: TTSMethod.fromRawValue(map['methodUsed'] as int),
+    );
+  }
+}
+
+/// Metadata for streaming TTS generation
+class SpeechMetadata {
+  final int sampleRate;
+  final double duration;
+  final TTSMethod methodUsed;
+  final String? outputFilePath;
+
+  SpeechMetadata({
+    required this.sampleRate,
+    required this.duration,
+    required this.methodUsed,
+    this.outputFilePath,
+  });
+
+  factory SpeechMetadata.fromMap(Map<String, dynamic> map) {
+    return SpeechMetadata(
+      sampleRate: map['sampleRate'] as int,
+      duration: map['duration'] as double,
+      methodUsed: TTSMethod.fromRawValue(map['methodUsed'] as int),
+      outputFilePath: map['outputFilePath'] as String?,
+    );
+  }
+}
+
+/// LoRA adapter configuration
+class LoraAdapter {
+  final String adapterPath;
+  final double scale;
+
+  LoraAdapter({required this.adapterPath, required this.scale});
+
+  Map<String, dynamic> toMap() {
+    return {'adapterPath': adapterPath, 'scale': scale};
+  }
+
+  factory LoraAdapter.fromMap(Map<String, dynamic> map) {
+    return LoraAdapter(
+      adapterPath: map['adapterPath'] as String,
+      scale: map['scale'] as double,
+    );
+  }
+}
 
 /// Main entry point for the LlamaMobile Flutter SDK.
 ///
 /// This class provides methods to initialize contexts, download models, and interact with
 /// the LlamaMobile platform implementation.
 class LlamaMobile {
+  /// Sets the log level for the SDK.
+  ///
+  /// Parameters:
+  /// - [level]: Log level to set (0 = debug, 1 = info, 2 = warning, 3 = error).
+  static Future<void> setLogLevel(LogLevel level) async {
+    await LlamaMobileFlutterSdkPlatform.instance.setLogLevel(level.rawValue);
+  }
+
+  /// Sets the log level for the SDK using raw integer value.
+  ///
+  /// Parameters:
+  /// - [level]: Log level to set (0 = debug, 1 = info, 2 = warning, 3 = error).
+  static Future<void> setLogLevelRaw(int level) async {
+    await LlamaMobileFlutterSdkPlatform.instance.setLogLevel(level);
+  }
+
+  /// Initializes a new LlamaMobile context with the specified model.
+  ///
+  /// Parameters:
+  /// - [params]: Initialization parameters.
+  Future<LlamaContext?> initContextWithParams(InitParams params) async {
+    final result = await LlamaMobileFlutterSdkPlatform.instance.initContext(
+      params.toMap(),
+    );
+    if (result != null && result.containsKey('contextHandle')) {
+      final contextHandle = result['contextHandle'] as int;
+      return LlamaContext._internal(contextHandle);
+    }
+    return null;
+  }
+
   /// Initializes a new LlamaMobile context with the specified model.
   ///
   /// Parameters:
@@ -25,6 +522,7 @@ class LlamaMobile {
   /// - [flashAttention]: Whether to use flash attention optimization.
   /// - [cacheTypeK]: Cache type for key tensors.
   /// - [cacheTypeV]: Cache type for value tensors.
+  /// - [enableChatTemplate]: Whether to enable chat template processing.
   Future<LlamaContext?> initContext({
     required String modelPath,
     String? chatTemplate,
@@ -42,34 +540,28 @@ class LlamaMobile {
     bool flashAttention = false,
     String? cacheTypeK,
     String? cacheTypeV,
+    bool enableChatTemplate = true,
   }) async {
-    final params = {
-      'modelPath': modelPath,
-      'chatTemplate': chatTemplate,
-      'systemPrompt': systemPrompt,
-      'nCtx': nCtx,
-      'nBatch': nBatch,
-      'nUBatch': nUBatch,
-      'nGpuLayers': nGpuLayers,
-      'nThreads': nThreads,
-      'useMmap': useMmap,
-      'useMlock': useMlock,
-      'embedding': embedding,
-      'poolingType': poolingType,
-      'embdNormalize': embdNormalize,
-      'flashAttention': flashAttention,
-      'cacheTypeK': cacheTypeK,
-      'cacheTypeV': cacheTypeV,
-    };
-
-    final result = await LlamaMobileFlutterSdkPlatform.instance.initContext(
-      params,
+    final params = InitParams(
+      modelPath: modelPath,
+      chatTemplate: chatTemplate,
+      systemPrompt: systemPrompt,
+      nCtx: nCtx,
+      nBatch: nBatch,
+      nUBatch: nUBatch,
+      nGpuLayers: nGpuLayers,
+      nThreads: nThreads,
+      useMmap: useMmap,
+      useMlock: useMlock,
+      embedding: embedding,
+      poolingType: poolingType,
+      embdNormalize: embdNormalize,
+      flashAttention: flashAttention,
+      cacheTypeK: cacheTypeK,
+      cacheTypeV: cacheTypeV,
+      enableChatTemplate: enableChatTemplate,
     );
-    if (result != null && result.containsKey('contextHandle')) {
-      final contextHandle = result['contextHandle'] as int;
-      return LlamaContext._internal(contextHandle, this);
-    }
-    return null;
+    return initContextWithParams(params);
   }
 
   /// Downloads a model from a URL
@@ -80,16 +572,23 @@ class LlamaMobile {
     String? password,
     Map<String, String>? headers,
   }) async {
-    final params = {
-      'url': url,
-      'localPath': localPath,
-      'username': username,
-      'password': password,
-      'headers': headers,
-    };
+    final params = DownloadParams(
+      url: url,
+      localPath: localPath,
+      username: username,
+      password: password,
+      headers: headers,
+    );
+    return downloadModelWithParams(params);
+  }
 
+  /// Downloads a model from a URL using DownloadParams.
+  ///
+  /// Parameters:
+  /// - [params]: Download parameters.
+  Future<DownloadResult?> downloadModelWithParams(DownloadParams params) async {
     final result = await LlamaMobileFlutterSdkPlatform.instance.downloadModel(
-      params,
+      params.toMap(),
     );
     if (result != null) {
       return DownloadResult(
@@ -99,18 +598,6 @@ class LlamaMobile {
       );
     }
     return null;
-  }
-
-  /// Lists files in a directory
-  Future<Map<String, dynamic>?> listFiles(String directoryPath) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.listFiles(
-      directoryPath,
-    );
-  }
-
-  /// Lists available models
-  Future<Map<String, dynamic>?> listModels() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.listModels();
   }
 
   /// Downloads a file from Hugging Face
@@ -121,16 +608,25 @@ class LlamaMobile {
     String? bearerToken,
     bool? offline,
   }) async {
-    final params = {
-      'repoId': repoId,
-      'filename': filename,
-      'localPath': localPath,
-      'bearerToken': bearerToken,
-      'offline': offline,
-    };
+    final params = HuggingFaceDownloadParams(
+      repoId: repoId,
+      filename: filename,
+      localPath: localPath,
+      bearerToken: bearerToken,
+      offline: offline ?? false,
+    );
+    return downloadHfFileWithParams(params);
+  }
 
+  /// Downloads a file from Hugging Face using HuggingFaceDownloadParams.
+  ///
+  /// Parameters:
+  /// - [params]: Hugging Face download parameters.
+  Future<DownloadResult?> downloadHfFileWithParams(
+    HuggingFaceDownloadParams params,
+  ) async {
     final result = await LlamaMobileFlutterSdkPlatform.instance.downloadHfFile(
-      params,
+      params.toMap(),
     );
     if (result != null) {
       return DownloadResult(
@@ -141,29 +637,13 @@ class LlamaMobile {
     }
     return null;
   }
-
-  /// Gets JSON grammar
-  Future<String?> getJsonGrammar() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.getJsonGrammar();
-  }
-
-  /// Gets arithmetic grammar
-  Future<String?> getArithmeticGrammar() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.getArithmeticGrammar();
-  }
-
-  /// Gets C grammar
-  Future<String?> getCGrammar() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.getCGrammar();
-  }
 }
 
 /// Represents a LlamaMobile context
 class LlamaContext {
   final int _contextHandle;
-  final LlamaMobile _parent;
 
-  LlamaContext._internal(this._contextHandle, this._parent);
+  LlamaContext._internal(this._contextHandle);
 
   /// Gets the context handle
   int get handle => _contextHandle;
@@ -229,10 +709,10 @@ class LlamaContext {
     return null;
   }
 
-  /// Generates a streaming completion from the given prompt
+  /// Generates a streaming completion from the given prompt.
   Future<CompletionResult?> generateStreamingCompletion({
     required String prompt,
-    int maxTokens = 128,
+    int maxTokens = 1024,
     int? nThreads,
     int seed = -1,
     double temperature = 0.8,
@@ -250,35 +730,43 @@ class LlamaContext {
     bool ignoreEos = false,
     List<String> stopSequences = const [],
     String? grammar,
-    bool useJsonResponse = false,
+    bool useJsonResponse = true,
     String? chatTemplate,
   }) async {
-    final params = {
-      'prompt': prompt,
-      'maxTokens': maxTokens,
-      'nThreads': nThreads,
-      'seed': seed,
-      'temperature': temperature,
-      'topK': topK,
-      'topP': topP,
-      'minP': minP,
-      'typicalP': typicalP,
-      'penaltyLastN': penaltyLastN,
-      'penaltyRepeat': penaltyRepeat,
-      'penaltyFreq': penaltyFreq,
-      'penaltyPresent': penaltyPresent,
-      'mirostat': mirostat,
-      'mirostatTau': mirostatTau,
-      'mirostatEta': mirostatEta,
-      'ignoreEos': ignoreEos,
-      'stopSequences': stopSequences,
-      'grammar': grammar,
-      'useJsonResponse': useJsonResponse,
-      'chatTemplate': chatTemplate,
-    };
+    final params = CompletionParams(
+      prompt: prompt,
+      maxTokens: maxTokens,
+      nThreads: nThreads,
+      seed: seed,
+      temperature: temperature,
+      topK: topK,
+      topP: topP,
+      minP: minP,
+      typicalP: typicalP,
+      penaltyLastN: penaltyLastN,
+      penaltyRepeat: penaltyRepeat,
+      penaltyFreq: penaltyFreq,
+      penaltyPresent: penaltyPresent,
+      mirostat: mirostat,
+      mirostatTau: mirostatTau,
+      mirostatEta: mirostatEta,
+      ignoreEos: ignoreEos,
+      stopSequences: stopSequences,
+      grammar: grammar,
+      useJsonResponse: useJsonResponse,
+    );
+    return generateStreamingCompletionWithParams(params);
+  }
 
+  /// Generates a streaming completion using CompletionParams.
+  ///
+  /// Parameters:
+  /// - [params]: Completion parameters.
+  Future<CompletionResult?> generateStreamingCompletionWithParams(
+    CompletionParams params,
+  ) async {
     final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateStreamingCompletion(_contextHandle, params);
+        .generateStreamingCompletion(_contextHandle, params.toMap());
     if (result != null) {
       return CompletionResult.fromMap(result);
     }
@@ -334,18 +822,6 @@ class LlamaContext {
     );
   }
 
-  /// Lists files in a directory
-  Future<Map<String, dynamic>?> listFiles(String directoryPath) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.listFiles(
-      directoryPath,
-    );
-  }
-
-  /// Lists available models
-  Future<Map<String, dynamic>?> listModels() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.listModels();
-  }
-
   /// Downloads a file from Hugging Face
   Future<DownloadResult?> downloadHfFile({
     required String repoId,
@@ -373,21 +849,6 @@ class LlamaContext {
       );
     }
     return null;
-  }
-
-  /// Gets JSON grammar
-  Future<String?> getJsonGrammar() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.getJsonGrammar();
-  }
-
-  /// Gets arithmetic grammar
-  Future<String?> getArithmeticGrammar() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.getArithmeticGrammar();
-  }
-
-  /// Gets C grammar
-  Future<String?> getCGrammar() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.getCGrammar();
   }
 
   /// Checks if multimodal is enabled
@@ -452,7 +913,7 @@ class LlamaContext {
   /// - [chatTemplate]: Custom chat template for this completion.
   Future<CompletionResult?> generateCompletion({
     required String prompt,
-    int maxTokens = 128,
+    int maxTokens = 1024,
     int? nThreads,
     int seed = -1,
     double temperature = 0.8,
@@ -470,35 +931,43 @@ class LlamaContext {
     bool ignoreEos = false,
     List<String> stopSequences = const [],
     String? grammar,
-    bool useJsonResponse = false,
+    bool useJsonResponse = true,
     String? chatTemplate,
   }) async {
-    final params = {
-      'prompt': prompt,
-      'maxTokens': maxTokens,
-      'nThreads': nThreads,
-      'seed': seed,
-      'temperature': temperature,
-      'topK': topK,
-      'topP': topP,
-      'minP': minP,
-      'typicalP': typicalP,
-      'penaltyLastN': penaltyLastN,
-      'penaltyRepeat': penaltyRepeat,
-      'penaltyFreq': penaltyFreq,
-      'penaltyPresent': penaltyPresent,
-      'mirostat': mirostat,
-      'mirostatTau': mirostatTau,
-      'mirostatEta': mirostatEta,
-      'ignoreEos': ignoreEos,
-      'stopSequences': stopSequences,
-      'grammar': grammar,
-      'useJsonResponse': useJsonResponse,
-      'chatTemplate': chatTemplate,
-    };
+    final params = CompletionParams(
+      prompt: prompt,
+      maxTokens: maxTokens,
+      nThreads: nThreads,
+      seed: seed,
+      temperature: temperature,
+      topK: topK,
+      topP: topP,
+      minP: minP,
+      typicalP: typicalP,
+      penaltyLastN: penaltyLastN,
+      penaltyRepeat: penaltyRepeat,
+      penaltyFreq: penaltyFreq,
+      penaltyPresent: penaltyPresent,
+      mirostat: mirostat,
+      mirostatTau: mirostatTau,
+      mirostatEta: mirostatEta,
+      ignoreEos: ignoreEos,
+      stopSequences: stopSequences,
+      grammar: grammar,
+      useJsonResponse: useJsonResponse,
+    );
+    return generateCompletionWithParams(params);
+  }
 
+  /// Generates a text completion using CompletionParams.
+  ///
+  /// Parameters:
+  /// - [params]: Completion parameters.
+  Future<CompletionResult?> generateCompletionWithParams(
+    CompletionParams params,
+  ) async {
     final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateCompletion(_contextHandle, params);
+        .generateCompletion(_contextHandle, params.toMap());
     if (result != null) {
       return CompletionResult.fromMap(result);
     }
@@ -509,7 +978,7 @@ class LlamaContext {
   Future<CompletionResult?> generateMultimodalCompletion({
     required String prompt,
     required List<String> mediaPaths,
-    int maxTokens = 128,
+    int maxTokens = 1024,
     int? nThreads,
     int seed = -1,
     double temperature = 0.8,
@@ -527,35 +996,78 @@ class LlamaContext {
     bool ignoreEos = false,
     List<String> stopSequences = const [],
     String? grammar,
-    bool useJsonResponse = false,
+    bool useJsonResponse = true,
     String? chatTemplate,
   }) async {
-    final params = {
-      'prompt': prompt,
-      'maxTokens': maxTokens,
-      'nThreads': nThreads,
-      'seed': seed,
-      'temperature': temperature,
-      'topK': topK,
-      'topP': topP,
-      'minP': minP,
-      'typicalP': typicalP,
-      'penaltyLastN': penaltyLastN,
-      'penaltyRepeat': penaltyRepeat,
-      'penaltyFreq': penaltyFreq,
-      'penaltyPresent': penaltyPresent,
-      'mirostat': mirostat,
-      'mirostatTau': mirostatTau,
-      'mirostatEta': mirostatEta,
-      'ignoreEos': ignoreEos,
-      'stopSequences': stopSequences,
-      'grammar': grammar,
-      'useJsonResponse': useJsonResponse,
-      'chatTemplate': chatTemplate,
-    };
+    final params = CompletionParams(
+      prompt: prompt,
+      maxTokens: maxTokens,
+      nThreads: nThreads,
+      seed: seed,
+      temperature: temperature,
+      topK: topK,
+      topP: topP,
+      minP: minP,
+      typicalP: typicalP,
+      penaltyLastN: penaltyLastN,
+      penaltyRepeat: penaltyRepeat,
+      penaltyFreq: penaltyFreq,
+      penaltyPresent: penaltyPresent,
+      mirostat: mirostat,
+      mirostatTau: mirostatTau,
+      mirostatEta: mirostatEta,
+      ignoreEos: ignoreEos,
+      stopSequences: stopSequences,
+      grammar: grammar,
+      useJsonResponse: useJsonResponse,
+    );
+    return generateMultimodalCompletionWithParams(params, mediaPaths);
+  }
 
+  /// Generates a multimodal completion using CompletionParams.
+  ///
+  /// Parameters:
+  /// - [params]: Completion parameters.
+  /// - [mediaPaths]: Paths to media files for multimodal generation (images/audio).
+  Future<CompletionResult?> generateMultimodalCompletionWithParams(
+    CompletionParams params,
+    List<String> mediaPaths,
+  ) async {
+    final paramsWithMedia = CompletionParams(
+      prompt: params.prompt,
+      maxTokens: params.maxTokens,
+      nThreads: params.nThreads,
+      seed: params.seed,
+      temperature: params.temperature,
+      topK: params.topK,
+      topP: params.topP,
+      minP: params.minP,
+      typicalP: params.typicalP,
+      penaltyLastN: params.penaltyLastN,
+      penaltyRepeat: params.penaltyRepeat,
+      penaltyFreq: params.penaltyFreq,
+      penaltyPresent: params.penaltyPresent,
+      mirostat: params.mirostat,
+      mirostatTau: params.mirostatTau,
+      mirostatEta: params.mirostatEta,
+      ignoreEos: params.ignoreEos,
+      stopSequences: params.stopSequences,
+      grammar: params.grammar,
+      useJsonResponse: params.useJsonResponse,
+      nProbs: params.nProbs,
+      jsonSchema: params.jsonSchema,
+      tools: params.tools,
+      parallelToolCalls: params.parallelToolCalls,
+      toolChoice: params.toolChoice,
+      mediaPaths: mediaPaths,
+      chatMessages: params.chatMessages,
+    );
     final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateMultimodalCompletion(_contextHandle, params, mediaPaths);
+        .generateMultimodalCompletion(
+          _contextHandle,
+          paramsWithMedia.toMap(),
+          mediaPaths,
+        );
     if (result != null) {
       return CompletionResult.fromMap(result);
     }
@@ -609,32 +1121,64 @@ class LlamaContext {
     bool useJsonResponse = false,
     String? chatTemplate,
   }) async {
-    final messagesJson = chatMessages.map((msg) => msg.toMap()).toList();
-    final params = {
-      'maxTokens': maxTokens,
-      'nThreads': nThreads,
-      'seed': seed,
-      'temperature': temperature,
-      'topK': topK,
-      'topP': topP,
-      'minP': minP,
-      'typicalP': typicalP,
-      'penaltyLastN': penaltyLastN,
-      'penaltyRepeat': penaltyRepeat,
-      'penaltyFreq': penaltyFreq,
-      'penaltyPresent': penaltyPresent,
-      'mirostat': mirostat,
-      'mirostatTau': mirostatTau,
-      'mirostatEta': mirostatEta,
-      'ignoreEos': ignoreEos,
-      'stopSequences': stopSequences,
-      'grammar': grammar,
-      'useJsonResponse': useJsonResponse,
-      'chatTemplate': chatTemplate,
+    final params = CompletionParams(
+      prompt: '',
+      maxTokens: maxTokens,
+      nThreads: nThreads,
+      seed: seed,
+      temperature: temperature,
+      topK: topK,
+      topP: topP,
+      minP: minP,
+      typicalP: typicalP,
+      penaltyLastN: penaltyLastN,
+      penaltyRepeat: penaltyRepeat,
+      penaltyFreq: penaltyFreq,
+      penaltyPresent: penaltyPresent,
+      mirostat: mirostat,
+      mirostatTau: mirostatTau,
+      mirostatEta: mirostatEta,
+      ignoreEos: ignoreEos,
+      stopSequences: stopSequences,
+      grammar: grammar,
+      useJsonResponse: useJsonResponse,
+      chatMessages: chatMessages,
+    );
+    return generateConversationWithParams(params);
+  }
+
+  /// Generates a conversation response using CompletionParams.
+  ///
+  /// Parameters:
+  /// - [params]: Completion parameters.
+  Future<ConversationResult?> generateConversationWithParams(
+    CompletionParams params,
+  ) async {
+    final messagesJson = params.chatMessages.map((msg) => msg.toMap()).toList();
+    final paramsMap = {
+      'maxTokens': params.maxTokens,
+      'nThreads': params.nThreads,
+      'seed': params.seed,
+      'temperature': params.temperature,
+      'topK': params.topK,
+      'topP': params.topP,
+      'minP': params.minP,
+      'typicalP': params.typicalP,
+      'penaltyLastN': params.penaltyLastN,
+      'penaltyRepeat': params.penaltyRepeat,
+      'penaltyFreq': params.penaltyFreq,
+      'penaltyPresent': params.penaltyPresent,
+      'mirostat': params.mirostat,
+      'mirostatTau': params.mirostatTau,
+      'mirostatEta': params.mirostatEta,
+      'ignoreEos': params.ignoreEos,
+      'stopSequences': params.stopSequences,
+      'grammar': params.grammar,
+      'useJsonResponse': params.useJsonResponse,
     };
 
     final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateConversation(_contextHandle, params, messagesJson);
+        .generateConversation(_contextHandle, paramsMap, messagesJson);
     if (result != null) {
       return ConversationResult.fromMap(result);
     }
@@ -654,24 +1198,17 @@ class LlamaContext {
     );
   }
 
-  /// Loads a built-in grammar file to constrain model output to specific formats.
-  ///
-  /// Available grammar files:
-  /// - `json` - Valid JSON objects and values
-  /// - `json_arr` - Valid JSON arrays
-  /// - `arithmetic` - Arithmetic expressions
-  /// - `c` - C programming language syntax
-  /// - `chess` - Chess moves notation
-  /// - `english` - English language bias
-  /// - `japanese` - Japanese language bias
-  /// - `list` - Structured lists
+  /// Loads a grammar from a file path.
   ///
   /// Parameters:
-  /// - [grammarName]: Name of the grammar file (without extension).
-  Future<String?> loadGrammar(String grammarName) async {
+  /// - [grammarPath]: Path to the grammar file.
+  ///
+  /// Returns:
+  /// The loaded grammar string, or null if loading failed.
+  Future<String?> loadGrammar(String grammarPath) async {
     return await LlamaMobileFlutterSdkPlatform.instance.loadGrammar(
       _contextHandle,
-      grammarName,
+      grammarPath,
     );
   }
 
@@ -844,18 +1381,157 @@ class LlamaContext {
       useGpu,
     );
   }
+
+  /// Releases multimodal resources
+  Future<void> releaseMultimodal() async {
+    await LlamaMobileFlutterSdkPlatform.instance.releaseMultimodal(
+      _contextHandle,
+    );
+  }
+
+  /// Initializes the vocoder for text-to-speech functionality
+  ///
+  /// Parameters:
+  /// - [vocoderModelPath]: Path to the vocoder model file
+  ///
+  /// Returns:
+  /// `true` if vocoder was initialized successfully, `false` otherwise
+  Future<bool> initVocoder(String vocoderModelPath) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.initVocoder(
+      _contextHandle,
+      vocoderModelPath,
+    );
+  }
+
+  /// Releases vocoder resources
+  Future<void> releaseVocoder() async {
+    await LlamaMobileFlutterSdkPlatform.instance.releaseVocoder(_contextHandle);
+  }
+
+  /// Clears the conversation history
+  Future<void> clearConversation() async {
+    await LlamaMobileFlutterSdkPlatform.instance.clearConversation(
+      _contextHandle,
+    );
+  }
+
+  /// Checks if a conversation is currently active
+  ///
+  /// Returns:
+  /// `true` if a conversation is active, `false` otherwise
+  Future<bool> isConversationActive() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.isConversationActive(
+      _contextHandle,
+    );
+  }
+
+  /// Removes all loaded LoRA adapters
+  Future<void> removeLoraAdapters() async {
+    await LlamaMobileFlutterSdkPlatform.instance.removeLoraAdapters(
+      _contextHandle,
+    );
+  }
+
+  /// Generates audio from text using the loaded TTS model.
+  ///
+  /// Parameters:
+  /// - [text]: Text to convert to speech.
+  /// - [speakerJson]: JSON string with speaker configuration (optional, defaults to default speaker).
+  ///
+  /// Returns:
+  /// A list of floating-point audio samples, or null if an error occurred.
+  Future<List<double>?> generateAudioFromText(
+    String text, {
+    String speakerJson = '{"speaker": "default"}',
+  }) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.generateAudioFromText(
+      _contextHandle,
+      text,
+      speakerJson,
+    );
+  }
+
+  /// Gets the formatted audio completion for TTS.
+  ///
+  /// Parameters:
+  /// - [speakerJson]: JSON string with speaker configuration.
+  /// - [textToSpeak]: Text to convert to speech.
+  ///
+  /// Returns:
+  /// The formatted audio completion string, or null if an error occurred.
+  Future<String?> getFormattedAudioCompletion(
+    String speakerJson,
+    String textToSpeak,
+  ) async {
+    return await LlamaMobileFlutterSdkPlatform.instance
+        .getFormattedAudioCompletion(_contextHandle, speakerJson, textToSpeak);
+  }
+
+  /// Gets audio guide tokens for TTS.
+  ///
+  /// Parameters:
+  /// - [textToSpeak]: Text to convert to speech.
+  ///
+  /// Returns:
+  /// A list of guide tokens, or null if an error occurred.
+  Future<List<int>?> getAudioGuideTokens(String textToSpeak) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.getAudioGuideTokens(
+      _contextHandle,
+      textToSpeak,
+    );
+  }
+
+  /// Sets guide tokens for audio generation.
+  ///
+  /// Parameters:
+  /// - [tokens]: Guide tokens to set for audio generation.
+  Future<void> setGuideTokens(List<int> tokens) async {
+    await LlamaMobileFlutterSdkPlatform.instance.setGuideTokens(
+      _contextHandle,
+      tokens,
+    );
+  }
+
+  /// Decodes audio tokens into raw audio data.
+  ///
+  /// Parameters:
+  /// - [tokens]: Audio tokens to decode.
+  ///
+  /// Returns:
+  /// A list of floating-point audio samples, or null if an error occurred.
+  Future<List<double>?> decodeAudioTokens(List<int> tokens) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.decodeAudioTokens(
+      _contextHandle,
+      tokens,
+    );
+  }
 }
 
 /// Represents a chat message
 class ChatMessage {
   final String role;
   final String content;
+  final String? reasoningContent;
+  final String? toolName;
+  final String? toolCallId;
 
-  ChatMessage({required this.role, required this.content});
+  ChatMessage({
+    required this.role,
+    required this.content,
+    this.reasoningContent,
+    this.toolName,
+    this.toolCallId,
+  });
 
   /// Converts to a map for platform channel communication
-  Map<String, String> toMap() {
-    return {'role': role, 'content': content};
+  Map<String, String?> toMap() {
+    return {
+      'role': role,
+      'content': content,
+      'reasoning_content': reasoningContent,
+      'tool_name': toolName,
+      'tool_call_id': toolCallId,
+    };
   }
 
   /// Converts from a map
@@ -863,6 +1539,9 @@ class ChatMessage {
     return ChatMessage(
       role: map['role'] as String,
       content: map['content'] as String,
+      reasoningContent: map['reasoning_content'] as String?,
+      toolName: map['tool_name'] as String?,
+      toolCallId: map['tool_call_id'] as String?,
     );
   }
 }

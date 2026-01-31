@@ -21,6 +21,11 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   );
 
   @override
+  Future<void> setLogLevel(int level) async {
+    await methodChannel.invokeMethod<void>('setLogLevel', {'level': level});
+  }
+
+  @override
   Future<Map<String, dynamic>?> initContext(Map<String, dynamic> params) async {
     final result = await methodChannel.invokeMapMethod<String, dynamic>(
       'initContext',
@@ -70,7 +75,7 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   Future<Map<String, dynamic>?> generateConversation(
     int contextHandle,
     Map<String, dynamic> params,
-    List<Map<String, String>> chatMessages,
+    List<Map<String, String?>> chatMessages,
   ) async {
     final result = await methodChannel.invokeMapMethod<String, dynamic>(
       'generateConversation',
@@ -86,7 +91,7 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   @override
   Future<String?> formatChatMessages(
     int contextHandle,
-    List<Map<String, String>> messages,
+    List<Map<String, String?>> messages,
     String? chatTemplate,
   ) async {
     final result = await methodChannel
@@ -186,6 +191,116 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<void> releaseMultimodal(int contextHandle) async {
+    await methodChannel.invokeMethod<void>('releaseMultimodal', {
+      'contextHandle': contextHandle,
+    });
+  }
+
+  @override
+  Future<bool> initVocoder(int contextHandle, String vocoderModelPath) async {
+    final result = await methodChannel.invokeMethod<bool>('initVocoder', {
+      'contextHandle': contextHandle,
+      'vocoderModelPath': vocoderModelPath,
+    });
+    return result ?? false;
+  }
+
+  @override
+  Future<void> releaseVocoder(int contextHandle) async {
+    await methodChannel.invokeMethod<void>('releaseVocoder', {
+      'contextHandle': contextHandle,
+    });
+  }
+
+  @override
+  Future<void> clearConversation(int contextHandle) async {
+    await methodChannel.invokeMethod<void>('clearConversation', {
+      'contextHandle': contextHandle,
+    });
+  }
+
+  @override
+  Future<bool> isConversationActive(int contextHandle) async {
+    final result = await methodChannel.invokeMethod<bool>(
+      'isConversationActive',
+      {'contextHandle': contextHandle},
+    );
+    return result ?? false;
+  }
+
+  @override
+  Future<void> removeLoraAdapters(int contextHandle) async {
+    await methodChannel.invokeMethod<void>('removeLoraAdapters', {
+      'contextHandle': contextHandle,
+    });
+  }
+
+  @override
+  Future<List<double>?> generateAudioFromText(
+    int contextHandle,
+    String text,
+    String speakerJson,
+  ) async {
+    final result = await methodChannel.invokeListMethod<double>(
+      'generateAudioFromText',
+      {
+        'contextHandle': contextHandle,
+        'text': text,
+        'speakerJson': speakerJson,
+      },
+    );
+    return result;
+  }
+
+  @override
+  Future<String?> getFormattedAudioCompletion(
+    int contextHandle,
+    String speakerJson,
+    String textToSpeak,
+  ) async {
+    final result = await methodChannel
+        .invokeMethod<String>('getFormattedAudioCompletion', {
+          'contextHandle': contextHandle,
+          'speakerJson': speakerJson,
+          'textToSpeak': textToSpeak,
+        });
+    return result;
+  }
+
+  @override
+  Future<List<int>?> getAudioGuideTokens(
+    int contextHandle,
+    String textToSpeak,
+  ) async {
+    final result = await methodChannel.invokeListMethod<int>(
+      'getAudioGuideTokens',
+      {'contextHandle': contextHandle, 'textToSpeak': textToSpeak},
+    );
+    return result;
+  }
+
+  @override
+  Future<void> setGuideTokens(int contextHandle, List<int> tokens) async {
+    await methodChannel.invokeMethod<void>('setGuideTokens', {
+      'contextHandle': contextHandle,
+      'tokens': tokens,
+    });
+  }
+
+  @override
+  Future<List<double>?> decodeAudioTokens(
+    int contextHandle,
+    List<int> tokens,
+  ) async {
+    final result = await methodChannel.invokeListMethod<double>(
+      'decodeAudioTokens',
+      {'contextHandle': contextHandle, 'tokens': tokens},
+    );
+    return result;
+  }
+
+  @override
   Future<List<double>?> generateEmbedding(
     int contextHandle,
     String text,
@@ -247,10 +362,10 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
-  Future<String?> loadGrammar(int contextHandle, String grammarName) async {
+  Future<String?> loadGrammar(int contextHandle, String grammarPath) async {
     final result = await methodChannel.invokeMethod<String>('loadGrammar', {
       'contextHandle': contextHandle,
-      'grammarName': grammarName,
+      'grammarPath': grammarPath,
     });
     return result;
   }
@@ -393,24 +508,6 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
-  Future<Map<String, dynamic>?> listFiles(String directoryPath) async {
-    final result = await methodChannel.invokeMapMethod<String, dynamic>(
-      'listFiles',
-      {'directoryPath': directoryPath},
-    );
-    return result;
-  }
-
-  @override
-  Future<Map<String, dynamic>?> listModels() async {
-    final result = await methodChannel.invokeMapMethod<String, dynamic>(
-      'listModels',
-      {},
-    );
-    return result;
-  }
-
-  @override
   Future<Map<String, dynamic>?> downloadHfFile(
     Map<String, dynamic> params,
   ) async {
@@ -418,30 +515,6 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
       'downloadHfFile',
       params,
     );
-    return result;
-  }
-
-  @override
-  Future<String?> getJsonGrammar() async {
-    final result = await methodChannel.invokeMethod<String>(
-      'getJsonGrammar',
-      {},
-    );
-    return result;
-  }
-
-  @override
-  Future<String?> getArithmeticGrammar() async {
-    final result = await methodChannel.invokeMethod<String>(
-      'getArithmeticGrammar',
-      {},
-    );
-    return result;
-  }
-
-  @override
-  Future<String?> getCGrammar() async {
-    final result = await methodChannel.invokeMethod<String>('getCGrammar', {});
     return result;
   }
 
