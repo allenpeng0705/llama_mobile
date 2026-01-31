@@ -233,7 +233,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CAPACITOR_PLUGIN_DIR="$ROOT_DIR/llama_mobile-capacitor-plugin"
 IOS_FRAMEWORK_DIR="$ROOT_DIR/llama_mobile-ios"
-ANDROID_LIBS_DIR="$ROOT_DIR/llama_mobile-android/libs"
+ANDROID_LIBS_DIR="$ROOT_DIR/output/llama_mobile-android/libs"
+ANDROID_SDK_OUTPUT_DIR="$ROOT_DIR/output/llama_mobile-android-java-SDK"
 
 log_message "[INFO] === Building Self-Contained Capacitor Plugin ==="
 log_message "[INFO] Build type: $BUILD_TYPE"
@@ -277,17 +278,35 @@ mkdir -p "$CAPACITOR_PLUGIN_DIR/android/libs"
 cp -R "$ANDROID_LIBS_DIR/"* "$CAPACITOR_PLUGIN_DIR/android/libs/"
 log_message "[SUCCESS] Android libraries copied to Capacitor plugin"
 
-# Copy Android source files to Capacitor plugin
+# Copy Android source files to Capacitor plugin from output directory
 script_progress "Copying Android source files to Capacitor plugin..."
 mkdir -p "$CAPACITOR_PLUGIN_DIR/android/src/main/java/com/llamamobile"
-cp -R "$ROOT_DIR/llama_mobile-android-java-SDK/src/main/java/com/llamamobile/"* "$CAPACITOR_PLUGIN_DIR/android/src/main/java/com/llamamobile/"
-log_message "[SUCCESS] Android source files copied to Capacitor plugin"
+if [ -d "$ANDROID_SDK_OUTPUT_DIR/src/main/java/com/llamamobile" ]; then
+    cp -R "$ANDROID_SDK_OUTPUT_DIR/src/main/java/com/llamamobile/"* "$CAPACITOR_PLUGIN_DIR/android/src/main/java/com/llamamobile/"
+    log_message "[SUCCESS] Android source files copied to Capacitor plugin from output directory"
+else
+    log_message "[WARN] Android SDK output directory not found, skipping source file copy"
+fi
 
-# Copy Android assets to Capacitor plugin
+# Copy JNI files to Capacitor plugin from output directory
+script_progress "Copying Android JNI files to Capacitor plugin..."
+mkdir -p "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp"
+if [ -d "$ANDROID_SDK_OUTPUT_DIR/src/main/cpp" ]; then
+    cp -R "$ANDROID_SDK_OUTPUT_DIR/src/main/cpp/"* "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp/"
+    log_message "[SUCCESS] Android JNI files copied to Capacitor plugin from output directory"
+else
+    log_message "[WARN] JNI files not found in output directory, skipping JNI file copy"
+fi
+
+# Copy Android assets to Capacitor plugin from output directory
 script_progress "Copying Android assets to Capacitor plugin..."
 mkdir -p "$CAPACITOR_PLUGIN_DIR/android/src/main/assets/grammars"
-cp -R "$ROOT_DIR/llama_mobile-android-java-SDK/src/main/assets/grammars/"* "$CAPACITOR_PLUGIN_DIR/android/src/main/assets/grammars/"
-log_message "[SUCCESS] Android assets copied to Capacitor plugin"
+if [ -d "$ANDROID_SDK_OUTPUT_DIR/src/main/assets/grammars" ]; then
+    cp -R "$ANDROID_SDK_OUTPUT_DIR/src/main/assets/grammars/"* "$CAPACITOR_PLUGIN_DIR/android/src/main/assets/grammars/"
+    log_message "[SUCCESS] Android assets copied to Capacitor plugin from output directory"
+else
+    log_message "[WARN] Android assets not found in output directory, skipping asset copy"
+fi
 
 # Build Android SDK if needed
 if [ ! -d "$ROOT_DIR/llama_mobile-android-java-SDK/src/main/java/com/llamamobile/" ] || [ ! -f "$ROOT_DIR/llama_mobile-android-java-SDK/src/main/java/com/llamamobile/LlamaMobile.java" ]; then

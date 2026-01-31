@@ -1,155 +1,302 @@
 #include "llama_mobile_ffi.h"
 #include <iostream>
 #include <string>
-#include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <chrono>
-
-// Define mkdtemp if not available (for Windows compatibility)
-#ifdef _WIN32
-#include <windows.h>
-#include <direct.h>
-#define mkdtemp _mktemp
-#else
+#include <atomic>
+#include <iomanip>
 #include <unistd.h>
-#endif
 
-// Test progress callback function
-void test_download_progress_callback(float progress, const char* status, int64_t downloaded_bytes, int64_t total_bytes) {
-    std::cout << "[Progress] " << status << " - " 
-              << (progress * 100.0) << "% complete";
+static const char* DEFAULT_BEARER_TOKEN = "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";
+
+struct DownloadProgress {
+    std::atomic<float> progress{0.0f};
+    std::atomic<int64_t> downloaded_bytes{0};
+    std::atomic<int64_t> total_bytes{0};
+    std::string status;
+    std::chrono::steady_clock::time_point start_time;
+    std::chrono::steady_clock::time_point last_update;
+};
+
+std::string format_bytes(int64_t bytes) {
+    const char* units[] = {"B", "KB", "MB", "GB"};
+    int unit_index = 0;
+    double size = static_cast<double>(bytes);
     
-    if (total_bytes > 0) {
-        std::cout << " (" << downloaded_bytes / (1024 * 1024) << " MB / " 
-                  << total_bytes / (1024 * 1024) << " MB)";
+    while (size >= 1024.0 && unit_index < 3) {
+        size /= 1024.0;
+        unit_index++;
     }
     
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2) << size << " " << units[unit_index];
+    return oss.str();
+}
+
+std::string format_duration(std::chrono::steady_clock::time_point start) {
+    auto now = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
+    
+    int seconds = duration / 1000;
+    int minutes = seconds / 60;
+    seconds = seconds % 60;
+    
+    std::ostringstream oss;
+    if (minutes > 0) {
+        oss << minutes << "m " << seconds << "s";
+    } else {
+        oss << seconds << "s";
+    }
+    return oss.str();
+}
+
+void display_progress_bar(float progress, int64_t downloaded_bytes, int64_t total_bytes, const std::string& status, std::chrono::steady_clock::time_point start) {
+    int bar_width = 50;
+    int filled = static_cast<int>(progress * bar_width);
+    
+    std::cout << "\r[";
+    for (int i = 0; i < bar_width; i++) {
+        if (i < filled) {
+            std::cout << "=";
+        } else if (i == filled) {
+            std::cout << ">";
+        } else {
+            std::cout << " ";
+        }
+    }
+    std::cout << "] " << std::fixed << std::setprecision(1) << progress * 100.0 << "% | " << status;
+    
+    if (total_bytes > 0) {
+        std::cout << " | " << format_bytes(downloaded_bytes) << " / " << format_bytes(total_bytes);
+    }
+    
+    std::cout << " | " << format_duration(start);
+    std::cout << std::flush;
+}
+
+void test_download_progress_callback(float progress, const char* status, int64_t downloaded_bytes, int64_t total_bytes, void* user_data) {
+    if (!user_data) return;
+    
+    DownloadProgress* progress_data = static_cast<DownloadProgress*>(user_data);
+    progress_data->progress.store(progress);
+    progress_data->downloaded_bytes.store(downloaded_bytes);
+    progress_data->total_bytes.store(total_bytes);
+    progress_data->status = status ? status : "";
+    
+    auto now = std::chrono::steady_clock::now();
+    auto time_since_last_update = std::chrono::duration_cast<std::chrono::milliseconds>(now - progress_data->last_update).count();
+    
+    if (time_since_last_update >= 100 || progress >= 1.0f) {
+        display_progress_bar(progress, downloaded_bytes, total_bytes, progress_data->status, progress_data->start_time);
+        progress_data->last_update = now;
+    }
+}
+
+bool download_from_huggingface(const std::string& repo_id, const std::string& filename, const std::string& destination_path, const std::string& bearer_token) {
+    std::cout << "\n" << std::string(80, '=') << std::endl;
+    std::cout << "Download from Hugging Face" << std::endl;
+    std::cout << std::string(80, '=') << std::endl;
+    std::cout << "Repository: " << repo_id << std::endl;
+    std::cout << "File: " << filename << std::endl;
+    std::cout << "Destination: " << destination_path << std::endl;
+    std::cout << std::endl;
+    
+    DownloadProgress progress_data;
+    progress_data.start_time = std::chrono::steady_clock::now();
+    progress_data.last_update = progress_data.start_time;
+    
+    llama_mobile_download_params_c_t params;
+    params.repo_id = repo_id.c_str();
+    params.filename = filename.c_str();
+    params.destination_path = destination_path.c_str();
+    params.bearer_token = bearer_token.empty() ? nullptr : bearer_token.c_str();
+    params.offline = false;
+    params.progress_callback = test_download_progress_callback;
+    params.progress_callback_user_data = &progress_data;
+    
+    llama_mobile_download_result_c_t result = llama_mobile_download_model_c(&params);
+    
+    std::cout << std::endl;
+    
+    if (result.success) {
+        std::cout << "Local path: " << (result.local_path ? result.local_path : "null") << std::endl;
+        std::cout << "File size: " << format_bytes(result.file_size) << std::endl;
+        std::cout << "Duration: " << format_duration(progress_data.start_time) << std::endl;
+        
+        if (std::filesystem::exists(result.local_path)) {
+            std::cout << "File verified: YES" << std::endl;
+        } else {
+            std::cout << "File verified: NO (file not found)" << std::endl;
+        }
+    } else {
+        std::cout << "Error message: " << (result.error_message ? result.error_message : "null") << std::endl;
+    }
+    
+    llama_mobile_free_download_result_c(&result);
+    std::cout << std::string(80, '=') << std::endl;
+    
+    return result.success;
+}
+
+bool download_from_url(const std::string& url, const std::string& filename, const std::string& destination_path, const std::string& bearer_token) {
+    std::cout << "\n" << std::string(80, '=') << std::endl;
+    std::cout << "Download from URL" << std::endl;
+    std::cout << std::string(80, '=') << std::endl;
+    std::cout << "URL: " << url << std::endl;
+    std::cout << "File: " << filename << std::endl;
+    std::cout << "Destination: " << destination_path << std::endl;
+    std::cout << std::endl;
+    
+    DownloadProgress progress_data;
+    progress_data.start_time = std::chrono::steady_clock::now();
+    progress_data.last_update = progress_data.start_time;
+    
+    llama_mobile_download_params_c_t params;
+    params.repo_id = url.c_str();
+    params.filename = filename.c_str();
+    params.destination_path = destination_path.c_str();
+    params.bearer_token = bearer_token.empty() ? nullptr : bearer_token.c_str();
+    params.offline = false;
+    params.progress_callback = test_download_progress_callback;
+    params.progress_callback_user_data = &progress_data;
+    
+    llama_mobile_download_result_c_t result = llama_mobile_download_model_c(&params);
+    
+    std::cout << std::endl;
+    
+    if (result.success) {
+        std::cout << "Local path: " << (result.local_path ? result.local_path : "null") << std::endl;
+        std::cout << "File size: " << format_bytes(result.file_size) << std::endl;
+        std::cout << "Duration: " << format_duration(progress_data.start_time) << std::endl;
+        
+        if (std::filesystem::exists(result.local_path)) {
+            std::cout << "File verified: YES" << std::endl;
+        } else {
+            std::cout << "File verified: NO (file not found)" << std::endl;
+        }
+    } else {
+        std::cout << "Error message: " << (result.error_message ? result.error_message : "null") << std::endl;
+    }
+    
+    llama_mobile_free_download_result_c(&result);
+    std::cout << std::string(80, '=') << std::endl;
+    
+    return result.success;
+}
+
+std::string get_current_directory() {
+    char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)) != nullptr) {
+        return std::string(cwd);
+    }
+    return ".";
+}
+
+void print_usage(const char* program_name) {
+    std::cout << "\nUsage: " << program_name << " [OPTION]" << std::endl;
+    std::cout << "\nDownload files using Llama Mobile Download API" << std::endl;
+    std::cout << "\nOptions:" << std::endl;
+    std::cout << "  --hf" << std::endl;
+    std::cout << "      Download from Hugging Face (pre-configured model)" << std::endl;
+    std::cout << "      Repo: microsoft/Phi-3-mini-4k-instruct-gguf" << std::endl;
+    std::cout << "      File: Phi-3-mini-4k-instruct-q4.gguf" << std::endl;
+    std::cout << std::endl;
+    std::cout << "  --url" << std::endl;
+    std::cout << "      Download from direct URL (pre-configured)" << std::endl;
+    std::cout << std::endl;
+    std::cout << "  --help, -h" << std::endl;
+    std::cout << "      Show this help message" << std::endl;
+    std::cout << "\nExamples:" << std::endl;
+    std::cout << "  " << program_name << " --hf" << std::endl;
+    std::cout << "  " << program_name << " --url" << std::endl;
     std::cout << std::endl;
 }
 
-// Test helper function to create temporary directory
-std::string create_temp_dir() {
-    // Use C++17 filesystem to create a temporary directory
-    std::filesystem::path temp_path = std::filesystem::temp_directory_path();
-    temp_path /= "llama_mobile_test_";
+void show_menu() {
+    std::cout << "\n" << std::string(80, '=') << std::endl;
+    std::cout << "Llama Mobile Download Test" << std::endl;
+    std::cout << std::string(80, '=') << std::endl;
+    std::cout << "\nSelect download option:" << std::endl;
+    std::cout << "\n  [1] Download from Hugging Face" << std::endl;
+    std::cout << "      Repo: microsoft/Phi-3-mini-4k-instruct-gguf" << std::endl;
+    std::cout << "      File: Phi-3-mini-4k-instruct-q4.gguf" << std::endl;
+    std::cout << "\n  [2] Download from direct URL" << std::endl;
+    std::cout << "      URL: https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf" << std::endl;
+    std::cout << "\n  [q] Quit" << std::endl;
+    std::cout << "\n" << std::string(80, '=') << std::endl;
+    std::cout << "Enter your choice [1-2, q]: ";
+}
+
+int main(int argc, char** argv) {
+    std::string destination_path = get_current_directory();
+    std::string bearer_token = DEFAULT_BEARER_TOKEN;
     
-    try {
-        // Create unique temporary directory
-        std::filesystem::path temp_dir = std::filesystem::temp_directory_path() / 
-            ("llama_mobile_test_" + std::to_string(std::chrono::system_clock::now().time_since_epoch().count()));
+    bool success = false;
+    
+    if (argc == 2) {
+        std::string arg = argv[1];
         
-        std::filesystem::create_directories(temp_dir);
-        return temp_dir.string();
-    } catch (const std::exception& e) {
-        std::cerr << "Failed to create temporary directory: " << e.what() << std::endl;
-        exit(1);
+        if (arg == "--hf") {
+            success = download_from_huggingface(
+                "microsoft/Phi-3-mini-4k-instruct-gguf",
+                "Phi-3-mini-4k-instruct-q4.gguf",
+                destination_path,
+                bearer_token
+            );
+        }
+        else if (arg == "--url") {
+            success = download_from_url(
+                "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf",
+                "Phi-3-mini-4k-instruct-q4.gguf",
+                destination_path,
+                bearer_token
+            );
+        }
+        else if (arg == "--help" || arg == "-h") {
+            print_usage(argv[0]);
+            return 0;
+        }
+        else {
+            std::cerr << "Error: Unknown option '" << arg << "'" << std::endl;
+            print_usage(argv[0]);
+            return 1;
+        }
     }
-}
-
-// Test download model function
-void test_download_model() {
-    std::cout << "=== Testing llama_mobile_download_model_c ===" << std::endl;
+    else {
+        show_menu();
+        std::string choice;
+        std::cin >> choice;
+        
+        if (choice == "1") {
+            success = download_from_huggingface(
+                "microsoft/Phi-3-mini-4k-instruct-gguf",
+                "Phi-3-mini-4k-instruct-q4.gguf",
+                destination_path,
+                bearer_token
+            );
+        }
+        else if (choice == "2") {
+            success = download_from_url(
+                "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf",
+                "Phi-3-mini-4k-instruct-q4.gguf",
+                destination_path,
+                bearer_token
+            );
+        }
+        else if (choice == "q" || choice == "Q") {
+            std::cout << "Exiting..." << std::endl;
+            return 0;
+        }
+        else {
+            std::cerr << "Invalid choice. Exiting..." << std::endl;
+            return 1;
+        }
+    }
     
-    // Create temporary directory
-    std::string temp_dir = create_temp_dir();
-    std::cout << "Using temporary directory: " << temp_dir << std::endl;
-    
-    // Prepare download parameters with progress callback
-    llama_mobile_download_params_c_t params;
-    params.repo_id = "jartine/TinyLlama-1.1B-Chat-v0.4-GGUF";
-    params.filename = "tinyllama-1.1b-chat-v0.4.Q2_K.gguf";
-    params.destination_path = temp_dir.c_str();
-    params.bearer_token = nullptr;
-    params.offline = false;
-    params.progress_callback = test_download_progress_callback;
-    
-    // Call download function
-    llama_mobile_download_result_c_t result = llama_mobile_download_model_c(&params);
-    
-    // Check results
-    std::cout << "Download result: " << (result.success ? "SUCCESS" : "FAILED") << std::endl;
-    if (result.success) {
-        std::cout << "Local path: " << (result.local_path ? result.local_path : "null") << std::endl;
-        std::cout << "File size: " << result.file_size << " bytes" << std::endl;
+    if (success) {
+        std::cout << "\nDownload completed successfully!" << std::endl;
+        return 0;
     } else {
-        std::cout << "Error message: " << (result.error_message ? result.error_message : "null") << std::endl;
+        return 1;
     }
-    
-    // Clean up
-    llama_mobile_free_download_result_c(&result);
-    
-    std::cout << "=== Test completed ===" << std::endl << std::endl;
-}
-
-// Test download HF file function
-void test_download_hf_file() {
-    std::cout << "=== Testing llama_mobile_download_hf_file_c ===" << std::endl;
-    
-    // Create temporary directory
-    std::string temp_dir = create_temp_dir();
-    std::cout << "Using temporary directory: " << temp_dir << std::endl;
-    
-    // Call download function with progress callback
-    llama_mobile_download_result_c_t result = llama_mobile_download_hf_file_c(
-        "jartine/TinyLlama-1.1B-Chat-v0.4-GGUF",
-        "tinyllama-1.1b-chat-v0.4.Q2_K.gguf",
-        temp_dir.c_str(),
-        nullptr,
-        false,
-        test_download_progress_callback
-    );
-    
-    // Check results
-    std::cout << "Download result: " << (result.success ? "SUCCESS" : "FAILED") << std::endl;
-    if (result.success) {
-        std::cout << "Local path: " << (result.local_path ? result.local_path : "null") << std::endl;
-        std::cout << "File size: " << result.file_size << " bytes" << std::endl;
-    } else {
-        std::cout << "Error message: " << (result.error_message ? result.error_message : "null") << std::endl;
-    }
-    
-    // Clean up
-    llama_mobile_free_download_result_c(&result);
-    
-    std::cout << "=== Test completed ===" << std::endl << std::endl;
-}
-
-// Test error handling
-void test_error_handling() {
-    std::cout << "=== Testing error handling ===" << std::endl;
-    
-    // Test with null params
-    std::cout << "Test 1: Null download parameters" << std::endl;
-    llama_mobile_download_result_c_t result1 = llama_mobile_download_model_c(nullptr);
-    std::cout << "Result: " << (result1.success ? "SUCCESS" : "FAILED") << std::endl;
-    std::cout << "Error: " << (result1.error_message ? result1.error_message : "none") << std::endl;
-    llama_mobile_free_download_result_c(&result1);
-    
-    // Test with missing filename
-    std::cout << "\nTest 2: Missing filename parameter" << std::endl;
-    llama_mobile_download_params_c_t params;
-    params.repo_id = "some/repo";
-    params.filename = nullptr;  // Missing required parameter
-    params.destination_path = "/tmp";
-    params.bearer_token = nullptr;
-    params.offline = false;
-    params.progress_callback = nullptr;
-    
-    llama_mobile_download_result_c_t result2 = llama_mobile_download_model_c(&params);
-    std::cout << "Result: " << (result2.success ? "SUCCESS" : "FAILED") << std::endl;
-    std::cout << "Error: " << (result2.error_message ? result2.error_message : "none") << std::endl;
-    llama_mobile_free_download_result_c(&result2);
-    
-    std::cout << "=== Error handling tests completed ===" << std::endl << std::endl;
-}
-
-int main() {
-    // Note: Comment out actual download tests if you don't want to download files
-    // test_download_model();
-    // test_download_hf_file();
-    test_error_handling();
-    
-    std::cout << "All tests completed!" << std::endl;
-    return 0;
 }

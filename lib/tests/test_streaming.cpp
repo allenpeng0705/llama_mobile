@@ -3,7 +3,7 @@
 #include "../llama_mobile_api.h"
 
 // Streaming callback function to print tokens as they arrive
-bool token_callback(const char* token) {
+bool token_callback(const char* token, void* user_data) {
     printf("%s", token);
     fflush(stdout);
     return true; // Continue generation
@@ -40,6 +40,7 @@ int main() {
         user_message,
         256,    // max_tokens
         token_callback, // Streaming callback
+        nullptr, // token_callback_user_data
         &conv_result
     );
 

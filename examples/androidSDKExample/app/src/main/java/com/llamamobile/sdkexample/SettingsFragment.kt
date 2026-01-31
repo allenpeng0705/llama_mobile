@@ -134,6 +134,22 @@ class SettingsFragment : Fragment() {
             }
         }
 
+        // Custom Template toggle
+        binding.customTemplateToggle.setOnCheckedChangeListener {
+            _, isChecked ->
+            appState?.let {
+                it.customTemplate = isChecked
+            }
+        }
+
+        // Chat Mode toggle
+        binding.chatModeToggle.setOnCheckedChangeListener {
+            _, isChecked ->
+            appState?.let {
+                it.chatMode = isChecked
+            }
+        }
+
         // Multimodal feature button
         binding.multimodalButton.setOnClickListener {
             try {
@@ -501,6 +517,8 @@ class SettingsFragment : Fragment() {
         // Update embedding toggle based on app state
         appState?.let {
             binding.embeddingToggle.isChecked = it.enableEmbedding
+            binding.customTemplateToggle.isChecked = it.customTemplate
+            binding.chatModeToggle.isChecked = it.chatMode
         }
     }
 

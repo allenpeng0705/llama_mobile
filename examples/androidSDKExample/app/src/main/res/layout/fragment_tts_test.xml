@@ -86,6 +86,28 @@
             android:textColor="@android:color/darker_gray" />
     </LinearLayout>
 
+    <!-- Feature Toggles -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Save to File"
+            android:textSize="16sp" />
+
+        <Switch
+            android:id="@+id/saveToFileToggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="" />
+    </LinearLayout>
+
     <!-- Action Buttons Section -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -94,13 +116,24 @@
         android:layout_marginBottom="16dp">
 
         <Button
-            android:id="@+id/generateSpeechButton"
+            android:id="@+id/generateSpeechAsyncButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Generate Speech"
+            android:text="Generate Speech(Async)"
             android:enabled="false"
             android:layout_marginBottom="8dp"
             android:backgroundTint="@android:color/holo_blue_light"
+            android:textColor="@android:color/white"
+            android:padding="12dp" />
+
+        <Button
+            android:id="@+id/generateSpeechSyncButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Generate Speech(Sync)"
+            android:enabled="false"
+            android:layout_marginBottom="8dp"
+            android:backgroundTint="@android:color/holo_blue_dark"
             android:textColor="@android:color/white"
             android:padding="12dp" />
 

@@ -13,16 +13,33 @@ include_directories(
 # Import the pre-built libraries
 set(LLAMA_MOBILE_ABIS arm64-v8a x86_64)
 
+# Shared libraries
 foreach(ABI ${LLAMA_MOBILE_ABIS})
-    add_library(llama_mobile_${ABI} SHARED IMPORTED)
-    set_target_properties(llama_mobile_${ABI} PROPERTIES
-        IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/${ABI}/libllama_mobile.so
+    add_library(llama_mobile_shared_${ABI} SHARED IMPORTED)
+    set_target_properties(llama_mobile_shared_${ABI} PROPERTIES
+        IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/shared/${ABI}/libllama_mobile.so
         ANDROID_ABI ${ABI}
     )
 endforeach()
 
-# Main library target for linking
+# Static libraries
+foreach(ABI ${LLAMA_MOBILE_ABIS})
+    add_library(llama_mobile_static_${ABI} STATIC IMPORTED)
+    set_target_properties(llama_mobile_static_${ABI} PROPERTIES
+        IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/static/${ABI}/libllama_mobile.a
+        ANDROID_ABI ${ABI}
+    )
+endforeach()
+
+# Main library targets for linking
+# Shared library target
 add_library(llama_mobile SHARED IMPORTED)
 set_target_properties(llama_mobile PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/${ANDROID_ABI}/libllama_mobile.so
+    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/shared/${ANDROID_ABI}/libllama_mobile.so
+)
+
+# Static library target
+add_library(llama_mobile_static STATIC IMPORTED)
+set_target_properties(llama_mobile_static PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/static/${ANDROID_ABI}/libllama_mobile.a
 )

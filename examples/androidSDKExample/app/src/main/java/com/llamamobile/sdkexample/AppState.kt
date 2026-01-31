@@ -35,6 +35,11 @@ class AppState {
 
     // Feature flags
     var enableEmbedding = false
+    var customTemplate = false  // Use custom chat template - off by default
+    var chatMode = true         // Use chat mode - on by default
+    var streaming = false       // Use streaming for LLM responses - off by default
+    var jsonResponse = true      // Generate JSON response from LLM - on by default
+    var saveToFile = true       // Save TTS output to file - on by default
 
     // Chat configuration
     var systemPrompt = "You are a local AI assistant. Please respond to user queries in a polite, helpful, and clear manner. Focus on providing accurate information and maintaining a friendly tone."

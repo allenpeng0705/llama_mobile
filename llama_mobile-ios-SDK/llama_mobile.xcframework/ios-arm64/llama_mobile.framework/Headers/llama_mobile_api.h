@@ -112,7 +112,8 @@ typedef struct {
     bool flash_attn;                 /**< Enable flash attention (default: false) */
     const char* cache_type_k;        /**< Cache type for key (optional, NULL for default) */
     const char* cache_type_v;        /**< Cache type for value (optional, NULL for default) */
-    void (*progress_callback)(float progress);  /**< Model loading progress callback (optional) */
+    void (*progress_callback)(float progress, void* user_data);  /**< Model loading progress callback (optional) */
+    void* progress_callback_user_data;  /**< User data to pass to progress callback (optional) */
     bool enable_chat_template;        /**< Enable chat template (default: false) */
 } llama_mobile_init_params_t;
 
@@ -144,7 +145,8 @@ typedef struct {
     const char** stop_sequences;      /**< Array of stop sequences to terminate generation (optional) */
     int stop_sequence_count;          /**< Number of stop sequences (optional, 0 for none) */
     const char* grammar;              /**< Path to grammar file (optional, NULL for no grammar) */
-    bool (*token_callback)(const char* token);  /**< Streaming callback for generated tokens (optional) */
+    bool (*token_callback)(const char* token, void* user_data);  /**< Streaming callback for generated tokens (optional) */
+    void* token_callback_user_data;  /**< User data to pass to token callback (optional) */
     
     // New fields for chat support
     const llama_mobile_chat_message_c* chat_messages;
@@ -409,6 +411,7 @@ LLAMA_MOBILE_API void llama_mobile_release_multimodal(llama_mobile_context_t ctx
  * @param user_message User's message to add to the conversation.
  * @param max_tokens Maximum number of tokens to generate in the response.
  * @param token_callback Streaming callback for generated tokens (optional)
+ * @param token_callback_user_data User data to pass to token callback (optional)
  * @param result Output parameter to store the conversation result.
  * @return 0 on success, negative error code on failure.
  */
@@ -416,7 +419,8 @@ LLAMA_MOBILE_API int llama_mobile_generate_response(
     llama_mobile_context_t ctx,
     const char* user_message,
     int32_t max_tokens,
-    bool (*token_callback)(const char* token),
+    bool (*token_callback)(const char* token, void* user_data),
+    void* token_callback_user_data,
     llama_mobile_conversation_result_t* result);
 
 
@@ -568,8 +572,9 @@ LLAMA_MOBILE_API void llama_mobile_release_vocoder(llama_mobile_context_t ctx);
  * @param status Current download status message.
  * @param downloaded_bytes Number of bytes downloaded so far.
  * @param total_bytes Total number of bytes to download.
+ * @param user_data User data pointer passed to the callback.
  */
-typedef void (*llama_mobile_download_progress_callback)(float progress, const char* status, int64_t downloaded_bytes, int64_t total_bytes);
+typedef void (*llama_mobile_download_progress_callback)(float progress, const char* status, int64_t downloaded_bytes, int64_t total_bytes, void* user_data);
 
 /**
  * @brief Result of a model download operation.
@@ -596,6 +601,7 @@ typedef struct {
     const char* bearer_token;                /**< Optional bearer token for authentication */
     bool offline;                            /**< Whether to operate in offline mode */
     llama_mobile_download_progress_callback progress_callback;  /**< Optional progress callback */
+    void* progress_callback_user_data;  /**< User data to pass to progress callback (optional) */
 } llama_mobile_download_params_t;
 
 /**
@@ -615,6 +621,7 @@ LLAMA_MOBILE_API llama_mobile_download_result_t llama_mobile_download_model(cons
  * @param bearer_token Optional bearer token for authentication.
  * @param offline Whether to operate in offline mode.
  * @param progress_callback Optional progress callback function.
+ * @param progress_callback_user_data Optional user data to pass to the progress callback.
  * @return Download result struct containing information about the operation.
  */
 LLAMA_MOBILE_API llama_mobile_download_result_t llama_mobile_download_hf_file(
@@ -623,7 +630,8 @@ LLAMA_MOBILE_API llama_mobile_download_result_t llama_mobile_download_hf_file(
     const char* destination_path,
     const char* bearer_token,
     bool offline,
-    llama_mobile_download_progress_callback progress_callback);
+    llama_mobile_download_progress_callback progress_callback,
+    void* progress_callback_user_data);
 
 /**
  * @brief Free the members of a download result.

@@ -231,7 +231,7 @@ int llama_mobile_completion_c(
             if (token_with_probs.tok != -1 && params->token_callback) {
                 std::string token_text = common_token_to_piece(context->ctx, token_with_probs.tok);
                 
-                bool continue_completion = params->token_callback(token_text.c_str());
+                bool continue_completion = params->token_callback(token_text.c_str(), params->token_callback_user_data);
                 if (!continue_completion) {
                     context->is_interrupted = true;
                     break;
@@ -419,7 +419,7 @@ int llama_mobile_multimodal_completion_c(
             if (token_with_probs.tok != -1 && params->token_callback) {
                 std::string token_text = common_token_to_piece(context->ctx, token_with_probs.tok);
                 
-                bool continue_completion = params->token_callback(token_text.c_str());
+                bool continue_completion = params->token_callback(token_text.c_str(), params->token_callback_user_data);
                 if (!continue_completion) {
                     context->is_interrupted = true;
                     break;
@@ -1003,7 +1003,7 @@ void llama_mobile_release_vocoder_c(llama_mobile_context_handle_t handle) {
     }
 }
 
-llama_mobile_conversation_result_c_t llama_mobile_continue_conversation_with_callback_c(llama_mobile_context_handle_t handle, const char* user_message, int32_t max_tokens, bool (*token_callback)(const char* token)) {
+llama_mobile_conversation_result_c_t llama_mobile_continue_conversation_with_callback_c(llama_mobile_context_handle_t handle, const char* user_message, int32_t max_tokens, bool (*token_callback)(const char* token, void* user_data), void* token_callback_user_data) {
     llama_mobile_conversation_result_c_t result = {nullptr, 0, 0, 0};
     if (!handle || !user_message) {
         return result;
@@ -1085,7 +1085,7 @@ llama_mobile_conversation_result_c_t llama_mobile_continue_conversation_with_cal
                 context->num_tokens_predicted++;
                 
                 if (token_callback) {
-                    bool continue_generation = token_callback(token_text.c_str());
+                    bool continue_generation = token_callback(token_text.c_str(), token_callback_user_data);
                     if (!continue_generation) {
                         context->is_interrupted = true;
                         break;
@@ -1620,19 +1620,6 @@ bool llama_mobile_is_conversation_active_c(llama_mobile_context_handle_t handle)
 }
 
 // **HIGH PRIORITY: Model Download Functions**
-// Helper to wrap progress callback
-struct download_callback_wrapper {
-    llama_mobile_download_progress_callback user_callback;
-    
-    download_callback_wrapper(llama_mobile_download_progress_callback cb) : user_callback(cb) {}
-    
-    bool operator()(float progress, const std::string& status, int64_t downloaded_bytes, int64_t total_bytes) {
-        if (user_callback) {
-            user_callback(progress, status.c_str(), downloaded_bytes, total_bytes);
-        }
-        return true;
-    }
-};
 
 llama_mobile_download_result_c_t llama_mobile_download_model_c(const llama_mobile_download_params_c_t* params) {
     llama_mobile_download_result_c_t result = {false, nullptr, nullptr, 0};
@@ -1656,58 +1643,39 @@ llama_mobile_download_result_c_t llama_mobile_download_model_c(const llama_mobil
         
         // Call the existing download functionality
         common_params_model model_params;
-        model_params.url = "https://huggingface.co/" + repo_id + "/resolve/main/" + filename;
-        model_params.path = destination_path + "/" + filename;
         
-        // Note: Progress callback is not yet supported in the core download functions
-        // but we accept it here for future compatibility and to maintain API consistency
-        if (params->progress_callback) {
-            // Initialize progress with 0% to indicate download started
-            params->progress_callback(0.0f, "Starting model download...", 0, 0);
+        // Check if repo_id is already a full URL
+        if (repo_id.find("http://") == 0 || repo_id.find("https://") == 0) {
+            model_params.url = repo_id;
+        } else {
+            model_params.url = "https://huggingface.co/" + repo_id + "/resolve/main/" + filename;
         }
         
-        bool success = common_download_model(model_params, bearer_token, params->offline);
+        model_params.path = destination_path + "/" + filename;
+        
+        // Pass progress callback to core download function
+        bool success = common_download_model(model_params, bearer_token, params->offline, params->progress_callback, params->progress_callback_user_data);
         
         if (success) {
             result.success = true;
             result.local_path = safe_strdup(model_params.path.c_str());
             result.file_size = std::filesystem::file_size(model_params.path);
-            
-            if (params->progress_callback) {
-                // Indicate download completed with 100%
-                params->progress_callback(1.0f, "Model download completed!", result.file_size, result.file_size);
-            }
         } else {
             result.error_message = safe_strdup("Failed to download model");
-            
-            if (params->progress_callback) {
-                // Indicate download failed
-                params->progress_callback(0.0f, "Model download failed", 0, 0);
-            }
         }
         
     } catch (const std::exception& e) {
         std::cerr << "Error downloading model: " << e.what() << std::endl;
         result.error_message = safe_strdup(e.what());
-        
-        if (params->progress_callback) {
-            // Indicate download failed due to exception
-            params->progress_callback(0.0f, "Model download failed with error", 0, 0);
-        }
     } catch (...) {
         std::cerr << "Unknown error downloading model" << std::endl;
         result.error_message = safe_strdup("Unknown error downloading model");
-        
-        if (params->progress_callback) {
-            // Indicate download failed due to unknown error
-            params->progress_callback(0.0f, "Model download failed", 0, 0);
-        }
     }
     
     return result;
 }
 
-llama_mobile_download_result_c_t llama_mobile_download_hf_file_c(const char* repo_id, const char* filename, const char* destination_path, const char* bearer_token, bool offline, llama_mobile_download_progress_callback progress_callback) {
+llama_mobile_download_result_c_t llama_mobile_download_hf_file_c(const char* repo_id, const char* filename, const char* destination_path, const char* bearer_token, bool offline, llama_mobile_download_progress_callback progress_callback, void* progress_callback_user_data) {
     llama_mobile_download_result_c_t result = {false, nullptr, nullptr, 0};
     
     if (!repo_id || !filename || !destination_path) {
@@ -1716,60 +1684,34 @@ llama_mobile_download_result_c_t llama_mobile_download_hf_file_c(const char* rep
     }
     
     try {
-        // Build the model parameters
+        // Build model parameters
         std::string repo_id_str(repo_id);
         std::string filename_str(filename);
         std::string destination_path_str(destination_path);
         std::string token(bearer_token ? bearer_token : "");
         
-        // Note: Progress callback is not yet supported in the core download functions
-        // but we accept it here for future compatibility and to maintain API consistency
-        if (progress_callback) {
-            // Initialize progress with 0% to indicate download started
-            progress_callback(0.0f, "Starting download...", 0, 0);
-        }
-        
-        // Call the existing download functionality using common_download_model
+        // Call existing download functionality using common_download_model
         common_params_model model_params;
         model_params.url = "https://huggingface.co/" + repo_id_str + "/resolve/main/" + filename_str;
         model_params.path = destination_path_str + "/" + filename_str;
         
-        bool success = common_download_model(model_params, token, offline);
+        // Pass progress callback to core download function
+        bool success = common_download_model(model_params, token, offline, progress_callback, progress_callback_user_data);
         
         if (success) {
             result.success = true;
             result.local_path = safe_strdup(model_params.path.c_str());
             result.file_size = std::filesystem::file_size(model_params.path);
-            
-            if (progress_callback) {
-                // Indicate download completed with 100%
-                progress_callback(1.0f, "Download completed!", result.file_size, result.file_size);
-            }
         } else {
             result.error_message = safe_strdup("Failed to download Hugging Face file");
-            
-            if (progress_callback) {
-                // Indicate download failed
-                progress_callback(0.0f, "Download failed", 0, 0);
-            }
         }
         
     } catch (const std::exception& e) {
         std::cerr << "Error downloading Hugging Face file: " << e.what() << std::endl;
         result.error_message = safe_strdup(e.what());
-        
-        if (progress_callback) {
-            // Indicate download failed due to exception
-            progress_callback(0.0f, "Download failed with error", 0, 0);
-        }
     } catch (...) {
         std::cerr << "Unknown error downloading Hugging Face file" << std::endl;
         result.error_message = safe_strdup("Unknown error downloading Hugging Face file");
-        
-        if (progress_callback) {
-            // Indicate download failed due to unknown error
-            progress_callback(0.0f, "Download failed", 0, 0);
-        }
     }
     
     return result;

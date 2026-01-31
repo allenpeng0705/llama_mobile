@@ -492,7 +492,8 @@ class AppState {
                 false,                           // flashAttn
                 null,                            // cacheTypeK
                 null,                            // cacheTypeV
-                LlamaMobile.CacheType.MEMORY     // cacheType
+                true,                            // enableChatTemplate
+                null                             // progressCallback
             )
             
             // Verify embedding setting in params

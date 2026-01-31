@@ -1,19 +1,21 @@
-# llama_mobile-android-SDK
+# llama_mobile Android SDK
 
-Native Android SDK for running AI models using llama_mobile, providing Kotlin bindings for seamless integration with Android applications.
+The llama_mobile Android SDK provides Kotlin and Java wrappers around the llama_mobile C API for easy integration into Android applications. It includes pre-built native libraries with JNI bindings and Kotlin extensions for a modern, idiomatic API.
 
 ## Project Overview
 
-The llama_mobile-android-SDK is a lightweight, high-performance library for running AI models on Android devices. It provides a Kotlin wrapper around the llama_mobile native C++ library, enabling developers to integrate large language models (LLMs) into Android applications with minimal effort.
+The llama_mobile Android SDK is a lightweight, high-performance library for running AI models on Android devices. It provides both Java and Kotlin interfaces around the llama_mobile native C++ library, enabling developers to integrate large language models (LLMs) into Android applications with minimal effort.
 
 ## Features
 
-- **Kotlin API**: Clean, modern Kotlin interface for easy integration
-- **Pre-built Native Libraries**: Optimized C++ libraries with Neon SIMD support
+- **Dual API Support**: Both Java and Kotlin APIs for maximum flexibility
+- **Kotlin Extensions**: DSL builders, coroutine support, and functional extensions
+- **Pre-built Native Libraries**: Optimized C++ libraries with Neon SIMD support for ARM64
 - **Model Compatibility**: Support for various GGUF model formats
-- **Multimodal Support**: Text generation, embeddings, and text-to-speech capabilities
-- **Structured Output**: Built-in grammar support for JSON and other formats
+- **Multimodal Support**: Text generation, embeddings, text-to-speech, and vision capabilities
 - **LoRA Adapter Support**: Dynamic model fine-tuning at runtime
+- **Download API**: Built-in support for downloading models from Hugging Face
+- **Progress Callbacks**: Real-time progress updates for long-running operations
 
 ## Project Structure
 
@@ -21,27 +23,28 @@ The llama_mobile-android-SDK is a lightweight, high-performance library for runn
 llama_mobile-android-SDK/
 ├── src/
 │   ├── main/
-│   │   ├── assets/               # Grammar files for structured output
-│   │   │   └── grammars/         # Various GBNF grammar definitions
-│   │   ├── java/                 # Kotlin source code
+│   │   ├── java/                 # Java source code
 │   │   │   └── com/llamamobile/
-│   │   │       └── LlamaMobile.kt # Kotlin wrapper API
-│   │   ├── jniLibs/              # Required C++ standard library
+│   │   │       └── LlamaMobile.java    # Main Java API wrapper
+│   │   ├── kotlin/               # Kotlin extensions
+│   │   │   └── com/llamamobile/
+│   │   │       └── LlamaMobileKt.kt    # Kotlin DSL and extensions
+│   │   ├── jniLibs/              # Pre-built native libraries
 │   │   │   ├── arm64-v8a/        # 64-bit ARM devices
-│   │   │   │   └── libc++_shared.so
+│   │   │   │   └── libllama_mobile.a     # Main native library (static)
 │   │   │   └── x86_64/           # x86_64 emulators
-│   │   │       └── libc++_shared.so
-│   │   ├── cpp/                  # JNI implementation and CMake config
-│   │   │   ├── CMakeLists.txt    # Build configuration for native libraries
+│   │   │       └── libllama_mobile.a     # Main native library (static)
+│   │   ├── cpp/                  # JNI implementation
+│   │   │   ├── CMakeLists.txt    # Build configuration
 │   │   │   └── llama_mobile_jni.cpp # JNI bridge code
 │   │   └── AndroidManifest.xml   # Android manifest file
 │   └── androidTest/              # Comprehensive instrumented tests
 │       └── java/com/llamamobile/
-│           └── LlamaMobileComprehensiveTests.kt
+│           └── LlamaMobileComprehensiveTests.kt # SDK test cases
 ├── build.gradle                  # Gradle build configuration
 ├── settings.gradle               # Gradle settings
 ├── consumer-rules.pro            # ProGuard rules for SDK users
-└── proguard-rules.pro            # ProGuard rules for the SDK itself
+└── proguard-rules.pro            # ProGuard rules for SDK itself
 ```
 
 ## Building
@@ -50,78 +53,115 @@ llama_mobile-android-SDK/
 
 The llama_mobile-android-SDK is a library project that packages:
 - **Pre-built native libraries** (copied from `llama_mobile-android/libs/`)
-- **Kotlin wrapper code** (LlamaMobile.kt)
-- **Grammar files** for structured output
+- **Java wrapper code** (LlamaMobile.java)
+- **Kotlin extensions** (LlamaMobileKt.kt)
 
-"Building" the SDK refers to compiling the Kotlin wrapper and packaging everything into an AAR (Android Archive) file that can be imported into Android applications. The native C++ libraries are pre-built and simply copied during this process.
+"Building" the SDK refers to compiling the Java/Kotlin wrapper and packaging everything into an AAR (Android Archive) file that can be imported into Android applications. The native C++ libraries are pre-built and simply copied during this process.
 
 ### When to Build the SDK
 
 You typically need to build the SDK:
-1. To generate an AAR file for distribution
-2. To verify the Kotlin wrapper compiles correctly
-3. To run instrumented tests on devices/emulators
+1. When you've updated the native libraries in `llama_mobile-android/libs/`
+2. To regenerate the SDK structure after making changes to Java/Kotlin wrapper
+3. To create a fresh AAR file for distribution
+4. To verify that all tests pass
 
 ### How to Build the SDK
+
+#### Using Gradle Command Line
+
+```bash
+# Navigate to SDK directory
+cd llama_mobile-android-SDK
+
+# Build debug AAR
+./gradlew assembleDebug
+
+# Build release AAR
+./gradlew assembleRelease
+
+# Build and run tests
+./gradlew connectedAndroidTest
+```
 
 #### Using Android Studio
 
 1. Open Android Studio
-2. Select `File > Open` and navigate to the `llama_mobile-android-SDK` directory
+2. Select `File > Open` and navigate to `llama_mobile-android-SDK` directory
 3. Click `Open` to load the project as a library
 4. Select `Build > Make Project` (or press Cmd+F9 on macOS, Ctrl+F9 on Windows)
 
-#### Using the Build Script
+#### Using Build Script
 
 ```bash
-# Navigate to the root directory
+# Navigate to root directory
 cd llama_mobile
 
-# Rebuild the Android SDK structure
+# Rebuild Android SDK structure
 ./scripts/build-android-SDK.sh
 ```
 
 This script will:
-1. Copy the latest pre-built native libraries from `llama_mobile-android/libs/`
-2. Copy grammar files from `llama_mobile-android/grammars/`
-3. Update the Android SDK structure with the latest files
-4. Preserve any custom modifications in your test files
+1. Copy the latest pre-built static libraries from `llama_mobile-android/libs/`
+2. Update the Android SDK structure with the latest files
+3. Run all tests (unit and instrumented)
+4. Build the SDK and generate AAR files
+5. Copy AAR files to the centralized output directory
 
-## Using the SDK in Your Android Application
+**Note**: The SDK uses `c++_static` STL to avoid external dependencies on `libc++_shared.so`. You can override this by setting the `ANDROID_STL` environment variable:
 
-There are two primary ways to use the llama_mobile-android-SDK in your project:
+```bash
+# Use c++_static (default, no external dependencies)
+./scripts/build-android-SDK.sh
 
-### Option 1: Import as a Module in Android Studio
+# Use c++_shared (smaller library size, requires libc++_shared.so)
+ANDROID_STL=c++_shared ./scripts/build-android-SDK.sh
+```
+
+## Output Directory
+
+After building, the AAR file is available at:
+- **Debug AAR**: `build/outputs/aar/llama_mobile-android-SDK-debug.aar`
+- **Release AAR**: `build/outputs/aar/llama_mobile-android-SDK-release.aar`
+
+## Integration Options
+
+### Option 1: Import as a Module in Android Studio (Recommended)
 
 1. **Open your Android project** in Android Studio
 2. **Import the SDK as a module**:
    - Select `File > New > Import Module`
    - Navigate to the `llama_mobile-android-SDK` directory
    - Click `Finish` to import
-   - Sometime you cannot import the module because some conflicts. you can import it manually. 
-   in settings.gradle add something like
-
-   rootProject.name = "androidSDKExample"
-   include ':app'
-   // Add the followings using the correct SDK path.
-   include ':llama_mobile-android-SDK'
-   project(':llama_mobile-android-SDK').projectDir = new File('../../llama_mobile-android-SDK')
-
-
-3. **Add the dependency**:
+3. **Add the dependency** to your app module:
    - Open your app's `build.gradle` file
    - In the `dependencies` block, add:
      ```gradle
-     implementation project(":llama_mobile-android-SDK")
+     dependencies {
+         implementation project(':llama_mobile-android-SDK')
+     }
      ```
 4. **Sync your project** with Gradle
 
-### Option 2: Use the AAR File
+**Note**: If Android Studio's import wizard fails to recognize the SDK as a module due to AGP version mismatch, you can manually add the module reference:
+1. Open `settings.gradle` and add:
+   ```gradle
+   include ':llama_mobile-android-SDK'
+   project(':llama_mobile-android-SDK').projectDir = new File('../llama_mobile-android-SDK')
+   ```
+2. Open `app/build.gradle` and add:
+   ```gradle
+   dependencies {
+       implementation project(':llama_mobile-android-SDK')
+   }
+   ```
+
+### Option 2: Use AAR File
 
 1. **Generate the AAR file**:
    - Open the SDK project in Android Studio
    - Select `Build > Make Project`
-   - Find the AAR file at `llama_mobile-android-SDK/build/outputs/aar/llama_mobile-android-SDK-debug.aar` (or release version)
+   - Find the AAR file at `build/outputs/aar/llama_mobile-android-SDK-release.aar`
 
 2. **Add the AAR to your project**:
    - Create a `libs` directory in your app's module if it doesn't exist
@@ -136,7 +176,7 @@ There are two primary ways to use the llama_mobile-android-SDK in your project:
    }
    
    dependencies {
-       implementation(name: 'llama_mobile-android-SDK-debug', ext: 'aar')
+       implementation(name: 'llama_mobile-android-SDK-release', ext: 'aar')
    }
    ```
 
@@ -144,126 +184,110 @@ There are two primary ways to use the llama_mobile-android-SDK in your project:
 
 ### Option 3: Direct Integration (For Advanced Users)
 
-If you prefer to integrate the components directly:
+If you prefer to integrate components directly:
 
-1. **Copy the native libraries**:
+1. **Copy native libraries**:
    - Copy `llama_mobile-android-SDK/src/main/jniLibs/` to your app's `src/main/jniLibs/`
-   - This includes both `libllama_mobile.so` and the required `libc++_shared.so` (C++ standard library)
+   - This includes `libllama_mobile.a` static library for each ABI
 
-2. **Copy the grammar files**:
-   - Copy `llama_mobile-android-SDK/src/main/assets/grammars/` to your app's `src/main/assets/grammars/`
+2. **Copy Java/Kotlin wrapper**:
+   - Copy `llama_mobile-android-SDK/src/main/java/com/llamamobile/` to your app's source directory
+   - Copy `llama_mobile-android-SDK/src/main/kotlin/com/llamamobile/` to your app's source directory
 
-3. **Copy the Kotlin wrapper**:
-   - Copy `llama_mobile-android-SDK/src/main/java/com/llamamobile/LlamaMobile.kt` to your app's source directory
+3. **Copy JNI implementation**:
+   - Copy `llama_mobile-android-SDK/src/main/cpp/` to your app's `src/main/cpp/`
 
-4. **Add required dependencies**:
+4. **Update build.gradle**:
    ```gradle
+   android {
+       externalNativeBuild {
+           cmake {
+               path "src/main/cpp/CMakeLists.txt"
+           }
+       }
+       
+       defaultConfig {
+           ndk {
+               abiFilters 'arm64-v8a', 'x86_64'
+               stl "c++_static"
+           }
+       }
+   }
+   
    dependencies {
        implementation 'androidx.core:core-ktx:1.12.0'
        implementation 'androidx.appcompat:appcompat:1.6.1'
    }
    ```
 
-## Verifying the Integration
+**Note**: The SDK uses `c++_static` STL by default, which means no external `libc++_shared.so` dependency is required.
 
-After integrating the SDK, you can verify it works by adding a simple test to your app:
+## Requirements
 
-```kotlin
-import com.llamamobile.LlamaMobile
+- **Minimum SDK**: API 21 (Android 5.0 Lollipop)
+- **Target SDK**: API 34 (Android 14)
+- **Compile SDK**: API 34 (Android 14)
+- **Kotlin**: 1.9.0+
+- **Java**: 8+
+- **Architecture**: arm64-v8a (recommended), x86_64 (emulators only)
 
-// Check if the library is properly loaded
-val version = LlamaMobile.getLibraryVersion()
-Log.d("LlamaMobile", "Library version: $version")
+## Dependencies
+
+The SDK requires the following AndroidX libraries:
+
+- `androidx.core:core-ktx:1.12.0`
+- `androidx.appcompat:appcompat:1.6.1`
+
+These are automatically included when using Gradle dependency management.
+
+## Permissions
+
+Depending on where you store your model files, you may need to add the following permissions to your app's `AndroidManifest.xml`:
+
+```xml
+<!-- For accessing models in external storage -->
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+
+<!-- For Android 13+ (API 33+) -->
+<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+<uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 ```
 
-If you see the library version in your logs, the integration is successful!
-
-## Basic Usage Example
-
-Here's a simple example of using the SDK to generate text completion:
-
+**Note**: For Android 10+ (API 29+), consider using scoped storage and storing models in your app's private directory:
 ```kotlin
-import com.llamamobile.LlamaMobile
-
-// Model path on the device
-val modelPath = "/sdcard/llama_mobile/models/SmolLM-360M-Instruct.Q6_K.gguf"
-
-// Initialize model context
-val initParams = LlamaMobile.InitParams(
-    modelPath = modelPath,
-    maxCtx = 4096,
-    threads = 4
-)
-
-val context = LlamaMobile.initContext(initParams)
-if (LlamaMobile.isContextValid(context)) {
-    // Generate completion
-    val completionParams = LlamaMobile.CompletionParams(
-        prompt = "Hello, how are you?"
-    )
-    .setMaxTokens(50)
-    .setTemperature(0.7f)
-    
-    val result = LlamaMobile.generateCompletion(context, completionParams)
-    Log.d("LlamaMobile", "Completion: ${result.text}")
-    
-    // Release resources
-    LlamaMobile.releaseContext(context)
-}
+val modelDir = File(context.filesDir, "models")
+modelDir.mkdirs()
+val modelPath = File(modelDir, "model.gguf").absolutePath
 ```
-
-## Troubleshooting
-
-- **JDK Configuration Issues**: If you see "Invalid Gradle JDK configuration" errors, use Android Studio's embedded JDK via `File > Project Structure > SDK Location > JDK Location`
-- **Native Library Loading Errors**: Ensure both `.so` files (`libllama_mobile.so` and `libc++_shared.so`) are in the correct `jniLibs` directories for your target ABIs
-- **C++ Standard Library Issues**: The SDK requires `libc++_shared.so` (included in the jniLibs directories) for proper C++ standard library functionality
-- **Missing Dependencies**: Double-check that all required dependencies are added to your app's build.gradle
-- **Model Access Permissions**: Ensure your app has READ_EXTERNAL_STORAGE/WRITE_EXTERNAL_STORAGE permissions if accessing models from external storage
-- **Module Import Issues**: If Android Studio's import wizard fails to recognize the SDK as a module:
-  - **Root Cause**: Android Gradle Plugin (AGP) version mismatch between the SDK (8.5.0) and your project
-  - **Solution**: Manually add the module reference:
-    1. Open `settings.gradle` and add:
-       ```gradle
-       include ':llama_mobile-android-SDK'
-       project(':llama_mobile-android-SDK').projectDir = new File('../llama_mobile-android-SDK')
-       ```
-    2. Open `app/build.gradle` and add:
-       ```gradle
-       implementation project(':llama_mobile-android-SDK')
-       ```
-    3. Sync Gradle - this should work despite the AGP version difference
 
 ## Testing
 
-The SDK includes comprehensive instrumented tests that run on Android devices or emulators:
+The SDK includes comprehensive instrumented tests that run on Android devices or emulators.
 
-### Running Tests with Android Studio (Option A - Recommended)
+### Running Tests with Android Studio
 
-#### 1. Prerequisites
+#### Prerequisites
 - Android Studio (latest version recommended)
 - Android SDK with API levels 21-34
 - Android device (USB debugging enabled) or emulator
 
-#### 2. Open the SDK Project
-```bash
-cd llama_mobile-android-SDK
-# Open this directory in Android Studio
-```
+#### Steps
+1. Open the SDK project in Android Studio
+2. Connect an Android device or start an emulator
+3. Navigate to `src/androidTest/java/com/llamamobile/LlamaMobileComprehensiveTests.kt`
+4. Right-click on the test file and select `Run 'LlamaMobileComprehensiveTests'`
+5. Select your target device/emulator when prompted
+6. View results in the "Run" window at the bottom
 
-#### 3. Run Instrumented Tests
-1. Connect an Android device (with USB debugging enabled) or start an emulator
-2. In the Project Explorer, navigate to `src/androidTest/java/com/llamamobile/LlamaMobileComprehensiveTests.kt`
-3. Right-click the file → `Run 'LlamaMobileComprehensiveTests'`
-4. Select the target device/emulator when prompted
-5. View results in the "Run" window at the bottom
+### Running Tests with Command Line
 
-### Running Tests with Command Line (Option B)
-
-#### 1. Prerequisites
+#### Prerequisites
 - Android SDK with `adb` and `gradle` tools in your PATH
 - Connected Android device/emulator
 
-#### 2. Run Instrumented Tests
+#### Steps
 ```bash
 # Navigate to SDK directory
 cd llama_mobile-android-SDK
@@ -278,28 +302,24 @@ adb devices
 ./gradlew connectedAndroidTest --tests "com.llamamobile.LlamaMobileComprehensiveTests"
 
 # Run specific test method
-./gradlew connectedAndroidTest --tests "com.llamamobile.LlamaMobileComprehensiveTests.testAssetLoading"
+./gradlew connectedAndroidTest --tests "com.llamamobile.LlamaMobileComprehensiveTests.testInitParamsConstructors"
 ```
 
 ### Test Configuration
 
-The tests now use internal device storage instead of sdcard, which eliminates permission issues. The tests automatically create the following directory structure:
+The tests use internal device storage for model files. The tests automatically create the following directory structure:
 
 ```
 /storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-SDK/files/
 ├── models/
-│   ├── SmolLM-360M-Instruct.Q6_K.gguf           # Main model
+│   ├── SmolVLM-256M-Instruct-Q8_0.gguf           # Main model
 │   ├── OuteTTS-0.2-500M-Q6_K.gguf               # TTS model
-│   ├── Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf  # Alternative TTS model
 │   ├── WavTokenizer-Large-75-F16.gguf           # Vocoder model
-│   ├── SmolVLM-256M-Instruct-Q8_0.gguf          # Vision model
-│   ├── mmproj-SmolVLM-256M-Instruct-Q8_0.gguf   # Multimodal projection
-│   ├── embedding/
-│   │   └── Qwen3-Embedding-0.6B-Q8_0.gguf       # Embedding model
+│   ├── Qwen3-Embedding-0.6B-Q8_0.gguf       # Embedding model
 │   ├── lora/
-│   │   └── fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf  # LoRA adapter
+│   │   └── fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf
 │   └── img/
-│       └── image.jpg                             # Test image
+│       └── image.jpg
 └── llama_mobile_test/                            # Test output directory
 ```
 
@@ -308,198 +328,97 @@ The tests now use internal device storage instead of sdcard, which eliminates pe
 #### Option 1: Use Android Studio Device File Explorer
 1. Connect your device/emulator
 2. Go to `View > Tool Windows > Device File Explorer`
-3. Navigate to either:
-   - **For development tests**: `/storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-SDK/files/`
-   - **For unit tests**: `/storage/emulated/0/Android/data/com.llamamobile.test/files/`
+3. Navigate to `/storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-SDK/files/`
 4. Create the `models` directory structure as shown above
 5. Upload your model files to the appropriate locations
 
 #### Option 2: Use ADB Command Line
 ```bash
 # Create directory structure
-adb shell mkdir -p /storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-SDK/files/models/embedding
 adb shell mkdir -p /storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-SDK/files/models/lora
 adb shell mkdir -p /storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-SDK/files/models/img
 
 # Upload model files
-adb push ~/Documents/models/SmolLM-360M-Instruct.Q6_K.gguf /storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-SDK/files/models/
-adb push ~/Documents/models/Qwen3-Embedding-0.6B-Q8_0.gguf /storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-SDK/files/models/embedding/
-# Upload other model files similarly
+adb push ~/Documents/models/SmolVLM-256M-Instruct-Q8_0.gguf /storage/emulated/0/Android/data/com.llamamobile.llama_mobile-android-SDK/files/models/
 ```
-
-### Test Model Requirements
-
-To run all tests, you'll need these model files:
-
-| Model Type | Required File | Notes |
-|------------|---------------|-------|
-| Text Generation | `SmolLM-360M-Instruct.Q6_K.gguf` | Main language model |
-| TTS | `OuteTTS-0.2-500M-Q6_K.gguf` | Primary TTS model |
-| Vocoder | `WavTokenizer-Large-75-F16.gguf` | For TTS audio generation |
-| Embeddings | `Qwen3-Embedding-0.6B-Q8_0.gguf` | For text embeddings |
-| Vision | `SmolVLM-256M-Instruct-Q8_0.gguf` | For image processing |
-| Multimodal | `mmproj-SmolVLM-256M-Instruct-Q8_0.gguf` | Projection for vision model |
-
-Note: Tests will skip gracefully if some model files are missing, so you don't need all of them to run basic tests.
 
 ### Test Results
 
 - **Instrumented Tests**: Results are in `build/reports/androidTests/connected/index.html`
+- **Test Coverage**: The SDK includes 74+ comprehensive tests covering all APIs
 
-## Running Tests
+## Troubleshooting
 
-### From Android Studio
+### Common Issues
 
-1. **Open the Project**
-   - Launch Android Studio
-   - Click `File > Open` and select the `llama_mobile-android-SDK` directory
-   - Android Studio will automatically detect it as an Android project and sync with Gradle
+1. **Native Library Loading Errors**:
+   - **Symptom**: `java.lang.UnsatisfiedLinkError: dalvik.system.PathClassLoader`
+   - **Cause**: Native libraries not properly included in the APK
+   - **Solution**: Ensure `.a` files are in the correct `jniLibs` directories for your target ABIs
 
-2. **Run Comprehensive Tests**
-   - Connect an Android device or start an emulator
-   - Navigate to `src/androidTest/java/com/llamamobile/LlamaMobileComprehensiveTests.kt`
-   - Right-click on the file and select `Run 'LlamaMobileComprehensiveTests'`
-   - Or right-click on any specific test method to run just that test
+2. **Module Import Issues**:
+   - **Symptom**: Android Studio fails to recognize SDK as a module
+   - **Cause**: Android Gradle Plugin (AGP) version mismatch
+   - **Solution**: Manually add module reference in `settings.gradle` and `app/build.gradle` (see Integration Options above)
 
-### From Command Line
+3. **Model Access Permissions**:
+   - **Symptom**: `java.io.FileNotFoundException: /sdcard/...`
+   - **Cause**: Missing storage permissions or scoped storage restrictions
+   - **Solution**: Add required permissions to `AndroidManifest.xml` or use app's private storage directory
 
-If you prefer to use the command line, Android Studio automatically includes a Gradle wrapper:
+4. **JNI Method Not Found**:
+   - **Symptom**: `java.lang.NoSuchMethodError: no static method`
+   - **Cause**: JNI method signature mismatch between Java and native code
+   - **Solution**: Ensure you're using the correct API version and method signatures
 
-```bash
-# Run instrumented tests (requires connected device/emulator)
-./gradlew connectedAndroidTest
+5. **Context Initialization Fails**:
+   - **Symptom**: `initContext()` returns 0
+   - **Cause**: Invalid model path, corrupted model file, or insufficient memory
+   - **Solution**: Verify model file exists, is readable, and device has enough memory
+
+6. **C++ STL Configuration Issues**:
+   - **Symptom**: Build errors related to C++ standard library
+   - **Cause**: Incorrect STL configuration
+   - **Solution**: Ensure your app's build.gradle uses compatible STL setting:
+     ```gradle
+     defaultConfig {
+         ndk {
+             stl "c++_static"
+         }
+     }
+     ```
+   - **Note**: The SDK uses `c++_static` by default to avoid external dependencies. If you need to use `c++_shared`, ensure `libc++_shared.so` is available and all native libraries use the same STL.
+
+### ProGuard/R8 Configuration
+
+If you use ProGuard or R8 in your app, add the following rules to your ProGuard configuration file:
+
+```proguard
+# Keep LlamaMobile classes
+-keep class com.llamamobile.** { *; }
+-keepclassmembers class com.llamamobile.** { *; }
+
+# Keep native methods
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
 ```
 
-**Note:** Android Studio manages Gradle automatically, so you don't need a global Gradle installation to run tests from the IDE.
+The SDK includes `consumer-rules.pro` that you can copy to your app's ProGuard configuration.
 
-## Development Environment Setup
+### Debugging
 
-### Prerequisites
+Enable verbose logging to help diagnose issues:
 
-- **Android Studio** (latest stable version)
-- **Android SDK** with API levels 21-34
-- **Kotlin** (latest version compatible with your Android Studio)
-
-### Setting Up the Project
-
-1. **Clone the Repository**
-   ```bash
-   git clone https://github.com/your-username/llama_mobile.git
-   cd llama_mobile
-   ```
-
-2. **Build the Android Libraries**
-   ```bash
-   # Build the native libraries
-   ./scripts/build-android.sh
-   
-   # Build the Android SDK
-   ./scripts/build-android-SDK.sh
-   ```
-
-3. **Open in Android Studio**
-   - Launch Android Studio
-   - Select `File > Open` and navigate to the `llama_mobile-android-SDK` directory
-   - Click `Open` and wait for the project to sync
-
-4. **Configure Device/Emulator**
-   - Connect an Android device with USB debugging enabled
-   - Or create and start an Android emulator with API level 21 or higher
-
-5. **Upload Model Files to Emulator**
-   To run tests with real models, you need to upload model files to your emulator. There are three primary ways:
-
-   ### Drag and Drop (Easiest)
-   For most files (images, PDFs, or generic data), you can simply drag the file from your computer's file explorer (Finder or Windows Explorer) and drop it directly onto the emulator screen.
-
-   - **Location**: Files are placed in the `/sdcard/Download` folder by default
-   - **Note**: If you drag an APK file, the emulator will attempt to install it instead of just saving the file
-
-   ### Android Studio Device File Explorer (Best for Folders)
-   If you need to put a file into a specific system directory or manage existing folders:
-
-   1. In Android Studio, go to `View > Tool Windows > Device File Explorer`
-   2. Select your running emulator from the dropdown at the top
-   3. Navigate to the destination folder (usually `sdcard/Download` or `storage/emulated/0/`)
-   4. Right-click on the folder and select `Upload...`
-   5. Select the file or folder from your computer
-
-   ### ADB Command Line (Best for Large Files/Automation)
-   For large model files or entire directories:
-
-   ```bash
-   # Push a single file
-   adb push ~/Documents/my_model.bin /sdcard/Download/
-
-   # Push an entire folder
-   adb push ~/Documents/my_folder /sdcard/Download/
-   ```
-
-## API Reference
-
-### Core Classes
-
-#### LlamaMobile
-The main entry point for the SDK, providing static methods for model management and inference.
-
-##### Initialization
 ```kotlin
-val initParams = LlamaMobile.InitParams(
-    modelPath = "/path/to/model.gguf",
-    maxCtx = 4096,
-    threads = 4,
-    seed = 42
-)
-
-val context = LlamaMobile.initContext(initParams)
+// Native library logging is controlled by build configuration
+// For debug builds, you'll see more detailed logs in Logcat
+adb logcat | grep llama_mobile
 ```
-
-##### Text Generation
-```kotlin
-val completionParams = LlamaMobile.CompletionParams("Hello, how are you?")
-    .setMaxTokens(50)
-    .setTemperature(0.7f)
-    .setTopP(0.9f)
-
-val result = LlamaMobile.generateCompletion(context, completionParams)
-```
-
-##### Embeddings
-```kotlin
-val embedding = LlamaMobile.generateEmbedding(context, "This is a test sentence")
-```
-
-##### Text-to-Speech
-```kotlin
-// Initialize vocoder
-LlamaMobile.initVocoder(context, "/path/to/vocoder.gguf")
-
-// Generate audio
-val audioParams = LlamaMobile.AudioParams("Hello from llama_mobile")
-    .setSampleRate(48000)
-    .setSpeakerId(0)
-    .setSpeed(1.0f)
-
-val audioData = LlamaMobile.generateAudioFromText(context, audioParams)
-```
-
-### Data Classes
-
-#### InitParams
-Configuration parameters for initializing a model context.
-
-#### CompletionParams
-Parameters for generating text completions.
-
-#### AudioParams
-Parameters for generating audio from text.
-
-#### LoraAdapter
-Configuration for LoRA adapters.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+The llama_mobile Android SDK is available under the MIT license. See the LICENSE file for more information.
 
 ## Acknowledgments
 

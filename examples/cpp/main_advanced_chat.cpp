@@ -6,12 +6,12 @@
 
 namespace fs = std::filesystem;
 
-void progress_callback(float progress) {
+void progress_callback(float progress, void* user_data) {
     std::cout << "Loading model: " << (progress * 100.0f) << "%\r";
     std::cout.flush();
 }
 
-bool token_callback(const char* token) {
+bool token_callback(const char* token, void* user_data) {
     std::cout << token;
     std::cout.flush();
     return true;
@@ -82,6 +82,7 @@ int main(int argc, char* argv[]) {
     init_params.n_gpu_layers = 0;
     init_params.n_threads = 4;
     init_params.progress_callback = progress_callback;
+    init_params.progress_callback_user_data = nullptr;
     init_params.enable_chat_template = true;
     // Use a simple custom chat template that doesn't use reasoning_content
     init_params.chat_template = "{% for message in messages %}{% if message.role == 'system' %}{{ message.content }}\n{% else %}{% if message.role == 'user' %}<|im_start|>user\n{{ message.content }}<|im_end|>\n{% else %}<|im_start|>assistant\n{{ message.content }}<|im_end|>\n{% endif %}{% endif %}{% endfor %}<|im_start|>assistant\n";
@@ -110,6 +111,7 @@ int main(int argc, char* argv[]) {
         completion_params.n_predict = 1024;
         completion_params.temperature = 0.7;
         completion_params.token_callback = token_callback;
+        completion_params.token_callback_user_data = nullptr;
         const char* stop_sequences[] = {"<|im_end|>"};
         completion_params.stop_sequences = stop_sequences;
         completion_params.stop_sequence_count = 1;
@@ -142,6 +144,7 @@ int main(int argc, char* argv[]) {
         completion_params.n_predict = 1024;
         completion_params.temperature = 0.7;
         completion_params.token_callback = token_callback;
+        completion_params.token_callback_user_data = nullptr;
 
         const char* stop_sequences[] = {"<|im_end|>"};
         completion_params.stop_sequences = stop_sequences;
@@ -193,6 +196,7 @@ int main(int argc, char* argv[]) {
         completion_params.n_predict = 1024;
         completion_params.temperature = 0.7;
         completion_params.token_callback = token_callback;
+        completion_params.token_callback_user_data = nullptr;
         const char* stop_sequences[] = {"<|im_end|>"};
         completion_params.stop_sequences = stop_sequences;
         completion_params.stop_sequence_count = 1;
@@ -245,6 +249,7 @@ int main(int argc, char* argv[]) {
         completion_params.n_predict = 1024;
         completion_params.temperature = 0.7;
         completion_params.token_callback = token_callback;
+        completion_params.token_callback_user_data = nullptr;
         const char* stop_sequences[] = {"<|im_end|>"};
         completion_params.stop_sequences = stop_sequences;
         completion_params.stop_sequence_count = 1;

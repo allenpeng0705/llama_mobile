@@ -327,7 +327,7 @@ static handle_model_result common_params_handle_model(
 
     // then, download it if needed
     if (!model.url.empty()) {
-        bool ok = common_download_model(model, bearer_token, offline);
+        bool ok = common_download_model(model, bearer_token, offline, nullptr, nullptr);
         if (!ok) {
             LOG_ERR("error: failed to download model from %s\n", model.url.c_str());
             exit(1);

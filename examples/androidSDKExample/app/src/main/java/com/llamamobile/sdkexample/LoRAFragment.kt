@@ -217,7 +217,7 @@ class LoRAFragment : Fragment() {
 
     private fun updateModelLoadedUI() {
         val modelLoaded = appState?.isModelLoaded ?: false
-        binding.applyLoraButton.isEnabled = modelLoaded && !isProcessing
+        binding.applyLoraButton.isEnabled = modelLoaded && !isProcessing && !isLoraApplied
         binding.removeLoraButton.isEnabled = modelLoaded && !isProcessing && isLoraApplied
 
         if (!modelLoaded) {
@@ -240,7 +240,7 @@ class LoRAFragment : Fragment() {
     }
 
     private fun updateProcessingUI() {
-        binding.applyLoraButton.isEnabled = (appState?.isModelLoaded ?: false) && !isProcessing
+        binding.applyLoraButton.isEnabled = (appState?.isModelLoaded ?: false) && !isProcessing && !isLoraApplied
         binding.removeLoraButton.isEnabled = (appState?.isModelLoaded ?: false) && !isProcessing && isLoraApplied
         binding.progressBar.visibility = if (isProcessing) View.VISIBLE else View.GONE
     }

@@ -103,7 +103,7 @@ std::string select_model() {
 }
 
 // Streaming token callback function
-bool token_callback(const char* token) {
+bool token_callback(const char* token, void* user_data) {
     if (token && token[0] != '\0') {
         std::cout << token;
         std::cout.flush();  // Ensure immediate output

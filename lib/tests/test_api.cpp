@@ -20,8 +20,8 @@ struct TestResult {
 // Forward declarations
 std::vector<std::string> list_models(const std::string& models_dir);
 std::string select_model(const std::vector<std::string>& models);
-void progress_callback(float progress);
-bool token_callback(const char* token);
+void progress_callback(float progress, void* user_data);
+bool token_callback(const char* token, void* user_data);
 
 // Helper function to get executable directory
 std::string get_executable_dir() {
@@ -91,6 +91,7 @@ int main(int argc, char* argv[]) {
     params.n_gpu_layers = 0;  // Disable GPU acceleration to avoid Metal backend issues
     params.n_threads = 4;
     params.progress_callback = progress_callback;
+    params.progress_callback_user_data = nullptr;
     params.embedding = false;  // Disable global embedding mode
     params.use_mmap = true;
     params.n_batch = 512;
@@ -116,6 +117,7 @@ int main(int argc, char* argv[]) {
     completion_params.n_predict = 128;
     completion_params.temperature = 0.8;
     completion_params.token_callback = token_callback;
+    completion_params.token_callback_user_data = nullptr;
     completion_params.top_k = 40;
     completion_params.top_p = 0.95;
     completion_params.min_p = 0.05;
@@ -185,6 +187,7 @@ int main(int argc, char* argv[]) {
         user_message,
         128,    // max_tokens
         nullptr, // token_callback
+        nullptr, // token_callback_user_data
         &conv_result
     );
     
@@ -220,6 +223,7 @@ int main(int argc, char* argv[]) {
         new_message,
         128,    // max_tokens
         nullptr, // token_callback
+        nullptr, // token_callback_user_data
         &new_conv_result
     );
     
@@ -284,6 +288,7 @@ int main(int argc, char* argv[]) {
     embed_params.n_gpu_layers = -1;  // Disable GPU
     embed_params.n_threads = 4;
     embed_params.progress_callback = progress_callback;
+    embed_params.progress_callback_user_data = nullptr;
     embed_params.embedding = true;  // Enable embedding mode specifically for embedding tests
     embed_params.use_mmap = true;
     embed_params.n_batch = 512;
@@ -447,12 +452,12 @@ std::string select_model(const std::vector<std::string>& models) {
     }
 }
 
-void progress_callback(float progress) {
+void progress_callback(float progress, void* user_data) {
     std::cout << "Progress: " << (progress * 100.0f) << "%\r";
     std::cout.flush();
 }
 
-bool token_callback(const char* token) {
+bool token_callback(const char* token, void* user_data) {
     std::cout << token;
     std::cout.flush();
     return true;  // Continue generation

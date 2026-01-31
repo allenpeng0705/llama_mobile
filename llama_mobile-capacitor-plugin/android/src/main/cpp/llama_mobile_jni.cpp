@@ -275,7 +275,7 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
                             const char* content = getStringUTFChars(env, contentStr);
                             
                             if (role != nullptr && content != nullptr) {
-                                chatMessages.push_back({strdup(role), strdup(content)});
+                                chatMessages.push_back({strdup(role), strdup(content), nullptr, nullptr, nullptr});
                             }
                             
                             releaseStringUTFChars(env, roleStr, role);
@@ -399,7 +399,7 @@ static jobject createCompletionResult(JNIEnv* env, const llama_mobile_completion
     }
     
     // Create the Java object
-    jstring text = env->NewStringUTF(result.text);
+    jstring text = result.text ? env->NewStringUTF(result.text) : env->NewStringUTF("");
     jstring stoppingWord = result.stopping_word ? env->NewStringUTF(result.stopping_word) : nullptr;
     jobject completionResult = env->NewObject(resultClass, constructor,
         text,
@@ -531,7 +531,16 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_nativeGenerateComplet
         return nullptr;
     }
     
-    llama_mobile_completion_result_c_t result;
+    llama_mobile_completion_result_c_t result = {
+        .text = nullptr,
+        .tokens_predicted = 0,
+        .tokens_evaluated = 0,
+        .truncated = false,
+        .stopped_eos = false,
+        .stopped_word = false,
+        .stopped_limit = false,
+        .stopping_word = nullptr
+    };
     int ret;
     
     // Use multimodal completion if media paths are present

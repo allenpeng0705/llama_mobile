@@ -274,7 +274,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 FLUTTER_SDK_DIR="$ROOT_DIR/llama_mobile-flutter-SDK"
 IOS_FRAMEWORK_DIR="$ROOT_DIR/llama_mobile-ios"
-ANDROID_LIBS_DIR="$ROOT_DIR/llama_mobile-android/libs"
+ANDROID_LIBS_DIR="$ROOT_DIR/output/llama_mobile-android/libs"
+ANDROID_SDK_OUTPUT_DIR="$ROOT_DIR/output/llama_mobile-android-SDK"
 
 log_message "[INFO] === Building Self-Contained Flutter SDK ==="
 log_message "[INFO] Build type: $BUILD_TYPE"
@@ -323,25 +324,43 @@ for abi in $(ls "$ANDROID_LIBS_DIR"); do
 done
 log_message "[SUCCESS] Android libraries copied to Flutter SDK"
 
-# Copy Android source files to Flutter SDK
+# Copy Android source files to Flutter SDK from output directory
 script_progress "Copying Android source files to Flutter SDK..."
 mkdir -p "$FLUTTER_SDK_DIR/android/src/main/java/com/llamamobile"
-cp -R "$ROOT_DIR/llama_mobile-android-SDK/src/main/java/com/llamamobile/LlamaMobile.kt" "$FLUTTER_SDK_DIR/android/src/main/java/com/llamamobile/"
-log_message "[SUCCESS] Android source files copied to Flutter SDK"
+if [ -d "$ANDROID_SDK_OUTPUT_DIR/src/main/java/com/llamamobile" ]; then
+    cp -R "$ANDROID_SDK_OUTPUT_DIR/src/main/java/com/llamamobile/"* "$FLUTTER_SDK_DIR/android/src/main/java/com/llamamobile/"
+    log_message "[SUCCESS] Android source files copied to Flutter SDK from output directory"
+else
+    log_message "[WARN] Android SDK output directory not found, skipping source file copy"
+fi
 
-# Copy Android assets to Flutter SDK
+# Copy JNI files to Flutter SDK from output directory
+script_progress "Copying Android JNI files to Flutter SDK..."
+mkdir -p "$FLUTTER_SDK_DIR/android/src/main/cpp"
+if [ -d "$ANDROID_SDK_OUTPUT_DIR/src/main/cpp" ]; then
+    cp -R "$ANDROID_SDK_OUTPUT_DIR/src/main/cpp/"* "$FLUTTER_SDK_DIR/android/src/main/cpp/"
+    log_message "[SUCCESS] Android JNI files copied to Flutter SDK from output directory"
+else
+    log_message "[WARN] JNI files not found in output directory, skipping JNI file copy"
+fi
+
+# Copy Android assets to Flutter SDK from output directory
 script_progress "Copying Android assets to Flutter SDK..."
 mkdir -p "$FLUTTER_SDK_DIR/android/src/main/assets/grammars"
-cp -R "$ROOT_DIR/llama_mobile-android-SDK/src/main/assets/grammars/"* "$FLUTTER_SDK_DIR/android/src/main/assets/grammars/"
-log_message "[SUCCESS] Android assets copied to Flutter SDK"
+if [ -d "$ANDROID_SDK_OUTPUT_DIR/src/main/assets/grammars" ]; then
+    cp -R "$ANDROID_SDK_OUTPUT_DIR/src/main/assets/grammars/"* "$FLUTTER_SDK_DIR/android/src/main/assets/grammars/"
+    log_message "[SUCCESS] Android assets copied to Flutter SDK from output directory"
+else
+    log_message "[WARN] Android assets not found in output directory, skipping asset copy"
+fi
 
 # Build Android SDK if needed
-if [ ! -d "$ROOT_DIR/llama_mobile-android-SDK/src/main/java/com/llamamobile/" ] || [ ! -f "$ROOT_DIR/llama_mobile-android-SDK/src/main/java/com/llamamobile/LlamaMobile.kt" ]; then
+if [ ! -d "$ANDROID_SDK_OUTPUT_DIR/src/main/java/com/llamamobile/" ] || [ ! -f "$ANDROID_SDK_OUTPUT_DIR/src/main/java/com/llamamobile/LlamaMobile.kt" ]; then
     script_progress "Building Android SDK..."
     "$SCRIPT_DIR/build-android-SDK.sh" ${VERBOSE:+--verbose}
     log_message "[SUCCESS] Android SDK built"
 else
-    log_message "[INFO] Android SDK already exists, skipping build"
+    log_message "[INFO] Android SDK output already exists, skipping build"
 fi
 
 # Build Flutter plugin

@@ -102,3 +102,17 @@ llama_mobile-ios-SDK/llama_mobile.xcframework/ios-arm64/llama_mobile.framework/l
 llama_mobile-capacitor-plugin/ios/Libraries/llama_mobile.xcframework/ios-arm64-simulator/llama_mobile.framework/llama_mobile
 llama_mobile-capacitor-plugin/ios/Libraries/llama_mobile.xcframework/ios-arm64/llama_mobile.framework/llama_mobile
 /llama_mobile-ios-SDK/.swiftpm
+/examples/androidSDKExample/.kotlin
+/scripts/sdk_backup
+/output
+/llama_mobile-ios-SDK/llama_mobile.xcframework
+/llama_mobile-ios-SDK/llama_mobileBundle
+/llama_mobile-ios/shared
+/llama_mobile-ios/static
+/lib/llama_cpp/cpp-httplib/.github
+/lib/llama_cpp/cpp-httplib/example
+/lib/llama_cpp/cpp-httplib/test
+/llama_mobile-android/include
+/llama_mobile-ios-SDK/llama_mobile.xcframework
+/llama_mobile-ios/llama_mobile.xcframework
+/llama_mobile-ios/llama_mobile.xcframework

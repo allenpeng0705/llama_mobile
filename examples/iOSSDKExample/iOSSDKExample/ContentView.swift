@@ -46,159 +46,8 @@ class AppState: ObservableObject {
     // LlamaMobile instance - optional since it requires a model path to initialize
     @Published var llamaMobile: LlamaMobile? = nil
     
-    // Grammar support
-    @Published var selectedGrammar: String? = nil
-    @Published var availableGrammars: [String] = []
     
-    // Load grammar content from available locations
-    func loadGrammarContent(grammarName: String) -> String? {
-        // First priority: the absolute path where we copied the grammar files
-        let absolutePath = "/Users/shileipeng/Documents/mygithub/llama_mobile/examples/iOSSDKExample/iOSSDKExample/Resources/grammars/\(grammarName).gbnf"
-        
-        if FileManager.default.fileExists(atPath: absolutePath) {
-            print("[DEBUG] ✓ Found grammar file at absolute path: \(absolutePath)")
-            
-            do {
-                let content = try String(contentsOf: URL(fileURLWithPath: absolutePath), encoding: .utf8)
-                print("[DEBUG] ✓ Successfully loaded grammar content for: \(grammarName)")
-                return content
-            } catch {
-                print("[ERROR] ✗ Failed to read grammar file at \(absolutePath): \(error)")
-            }
-        } else {
-            print("[DEBUG] ✗ Grammar file not found at absolute path: \(absolutePath)")
-        }
-        
-        // Second priority: main app bundle
-        let mainBundle = Bundle.main
-        
-        // Try directly in main bundle
-        if let fileURL = mainBundle.url(forResource: grammarName, withExtension: "gbnf") {
-            print("[DEBUG] ✓ Found grammar file directly in main app bundle: \(fileURL.path)")
-            
-            do {
-                let content = try String(contentsOf: fileURL, encoding: .utf8)
-                print("[DEBUG] ✓ Successfully loaded grammar content")
-                return content
-            } catch {
-                print("[ERROR] ✗ Failed to read grammar file: \(error)")
-            }
-        }
-        
-        // Try in grammars subdirectory of main bundle
-        if let fileURL = mainBundle.url(forResource: grammarName, withExtension: "gbnf", subdirectory: "grammars") {
-            print("[DEBUG] ✓ Found grammar file in main app bundle grammars subdirectory: \(fileURL.path)")
-            
-            do {
-                let content = try String(contentsOf: fileURL, encoding: .utf8)
-                print("[DEBUG] ✓ Successfully loaded grammar content")
-                return content
-            } catch {
-                print("[ERROR] ✗ Failed to read grammar file: \(error)")
-            }
-        }
-        
-        // Third priority: framework bundle - try direct access to embedded framework
-        print("[DEBUG] Main bundle path: \(Bundle.main.bundlePath)")
-        
-        // Try 1: Find framework bundle directly in the app's Frameworks directory
-        let frameworkURL = mainBundle.bundleURL.appendingPathComponent("Frameworks/llama_mobile.framework")
-        print("[DEBUG] Direct framework URL: \(frameworkURL.path)")
-        
-        let frameworkExists = FileManager.default.fileExists(atPath: frameworkURL.path)
-        print("[DEBUG] Framework exists at direct path: \(frameworkExists)")
-        
-        if frameworkExists {
-            // Check if this is a valid bundle
-            if let frameworkBundle = Bundle(url: frameworkURL) {
-                print("[DEBUG] Created framework bundle from URL successfully")
-                
-                // List framework bundle contents
-                do {
-                    let frameworkContents = try FileManager.default.contentsOfDirectory(atPath: frameworkBundle.bundlePath)
-                    print("[DEBUG] Framework bundle contents: \(frameworkContents)")
-                    
-                    // Check for grammars directory
-                    let grammarsURL = frameworkBundle.bundleURL.appendingPathComponent("grammars")
-                    print("[DEBUG] Framework grammars URL: \(grammarsURL.path)")
-                    
-                    let grammarsExists = FileManager.default.fileExists(atPath: grammarsURL.path)
-                    print("[DEBUG] Framework grammars directory exists: \(grammarsExists)")
-                    
-                    if grammarsExists {
-                        let grammarFiles = try FileManager.default.contentsOfDirectory(atPath: grammarsURL.path)
-                        print("[DEBUG] Framework grammar files: \(grammarFiles)")
-                        
-                        // Try to find the specific grammar file
-                        let grammarFilePath = grammarsURL.appendingPathComponent("\(grammarName).gbnf")
-                        print("[DEBUG] Specific grammar file path: \(grammarFilePath.path)")
-                        
-                        let grammarFileExists = FileManager.default.fileExists(atPath: grammarFilePath.path)
-                        print("[DEBUG] Specific grammar file exists: \(grammarFileExists)")
-                        
-                        if grammarFileExists {
-                            // Try to read the file
-                            do {
-                                let content = try String(contentsOf: grammarFilePath, encoding: .utf8)
-                                print("[DEBUG] ✓ Successfully loaded grammar from direct framework path")
-                                return content
-                            } catch {
-                                print("[ERROR] ✗ Failed to read grammar file: \(error)")
-                            }
-                        }
-                    }
-                } catch {
-                    print("[ERROR] ✗ Failed to access framework bundle: \(error)")
-                }
-            } else {
-            print("[ERROR] ✗ Failed to create bundle from framework URL")
-        }
-        }
-        
-        // Try 2: Fallback to Bundle(for:) method
-        print("[DEBUG] Trying fallback: Bundle(for: LlamaMobile.self)")
-        let fallbackFrameworkBundle = Bundle(for: LlamaMobile.self)
-        print("[DEBUG] Fallback framework bundle path: \(fallbackFrameworkBundle.bundlePath)")
-        
-        // Try 2: Fallback to Bundle(for:) method - continued
-        // Try with Bundle API on the fallback bundle
-        if let fileURL = fallbackFrameworkBundle.url(forResource: grammarName, withExtension: "gbnf", subdirectory: "grammars") {
-            print("[DEBUG] ✓ Found grammar file using fallback Bundle API: \(fileURL.path)")
-            
-            do {
-                let content = try String(contentsOf: fileURL, encoding: .utf8)
-                print("[DEBUG] ✓ Successfully loaded grammar content from fallback bundle")
-                return content
-            } catch {
-                print("[ERROR] ✗ Failed to read grammar file from fallback bundle: \(error)")
-            }
-        } else {
-            print("[DEBUG] ✗ Grammar file not found using fallback Bundle API")
-        }
-        
-        // Try direct file path access on the fallback bundle
-        let directGrammarPath = fallbackFrameworkBundle.bundlePath + "/grammars/\(grammarName).gbnf"
-        print("[DEBUG] Trying direct file path on fallback bundle: \(directGrammarPath)")
-        
-        if FileManager.default.fileExists(atPath: directGrammarPath) {
-            print("[DEBUG] ✓ Found grammar file using direct path on fallback bundle: \(directGrammarPath)")
-            
-            do {
-                let content = try String(contentsOf: URL(fileURLWithPath: directGrammarPath), encoding: .utf8)
-                print("[DEBUG] ✓ Successfully loaded grammar content using direct path on fallback bundle")
-                return content
-            } catch {
-                print("[ERROR] ✗ Failed to read grammar file using direct path on fallback bundle: \(error)")
-            }
-        } else {
-            print("[DEBUG] ✗ Grammar file not found using direct path on fallback bundle")
-        }
-        
 
-        
-        print("[ERROR] ✗ Could not find grammar file in any location: \(grammarName).gbnf")
-        return nil
-    }
 }
 
 struct ContentView: View {
@@ -313,10 +162,6 @@ struct ContentView: View {
                     // Set default LoRA model path to "Empty"
                     appState.loraModelPath = ""
                     
-                    // Load available grammar files
-                    appState.availableGrammars = ["json", "json_arr", "list", "arithmetic", "c", "chess", "english", "japanese"]
-                    // Set default grammar to nil (Empty)
-                    appState.selectedGrammar = nil
                     
                 } catch {
                     print("Error listing models: \(error)")
@@ -339,7 +184,6 @@ struct ChatView: View {
     @State private var message = ""
     @State private var messages: [Message] = []
     @State private var isLoading = false
-    @State private var jsonGrammar: String? = nil
     
     var body: some View {
         VStack(spacing: 0) {
@@ -439,7 +283,6 @@ struct ChatView: View {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         .onAppear {
-            // JSON grammar loading removed - method no longer exists
         }
     }
     
@@ -529,7 +372,6 @@ struct ChatView: View {
             params.penaltyRepeat = 1.0
             params.penaltyFreq = 0.0
             params.penaltyPresent = 0.0
-            params.grammar = nil // Never use grammar as requested
             params.stopSequences = ["<|im_end|>"]
             params.useJsonResponse = appState.useJsonResponse
             
@@ -548,7 +390,6 @@ struct ChatView: View {
             print("Min P: \(params.minP)")
             print("Penalty Repeat: \(params.penaltyRepeat)")
             print("Stop Sequences: \(params.stopSequences)")
-            print("Grammar: nil (disabled as requested)")
             print("==================================================")
             
             // Generate completion based on Streaming switch
@@ -768,14 +609,6 @@ struct SettingsView: View {
                     .pickerStyle(.menu)
                     .disabled(appState.isModelLoaded)
                     
-                    // Grammar picker - always show picker with "Empty" option
-                    Picker("Select Grammar", selection: $appState.selectedGrammar) {
-                        Text("Empty").tag(nil as String?)
-                        ForEach(appState.availableGrammars, id: \.self) {
-                            Text($0).tag($0 as String?)
-                        }
-                    }
-                    .pickerStyle(.menu)
                     .disabled(appState.isModelLoaded)
                     
                     // Template Toggle
@@ -1648,7 +1481,7 @@ struct LoRATestView: View {
                     .disabled(!appState.isModelLoaded || isProcessing)
             }
             
-            Section(header: Text("Apply LoRA Adapter")) {
+            Section(header: Text("LoRA Actions")) {
                 Button(action: applyLoRA) {
                     HStack {
                         Spacer()
@@ -1657,7 +1490,7 @@ struct LoRATestView: View {
                         Spacer()
                     }
                 }
-                .disabled(appState.loraModelPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !appState.isModelLoaded || isProcessing)
+                .disabled(appState.loraModelPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !appState.isModelLoaded || isProcessing || loraApplied)
                 .buttonStyle(.borderedProminent)
                 .tint(.blue)
                 
@@ -1703,168 +1536,51 @@ struct LoRATestView: View {
     }
     
     func performApplyLoRA(path: String) async {
-        defer { DispatchQueue.main.async { self.isProcessing = false } }
+        var success = false
+        var errorMessage: String?
         
         do {
             let loraAdapter = LlamaMobile.LoraAdapter(path: path, scale: scale)
-            if appState.llamaMobile?.applyLoraAdapters([loraAdapter]) ?? false {
-                DispatchQueue.main.async {
-                    self.loraApplied = true
-                }
-            } else {
-                DispatchQueue.main.async {
-                    appState.errorMessage = "Failed to apply LoRA adapter"
-                }
+            success = appState.llamaMobile?.applyLoraAdapters([loraAdapter]) ?? false
+            if !success {
+                errorMessage = "Failed to apply LoRA adapter"
             }
         } catch {
-            DispatchQueue.main.async {
-                appState.errorMessage = "Error applying LoRA adapter: \(error.localizedDescription)"
+            errorMessage = "Error applying LoRA adapter: \(error.localizedDescription)"
+        }
+        
+        // Update all UI states in a single main thread dispatch
+        DispatchQueue.main.async {
+            self.isProcessing = false
+            if success {
+                self.loraApplied = true
+            } else if let errorMessage = errorMessage {
+                self.appState.errorMessage = errorMessage
             }
         }
     }
     
     func performRemoveLoRA() async {
-        defer { DispatchQueue.main.async { self.isProcessing = false } }
+        var errorMessage: String?
         
         do {
             appState.llamaMobile?.removeLoraAdapters()
-            DispatchQueue.main.async {
-                self.loraApplied = false
-            }
         } catch {
-            DispatchQueue.main.async {
-                appState.errorMessage = "Error removing LoRA adapter: \(error.localizedDescription)"
+            errorMessage = "Error removing LoRA adapter: \(error.localizedDescription)"
+        }
+        
+        // Update all UI states in a single main thread dispatch
+        DispatchQueue.main.async {
+            self.isProcessing = false
+            self.loraApplied = false
+            if let errorMessage = errorMessage {
+                self.appState.errorMessage = errorMessage
             }
         }
     }
 }
 
-// Grammar Test View
-struct GrammarTestView: View {
-    @ObservedObject var appState: AppState
-    @State private var grammarName = "json"
-    @State private var grammarContent = ""
-    @State private var prompt = "Generate a JSON object with name, age, and city fields"
-    @State private var result = ""
-    @State private var isLoading = false
-    
-    let availableGrammars = ["json", "json_arr", "list", "arithmetic", "c", "chess", "english", "japanese"]
-    
-    var body: some View {
-        Form {
-            // Grammar Selection
-            Section(header: Text("Grammar Configuration")) {
-                Picker("Grammar", selection: $grammarName) {
-                    ForEach(availableGrammars, id: \.self) {
-                        Text($0)
-                    }
-                }
-                .pickerStyle(.menu)
-                
-                Button("Get Grammar Content") {
-                    Task {
-                        await getGrammarContent()
-                    }
-                }
-                
-                if !grammarContent.isEmpty {
-                    Section(header: Text("Grammar Content")) {
-                        Text(grammarContent)
-                            .font(.system(.caption, design: .monospaced))
-                            .frame(maxHeight: 100)
-                            .padding()
-                            .background(Color(.systemGroupedBackground))
-                            .cornerRadius(8)
-                            .scrollContentBackground(.hidden)
-                    }
-                }
-            }
-            
-            // Generate with Grammar
-            Section(header: Text("Generate with Grammar")) {
-                TextField("Enter prompt...", text: $prompt, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(1...3)
-                
-                Button(action: generateWithGrammar) {
-                    Text(isLoading ? "Generating..." : "Generate")
-                }
-                .disabled(isLoading)
-            }
-            
-            // Result
-            if !result.isEmpty {
-                Section(header: Text("Result")) {
-                    Text(result)
-                        .font(.system(.body, design: .monospaced))
-                        .padding()
-                        .background(Color(.systemGroupedBackground))
-                        .cornerRadius(8)
-                        .scrollContentBackground(.hidden)
-                }
-            }
-        }
-        .navigationTitle("Grammar Test")
-    }
-    
-    func getGrammarContent() async {
-        Task {
-            do {
-                // Grammar content loading removed - method no longer exists
-                await MainActor.run {
-                    // Grammar content loading removed - no content variable anymore
-                }
-            } catch {
-                await MainActor.run {
-                    self.grammarContent = "Error getting grammar content: \(error.localizedDescription)"
-                }
-            }
-        }
-    }
-    
-    func generateWithGrammar() {
-        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        
-        Task {
-            await MainActor.run {
-                self.isLoading = true
-                self.result = ""
-            }
-            
-            do {
-                defer {
-                    Task {
-                        await MainActor.run {
-                            self.isLoading = false
-                        }
-                    }
-                }
-                
-                // Grammar content loading removed - method no longer exists
-                
-                let params = LlamaMobile.CompletionParams(
-                    prompt: prompt,
-                    maxTokens: 512,
-                    temperature: 0.7,
-                    topK: 40,
-                    topP: 0.95,
-                    minP: 0.05,
-                    grammar: grammarContent
-                )
-                
-                let generated = try await appState.llamaMobile?.generateCompletion(with: params)
-                
-                await MainActor.run {
-                    self.result = generated?.text ?? "Generation failed"
-                }
-            } catch {
-                await MainActor.run {
-                    self.result = "Error: \(error.localizedDescription)"
-                }
-            }
-        }
-    }
-}
+
 
 // Multimodal Test View
 struct MultimodalTestView: View {

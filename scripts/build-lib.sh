@@ -3,6 +3,7 @@
 # ============================================================================
 # CORE LIBRARY BUILD SCRIPT
 # This script uses variables from config.env and provides auto-detection
+# Only builds the core library, not tests
 # ============================================================================
 
 # Load centralized configuration from config.env
@@ -102,6 +103,9 @@ show_usage() {
     echo "  --no-clean           Skip cleaning build directory"
     echo "  --cmake-args         Additional CMake arguments"
     echo ""
+    echo "Note: This script only builds the core library (llama_mobile_core_lib)."
+    echo "      Use build-tests-run.sh to build and run tests."
+    echo ""
     echo "Examples:"
     echo "  $0 -j 8 --debug"
     echo "  $0 --sdk-path /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
@@ -164,7 +168,7 @@ parse_args() {
 
 # Validate build environment
 validate_environment() {
-    echo -e "${BLUE}=== llama_mobile Build Script ===${NC}"
+    echo -e "${BLUE}=== llama_mobile Core Library Build Script ===${NC}"
     echo -e "${BLUE}Validating build environment...${NC}"
     
     # Check for necessary tools
@@ -257,9 +261,9 @@ clean_build() {
     fi
 }
 
-# Build the project
-build_project() {
-    echo -e "${BLUE}Building llama_mobile ($BUILD_TYPE)...${NC}"
+# Build the core library only
+build_core_library() {
+    echo -e "${BLUE}Building llama_mobile core library ($BUILD_TYPE)...${NC}"
     echo -e "${BLUE}Build directory: $BUILD_DIR${NC}"
     echo -e "${BLUE}Output directory: $OUTPUT_DIR${NC}"
     echo -e "${BLUE}Using $NUM_JOBS build jobs${NC}"
@@ -279,12 +283,12 @@ build_project() {
         exit 1
     fi
     
-    # Build the project
-    echo -e "${BLUE}Starting build process...${NC}"
-    if make -j"$NUM_JOBS"; then
-        echo -e "${GREEN}✓ Build completed successfully${NC}"
+    # Build only the core library
+    echo -e "${BLUE}Building core library (llama_mobile_core_lib)...${NC}"
+    if make llama_mobile_core_lib -j"$NUM_JOBS"; then
+        echo -e "${GREEN}✓ Core library built successfully${NC}"
     else
-        echo -e "${RED}✗ Build failed${NC}"
+        echo -e "${RED}✗ Core library build failed${NC}"
         exit 1
     fi
 }
@@ -311,13 +315,14 @@ copy_grammars() {
 # Display summary
 show_summary() {
     echo -e "${BLUE}=== Build Summary ===${NC}"
-    echo -e "${GREEN}✓ Build completed successfully${NC}"
+    echo -e "${GREEN}✓ Core library build completed successfully${NC}"
     echo -e "${BLUE}Build type:${NC} $BUILD_TYPE"
     echo -e "${BLUE}Build directory:${NC} $BUILD_DIR"
     echo -e "${BLUE}Output directory:${NC} $OUTPUT_DIR"
     echo -e "${BLUE}SDK path:${NC} $SDK_PATH"
     echo -e "${BLUE}Grammar files:${NC} $(ls -la "$OUTPUT_DIR/grammars"/*.gbnf 2>/dev/null | wc -l | tr -d ' ') files copied"
     echo -e "${BLUE}=====================${NC}"
+    echo -e "${YELLOW}Note: To build and run tests, use: bash scripts/build-tests-run.sh${NC}"
 }
 
 # Main execution flow
@@ -325,7 +330,7 @@ main() {
     parse_args "$@"
     validate_environment
     clean_build
-    build_project
+    build_core_library
     copy_grammars
     show_summary
 }

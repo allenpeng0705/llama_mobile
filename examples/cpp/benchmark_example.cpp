@@ -35,7 +35,7 @@ std::vector<std::string> list_available_models(const std::string& models_dir) {
 }
 
 // Simple token callback that just counts tokens (no output)
-bool silent_token_callback(const char* token) {
+bool silent_token_callback(const char* token, void* user_data) {
     // Do nothing, just count the token
     return true;
 }
@@ -62,7 +62,7 @@ struct BenchmarkResults {
 };
 
 // Progress callback for model loading
-void progress_callback(float progress) {
+void progress_callback(float progress, void* user_data) {
     printf("Model loading progress: %.1f%%\r", progress * 100.0f);
     fflush(stdout);
 }
@@ -104,6 +104,7 @@ BenchmarkResults run_benchmark(const BenchmarkConfig& config) {
         .min_p = 0.05,
         .penalty_repeat = 1.1,
         .token_callback = silent_token_callback,
+        .token_callback_user_data = nullptr,
     };
     
     llama_mobile_completion_result_t warmup_result;
@@ -128,6 +129,7 @@ BenchmarkResults run_benchmark(const BenchmarkConfig& config) {
         .min_p = 0.05,
         .penalty_repeat = 1.1,
         .token_callback = silent_token_callback,
+        .token_callback_user_data = nullptr,
     };
     
     llama_mobile_completion_result_t benchmark_result;

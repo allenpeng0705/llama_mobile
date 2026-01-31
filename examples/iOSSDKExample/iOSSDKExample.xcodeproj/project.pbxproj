@@ -12,9 +12,9 @@
 		34C4DB9E947B0D8D5098F38B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C9BE87A5686B4EA2318609A1 /* Assets.xcassets */; };
 		5F3E4A2B1A6C4F989A4D7B5E /* models in Resources */ = {isa = PBXBuildFile; fileRef = 2D1A5E3B4F8D4A7E9C6F8B3A /* models */; };
 		74142D8FC0BFD09F20DBE738 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1988D476BD568ACC2ACB4A8 /* ContentView.swift */; };
-		7B251F70B0348A4A302D225B /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C8A2E18D37A50BBFB5303B /* AppDelegate.swift */; };
-		8A1B2C3D4E5F6789 /* LlamaMobile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1234567890ABCDEF /* LlamaMobile.swift */; };
-		B585EB96D4D40A4EE0468573 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B93EB37C1376ABA72525EAB /* SceneDelegate.swift */; };
+	7B251F70B0348A4A302D225B /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99C8A2E18D37A50BBFB5303B /* AppDelegate.swift */; };
+	8A1B2C3D4E5F6789 /* LlamaMobile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1234567890ABCDEF /* LlamaMobile.swift */; };
+	B585EB96D4D40A4EE0468573 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B93EB37C1376ABA72525EAB /* SceneDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -43,7 +43,7 @@
 		C9BE87A5686B4EA2318609A1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D166726F7AFEFC3E69EB8080 /* iOSSDKExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iOSSDKExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F1988D476BD568ACC2ACB4A8 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		1234567890ABCDEF /* LlamaMobile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LlamaMobile.swift; sourceTree = "<group>"; };
+	1234567890ABCDEF /* LlamaMobile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../../llama_mobile-ios-SDK/Sources/LlamaMobile/LlamaMobile.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */

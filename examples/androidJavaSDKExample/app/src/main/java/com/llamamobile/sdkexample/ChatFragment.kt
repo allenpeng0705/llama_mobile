@@ -286,7 +286,10 @@ class ChatFragment : Fragment() {
                     null,                           // tokenCallback
                     chatMessages,                   // chatMessages (conversation context)
                     false,                          // useJsonResponse
-                    null                            // chatTemplate
+                    null,                           // jsonSchema
+                    null,                           // tools
+                    false,                          // parallelToolCalls
+                    null                            // toolChoice
                 )
                 
                 // Generate response

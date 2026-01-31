@@ -88,36 +88,35 @@ class ChatFragment : Fragment() {
                 true
             }
 
-            // Add JSON grammar toggle if grammar is available
-            // Use defensive check to prevent crashes if appState.jsonGrammar is not yet initialized
-            try {
-                context?.let { ctx ->
-                    // Add JSON grammar toggle if grammar is available
-                    if (appState?.jsonGrammar != null) {
-                        // Create a toggle for JSON grammar support
-                        val grammarToggle = android.widget.Switch(ctx)
-                        grammarToggle.text = "JSON Response"
-                        grammarToggle.setOnCheckedChangeListener { _, isChecked ->
-                            useJsonGrammar = isChecked
-                        }
-
-                        // Add grammar toggle
-                        val layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.MATCH_PARENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT
-                        )
-                        layoutParams.setMargins(0, 8, 0, 8)
-                        grammarToggle.layoutParams = layoutParams
-                        (binding.promptEditText.parent as ViewGroup).addView(grammarToggle)
-                    }
-                }
-            } catch (e: Exception) {
-                // Log but don't crash if there's an issue with toggles
-                e.printStackTrace()
-            }
+            // Set up feature toggles
+            setupFeatureToggles()
         } catch (e: Exception) {
             // Log but don't crash if there's an issue with fragment initialization
             e.printStackTrace()
+        }
+    }
+
+    private fun setupFeatureToggles() {
+        // Streaming toggle
+        binding.streamingToggle.setOnCheckedChangeListener {
+            _, isChecked ->
+            appState?.let {
+                it.streaming = isChecked
+            }
+        }
+
+        // JSON Response toggle
+        binding.jsonResponseToggle.setOnCheckedChangeListener {
+            _, isChecked ->
+            appState?.let {
+                it.jsonResponse = isChecked
+            }
+        }
+
+        // Update toggles based on app state
+        appState?.let {
+            binding.streamingToggle.isChecked = it.streaming
+            binding.jsonResponseToggle.isChecked = it.jsonResponse
         }
     }
 
@@ -229,7 +228,7 @@ class ChatFragment : Fragment() {
                 // Determine which grammar to use
                 val grammarToUse = if (currentAppState.selectedGrammar != null) {
                     currentAppState.selectedGrammar
-                } else if (useJsonGrammar) {
+                } else if (currentAppState.jsonResponse) {
                     currentAppState.jsonGrammar
                 } else {
                     null
@@ -261,164 +260,12 @@ class ChatFragment : Fragment() {
                     chatMessages = chatMessages
                 )
                 
-                // Generate response
-                val result = LlamaMobile.generateCompletion(currentAppState.contextHandle, params)
-                
-                // Log the raw model output
-                Log.d(TAG, "Model Raw Output: $result")
-
-                // Parse the result if it's in OpenAI format
-                val parsedContent = if (result != null) {
-                    try {
-                        // Extract the generated text from CompletionResult
-                        val resultText = result.text
-                        
-                        // First clean up the raw result by removing extra tokens
-                        var cleanedResult = resultText
-                            // Remove endoftext tokens
-                            .replace("<|endoftext|", "")
-                            // Remove im_end tokens
-                            .replace("<|im_end|", "")
-                            // Trim whitespace
-                            .trim()
-                        
-                        // Try multiple parsing strategies similar to iOS implementation
-                        var assistantResponse = ""
-                        
-                        // First try to parse as JSON
-                        try {
-                            val json = JSONObject(cleanedResult)
-                            
-                            // Try format 1: choices with text field (chat_example.cpp format)
-                            if (json.has("choices")) {
-                                val choices = json.getJSONArray("choices")
-                                if (choices.length() > 0) {
-                                    val firstChoice = choices.getJSONObject(0)
-                                    
-                                    // Try text field first
-                                    if (firstChoice.has("text")) {
-                                        assistantResponse = firstChoice.getString("text").trim()
-                                        Log.d(TAG, "Successfully parsed JSON with choices.text")
-                                    } 
-                                    // Try standard OpenAI message format
-                                    else if (firstChoice.has("message")) {
-                                        val message = firstChoice.getJSONObject("message")
-                                        if (message.has("content")) {
-                                            val content = message.get("content")
-                                            
-                                            // Handle both string and array content formats
-                                            if (content is String) {
-                                                assistantResponse = content.trim()
-                                            } else if (content is org.json.JSONArray) {
-                                                // Extract text from content array
-                                                val textBuilder = StringBuilder()
-                                                for (i in 0 until content.length()) {
-                                                    val contentItem = content.getJSONObject(i)
-                                                    if (contentItem.has("type") && contentItem.getString("type") == "text") {
-                                                        textBuilder.append(contentItem.optString("text", ""))
-                                                        textBuilder.append(" ")
-                                                    }
-                                                }
-                                                assistantResponse = textBuilder.toString().trim()
-                                            }
-                                            Log.d(TAG, "Successfully parsed standard OpenAI response")
-                                        }
-                                    }
-                                }
-                            }
-                            // Try format 2: single message object
-                            else if (json.has("role") && json.has("content")) {
-                                val content = json.get("content")
-                                if (content is String) {
-                                    assistantResponse = content.trim()
-                                } else if (content is org.json.JSONArray) {
-                                    // Extract text from content array
-                                    val textBuilder = StringBuilder()
-                                    for (i in 0 until content.length()) {
-                                        val contentItem = content.getJSONObject(i)
-                                        if (contentItem.has("type") && contentItem.getString("type") == "text") {
-                                            textBuilder.append(contentItem.optString("text", ""))
-                                            textBuilder.append(" ")
-                                        }
-                                    }
-                                    assistantResponse = textBuilder.toString().trim()
-                                }
-                                Log.d(TAG, "Successfully parsed single message format")
-                            }
-                        } catch (jsonError: JSONException) {
-                            // JSON parsing failed, try regex fallback
-                            Log.d(TAG, "JSON parsing failed, using regex fallback: ${jsonError.message}")
-                            
-                            // Try to extract text field
-                            val textPattern = "\"text\"\\s*:\\s*\"([^\"]+)\""
-                            val textMatcher = Regex(textPattern).find(cleanedResult)
-                            if (textMatcher != null) {
-                                val matchGroup = textMatcher.groups[1]
-                                if (matchGroup != null) {
-                                    assistantResponse = matchGroup.value
-                                    Log.d(TAG, "Extracted text via regex fallback")
-                                }
-                            }
-                            // Try to extract content field if text field extraction failed
-                            else if (assistantResponse.isEmpty()) {
-                                val contentPattern = "\"content\"\\s*:\\s*\"([^\"]+)\""
-                                val contentMatcher = Regex(contentPattern).find(cleanedResult)
-                                if (contentMatcher != null) {
-                                    val matchGroup = contentMatcher.groups[1]
-                                    if (matchGroup != null) {
-                                        assistantResponse = matchGroup.value
-                                        Log.d(TAG, "Extracted content via regex fallback")
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // If all parsing strategies failed, use the cleaned result
-                        if (assistantResponse.isEmpty()) {
-                            assistantResponse = cleanedResult
-                            Log.d(TAG, "All parsing strategies failed, using cleaned result")
-                        }
-                        
-                        // Normalize whitespace in the final response
-                        assistantResponse.replace(Regex("\\s+"), " ").trim()
-                    } catch (e: Exception) {
-                        // Any other error, return cleaned result
-                        Log.e(TAG, "Error parsing response: ${e.message}")
-                        result.text
-                            .replace("<|endoftext|", "")
-                            .replace("<|im_end|", "")
-                            .trim()
-                            .replace(Regex("\\s+"), " ")
-                    }
+                if (currentAppState.streaming) {
+                    // Use streaming API
+                    generateResponseStreaming(currentAppState, params)
                 } else {
-                    null
-                }
-                
-                // Log the parsed content that will be displayed
-                Log.d(TAG, "Model Parsed Content: $parsedContent")
-
-                activity?.runOnUiThread {
-                    if (parsedContent != null) {
-                        // Update the assistant message with the complete response
-                        if (messages.isNotEmpty() && messages.last().role == Message.ROLE_ASSISTANT) {
-                            val updatedMessage = messages.last().copy(text = parsedContent)
-                            messages[messages.size - 1] = updatedMessage
-                            chatAdapter.notifyItemChanged(messages.size - 1)
-                            scrollToBottom()
-                        }
-                    } else {
-                        // Handle empty result
-                        activity?.let { Toast.makeText(it, "Generation failed: empty result", Toast.LENGTH_SHORT).show()}
-                        // Remove the empty assistant message
-                        if (messages.isNotEmpty() && messages.last().role == Message.ROLE_ASSISTANT && messages.last().text.isEmpty()) {
-                            messages.removeAt(messages.size - 1)
-                            chatAdapter.notifyItemRemoved(messages.size)
-                        }
-                    }
-
-                    isGenerating = false
-                    binding.sendButton.isEnabled = currentAppState.isModelLoaded
-                    binding.statusTextView.visibility = View.GONE
+                    // Use non-streaming API
+                    generateResponseNonStreaming(currentAppState, params)
                 }
             } catch (e: Exception) {
                 activity?.runOnUiThread {
@@ -434,6 +281,396 @@ class ChatFragment : Fragment() {
                 }
             }
         }.start()
+    }
+
+    private fun generateResponseStreaming(appState: AppState, params: LlamaMobile.CompletionParams) {
+        // Create a StringBuilder to accumulate the streaming response
+        val responseBuilder = StringBuilder()
+        
+        // Create updated params with token callback
+        val streamingParams = LlamaMobile.CompletionParams(
+            prompt = params.prompt,
+            temperature = params.temperature,
+            maxTokens = params.maxTokens,
+            nThreads = 4,
+            seed = -1,
+            topK = params.topK,
+            topP = params.topP,
+            minP = 0.05f,
+            typicalP = 1.0f,
+            penaltyLastN = 64,
+            penaltyRepeat = params.penaltyRepeat,
+            penaltyFreq = params.penaltyFreq,
+            penaltyPresent = params.penaltyPresent,
+            mirostat = 0,
+            mirostatTau = 5.0f,
+            mirostatEta = 0.1f,
+            ignoreEos = false,
+            nProbs = 0,
+            grammar = null,
+            stopSequences = params.stopSequences,
+            mediaPaths = emptyList(),
+            tokenCallback = { token ->
+                // Update the response builder with each token
+                responseBuilder.append(token)
+                
+                // Update the UI with the current response
+                activity?.runOnUiThread {
+                    if (messages.isNotEmpty() && messages.last().role == Message.ROLE_ASSISTANT) {
+                        val updatedMessage = messages.last().copy(text = responseBuilder.toString())
+                        messages[messages.size - 1] = updatedMessage
+                        chatAdapter.notifyItemChanged(messages.size - 1)
+                        scrollToBottom()
+                    }
+                }
+                
+                // Continue streaming
+                true
+            },
+            chatMessages = params.chatMessages,
+            useJsonResponse = appState.jsonResponse,
+            jsonSchema = null,
+            tools = null,
+            parallelToolCalls = false,
+            toolChoice = null
+        )
+        
+        // Generate response with streaming
+        Thread {
+            try {
+                val result = LlamaMobile.generateCompletion(appState.contextHandle, streamingParams)
+                activity?.runOnUiThread {
+                    try {
+                        if (result != null) {
+                            // Log the raw model output
+                            Log.d(TAG, "Model Raw Output: $result")
+
+                            // Parse the final result if it's in OpenAI format
+                            val parsedContent = try {
+                                // Extract the generated text from CompletionResult
+                                val resultText = result.text
+                                
+                                // First clean up the raw result by removing extra tokens
+                                var cleanedResult = resultText
+                                    // Remove endoftext tokens
+                                    .replace("<|endoftext|", "")
+                                    // Remove im_end tokens
+                                    .replace("<|im_end|", "")
+                                    // Trim whitespace
+                                    .trim()
+                                
+                                // Try multiple parsing strategies similar to iOS implementation
+                                var assistantResponse = ""
+                                
+                                // First try to parse as JSON
+                                try {
+                                    val json = JSONObject(cleanedResult)
+                                    
+                                    // Try format 1: choices with text field (chat_example.cpp format)
+                                    if (json.has("choices")) {
+                                        val choices = json.getJSONArray("choices")
+                                        if (choices.length() > 0) {
+                                            val firstChoice = choices.getJSONObject(0)
+                                            
+                                            // Try text field first
+                                            if (firstChoice.has("text")) {
+                                                assistantResponse = firstChoice.getString("text").trim()
+                                                Log.d(TAG, "Successfully parsed JSON with choices.text")
+                                            } 
+                                            // Try standard OpenAI message format
+                                            else if (firstChoice.has("message")) {
+                                                val message = firstChoice.getJSONObject("message")
+                                                if (message.has("content")) {
+                                                    val content = message.get("content")
+                                                    
+                                                    // Handle both string and array content formats
+                                                    if (content is String) {
+                                                        assistantResponse = content.trim()
+                                                    } else if (content is org.json.JSONArray) {
+                                                        // Extract text from content array
+                                                        val textBuilder = StringBuilder()
+                                                        for (i in 0 until content.length()) {
+                                                            val contentItem = content.getJSONObject(i)
+                                                            if (contentItem.has("type") && contentItem.getString("type") == "text") {
+                                                                textBuilder.append(contentItem.optString("text", ""))
+                                                                textBuilder.append(" ")
+                                                            }
+                                                        }
+                                                        assistantResponse = textBuilder.toString().trim()
+                                                    }
+                                                    Log.d(TAG, "Successfully parsed standard OpenAI response")
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Try format 2: single message object
+                                    else if (json.has("role") && json.has("content")) {
+                                        val content = json.get("content")
+                                        if (content is String) {
+                                            assistantResponse = content.trim()
+                                        } else if (content is org.json.JSONArray) {
+                                            // Extract text from content array
+                                            val textBuilder = StringBuilder()
+                                            for (i in 0 until content.length()) {
+                                                val contentItem = content.getJSONObject(i)
+                                                if (contentItem.has("type") && contentItem.getString("type") == "text") {
+                                                    textBuilder.append(contentItem.optString("text", ""))
+                                                    textBuilder.append(" ")
+                                                }
+                                            }
+                                            assistantResponse = textBuilder.toString().trim()
+                                        }
+                                        Log.d(TAG, "Successfully parsed single message format")
+                                    }
+                                } catch (jsonError: JSONException) {
+                                    // JSON parsing failed, try regex fallback
+                                    Log.d(TAG, "JSON parsing failed, using regex fallback: ${jsonError.message}")
+                                    
+                                    // Try to extract text field
+                                    val textPattern = "\"text\"\\s*:\\s*\"([^\"]+)\""
+                                    val textMatcher = Regex(textPattern).find(cleanedResult)
+                                    if (textMatcher != null) {
+                                        val matchGroup = textMatcher.groups[1]
+                                        if (matchGroup != null) {
+                                            assistantResponse = matchGroup.value
+                                            Log.d(TAG, "Extracted text via regex fallback")
+                                        }
+                                    }
+                                    // Try to extract content field if text field extraction failed
+                                    else if (assistantResponse.isEmpty()) {
+                                        val contentPattern = "\"content\"\\s*:\\s*\"([^\"]+)\""
+                                        val contentMatcher = Regex(contentPattern).find(cleanedResult)
+                                        if (contentMatcher != null) {
+                                            val matchGroup = contentMatcher.groups[1]
+                                            if (matchGroup != null) {
+                                                assistantResponse = matchGroup.value
+                                                Log.d(TAG, "Extracted content via regex fallback")
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                // If all parsing strategies failed, use the cleaned result
+                                if (assistantResponse.isEmpty()) {
+                                    assistantResponse = cleanedResult
+                                    Log.d(TAG, "All parsing strategies failed, using cleaned result")
+                                }
+                                
+                                // Normalize whitespace in the final response
+                                assistantResponse.replace(Regex("\\s+"), " ").trim()
+                            } catch (e: Exception) {
+                                // Any other error, return cleaned result
+                                Log.e(TAG, "Error parsing response: ${e.message}")
+                                result.text
+                                    .replace("<|endoftext|", "")
+                                    .replace("<|im_end|", "")
+                                    .trim()
+                                    .replace(Regex("\\s+"), " ")
+                            }
+                            
+                            // Log the parsed content that will be displayed
+                            Log.d(TAG, "Model Parsed Content: $parsedContent")
+
+                            // Update the assistant message with the complete parsed response
+                            if (messages.isNotEmpty() && messages.last().role == Message.ROLE_ASSISTANT) {
+                                val updatedMessage = messages.last().copy(text = parsedContent)
+                                messages[messages.size - 1] = updatedMessage
+                                chatAdapter.notifyItemChanged(messages.size - 1)
+                                scrollToBottom()
+                            }
+                        } else {
+                            // Handle empty result
+                            activity?.let { Toast.makeText(it, "Generation failed: empty result", Toast.LENGTH_SHORT).show()}
+                            // Remove the empty assistant message
+                            if (messages.isNotEmpty() && messages.last().role == Message.ROLE_ASSISTANT && messages.last().text.isEmpty()) {
+                                messages.removeAt(messages.size - 1)
+                                chatAdapter.notifyItemRemoved(messages.size)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error in completion: ${e.message}")
+                    } finally {
+                        isGenerating = false
+                        binding.sendButton.isEnabled = appState.isModelLoaded
+                        binding.statusTextView.visibility = View.GONE
+                    }
+                }
+            } catch (e: Exception) {
+                activity?.runOnUiThread {
+                    isGenerating = false
+                    binding.sendButton.isEnabled = appState.isModelLoaded
+                    binding.statusTextView.text = "Error: ${e.message}"
+                    binding.statusTextView.setTextColor(activity?.let { ContextCompat.getColor(it, android.R.color.holo_red_dark) } ?: android.graphics.Color.RED)
+                    // Remove the empty assistant message
+                    if (messages.isNotEmpty() && messages.last().role == Message.ROLE_ASSISTANT && messages.last().text.isEmpty()) {
+                        messages.removeAt(messages.size - 1)
+                        chatAdapter.notifyItemRemoved(messages.size)
+                    }
+                }
+            }
+        }.start()
+    }
+
+    private fun generateResponseNonStreaming(appState: AppState, params: LlamaMobile.CompletionParams) {
+        // Generate response
+        val result = LlamaMobile.generateCompletion(appState.contextHandle, params)
+        
+        // Log the raw model output
+        Log.d(TAG, "Model Raw Output: $result")
+
+        // Parse the result if it's in OpenAI format
+        val parsedContent = if (result != null) {
+            try {
+                // Extract the generated text from CompletionResult
+                val resultText = result.text
+                
+                // First clean up the raw result by removing extra tokens
+                var cleanedResult = resultText
+                    // Remove endoftext tokens
+                    .replace("<|endoftext|", "")
+                    // Remove im_end tokens
+                    .replace("<|im_end|", "")
+                    // Trim whitespace
+                    .trim()
+                
+                // Try multiple parsing strategies similar to iOS implementation
+                var assistantResponse = ""
+                
+                // First try to parse as JSON
+                try {
+                    val json = JSONObject(cleanedResult)
+                    
+                    // Try format 1: choices with text field (chat_example.cpp format)
+                    if (json.has("choices")) {
+                        val choices = json.getJSONArray("choices")
+                        if (choices.length() > 0) {
+                            val firstChoice = choices.getJSONObject(0)
+                            
+                            // Try text field first
+                            if (firstChoice.has("text")) {
+                                assistantResponse = firstChoice.getString("text").trim()
+                                Log.d(TAG, "Successfully parsed JSON with choices.text")
+                            } 
+                            // Try standard OpenAI message format
+                            else if (firstChoice.has("message")) {
+                                val message = firstChoice.getJSONObject("message")
+                                if (message.has("content")) {
+                                    val content = message.get("content")
+                                    
+                                    // Handle both string and array content formats
+                                    if (content is String) {
+                                        assistantResponse = content.trim()
+                                    } else if (content is org.json.JSONArray) {
+                                        // Extract text from content array
+                                        val textBuilder = StringBuilder()
+                                        for (i in 0 until content.length()) {
+                                            val contentItem = content.getJSONObject(i)
+                                            if (contentItem.has("type") && contentItem.getString("type") == "text") {
+                                                textBuilder.append(contentItem.optString("text", ""))
+                                                textBuilder.append(" ")
+                                            }
+                                        }
+                                        assistantResponse = textBuilder.toString().trim()
+                                    }
+                                    Log.d(TAG, "Successfully parsed standard OpenAI response")
+                                }
+                            }
+                        }
+                    }
+                    // Try format 2: single message object
+                    else if (json.has("role") && json.has("content")) {
+                        val content = json.get("content")
+                        if (content is String) {
+                            assistantResponse = content.trim()
+                        } else if (content is org.json.JSONArray) {
+                            // Extract text from content array
+                            val textBuilder = StringBuilder()
+                            for (i in 0 until content.length()) {
+                                val contentItem = content.getJSONObject(i)
+                                if (contentItem.has("type") && contentItem.getString("type") == "text") {
+                                    textBuilder.append(contentItem.optString("text", ""))
+                                    textBuilder.append(" ")
+                                }
+                            }
+                            assistantResponse = textBuilder.toString().trim()
+                        }
+                        Log.d(TAG, "Successfully parsed single message format")
+                    }
+                } catch (jsonError: JSONException) {
+                    // JSON parsing failed, try regex fallback
+                    Log.d(TAG, "JSON parsing failed, using regex fallback: ${jsonError.message}")
+                    
+                    // Try to extract text field
+                    val textPattern = "\"text\"\\s*:\\s*\"([^\"]+)\""
+                    val textMatcher = Regex(textPattern).find(cleanedResult)
+                    if (textMatcher != null) {
+                        val matchGroup = textMatcher.groups[1]
+                        if (matchGroup != null) {
+                            assistantResponse = matchGroup.value
+                            Log.d(TAG, "Extracted text via regex fallback")
+                        }
+                    }
+                    // Try to extract content field if text field extraction failed
+                    else if (assistantResponse.isEmpty()) {
+                        val contentPattern = "\"content\"\\s*:\\s*\"([^\"]+)\""
+                        val contentMatcher = Regex(contentPattern).find(cleanedResult)
+                        if (contentMatcher != null) {
+                            val matchGroup = contentMatcher.groups[1]
+                            if (matchGroup != null) {
+                                assistantResponse = matchGroup.value
+                                Log.d(TAG, "Extracted content via regex fallback")
+                            }
+                        }
+                    }
+                }
+                
+                // If all parsing strategies failed, use the cleaned result
+                if (assistantResponse.isEmpty()) {
+                    assistantResponse = cleanedResult
+                    Log.d(TAG, "All parsing strategies failed, using cleaned result")
+                }
+                
+                // Normalize whitespace in the final response
+                assistantResponse.replace(Regex("\\s+"), " ").trim()
+            } catch (e: Exception) {
+                // Any other error, return cleaned result
+                Log.e(TAG, "Error parsing response: ${e.message}")
+                result.text
+                    .replace("<|endoftext|", "")
+                    .replace("<|im_end|", "")
+                    .trim()
+                    .replace(Regex("\\s+"), " ")
+            }
+        } else {
+            null
+        }
+        
+        // Log the parsed content that will be displayed
+        Log.d(TAG, "Model Parsed Content: $parsedContent")
+
+        activity?.runOnUiThread {
+            if (parsedContent != null) {
+                // Update the assistant message with the complete response
+                if (messages.isNotEmpty() && messages.last().role == Message.ROLE_ASSISTANT) {
+                    val updatedMessage = messages.last().copy(text = parsedContent)
+                    messages[messages.size - 1] = updatedMessage
+                    chatAdapter.notifyItemChanged(messages.size - 1)
+                    scrollToBottom()
+                }
+            } else {
+                // Handle empty result
+                activity?.let { Toast.makeText(it, "Generation failed: empty result", Toast.LENGTH_SHORT).show()}
+                // Remove the empty assistant message
+                if (messages.isNotEmpty() && messages.last().role == Message.ROLE_ASSISTANT && messages.last().text.isEmpty()) {
+                    messages.removeAt(messages.size - 1)
+                    chatAdapter.notifyItemRemoved(messages.size)
+                }
+            }
+
+            isGenerating = false
+            binding.sendButton.isEnabled = appState.isModelLoaded
+            binding.statusTextView.visibility = View.GONE
+        }
     }
 
     private fun updateModelLoadedUI() {

@@ -77,6 +77,56 @@
             android:maxLines="5"
             android:minLines="1" />
 
+        <!-- Feature Toggles -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Streaming"
+                    android:textSize="14sp"
+                    android:layout_marginEnd="8dp" />
+
+                <Switch
+                    android:id="@+id/streamingToggle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="JSON Response"
+                    android:textSize="14sp"
+                    android:layout_marginEnd="8dp" />
+
+                <Switch
+                    android:id="@+id/jsonResponseToggle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="" />
+            </LinearLayout>
+        </LinearLayout>
+
         <Button
             android:id="@+id/sendButton"
             android:layout_width="match_parent"

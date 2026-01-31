@@ -37,14 +37,14 @@ std::vector<std::string> list_available_models(const std::string& models_dir) {
 }
 
 // Simple token callback for streaming output
-bool token_callback(const char* token) {
+bool token_callback(const char* token, void* user_data) {
     printf("%s", token);
     fflush(stdout);
     return true; // Continue generation
 }
 
 // Progress callback for model loading
-void progress_callback(float progress) {
+void progress_callback(float progress, void* user_data) {
     printf("Model loading progress: %.1f%%\r", progress * 100.0f);
     fflush(stdout);
 }
@@ -113,6 +113,7 @@ int main(int argc, char** argv) {
     init_params.use_mmap = true;
     init_params.embedding = false;  // Disable global embedding mode (we'll test embedding separately)
     init_params.progress_callback = progress_callback;
+    init_params.progress_callback_user_data = nullptr;
 
     printf("1. Testing context initialization...\n");
     llama_mobile_context_t ctx = llama_mobile_init(&init_params);
@@ -155,6 +156,7 @@ int main(int argc, char** argv) {
     embed_params.use_mmap = true;
     embed_params.embedding = true;  // Enable embedding mode specifically for this context
     embed_params.progress_callback = progress_callback;
+    embed_params.progress_callback_user_data = nullptr;
     
     llama_mobile_context_t embed_ctx = llama_mobile_init(&embed_params);
     if (embed_ctx != nullptr) {
@@ -187,6 +189,7 @@ int main(int argc, char** argv) {
         .stop_sequences = &stop_sequence,
         .stop_sequence_count = 1,
         .token_callback = token_callback,
+        .token_callback_user_data = nullptr,
     };
 
     printf("Prompt: %s\n", prompt);
@@ -305,6 +308,7 @@ int main(int argc, char** argv) {
         .stop_sequence_count = 1,
         .grammar = grammar_path.c_str(),
         .token_callback = token_callback,
+        .token_callback_user_data = nullptr,
     };
 
     printf("Prompt: %s\n", json_prompt);
@@ -356,7 +360,7 @@ int main(int argc, char** argv) {
     printf("9. Testing Download API...\n");
     
     // Progress callback function for downloads
-    auto download_progress = [](float progress, const char* status, int64_t downloaded_bytes, int64_t total_bytes) {
+    auto download_progress = [](float progress, const char* status, int64_t downloaded_bytes, int64_t total_bytes, void* user_data) {
         printf("  Download progress: %.1f%% - %s\n", progress * 100.0f, status ? status : "");
         if (total_bytes > 0) {
             printf("  Downloaded: %.2f MB / %.2f MB\n", 
@@ -376,6 +380,7 @@ int main(int argc, char** argv) {
     download_params.bearer_token = nullptr;
     download_params.offline = false;
     download_params.progress_callback = download_progress;
+    download_params.progress_callback_user_data = nullptr;
     
     printf("  Example: llama_mobile_download_model(&download_params);\n");
     printf("  Note: Actual download is commented out to avoid unintended downloads\n");

@@ -263,7 +263,10 @@ static void common_curl_easy_setopt_get(CURL * curl) {
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 }
 
-static bool common_pull_file(CURL * curl, const std::string & path_temporary) {
+static bool common_pull_file(CURL * curl, 
+                             const std::string & path_temporary,
+                             common_download_progress_callback progress_callback = nullptr,
+                             void* progress_callback_user_data = nullptr) {
     if (std::filesystem::exists(path_temporary)) {
         const std::string partial_size = std::to_string(std::filesystem::file_size(path_temporary));
         LOG_INF("%s: server supports range requests, resuming download from byte %s\n", __func__, partial_size.c_str());
@@ -308,7 +311,9 @@ static bool common_download_head(CURL *              curl,
 // download one single file from remote URL to local path
 static bool common_download_file_single_online(const std::string & url,
                                                const std::string & path,
-                                               const std::string & bearer_token) {
+                                               const std::string & bearer_token,
+                                               common_download_progress_callback progress_callback = nullptr,
+                                               void* progress_callback_user_data = nullptr) {
     static const int max_attempts        = 3;
     static const int retry_delay_seconds = 2;
     for (int i = 0; i < max_attempts; ++i) {
@@ -553,7 +558,9 @@ static bool common_pull_file(httplib::Client & cli,
                              const std::string & path_tmp,
                              bool supports_ranges,
                              size_t existing_size,
-                             size_t & total_size) {
+                             size_t & total_size,
+                             common_download_progress_callback progress_callback = nullptr,
+                             void* progress_callback_user_data = nullptr) {
     std::ofstream ofs(path_tmp, std::ios::binary | std::ios::app);
     if (!ofs.is_open()) {
         LOG_ERR("%s: error opening local file for writing: %s\n", __func__, path_tmp.c_str());
@@ -602,6 +609,11 @@ static bool common_pull_file(httplib::Client & cli,
             if (progress_step >= total_size / 1000 || downloaded == total_size) {
                 bar.update(downloaded, total_size);
                 progress_step = 0;
+                
+                if (progress_callback && total_size > 0) {
+                    float progress = static_cast<float>(downloaded) / static_cast<float>(total_size);
+                    progress_callback(progress, "Downloading...", downloaded, total_size, progress_callback_user_data);
+                }
             }
             return true;
         },
@@ -619,7 +631,9 @@ static bool common_pull_file(httplib::Client & cli,
 // download one single file from remote URL to local path
 static bool common_download_file_single_online(const std::string & url,
                                                const std::string & path,
-                                               const std::string & bearer_token) {
+                                               const std::string & bearer_token,
+                                               common_download_progress_callback progress_callback = nullptr,
+                                               void* progress_callback_user_data = nullptr) {
     static const int max_attempts        = 3;
     static const int retry_delay_seconds = 2;
 
@@ -704,7 +718,7 @@ static bool common_download_file_single_online(const std::string & url,
         // start the download
         LOG_INF("%s: trying to download model from %s to %s (etag:%s)...\n",
                 __func__, common_http_show_masked_url(parts).c_str(), path_temporary.c_str(), etag.c_str());
-        const bool was_pull_successful = common_pull_file(cli, parts.path, path_temporary, supports_ranges, existing_size, total_size);
+        const bool was_pull_successful = common_pull_file(cli, parts.path, path_temporary, supports_ranges, existing_size, total_size, progress_callback, progress_callback_user_data);
         if (!was_pull_successful) {
             if (i + 1 < max_attempts) {
                 const int exponential_backoff_delay = std::pow(retry_delay_seconds, i) * 1000;
@@ -772,9 +786,11 @@ std::pair<long, std::vector<char>> common_remote_get_content(const std::string  
 static bool common_download_file_single(const std::string & url,
                                         const std::string & path,
                                         const std::string & bearer_token,
-                                        bool                offline) {
+                                        bool offline,
+                                        common_download_progress_callback progress_callback = nullptr,
+                                        void* progress_callback_user_data = nullptr) {
     if (!offline) {
-        return common_download_file_single_online(url, path, bearer_token);
+        return common_download_file_single_online(url, path, bearer_token, progress_callback, progress_callback_user_data);
     }
 
     if (!std::filesystem::exists(path)) {
@@ -810,14 +826,23 @@ static bool common_download_file_multiple(const std::vector<std::pair<std::strin
 bool common_download_model(
         const common_params_model & model,
         const std::string & bearer_token,
-        bool offline) {
+        bool offline,
+        common_download_progress_callback progress_callback,
+        void* progress_callback_user_data) {
     // Basic validation of the model.url
     if (model.url.empty()) {
         LOG_ERR("%s: invalid model url\n", __func__);
         return false;
     }
 
-    if (!common_download_file_single(model.url, model.path, bearer_token, offline)) {
+    if (progress_callback) {
+        progress_callback(0.0f, "Starting download...", 0, 0, progress_callback_user_data);
+    }
+
+    if (!common_download_file_single(model.url, model.path, bearer_token, offline, progress_callback, progress_callback_user_data)) {
+        if (progress_callback) {
+            progress_callback(0.0f, "Download failed", 0, 0, progress_callback_user_data);
+        }
         return false;
     }
 
@@ -831,6 +856,9 @@ bool common_download_model(
         auto * ctx_gguf = lm_gguf_init_from_file(model.path.c_str(), lm_gguf_params);
         if (!ctx_gguf) {
             LOG_ERR("\n%s:  failed to load input GGUF from %s\n", __func__, model.path.c_str());
+            if (progress_callback) {
+                progress_callback(0.0f, "Failed to load GGUF file", 0, 0, progress_callback_user_data);
+            }
             return false;
         }
 
@@ -851,11 +879,17 @@ bool common_download_model(
         {
             if (!llama_split_prefix(split_prefix, sizeof(split_prefix), model.path.c_str(), 0, n_split)) {
                 LOG_ERR("\n%s: unexpected model file name: %s n_split=%d\n", __func__, model.path.c_str(), n_split);
+                if (progress_callback) {
+                    progress_callback(0.0f, "Invalid split file format", 0, 0, progress_callback_user_data);
+                }
                 return false;
             }
 
             if (!llama_split_prefix(split_url_prefix, sizeof(split_url_prefix), model.url.c_str(), 0, n_split)) {
                 LOG_ERR("\n%s: unexpected model url: %s n_split=%d\n", __func__, model.url.c_str(), n_split);
+                if (progress_callback) {
+                    progress_callback(0.0f, "Invalid split URL format", 0, 0, progress_callback_user_data);
+                }
                 return false;
             }
         }
@@ -877,6 +911,10 @@ bool common_download_model(
 
         // Download in parallel
         common_download_file_multiple(urls, bearer_token, offline);
+    }
+
+    if (progress_callback) {
+        progress_callback(1.0f, "Download completed!", 0, 0, progress_callback_user_data);
     }
 
     return true;
@@ -1088,7 +1126,7 @@ common_hf_file_res common_get_hf_file(const std::string &, const std::string &, 
     throw std::runtime_error("download functionality is not enabled in this build");
 }
 
-bool common_download_model(const common_params_model &, const std::string &, bool) {
+bool common_download_model(const common_params_model &, const std::string &, bool, common_download_progress_callback, void*) {
     throw std::runtime_error("download functionality is not enabled in this build");
 }
 

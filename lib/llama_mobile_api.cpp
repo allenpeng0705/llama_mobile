@@ -265,7 +265,8 @@ int llama_mobile_generate_response(
     llama_mobile_context_t ctx,
     const char* user_message,
     int32_t max_tokens,
-    bool (*token_callback)(const char* token),
+    bool (*token_callback)(const char* token, void* user_data),
+    void* token_callback_user_data,
     llama_mobile_conversation_result_t* result) {
     
     if (!ctx || !user_message || !result) {
@@ -279,7 +280,8 @@ int llama_mobile_generate_response(
             (llama_mobile_context_handle_t) ctx,
             user_message,
             max_tokens,
-            token_callback);
+            token_callback,
+            token_callback_user_data);
     } else {
         ffi_result = llama_mobile_continue_conversation_c(
             (llama_mobile_context_handle_t) ctx,
@@ -426,7 +428,8 @@ llama_mobile_download_result_t llama_mobile_download_hf_file(
     const char* destination_path,
     const char* bearer_token,
     bool offline,
-    llama_mobile_download_progress_callback progress_callback) {
+    llama_mobile_download_progress_callback progress_callback,
+    void* progress_callback_user_data) {
     
     llama_mobile_download_result_c_t ffi_result = llama_mobile_download_hf_file_c(
         repo_id,
@@ -434,7 +437,8 @@ llama_mobile_download_result_t llama_mobile_download_hf_file(
         destination_path,
         bearer_token,
         offline,
-        progress_callback);
+        progress_callback,
+        progress_callback_user_data);
     
     return convert_download_result(ffi_result);
 }

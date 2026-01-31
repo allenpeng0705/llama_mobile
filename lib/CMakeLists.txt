@@ -5,6 +5,10 @@ project(llama_mobile_core)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Download support options
+option(LLAMA_USE_CURL "Use libcurl for download support" OFF)
+option(LLAMA_USE_HTTPLIB "Use cpp-httplib for download support" ON)
+
 set(LLAMA_MOBILE_CORE_SOURCES
     llama_mobile_context.cpp
     llama_mobile_loader.cpp
@@ -253,6 +257,11 @@ endif()
 
 add_library(llama_mobile_core_lib OBJECT ${LLAMA_MOBILE_CORE_SOURCES})
 
+# Set position-independent code (PIC) for object library
+# This is required for shared libraries
+target_compile_options(llama_mobile_core_lib PRIVATE -fPIC)
+
+
 # Add LM_GGML_CPU_GENERIC definition for non-ARM architectures
 if(NOT ((CMAKE_OSX_ARCHITECTURES MATCHES "arm64") OR (ANDROID_ABI MATCHES "arm64-v8a") OR (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64") OR (CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")))
     target_compile_definitions(llama_mobile_core_lib PRIVATE LM_GGML_CPU_GENERIC)
@@ -265,6 +274,19 @@ set_target_properties(llama_mobile_core_static PROPERTIES OUTPUT_NAME "llama_mob
 # Create shared library
 add_library(llama_mobile_core_shared SHARED $<TARGET_OBJECTS:llama_mobile_core_lib>)
 set_target_properties(llama_mobile_core_shared PROPERTIES OUTPUT_NAME "llama_mobile_core")
+
+# iOS-specific properties for shared library
+if(APPLE)
+    set_target_properties(llama_mobile_core_shared PROPERTIES
+        FRAMEWORK TRUE
+        FRAMEWORK_VERSION A
+        MACOSX_FRAMEWORK_IDENTIFIER com.llamamobile
+        MACOSX_FRAMEWORK_BUNDLE_VERSION "1.0.0"
+        MACOSX_FRAMEWORK_SHORT_VERSION_STRING "1.0"
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_NAME_DIR "@rpath"
+    )
+endif()
 
 # Define LLAMA_MOBILE_FFI_BUILDING_DLL on Windows to avoid dllimport errors in static builds
 if(WIN32)
@@ -315,6 +337,63 @@ target_include_directories(llama_mobile_core_lib PUBLIC
 
 if(NOT MSVC)
     target_compile_options(llama_mobile_core_lib PRIVATE -Wno-cast-qual)
+endif()
+
+# Find and configure download library
+if(LLAMA_USE_CURL)
+    find_package(CURL REQUIRED)
+    if(CURL_FOUND)
+        message(STATUS "Found CURL: ${CURL_VERSION}")
+        target_link_libraries(llama_mobile_core_lib PUBLIC ${CURL_LIBRARIES})
+        target_link_libraries(llama_mobile_core_static PUBLIC ${CURL_LIBRARIES})
+        target_link_libraries(llama_mobile_core_shared PUBLIC ${CURL_LIBRARIES})
+        target_include_directories(llama_mobile_core_lib PUBLIC ${CURL_INCLUDE_DIRS})
+        target_include_directories(llama_mobile_core_static PUBLIC ${CURL_INCLUDE_DIRS})
+        target_include_directories(llama_mobile_core_shared PUBLIC ${CURL_INCLUDE_DIRS})
+        target_compile_definitions(llama_mobile_core_lib PRIVATE LLAMA_USE_CURL)
+        target_compile_definitions(llama_mobile_core_static PRIVATE LLAMA_USE_CURL)
+        target_compile_definitions(llama_mobile_core_shared PRIVATE LLAMA_USE_CURL)
+    else()
+        message(FATAL_ERROR "CURL not found but LLAMA_USE_CURL is ON")
+    endif()
+elseif(LLAMA_USE_HTTPLIB)
+    # Find cpp-httplib header-only library
+    find_path(CPP_HTTPLIB_INCLUDE_DIR
+        NAMES httplib.h
+        PATHS ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/cpp-httplib
+        NO_DEFAULT_PATH
+    )
+    
+    if(CPP_HTTPLIB_INCLUDE_DIR)
+        message(STATUS "Found cpp-httplib at ${CPP_HTTPLIB_INCLUDE_DIR}")
+        target_include_directories(llama_mobile_core_lib PUBLIC ${CPP_HTTPLIB_INCLUDE_DIR})
+        target_include_directories(llama_mobile_core_static PUBLIC ${CPP_HTTPLIB_INCLUDE_DIR})
+        target_include_directories(llama_mobile_core_shared PUBLIC ${CPP_HTTPLIB_INCLUDE_DIR})
+        
+        # Find OpenSSL for HTTPS support
+        find_package(OpenSSL REQUIRED)
+        if(OPENSSL_FOUND)
+            message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")
+            target_include_directories(llama_mobile_core_lib PUBLIC ${OPENSSL_INCLUDE_DIR})
+            target_include_directories(llama_mobile_core_static PUBLIC ${OPENSSL_INCLUDE_DIR})
+            target_include_directories(llama_mobile_core_shared PUBLIC ${OPENSSL_INCLUDE_DIR})
+            target_link_libraries(llama_mobile_core_lib PUBLIC ${OPENSSL_LIBRARIES})
+            target_link_libraries(llama_mobile_core_static PUBLIC ${OPENSSL_LIBRARIES})
+            target_link_libraries(llama_mobile_core_shared PUBLIC ${OPENSSL_LIBRARIES})
+            target_compile_definitions(llama_mobile_core_lib PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+            target_compile_definitions(llama_mobile_core_static PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+            target_compile_definitions(llama_mobile_core_shared PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+        endif()
+        
+        target_compile_definitions(llama_mobile_core_lib PRIVATE LLAMA_USE_HTTPLIB)
+        target_compile_definitions(llama_mobile_core_static PRIVATE LLAMA_USE_HTTPLIB)
+        target_compile_definitions(llama_mobile_core_shared PRIVATE LLAMA_USE_HTTPLIB)
+    else()
+        message(WARNING "cpp-httplib not found, download support will be disabled")
+        set(LLAMA_USE_HTTPLIB OFF)
+    endif()
+else()
+    message(WARNING "No download library selected (LLAMA_USE_CURL or LLAMA_USE_HTTPLIB), download support will be disabled")
 endif()
 
 # Get version information from the original llama.cpp source

@@ -75,24 +75,33 @@ private var chunkCallbackContext: ((String) -> Void)? = nil
 private var embeddingCallbackContext: (([Float]) -> Void)? = nil
 
 // C-compatible callback functions
-private func cProgressCallback(progress: Float) -> Void {
-    callbackQueue.sync {
-        progressCallbackContext?(progress)
+private func cProgressCallback(progress: Float, user_data: UnsafeMutableRawPointer?) -> Void {
+    guard let userData = user_data else { return }
+    let instance = Unmanaged<LlamaMobile>.fromOpaque(userData).takeUnretainedValue()
+    
+    instance.callbackQueue.sync {
+        instance.progressCallbackContext?(progress)
     }
 }
 
-private func cDownloadProgressCallback(progress: Float, status: UnsafePointer<CChar>?, downloadedBytes: Int64, totalBytes: Int64) -> Void {
-    callbackQueue.sync {
-        downloadProgressCallbackContext?(progress)
+private func cDownloadProgressCallback(progress: Float, status: UnsafePointer<CChar>?, downloadedBytes: Int64, totalBytes: Int64, user_data: UnsafeMutableRawPointer?) -> Void {
+    guard let userData = user_data else { return }
+    let instance = Unmanaged<LlamaMobile>.fromOpaque(userData).takeUnretainedValue()
+    
+    instance.callbackQueue.sync {
+        instance.downloadProgressCallbackContext?(progress)
     }
 }
 
-private func cTokenCallback(token: UnsafePointer<CChar>?) -> Bool {
+private func cTokenCallback(token: UnsafePointer<CChar>?, user_data: UnsafeMutableRawPointer?) -> Bool {
+    guard let userData = user_data else { return true }
+    let instance = Unmanaged<LlamaMobile>.fromOpaque(userData).takeUnretainedValue()
+    
     guard let token = token else { return true }
     let tokenString = String(cString: token)
     var shouldContinue = true
-    callbackQueue.sync {
-        shouldContinue = tokenCallbackContext?(tokenString) ?? true
+    instance.callbackQueue.sync {
+        shouldContinue = instance.tokenCallbackContext?(tokenString) ?? true
     }
     return shouldContinue
 }
@@ -753,15 +762,15 @@ public class LlamaMobile {
         configureMetalPaths()
         
         // Create progress callback wrapper if needed
-        typealias ProgressCallbackType = @convention(c) (Float) -> Void
+        typealias ProgressCallbackType = @convention(c) (Float, UnsafeMutableRawPointer?) -> Void
         var callbackWrapper: ProgressCallbackType? = nil
         
         if params.progressCallback != nil {
-            // Store the closure in global context
+            // Store the closure in instance context
             progressCallbackContext = params.progressCallback
-            // Use the global C-compatible function
-            callbackWrapper = { (progress: Float) -> Void in
-                cProgressCallback(progress: progress)
+            // Use the C-compatible function with self as user_data
+            callbackWrapper = { (progress: Float, user_data: UnsafeMutableRawPointer?) -> Void in
+                cProgressCallback(progress: progress, user_data: user_data)
             }
         }
         
@@ -796,8 +805,9 @@ public class LlamaMobile {
         cParams.embd_normalize = params.embdNormalize
         cParams.flash_attn = params.flashAttention
         
-        // Set callback
+        // Set callback with self as user_data
         cParams.progress_callback = callbackWrapper
+        cParams.progress_callback_user_data = Unmanaged.passUnretained(self).toOpaque()
         
         // Set enable_chat_template at the end (matches C struct order)
         cParams.enable_chat_template = params.enableChatTemplate
@@ -844,40 +854,6 @@ public class LlamaMobile {
         }
     }
     
-    /// Load grammar content from the framework's grammars directory
-    /// - Parameter grammarName: Name of the grammar file (without .gbnf extension)
-    /// - Returns: Grammar content as a string, or nil if an error occurred
-    public func loadGrammar(named grammarName: String) -> String? {
-        let frameworkBundle = Bundle(for: type(of: self))
-        log("Loading grammar '\(grammarName)' from framework bundle: \(frameworkBundle.bundlePath)", level: .debug)
-        
-        if let grammarURL = frameworkBundle.url(forResource: grammarName, withExtension: "gbnf", subdirectory: "grammars") {
-            log("Found grammar file at: \(grammarURL.path)", level: .debug)
-            
-            do {
-                let content = try String(contentsOf: grammarURL, encoding: .utf8)
-                log("Successfully loaded grammar '\(grammarName)' (\(content.count) characters)", level: .debug)
-                return content
-            } catch {
-                log("Failed to read grammar file: \(error)", level: .error)
-            }
-        } else {
-            do {
-                let grammarsDirURL = frameworkBundle.url(forResource: nil, withExtension: nil, subdirectory: "grammars")
-                if let grammarsPath = grammarsDirURL?.path {
-                    let availableGrammars = try FileManager.default.contentsOfDirectory(atPath: grammarsPath)
-                    log("Available grammar files in framework: \(availableGrammars)", level: .debug)
-                }
-            } catch {
-                log("Failed to list available grammar files: \(error)", level: .error)
-            }
-            
-            log("Grammar file '\(grammarName).gbnf' not found in framework's grammars directory", level: .error)
-        }
-        
-        return nil
-    }
-    
     /// Generate a text completion from a prompt
     /// - Parameter params: Completion parameters
     /// - Parameter useJsonResponse: Whether to return the response in OpenAI-like JSON format
@@ -913,15 +889,15 @@ public class LlamaMobile {
         }
         
         // Create token callback wrapper if needed
-        typealias TokenCallbackType = @convention(c) (UnsafePointer<CChar>?) -> Bool
+        typealias TokenCallbackType = @convention(c) (UnsafePointer<CChar>?, UnsafeMutableRawPointer?) -> Bool
         var tokenCallbackPtr: TokenCallbackType? = nil
         
         if params.tokenCallback != nil {
-            // Store the closure in global context
+            // Store the closure in instance context
             tokenCallbackContext = params.tokenCallback
-            // Use the global C-compatible function
-            tokenCallbackPtr = { (token: UnsafePointer<CChar>?) -> Bool in
-                cTokenCallback(token: token)
+            // Use the C-compatible function with self as user_data
+            tokenCallbackPtr = { (token: UnsafePointer<CChar>?, user_data: UnsafeMutableRawPointer?) -> Bool in
+                cTokenCallback(token: token, user_data: user_data)
             }
         }
         
@@ -969,7 +945,9 @@ public class LlamaMobile {
             stopStringsToFree.append(grammarCString)
         }
         
+        // Set callback with self as user_data
         cParams.token_callback = tokenCallbackPtr
+        cParams.token_callback_user_data = Unmanaged.passUnretained(self).toOpaque()
         
         // Handle chat messages if provided
         if !params.chatMessages.isEmpty {
@@ -1130,7 +1108,6 @@ public class LlamaMobile {
     /// OpenAI-compatible completion API
     /// Accepts OpenAI format JSON and generates a completion
     /// - Parameter openAIJSON: OpenAI format JSON string
-    /// - Parameter grammar: Optional grammar content to constrain generation
     /// - Returns: The generated completion result in OpenAI format, or nil if an error occurred.
     public func generateOpenAICompletion(with openAIJSON: String) -> CompletionResult? {
         guard let context = context else {
@@ -1196,15 +1173,15 @@ public class LlamaMobile {
     /// - Returns: Download result containing success status and local path
     public func download(with params: DownloadParams) -> DownloadResult {
         // Create a progress callback wrapper if needed
-        typealias DownloadProgressCallbackType = @convention(c) (Float, UnsafePointer<CChar>?, Int64, Int64) -> Void
+        typealias DownloadProgressCallbackType = @convention(c) (Float, UnsafePointer<CChar>?, Int64, Int64, UnsafeMutableRawPointer?) -> Void
         var callbackWrapper: DownloadProgressCallbackType? = nil
         
         if params.progressCallback != nil {
-            // Store the closure in global context
+            // Store the closure in instance context
             downloadProgressCallbackContext = params.progressCallback
-            // Use the global C-compatible function
-            callbackWrapper = { (progress: Float, status: UnsafePointer<CChar>?, downloadedBytes: Int64, totalBytes: Int64) -> Void in
-                cDownloadProgressCallback(progress: progress, status: status, downloadedBytes: downloadedBytes, totalBytes: totalBytes)
+            // Use the C-compatible function with self as user_data
+            callbackWrapper = { (progress: Float, status: UnsafePointer<CChar>?, downloadedBytes: Int64, totalBytes: Int64, user_data: UnsafeMutableRawPointer?) -> Void in
+                cDownloadProgressCallback(progress: progress, status: status, downloadedBytes: downloadedBytes, totalBytes: totalBytes, user_data: user_data)
             }
         }
         
@@ -1230,6 +1207,7 @@ public class LlamaMobile {
         cParams.bearer_token = params.password?.withCString { $0 } // password field used for bearer token
         cParams.offline = false
         cParams.progress_callback = callbackWrapper
+        cParams.progress_callback_user_data = Unmanaged.passUnretained(self).toOpaque()
         
         var cResult = llama_mobile_download_model_c(&cParams)
         

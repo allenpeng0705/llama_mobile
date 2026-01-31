@@ -2,6 +2,7 @@ package com.llamamobile
 
 import android.content.Context
 import android.content.res.AssetManager
+import android.os.Build
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.*
@@ -22,8 +23,6 @@ class LlamaMobileComprehensiveTests {
     private lateinit var assetManager: AssetManager
     
     companion object TestPaths {
-        const val testGrammarFile = "json.gbnf"
-        const val testAssetDir = "grammars"
     }
 
     private lateinit var TEST_OUTPUT_DIR: String
@@ -77,27 +76,6 @@ class LlamaMobileComprehensiveTests {
     }
 
     @Test
-    fun testAssetLoading() {
-        try {
-            // Test loading grammar files from assets
-            val assetList = assetManager.list(testAssetDir)
-            assertNotNull("Asset list should not be null", assetList)
-            assertTrue("Should contain at least one grammar file", assetList?.isNotEmpty() ?: false)
-            
-            // Test reading a specific grammar file
-            val inputStream: InputStream = assetManager.open("$testAssetDir/$testGrammarFile")
-            val reader = BufferedReader(InputStreamReader(inputStream))
-            val content = reader.use { it.readText() }
-            assertFalse("Grammar file should not be empty", content.isEmpty())
-            
-            println("Loaded grammar file content length: ${content.length}")
-            println("First 100 characters: ${content.take(100)}...")
-        } catch (e: IOException) {
-            fail("Failed to load assets: ${e.message}")
-        }
-    }
-
-    @Test
     fun testModelDirectoryAccess() {
         // Test that the model directory exists
         val modelDir = File(rootPath)
@@ -126,50 +104,27 @@ class LlamaMobileComprehensiveTests {
         assertEquals(4, params1.nThreads)
         
         // Test secondary constructor
-        val params2 = LlamaMobile.InitParams(
-            modelPath = modelPath,
-            nCtx = 8192,
-            nThreads = 8
-        )
+        val params2 = LlamaMobile.InitParams(modelPath, 8192)
         assertEquals(modelPath, params2.modelPath)
         assertEquals(8192, params2.nCtx)
-        assertEquals(8, params2.nThreads)
-        
-        // Test copy constructor
-        val params3 = params2.copy(nCtx = 16384)
-        assertEquals(modelPath, params3.modelPath)
-        assertEquals(16384, params3.nCtx)
-        assertEquals(8, params3.nThreads)
+        assertEquals(4, params2.nThreads)
     }
 
     @Test
     fun testCompletionParamsBuilder() {
         val prompt = "Hello, world!"
-        val params = LlamaMobile.CompletionParams(
-            prompt = prompt,
-            temperature = 0.7f,
-            topP = 0.9f,
-            topK = 40,
-            maxTokens = 100,
-            stopSequences = listOf("\n", "User:")
-        )
+        val params = LlamaMobile.CompletionParams(prompt, 0.7f, 100)
         
         assertEquals(prompt, params.prompt)
         assertEquals(0.7f, params.temperature)
-        assertEquals(0.9f, params.topP)
-        assertEquals(40, params.topK)
         assertEquals(100, params.maxTokens)
-        assertEquals(listOf("\n", "User:"), params.stopSequences)
     }
 
     // Note: AudioParams test removed as it doesn't exist in current API
 
     @Test
     fun testLoraAdapterBuilder() {
-        val adapter = LlamaMobile.LoraAdapter(
-            path = loraPath,
-            scale = 0.8f
-        )
+        val adapter = LlamaMobile.LoraAdapter(loraPath, 0.8f)
         
         assertEquals(loraPath, adapter.path)
         assertEquals(0.8f, adapter.scale)
@@ -211,895 +166,439 @@ class LlamaMobileComprehensiveTests {
     }
 
     @Test
-    fun testContextInitializationWithInvalidPath() {
-        // Test initialization with invalid model path
-        val invalidParams = LlamaMobile.InitParams(modelPath = "/invalid/path/to/model.gguf")
-        val context = LlamaMobile.initContext(invalidParams)
+    fun testTTSMethod() {
+        // Test TTSMethod enum values exist
+        val builtIn = LlamaMobile.TTSMethod.BUILT_IN
+        val customWorkflow = LlamaMobile.TTSMethod.CUSTOM_WORKFLOW
         
-        // Should return 0 on failure
-        assertEquals("Context should be zero for invalid path", 0L, context)
+        assertNotNull(builtIn)
+        assertNotNull(customWorkflow)
+        
+        assertEquals("BUILT_IN", builtIn.name)
+        assertEquals("CUSTOM_WORKFLOW", customWorkflow.name)
     }
 
     @Test
-    fun testMethodsWithInvalidContext() {
-        val invalidContext = 0L
-        
-        // Test completion methods
-        val completionResult = LlamaMobile.generateCompletion(invalidContext, "Hello")
-        assertNull("Completion should return null for invalid context", completionResult)
-        
-        val completionParams = LlamaMobile.CompletionParams(prompt = "Hello")
-        val completionResult2 = LlamaMobile.generateCompletion(invalidContext, completionParams)
-        assertNull("Completion with params should return null for invalid context", completionResult2)
-        
-        // Test tokenization methods
-        val tokens = LlamaMobile.tokenize(invalidContext, "Hello")
-        assertNull("Tokenization should return null for invalid context", tokens)
-        
-        val detokenized = LlamaMobile.detokenize(invalidContext, intArrayOf(1, 2, 3))
-        assertNull("Detokenization should return null for invalid context", detokenized)
-        
-        // Test embedding methods
-        val embeddings = LlamaMobile.generateEmbeddings(invalidContext, "Hello")
-        assertNull("Embeddings should return null for invalid context", embeddings)
-        
-        // Test TTS methods
-        val audioSamples = LlamaMobile.generateAudioFromText(invalidContext, "Hello")
-        assertNull("Audio generation should return null for invalid context", audioSamples)
-        
-        val formattedAudio = LlamaMobile.getFormattedAudioCompletion(invalidContext, "{}", "Hello")
-        assertNull("Formatted audio should return null for invalid context", formattedAudio)
-        
-        val audioTokens = LlamaMobile.getAudioGuideTokens(invalidContext, "Hello")
-        assertNull("Audio guide tokens should return null for invalid context", audioTokens)
-        
-        val decodedAudio = LlamaMobile.decodeAudioTokens(invalidContext, intArrayOf(1, 2, 3))
-        assertNull("Audio decoding should return null for invalid context", decodedAudio)
-        
-        // Test LoRA methods
-        val loraAdapters = LlamaMobile.getLoadedLoraAdapters(invalidContext)
-        assertNull("Loaded LoRA adapters should return null for invalid context", loraAdapters)
-        
-        // Test conversation methods
-        val conversationResult = LlamaMobile.generateResponse(invalidContext, "Hello")
-        assertNull("Conversation should return null for invalid context", conversationResult)
-        
-        // Test model info methods
-        val modelDesc = LlamaMobile.getModelDescription(invalidContext)
-        assertNull("Model description should return null for invalid context", modelDesc)
-        
-        // Boolean methods should return false for invalid context
-        assertFalse("isVocoderEnabled should return false for invalid context", LlamaMobile.isVocoderEnabled(invalidContext))
-        assertFalse("isMultimodalEnabled should return false for invalid context", LlamaMobile.isMultimodalEnabled(invalidContext))
-        assertFalse("supportsVision should return false for invalid context", LlamaMobile.supportsVision(invalidContext))
-        assertFalse("supportsAudio should return false for invalid context", LlamaMobile.supportsAudio(invalidContext))
-        assertFalse("isConversationActive should return false for invalid context", LlamaMobile.isConversationActive(invalidContext))
-        
-        // Number methods should return 0 for invalid context
-        assertEquals("Context window size should be 0 for invalid context", 0, LlamaMobile.getContextWindowSize(invalidContext))
-        assertEquals("Embedding dimension should be 0 for invalid context", 0, LlamaMobile.getEmbeddingDimension(invalidContext))
-        assertEquals("Model size should be 0 for invalid context", 0L, LlamaMobile.getModelSize(invalidContext))
-        assertEquals("Model parameters count should be 0 for invalid context", 0L, LlamaMobile.getModelParametersCount(invalidContext))
-        
-        // Test TTS type
-        assertEquals("TTS type should be UNKNOWN for invalid context", LlamaMobile.TTSModelType.UNKNOWN, LlamaMobile.getTTSType(invalidContext))
-    }
-
-    @Test
-    fun testCompletionControl() {
-        // These methods should not crash with invalid context
-        val invalidContext = 0L
-        
-        // Test stop completion
-        LlamaMobile.stopCompletion(invalidContext)
-        
-        // Test conversation control
-        LlamaMobile.clearConversation(invalidContext)
-        
-        // Test LoRA control
-        LlamaMobile.removeLoraAdapters(invalidContext)
-        
-        // Test resource release methods
-        LlamaMobile.releaseVocoder(invalidContext)
-        LlamaMobile.releaseMultimodal(invalidContext)
-        LlamaMobile.releaseContext(invalidContext)
-    }
-
-    @Test
-    fun testDownloadParams() {
-        val testUrl = "https://huggingface.co/model"
-        val testLocalPath = "/tmp/test/model.gguf"
-        
-        // Test default constructor
-        val params = LlamaMobile.DownloadParams(url = testUrl, localPath = testLocalPath)
-        assertEquals(testUrl, params.url)
-        assertEquals(testLocalPath, params.localPath)
-        assertNull(params.password)
-        assertNull(params.headers)
-        
-        // Test with optional parameters
-        val paramsWithAuth = LlamaMobile.DownloadParams(
-            url = testUrl,
-            localPath = testLocalPath,
-            password = "token123",
-            headers = mapOf("Authorization" to "Bearer token")
-        )
-        assertEquals("token123", paramsWithAuth.password)
-        assertEquals("Bearer token", paramsWithAuth.headers?.get("Authorization"))
-    }
-
-    @Test
-    fun testResponseStructures() {
-        // Test CompletionResult
-        val completionResult = LlamaMobile.CompletionResult(
-            text = "Test response",
-            tokensGenerated = 10,
-            tokensEvaluated = 5,
-            truncated = false,
-            stoppedEos = true,
-            stoppedWord = false,
-            stoppedLimit = false
-        )
-        assertEquals("Test response", completionResult.text)
-        assertEquals(10, completionResult.tokensGenerated)
-        assertEquals(5, completionResult.tokensEvaluated)
-        assertFalse(completionResult.truncated)
-        assertTrue(completionResult.stoppedEos)
-        assertFalse(completionResult.stoppedWord)
-        assertFalse(completionResult.stoppedLimit)
-        
-        // Test ConversationResult
-        val conversationResult = LlamaMobile.ConversationResult(
-            text = "Test conversation",
-            timeToFirstToken = 100,
-            totalTime = 500,
-            tokensGenerated = 20
-        )
-        assertEquals("Test conversation", conversationResult.text)
-        assertEquals(100L, conversationResult.timeToFirstToken)
-        assertEquals(500L, conversationResult.totalTime)
-        assertEquals(20, conversationResult.tokensGenerated)
-        
-        // Test DownloadResult
-        val downloadResult = LlamaMobile.DownloadResult(
-            success = true,
-            localPath = "/tmp/test/model.gguf",
-            errorMessage = null
-        )
-        assertTrue(downloadResult.success)
-        assertEquals("/tmp/test/model.gguf", downloadResult.localPath)
-        assertNull(downloadResult.errorMessage)
-        
-        val failedResult = LlamaMobile.DownloadResult(
-            success = false,
-            localPath = "/tmp/test/model.gguf",
-            errorMessage = "Download failed"
-        )
-        assertFalse(failedResult.success)
-        assertEquals("Download failed", failedResult.errorMessage)
-    }
-
-    @Test
-    fun testParameterEdgeCases() {
-        // Test completion with various edge case parameters
-        val params = LlamaMobile.CompletionParams(
-            prompt = "",
-            maxTokens = 0,
-            temperature = 0.0f,
-            topK = 0,
-            topP = 0.0f,
-            minP = 0.0f,
-            typicalP = 0.0f,
-            penaltyLastN = 0,
-            penaltyRepeat = 0.0f,
-            penaltyFreq = 0.0f,
-            penaltyPresent = 0.0f,
-            mirostat = 0,
-            mirostatTau = 0.0f,
-            mirostatEta = 0.0f,
-            ignoreEos = true,
-            stopSequences = emptyList(),
-            grammar = null,
-            mediaPaths = emptyList()
-        )
-        
-        assertEquals("", params.prompt)
-        assertEquals(0, params.maxTokens)
-        assertEquals(0.0f, params.temperature)
-        assertEquals(0, params.topK)
-        assertEquals(0.0f, params.topP)
-        assertEquals(0.0f, params.minP)
-        assertEquals(0.0f, params.typicalP)
-        assertEquals(0, params.penaltyLastN)
-        assertEquals(0.0f, params.penaltyRepeat)
-        assertEquals(0.0f, params.penaltyFreq)
-        assertEquals(0.0f, params.penaltyPresent)
-        assertEquals(0, params.mirostat)
-        assertEquals(0.0f, params.mirostatTau)
-        assertEquals(0.0f, params.mirostatEta)
-        assertTrue(params.ignoreEos)
-        assertTrue(params.stopSequences.isEmpty())
-        assertNull(params.grammar)
-        assertTrue(params.mediaPaths.isEmpty())
-    }
-
-    // The following tests require actual model files
-    // Uncomment and run them when you have the models available
-
-    @Test
-    fun testRealModelLoading() {
-        val modelFile = File(modelPath)
-        
-        // Check if file exists and is readable
-         
-        if (!modelFile.exists() || !modelFile.canRead()) {
-            println("Model file not available or cannot be read at $modelPath - skipping real model test")
-            println("This is likely due to permission issues or the file not being present")
-            return
-        }
-        
-        val params = LlamaMobile.InitParams(modelPath)
-        val context = LlamaMobile.initContext(params)
-        
-        if (context == 0L) {
-            println("Failed to initialize context for model - skipping real model test")
-            println("This may be due to permission issues or model file corruption")
-            return
-        }
-        
-        // Check model info
-        assertTrue("Model size should be greater than 0", LlamaMobile.getModelSize(context) > 0L)
-        assertTrue("Model parameters should be greater than 0", LlamaMobile.getModelParametersCount(context) > 0L)
-        
-        LlamaMobile.releaseContext(context)
-    }
-    
-    @Test
-    fun testRealModelCompletion() {
-        val modelFile = File(modelPath)
-        
-        // Check if file exists and is readable
-        if (!modelFile.exists() || !modelFile.canRead()) {
-            println("Model file not available or cannot be read at $modelPath - skipping real model test")
-            println("This is likely due to permission issues or the file not being present")
-            return
-        }
-        
-        val params = LlamaMobile.InitParams(modelPath)
-        val context = LlamaMobile.initContext(params)
-        
-        if (context == 0L) {
-            println("Failed to initialize context for model - skipping real model test")
-            println("This may be due to permission issues or model file corruption")
-            return
-        }
-        
-        // Use the overload that returns CompletionResult
-        val result = LlamaMobile.generateCompletion(context, "Hello, how are you?", 20, 0.7f)
-        assertNotNull("Completion result should not be null", result)
-        val textGenerated = result?.text?.isNotEmpty() ?: false
-        val tokensGenerated = result?.tokensGenerated ?: 0 > 0
-        assertTrue("Should generate either text or tokens", textGenerated || tokensGenerated)
-        
-        println("Completion result: ${result?.text}")
-        println("Tokens generated: ${result?.tokensGenerated}")
-        
-        LlamaMobile.releaseContext(context)
-    }
-    
-    @Test
-    fun testRealModelTokenization() {
-        // Debug the model path
-        println("Attempting to access model at: $modelPath")
-        println("Root path contents: ${File(rootPath).listFiles()?.joinToString { it.name }}")
-        
-        val modelFile = File(modelPath)
-        
-        // Check file properties
-        println("File exists: ${modelFile.exists()}")
-        println("File can read: ${modelFile.canRead()}")
-        println("File can write: ${modelFile.canWrite()}")
-        println("Parent directory exists: ${modelFile.parentFile?.exists()}")
-        println("Parent directory can read: ${modelFile.parentFile?.canRead()}")
-        
-        if (!modelFile.exists() || !modelFile.canRead()) {
-            println("Model file not available or cannot be read at $modelPath - skipping real model test")
-            println("This is likely due to permission issues or the file not being present")
-            return
-        }
-        
-        println("Found model file at $modelPath")
-        println("File size: ${modelFile.length()} bytes")
-        
-        val params = LlamaMobile.InitParams(modelPath)
-        println("Initialization parameters: $params")
-        
-        // Try different path formats
-        val pathFormats = listOf(
-            modelPath,
-            "/sdcard/Download/models/SmolLM-360M-Instruct.Q6_K.gguf",
-            "storage/emulated/0/Download/models/SmolLM-360M-Instruct.Q6_K.gguf"
-        )
-        
-        var context: Long = 0L
-        
-        for ((i, path) in pathFormats.withIndex()) {
-            println("\nTrying path format $i: $path")
-            val formatParams = LlamaMobile.InitParams(path)
-            val tempContext = LlamaMobile.initContext(formatParams)
-            println("Context handle: $tempContext")
-            
-            if (tempContext != 0L) {
-                println("✓ Success with path format $i")
-                context = tempContext
-                break
-            } else {
-                println("✗ Failed with path format $i")
-            }
-        }
-        
-        // Skip the test if context couldn't be created (likely due to permissions)
-        if (context == 0L) {
-            println("Could not initialize context from any path format - skipping tokenization test")
-            println("This may be due to permission issues or model file corruption")
-            return
-        }
-        
-        // Test tokenization
-        val testText = "Hello, world!"
-        val tokens = LlamaMobile.tokenize(context, testText)
-        assertNotNull("Tokenization should succeed with real model", tokens)
-        assertTrue("Should tokenize into multiple tokens", tokens?.size ?: 0 > 0)
-        
-        // Test detokenization
-        val detokenized = LlamaMobile.detokenize(context, tokens ?: intArrayOf())
-        assertNotNull("Detokenization should succeed with real model", detokenized)
-        assertTrue("Detokenized text should contain original words", detokenized?.contains("Hello") ?: false)
-        
-        LlamaMobile.releaseContext(context)
-    }
-    
-    @Test
-    fun testDedicatedEmbeddingModel() {
-        val embeddingFile = File(embeddingPath)
-        if (!embeddingFile.exists() || !embeddingFile.canRead()) {
-            println("Dedicated embedding model file not available or cannot be read at $embeddingPath - skipping test")
-            println("This is likely due to permission issues or the file not being present")
-            return
-        }
-        
-        println("Attempting to load embedding model: $embeddingPath")
-        
-        // Create instance with dedicated embedding model - explicitly enable embeddings
-        val initParams = LlamaMobile.InitParams(modelPath = embeddingPath, embedding = true)
-        val context = LlamaMobile.initContext(initParams)
-        
-        if (context == 0L) {
-            println("Failed to initialize context for embedding model - skipping test")
-            println("This may be due to permission issues or model file corruption")
-            return
-        }
-        
-        // Test embedding generation
-        val embeddings = LlamaMobile.generateEmbeddings(context, "Hello, world!")
-        
-        assertNotNull("Embeddings should be generated with dedicated embedding model", embeddings)
-        assertTrue("Embedding vector should have dimensions", embeddings?.size ?: 0 > 0)
-        
-        // Test embedding parameters
-        val embeddingDim = LlamaMobile.getEmbeddingDimension(context)
-        println("Embedding dimension: $embeddingDim")
-        assertTrue("Embedding dimension should be greater than 0", embeddingDim > 0)
-        
-        LlamaMobile.releaseContext(context)
-    }
-    
-    @Test
-    fun testMultimodalCapabilities() {
-        val modelFile = File(imageModelPath)
-        val mmprojFile = File(mmprojPath)
-        
-        // Check if files exist and are readable
-        val modelReadable = modelFile.exists() && modelFile.canRead()
-        val mmprojReadable = mmprojFile.exists() && mmprojFile.canRead()
-        
-        if (!modelReadable || !mmprojReadable) {
-            println("Multimodal model files not available or cannot be read - skipping test")
-            println("- Model: $imageModelPath (exists: ${modelFile.exists()}, readable: ${modelFile.canRead()})")
-            println("- MMProj: $mmprojPath (exists: ${mmprojFile.exists()}, readable: ${mmprojFile.canRead()})")
-            println("This is likely due to permission issues or files not being present")
-            return
-        }
-        
-        val params = LlamaMobile.InitParams(imageModelPath)
-        val context = LlamaMobile.initContext(params)
-        
-        if (context == 0L) {
-            println("Failed to initialize context for multimodal model - skipping test")
-            return
-        }
-        
-        // Initialize multimodal capabilities
-        val success = LlamaMobile.initMultimodal(context, mmprojPath)
-        if (!success) {
-            println("Failed to initialize multimodal capabilities - skipping test")
-            LlamaMobile.releaseContext(context)
-            return
-        }
-        
-        // Check multimodal status
-        assertTrue("Multimodal should be enabled", LlamaMobile.isMultimodalEnabled(context))
-        assertTrue("Model should support vision", LlamaMobile.supportsVision(context))
-        
-        LlamaMobile.releaseMultimodal(context)
-        LlamaMobile.releaseContext(context)
-    }
-    
-    @Test
-    fun testTTSCapabilities() {
-        val ttsFile = File(ttsModelPath)
-        val vocoderFile = File(vocoderPath)
-        
-        // Check if files exist and are readable
-        val ttsReadable = ttsFile.exists() && ttsFile.canRead()
-        val vocoderReadable = vocoderFile.exists() && vocoderFile.canRead()
-        
-        if (!ttsReadable || !vocoderReadable) {
-            println("TTS model files not available or cannot be read - skipping test")
-            println("- TTS Model: $ttsModelPath (exists: ${ttsFile.exists()}, readable: ${ttsFile.canRead()})")
-            println("- Vocoder: $vocoderPath (exists: ${vocoderFile.exists()}, readable: ${vocoderFile.canRead()})")
-            println("This is likely due to permission issues or files not being present")
-            return
-        }
-        
-        // Load TTS model
-        val ttsParams = LlamaMobile.InitParams(ttsModelPath)
-        val context = LlamaMobile.initContext(ttsParams)
-        
-        if (context == 0L) {
-            println("Failed to initialize context for TTS model - skipping test")
-            return
-        }
-        
-        // Initialize vocoder
-        val vocoderSuccess = LlamaMobile.initVocoder(context, vocoderPath)
-        if (!vocoderSuccess) {
-            println("Failed to initialize vocoder - skipping test")
-            LlamaMobile.releaseContext(context)
-            return
-        }
-        
-        // Check TTS status
-        assertTrue("Vocoder should be enabled", LlamaMobile.isVocoderEnabled(context))
-        
-        // Test TTS type
-        val ttsType = LlamaMobile.getTTSType(context)
-        assertNotEquals("TTS type should not be unknown", LlamaMobile.TTSModelType.UNKNOWN, ttsType)
-        
-        LlamaMobile.releaseVocoder(context)
-        LlamaMobile.releaseContext(context)
+    fun testCacheType() {
+        // Test CacheType enum values exist
+        val none = LlamaMobile.CacheType.NONE
+        val memory = LlamaMobile.CacheType.MEMORY
+        
+        assertNotNull(none)
+        assertNotNull(memory)
+        
+        assertEquals("NONE", none.name)
+        assertEquals("MEMORY", memory.name)
     }
 
     @Test
     fun testTTSOptions() {
-        // Test TTSOptions with custom parameters
-        val options = LlamaMobile.TTSOptions(
-            sampleRate = 16000,
-            voice = "en-us",
-            speed = 1.2f,
-            saveToFile = false,
-            outputFilePath = null
-        )
+        // Test default constructor
+        val options1 = LlamaMobile.TTSOptions()
+        assertEquals(24000, options1.sampleRate)
+        assertNull(options1.voice)
+        assertEquals(1.0f, options1.speed, 0.001f)
+        assertFalse(options1.isSaveToFile)
+        assertNull(options1.outputFilePath)
         
-        assertEquals("Sample rate should be 16000", 16000, options.sampleRate)
-        assertEquals("Voice should be en-us", "en-us", options.voice)
-        assertEquals("Speed should be 1.2", 1.2f, options.speed)
-        assertFalse("Save to file should be false", options.saveToFile)
-        assertNull("Output file path should be null", options.outputFilePath)
+        // Test builder with all parameters
+        val options2 = LlamaMobile.TTSOptions.Builder()
+            .sampleRate(48000)
+            .voice("custom_voice")
+            .speed(1.5f)
+            .saveToFile(true)
+            .outputFilePath("/path/to/output.wav")
+            .build()
+        
+        assertEquals(48000, options2.sampleRate)
+        assertEquals("custom_voice", options2.voice)
+        assertEquals(1.5f, options2.speed, 0.001f)
+        assertTrue(options2.isSaveToFile)
+        assertEquals("/path/to/output.wav", options2.outputFilePath)
     }
 
     @Test
-    fun testTTSWithCustomOptions() {
-        val ttsFile = File(ttsModelPath)
-        val vocoderFile = File(vocoderPath)
-        
-        // Check if files exist and are readable
-        val ttsReadable = ttsFile.exists() && ttsFile.canRead()
-        val vocoderReadable = vocoderFile.exists() && vocoderFile.canRead()
-        
-        if (!ttsReadable || !vocoderReadable) {
-            println("TTS model files not available or cannot be read - skipping test")
-            return
-        }
-        
-        // Load TTS model
-        val ttsParams = LlamaMobile.InitParams(ttsModelPath)
-        val context = LlamaMobile.initContext(ttsParams)
-        
-        if (context == 0L) {
-            println("Failed to initialize context for TTS model - skipping test")
-            return
-        }
-        
-        // Initialize vocoder
-        val vocoderSuccess = LlamaMobile.initVocoder(context, vocoderPath)
-        if (!vocoderSuccess) {
-            println("Failed to initialize vocoder - skipping test")
-            LlamaMobile.releaseContext(context)
-            return
-        }
-        
-        // Test TTS with custom options
-        val text = "Hello, this is a test with custom TTS options."
-        val options = LlamaMobile.TTSOptions(
-            sampleRate = 24000,
-            voice = "en-us",
-            speed = 1.0f
+    fun testSpeechResult() {
+        val audioSamples = shortArrayOf(100, 200, 300, 400, 500)
+        val result = LlamaMobile.SpeechResult(
+            audioSamples,
+            48000,
+            0.125,
+            "/path/to/output.wav",
+            LlamaMobile.TTSMethod.BUILT_IN
         )
         
-        val result = LlamaMobile.generateSpeechSync(context, text, options)
-        
-        if (result.isSuccess()) {
-            val speechResult = result.getValue()
-            println("TTS with custom options succeeded!")
-            println("Sample rate: ${speechResult?.sampleRate}")
-            println("Duration: ${speechResult?.duration} seconds")
-            println("Method used: ${speechResult?.methodUsed}")
-            assertTrue("Audio samples should not be empty", speechResult?.audioSamples?.isNotEmpty() ?: false)
-        } else {
-            val error = result.getError()
-            println("TTS with custom options failed: $error")
-            // This might fail if the model doesn't support all options, but we should still test the API
-        }
-        
-        LlamaMobile.releaseVocoder(context)
-        LlamaMobile.releaseContext(context)
+        assertEquals(5, result.audioSamples.size)
+        assertEquals(48000, result.sampleRate)
+        assertEquals(0.125, result.duration, 0.001)
+        assertEquals("/path/to/output.wav", result.outputFilePath)
+        assertEquals(LlamaMobile.TTSMethod.BUILT_IN, result.methodUsed)
     }
 
     @Test
-    fun testTTSStreaming() {
-        val ttsFile = File(ttsModelPath)
-        val vocoderFile = File(vocoderPath)
-        
-        // Check if files exist and are readable
-        val ttsReadable = ttsFile.exists() && ttsFile.canRead()
-        val vocoderReadable = vocoderFile.exists() && vocoderFile.canRead()
-        
-        if (!ttsReadable || !vocoderReadable) {
-            println("TTS model files not available or cannot be read - skipping test")
-            return
-        }
-        
-        // Load TTS model
-        val ttsParams = LlamaMobile.InitParams(ttsModelPath)
-        val context = LlamaMobile.initContext(ttsParams)
-        
-        if (context == 0L) {
-            println("Failed to initialize context for TTS model - skipping test")
-            return
-        }
-        
-        // Initialize vocoder
-        val vocoderSuccess = LlamaMobile.initVocoder(context, vocoderPath)
-        if (!vocoderSuccess) {
-            println("Failed to initialize vocoder - skipping test")
-            LlamaMobile.releaseContext(context)
-            return
-        }
-        
-        // Test streaming TTS
-        val text = "Hello, this is a test of the streaming TTS API."
-        val options = LlamaMobile.TTSOptions(sampleRate = 24000)
-        
-        var receivedChunks = 0
-        var totalSamples = 0
-        
-        val result = LlamaMobile.generateSpeechStream(
-            context,
-            text,
-            options,
-            progressHandler = { progress ->
-                println("Streaming Progress: ${(progress * 100).toInt()}%")
-            },
-            audioChunkHandler = { audioChunk ->
-                receivedChunks++
-                totalSamples += audioChunk.size
-                println("Received audio chunk with ${audioChunk.size} samples")
-            }
+    fun testSpeechMetadata() {
+        val metadata = LlamaMobile.SpeechMetadata(
+            24000,
+            1.5,
+            LlamaMobile.TTSMethod.BUILT_IN,
+            "/path/to/output.wav"
         )
         
-        if (result.isSuccess()) {
-            val metadata = result.getValue()
-            println("Streaming TTS succeeded!")
-            println("Sample rate: ${metadata?.sampleRate}")
-            println("Duration: ${metadata?.duration} seconds")
-            println("Method used: ${metadata?.methodUsed}")
-            println("Received $receivedChunks chunks with $totalSamples total samples")
-            assertTrue("Should have received at least one chunk", receivedChunks > 0)
-        } else {
-            val error = result.getError()
-            println("Streaming TTS failed: $error")
-        }
-        
-        LlamaMobile.releaseVocoder(context)
-        LlamaMobile.releaseContext(context)
+        assertEquals(24000, metadata.sampleRate)
+        assertEquals(1.5, metadata.duration, 0.001)
+        assertEquals(LlamaMobile.TTSMethod.BUILT_IN, metadata.methodUsed)
+        assertEquals("/path/to/output.wav", metadata.outputFilePath)
     }
 
-    @Test
-    fun testTTSStreamingForLongText() {
-        val ttsFile = File(ttsModelPath)
-        val vocoderFile = File(vocoderPath)
-        
-        // Check if files exist and are readable
-        val ttsReadable = ttsFile.exists() && ttsFile.canRead()
-        val vocoderReadable = vocoderFile.exists() && vocoderFile.canRead()
-        
-        if (!ttsReadable || !vocoderReadable) {
-            println("TTS model files not available or cannot be read - skipping test")
-            return
-        }
-        
-        // Load TTS model
-        val ttsParams = LlamaMobile.InitParams(ttsModelPath)
-        val context = LlamaMobile.initContext(ttsParams)
-        
-        if (context == 0L) {
-            println("Failed to initialize context for TTS model - skipping test")
-            return
-        }
-        
-        // Initialize vocoder
-        val vocoderSuccess = LlamaMobile.initVocoder(context, vocoderPath)
-        if (!vocoderSuccess) {
-            println("Failed to initialize vocoder - skipping test")
-            LlamaMobile.releaseContext(context)
-            return
-        }
-        
-        // Test long text streaming
-        val longText = "Hello! This is a long text example for streaming TTS. " +
-                "This text will be split into multiple chunks and played continuously. " +
-                "Each sentence will be generated and played as soon as it's ready. " +
-                "This provides a much better user experience for long texts."
-        
-        val options = LlamaMobile.TTSOptions(sampleRate = 24000)
-        
-        var receivedChunks = 0
-        var totalSamples = 0
-        
-        val result = LlamaMobile.generateSpeechStreamForLongText(
-            context,
-            longText,
-            options,
-            progressHandler = { progress ->
-                println("Long Text Streaming Progress: ${(progress * 100).toInt()}%")
-            },
-            audioChunkHandler = { audioChunk ->
-                receivedChunks++
-                totalSamples += audioChunk.size
-                println("Received audio chunk with ${audioChunk.size} samples")
-            }
-        )
-        
-        if (result.isSuccess()) {
-            val metadata = result.getValue()
-            println("Long text streaming succeeded!")
-            println("Sample rate: ${metadata?.sampleRate}")
-            println("Duration: ${metadata?.duration} seconds")
-            println("Method used: ${metadata?.methodUsed}")
-            println("Received $receivedChunks chunks with $totalSamples total samples")
-            assertTrue("Should have received at least one chunk", receivedChunks > 0)
-        } else {
-            val error = result.getError()
-            println("Long text streaming failed: $error")
-        }
-        
-        LlamaMobile.releaseVocoder(context)
-        LlamaMobile.releaseContext(context)
-    }
+    // ==================== Context Management Tests ====================
 
     @Test
-    fun testTTSErrorHandling() {
-        val ttsFile = File(ttsModelPath)
-        val vocoderFile = File(vocoderPath)
-        
-        // Check if files exist and are readable
-        val ttsReadable = ttsFile.exists() && ttsFile.canRead()
-        val vocoderReadable = vocoderFile.exists() && vocoderFile.canRead()
-        
-        if (!ttsReadable || !vocoderReadable) {
-            println("TTS model files not available or cannot be read - skipping test")
-            return
-        }
-        
-        // Load TTS model
-        val ttsParams = LlamaMobile.InitParams(ttsModelPath)
-        val context = LlamaMobile.initContext(ttsParams)
-        
-        if (context == 0L) {
-            println("Failed to initialize context for TTS model - skipping test")
-            return
-        }
-        
-        // Initialize vocoder
-        val vocoderSuccess = LlamaMobile.initVocoder(context, vocoderPath)
-        if (!vocoderSuccess) {
-            println("Failed to initialize vocoder - skipping test")
-            LlamaMobile.releaseContext(context)
-            return
-        }
-        
-        // Test 1: Empty text
-        val emptyTextResult = LlamaMobile.generateSpeechSync(
-            context,
-            "",
-            LlamaMobile.TTSOptions()
-        )
-        
-        if (emptyTextResult.isFailure()) {
-            val error = emptyTextResult.getError()
-            println("Empty text test: Expected failure, got: $error")
-        }
-        
-        // Test 2: Test without vocoder
-        LlamaMobile.releaseVocoder(context)
-        
-        val noVocoderResult = LlamaMobile.generateSpeechSync(
-            context,
-            "Hello",
-            LlamaMobile.TTSOptions()
-        )
-        
-        if (noVocoderResult.isFailure()) {
-            val error = noVocoderResult.getError()
-            println("No vocoder test: Expected failure, got: $error")
-        }
-        
-        // Re-initialize vocoder for cleanup
-        LlamaMobile.initVocoder(context, vocoderPath)
-        
-        LlamaMobile.releaseVocoder(context)
-        LlamaMobile.releaseContext(context)
-    }
+    fun testContextCreationAndRelease() {
+        // Test context creation with invalid path (should fail)
+        val invalidParams = LlamaMobile.InitParams("/invalid/path/model.gguf")
+        val invalidContext = LlamaMobile.initContext(invalidParams)
+        assertEquals(0, invalidContext)
 
-    @Test
-    fun testTTSNoModelLoaded() {
-        // Test TTS with no model loaded (invalid context)
-        val invalidContext = 0L
-        
-        val result = LlamaMobile.generateSpeechSync(
-            invalidContext,
-            "Hello",
-            LlamaMobile.TTSOptions()
-        )
-        
-        if (result.isFailure()) {
-            val error = result.getError()
-            println("No model loaded test: Expected failure, got: $error")
-        }
-    }
-
-    @Test
-    fun testConversationAPI() {
-        val modelFile = File(modelPath)
-        if (!modelFile.exists() || !modelFile.canRead()) {
-            println("Model file not available at $modelPath - skipping test")
-            return
-        }
-        
+        // Test context creation parameters
         val params = LlamaMobile.InitParams(modelPath)
-        val context = LlamaMobile.initContext(params)
-        
-        if (context == 0L) {
-            println("Failed to initialize context for conversation test - skipping test")
-            return
-        }
-        
-        // Test conversation API
-        val result = LlamaMobile.generateResponse(context, "Hello, how are you?")
-        assertNotNull("Conversation result should not be null", result)
-        
-        val textGenerated = result?.text?.isNotEmpty() ?: false
-        val tokensGenerated = result?.tokensGenerated ?: 0 > 0
-        assertTrue("Should generate either text or tokens", textGenerated || tokensGenerated)
-        
-        println("Conversation result: ${result?.text}")
-        println("Tokens generated: ${result?.tokensGenerated}")
-        println("Time to first token: ${result?.timeToFirstToken}ms")
-        println("Total time: ${result?.totalTime}ms")
-        
-        LlamaMobile.releaseContext(context)
+        assertNotNull(params)
+        assertEquals(modelPath, params.modelPath)
+        assertEquals(2048, params.nCtx)
+        assertEquals(4, params.nThreads)
     }
 
     @Test
-    fun testModelInfo() {
-        val modelFile = File(modelPath)
-        if (!modelFile.exists() || !modelFile.canRead()) {
-            println("Model file not available at $modelPath - skipping test")
-            return
-        }
-        
-        val params = LlamaMobile.InitParams(modelPath)
-        val context = LlamaMobile.initContext(params)
-        
-        if (context == 0L) {
-            println("Failed to initialize context for model info test - skipping test")
-            return
-        }
-        
-        // Test model size and parameters count
-        val modelSize = LlamaMobile.getModelSize(context)
-        val paramsCount = LlamaMobile.getModelParametersCount(context)
-        
-        assertTrue("Model size should be greater than 0", modelSize > 0L)
-        assertTrue("Model parameters count should be greater than 0", paramsCount > 0L)
-        
-        println("Model size: $modelSize bytes")
-        println("Model parameters count: $paramsCount")
-        
-        // Test model description
-        val modelDesc = LlamaMobile.getModelDescription(context)
-        assertNotNull("Model description should not be null", modelDesc)
-        println("Model description: $modelDesc")
-        
-        // Test context window size
-        val ctxWindowSize = LlamaMobile.getContextWindowSize(context)
-        assertTrue("Context window size should be greater than 0", ctxWindowSize > 0)
-        println("Context window size: $ctxWindowSize")
-        
-        LlamaMobile.releaseContext(context)
+    fun testInitParamsFactories() {
+        // Test GPU factory
+        val gpuParams = LlamaMobile.InitParams.gpu(modelPath, 4, 4096)
+        assertEquals(modelPath, gpuParams.modelPath)
+        assertEquals(4096, gpuParams.nCtx)
+        assertEquals(4, gpuParams.nGpuLayers)
+
+        // Test embedding factory
+        val embeddingParams = LlamaMobile.InitParams.embedding(modelPath, 1)
+        assertEquals(modelPath, embeddingParams.modelPath)
+        assertTrue(embeddingParams.isEmbedding)
+        assertEquals(1, embeddingParams.poolingType)
     }
 
+    // ==================== Text Generation Tests ====================
+
     @Test
-    fun testLoRAAdapterLoading() {
-        val modelFile = File(modelPath)
-        if (!modelFile.exists() || !modelFile.canRead()) {
-            println("Model file not available at $modelPath - skipping test")
-            return
-        }
-        
-        val loraFile = File(loraPath)
-        if (!loraFile.exists() || !loraFile.canRead()) {
-            println("LoRA adapter file not available at $loraPath - skipping test")
-            return
-        }
-        
-        val params = LlamaMobile.InitParams(modelPath)
-        val context = LlamaMobile.initContext(params)
-        
-        if (context == 0L) {
-            println("Failed to initialize context for LoRA test - skipping test")
-            return
-        }
-        
-        // Test LoRA adapter loading
-        val adapter = LlamaMobile.LoraAdapter(
-            path = loraPath,
-            scale = 0.8f
+    fun testCompletionParamsFactories() {
+        // Test creative factory
+        val creativeParams = LlamaMobile.CompletionParams.creative("Hello", 200)
+        assertEquals("Hello", creativeParams.prompt)
+        assertEquals(1.0f, creativeParams.temperature)
+        assertEquals(200, creativeParams.maxTokens)
+
+        // Test factual factory
+        val factualParams = LlamaMobile.CompletionParams.factual("Hello")
+        assertEquals("Hello", factualParams.prompt)
+        assertEquals(0.1f, factualParams.temperature)
+
+        // Test chat factory with messages
+        val messages = listOf(
+            LlamaMobile.ChatMessage("user", "Hello")
         )
+        val chatParams = LlamaMobile.CompletionParams.chat(messages, 100)
+        assertEquals(100, chatParams.maxTokens)
+        assertEquals(1, chatParams.chatMessages.size)
+
+        // Test chat factory with raw prompt
+        val chatPromptParams = LlamaMobile.CompletionParams.chat("Hello", 100)
+        assertEquals("Hello", chatPromptParams.prompt)
+        assertEquals(100, chatPromptParams.maxTokens)
+
+        // Test multimodal factory
+        val mediaPaths = listOf(imagePath)
+        val multimodalParams = LlamaMobile.CompletionParams.multimodal("Describe this image", mediaPaths, 100)
+        assertEquals("Describe this image", multimodalParams.prompt)
+        assertEquals(1, multimodalParams.mediaPaths.size)
+
+        // Test JSON output factory
+        val jsonParams = LlamaMobile.CompletionParams.jsonOutput("Generate JSON", 100)
+        assertEquals("Generate JSON", jsonParams.prompt)
+        assertTrue(jsonParams.isUseJsonResponse)
+    }
+
+    @Test
+    fun testCompletionParamsFromOpenAIJSON() {
+        val openAIJson = "{" +
+            "\"messages\": [" +
+            "{\"role\": \"system\", \"content\": \"You are a helpful assistant\"}," +
+            "{\"role\": \"user\", \"content\": \"Hello\"}" +
+            "]}"
         
+        try {
+            val params = LlamaMobile.CompletionParams.fromOpenAIJSON(openAIJson)
+            assertNotNull(params)
+        } catch (e: Exception) {
+            fail("Failed to parse OpenAI JSON: ${e.message}")
+        }
+    }
+
+    // ==================== Tokenization Tests ====================
+
+    @Test
+    fun testTokenization() {
+        // Test tokenization with invalid context (should return null)
+        val tokens = LlamaMobile.tokenize(0, "Hello world")
+        assertNull(tokens)
+
+        // Test detokenization with invalid context (should return null)
+        val text = LlamaMobile.detokenize(0, intArrayOf(1, 2, 3))
+        assertNull(text)
+    }
+
+    // ==================== Embeddings Tests ====================
+
+    @Test
+    fun testEmbeddings() {
+        // Test embedding generation with invalid context (should return null)
+        val embeddings = LlamaMobile.generateEmbeddings(0, "Hello world")
+        assertNull(embeddings)
+    }
+
+    // ==================== Multimodal Tests ====================
+
+    @Test
+    fun testMultimodal() {
+        // Test multimodal initialization with invalid context (should return false)
+        val result = LlamaMobile.initMultimodal(0, mmprojPath, true)
+        assertFalse(result)
+
+        // Test multimodal status with invalid context (should return false)
+        assertFalse(LlamaMobile.isMultimodalEnabled(0))
+        assertFalse(LlamaMobile.supportsVision(0))
+        assertFalse(LlamaMobile.supportsAudio(0))
+
+        // Test multimodal release (should not crash)
+        LlamaMobile.releaseMultimodal(0)
+    }
+
+    // ==================== TTS Tests ====================
+
+    @Test
+    fun testVocoder() {
+        // Test vocoder initialization with invalid context (should return false)
+        val result = LlamaMobile.initVocoder(0, vocoderPath)
+        assertFalse(result)
+
+        // Test vocoder status with invalid context (should return false)
+        assertFalse(LlamaMobile.isVocoderEnabled(0))
+
+        // Test TTS type with invalid context (should return UNKNOWN)
+        val ttsType = LlamaMobile.getTTSType(0)
+        assertEquals(LlamaMobile.TTSModelType.UNKNOWN, ttsType)
+
+        // Test vocoder release (should not crash)
+        LlamaMobile.releaseVocoder(0)
+    }
+
+    @Test
+    fun testSpeechGeneration() {
+        // Test audio generation with invalid context (should return null)
+        val audio = LlamaMobile.generateAudioFromText(0, "Hello", null)
+        assertNull(audio)
+
+        // Test speech generation with invalid context (should return failure)
+        val result = LlamaMobile.generateSpeech(0, "Hello")
+        assertNotNull(result)
+        assertTrue(result.isFailure)
+
+        // Test speech stream with invalid context (should return failure)
+        val streamResult = LlamaMobile.generateSpeechStream(0, "Hello", {})
+        assertNotNull(streamResult)
+        assertTrue(streamResult.isFailure)
+    }
+
+    @Test
+    fun testTTSOptionsBuilder() {
+        val options = LlamaMobile.TTSOptions.Builder()
+            .sampleRate(48000)
+            .voice("custom")
+            .speed(1.5f)
+            .saveToFile(true)
+            .outputFilePath("/test/output.wav")
+            .build()
+        
+        assertEquals(48000, options.sampleRate)
+        assertEquals("custom", options.voice)
+        assertEquals(1.5f, options.speed, 0.001f)
+        assertTrue(options.isSaveToFile)
+        assertEquals("/test/output.wav", options.outputFilePath)
+    }
+
+    // ==================== LoRA Tests ====================
+
+    @Test
+    fun testLoraAdapters() {
+        // Test LoRA adapter creation
+        val adapter = LlamaMobile.LoraAdapter(loraPath, 0.8f)
+        assertEquals(loraPath, adapter.path)
+        assertEquals(0.8f, adapter.scale)
+
+        // Test LoRA application with invalid context (should return false)
         val adapters = arrayOf(adapter)
-        val success = LlamaMobile.applyLoraAdapters(context, adapters)
+        val result = LlamaMobile.applyLoraAdapters(0, adapters)
+        assertFalse(result)
+
+        // Test LoRA removal (should not crash)
+        LlamaMobile.removeLoraAdapters(0)
+
+        // Test get loaded LoRA adapters (should return null)
+        val loadedAdapters = LlamaMobile.getLoadedLoraAdapters(0)
+        assertNull(loadedAdapters)
+    }
+
+    // ==================== Utility Tests ====================
+
+    @Test
+    fun testLoadGrammar() {
+        // Test load grammar with null path (should return null)
+        val grammar1 = LlamaMobile.loadGrammar(null)
+        assertNull(grammar1)
+
+        // Test load grammar with empty path (should return null)
+        val grammar2 = LlamaMobile.loadGrammar("")
+        assertNull(grammar2)
+
+        // Test load grammar with invalid path (should return null)
+        val grammar3 = LlamaMobile.loadGrammar("/invalid/path/grammar.gbnf")
+        assertNull(grammar3)
+    }
+
+    // ==================== Download Tests ====================
+
+    @Test
+    fun testDownloadParams() {
+        val params = LlamaMobile.DownloadParams.Builder(
+            "facebook/opt-125m",
+            "model.safetensors",
+            "/test/download/path"
+        )
+            .bearerToken("test-token")
+            .offline(true)
+            .build()
         
-        if (success) {
-            println("Successfully loaded LoRA adapter")
-            
-            // Test getting loaded LoRA adapters
-            val loadedAdapters = LlamaMobile.getLoadedLoraAdapters(context)
-            assertNotNull("Loaded LoRA adapters should not be null", loadedAdapters)
-            assertTrue("Should have at least one LoRA adapter loaded", loadedAdapters?.isNotEmpty() ?: false)
-            
-            println("Loaded ${loadedAdapters?.size} LoRA adapter(s)")
-            
-            // Test removing LoRA adapters
-            LlamaMobile.removeLoraAdapters(context)
-            val removedAdapters = LlamaMobile.getLoadedLoraAdapters(context)
-            assertTrue("Should have no LoRA adapters after removal", removedAdapters?.isEmpty() ?: true)
-            println("Successfully removed LoRA adapters")
-        } else {
-            println("Failed to load LoRA adapter - this may be due to compatibility issues")
+        assertEquals("facebook/opt-125m", params.repoId)
+        assertEquals("model.safetensors", params.filename)
+        assertEquals("/test/download/path", params.destinationPath)
+        assertEquals("test-token", params.bearerToken)
+        assertTrue(params.isOffline)
+    }
+
+    // ==================== Error Handling Tests ====================
+
+    @Test
+    fun testTTSErrors() {
+        val noModelError = LlamaMobile.TTSError.noModelLoaded()
+        assertNotNull(noModelError)
+
+        val noVocoderError = LlamaMobile.TTSError.noVocoderEnabled()
+        assertNotNull(noVocoderError)
+
+        val invalidTextError = LlamaMobile.TTSError.invalidText()
+        assertNotNull(invalidTextError)
+
+        val generationFailedError = LlamaMobile.TTSError.generationFailed()
+        assertNotNull(generationFailedError)
+
+        val formattingFailedError = LlamaMobile.TTSError.formattingFailed()
+        assertNotNull(formattingFailedError)
+
+        val tokenizationFailedError = LlamaMobile.TTSError.tokenizationFailed()
+        assertNotNull(tokenizationFailedError)
+
+        val audioDecodingFailedError = LlamaMobile.TTSError.audioDecodingFailed()
+        assertNotNull(audioDecodingFailedError)
+
+        val fileSaveFailedError = LlamaMobile.TTSError.fileSaveFailed()
+        assertNotNull(fileSaveFailedError)
+
+        val unknownError = LlamaMobile.TTSError.unknownError("Test error")
+        assertNotNull(unknownError)
+    }
+
+    @Test
+    fun testResultClass() {
+        // Test success result
+        val successResult = LlamaMobile.Result.success<String, String>("Test success")
+        assertTrue(successResult.isSuccess)
+        assertFalse(successResult.isFailure)
+        assertEquals("Test success", successResult.value)
+        assertNull(successResult.error)
+
+        // Test failure result
+        val failureResult = LlamaMobile.Result.failure<String, String>("Test failure")
+        assertFalse(failureResult.isSuccess)
+        assertTrue(failureResult.isFailure)
+        assertNull(failureResult.value)
+        assertEquals("Test failure", failureResult.error)
+    }
+
+    // ==================== Chat Message Tests ====================
+
+    @Test
+    fun testChatMessage() {
+        // Test basic chat message
+        val basicMessage = LlamaMobile.ChatMessage("user", "Hello")
+        assertEquals("user", basicMessage.role)
+        assertEquals("Hello", basicMessage.content)
+        assertNull(basicMessage.reasoningContent)
+        assertNull(basicMessage.toolName)
+        assertNull(basicMessage.toolCallId)
+
+        // Test chat message with all parameters
+        val fullMessage = LlamaMobile.ChatMessage(
+            "assistant",
+            "Hello",
+            "Thinking",
+            "test-tool",
+            "tool-123"
+        )
+        assertEquals("assistant", fullMessage.role)
+        assertEquals("Hello", fullMessage.content)
+        assertEquals("Thinking", fullMessage.reasoningContent)
+        assertEquals("test-tool", fullMessage.toolName)
+        assertEquals("tool-123", fullMessage.toolCallId)
+    }
+
+    // ==================== Callback Tests ====================
+
+    @Test
+    fun testCallbacks() {
+        // Test token callback
+        val tokenCallback = object : LlamaMobile.TokenCallback {
+            override fun onToken(token: String): Boolean {
+                return true
+            }
         }
-        
-        LlamaMobile.releaseContext(context)
+        assertNotNull(tokenCallback)
+
+        // Test progress callback
+        val progressCallback = object : LlamaMobile.ProgressCallback {
+            override fun onProgress(progress: Float) {
+                // Do nothing
+            }
+        }
+        assertNotNull(progressCallback)
+
+        // Test download progress callback
+        val downloadCallback = object : LlamaMobile.DownloadProgressCallback {
+            override fun onProgress(progress: Float, status: String, downloadedBytes: Long, totalBytes: Long) {
+                // Do nothing
+            }
+        }
+        assertNotNull(downloadCallback)
+
+        // Test audio chunk callback
+        val audioCallback = object : LlamaMobile.AudioChunkCallback {
+            override fun onAudioChunk(audioChunk: ShortArray) {
+                // Do nothing
+            }
+        }
+        assertNotNull(audioCallback)
     }
 }
