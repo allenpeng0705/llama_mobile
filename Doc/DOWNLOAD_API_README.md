@@ -54,7 +54,7 @@ public func download(with params: DownloadParams) -> DownloadResult
 - `params`: Download configuration parameters
 
 #### Returns:
-- `DownloadResult`: Contains the download outcome, local path, and error information if applicable
+- `DownloadResult`: Contains download outcome, local path, and error information if applicable
 
 ### Android Kotlin {#android-kotlin-download}
 
@@ -69,7 +69,7 @@ fun download(params: DownloadParams): DownloadResult
 - `params`: Download configuration parameters
 
 #### Returns:
-- `DownloadResult`: Contains the download outcome, local path, and error information if applicable
+- `DownloadResult`: Contains download outcome, local path, and error information if applicable
 
 ### Android Java {#android-java-download}
 
@@ -83,7 +83,7 @@ public static DownloadResult download(DownloadParams params)
 - `params`: Download configuration parameters
 
 #### Returns:
-- `DownloadResult`: Contains the download outcome, local path, and error information if applicable
+- `DownloadResult`: Contains download outcome, local path, and error information if applicable
 
 ## Supporting Types
 
@@ -105,7 +105,7 @@ public struct DownloadParams {
     /// Password or API token for authentication (if required)
     public var password: String? = nil
     
-    /// Custom HTTP headers for the download request
+    /// Custom HTTP headers for download request
     public var headers: [String: String]? = nil
     
     /// Callback for download progress (0.0 to 1.0)
@@ -240,7 +240,7 @@ public static class DownloadParams {
 
 ```java
 public interface ProgressCallback {
-    void onProgress(float progress);
+    void onProgress(float progress, String status, long downloadedBytes, long totalBytes);
 }
 ```
 
@@ -485,7 +485,7 @@ fun downloadVocoderModel() {
     
     // Handle result
     if (result.success) {
-        println("Vocoder model downloaded successfully to: ${result.localPath}")
+        println("Vocoder downloaded successfully to: ${result.localPath}")
         // Now you can set this as the vocoder model path
     } else {
         println("Error downloading vocoder model: ${result.errorMessage ?: "Unknown error"}")
@@ -527,8 +527,10 @@ public void downloadModelWithProgress() {
         "meta-llama/Llama-3.2-1B-Instruct",
         getFilesDir() + File.separator + "Models" + File.separator + "Llama-3.2-1B-Instruct.Q4_K_M.gguf"
     )
-    .progressCallback(progress -> {
+    .progressCallback((progress, status, downloadedBytes, totalBytes) -> {
         System.out.println("Download progress: " + (int)(progress * 100) + "%");
+        System.out.println("Status: " + status);
+        System.out.println("Downloaded: " + downloadedBytes + " / " + totalBytes + " bytes");
     })
     .build();
     
@@ -555,7 +557,7 @@ public void downloadPrivateModel() {
     )
     .username("your-username")
     .password("your-huggingface-token") // Use your Hugging Face API token here
-    .progressCallback(progress -> {
+    .progressCallback((progress, status, downloadedBytes, totalBytes) -> {
         System.out.println("Download progress: " + (int)(progress * 100) + "%");
     })
     .build();
@@ -581,7 +583,7 @@ public void downloadVocoderModel() {
         "facebook/tts-transformer",
         getFilesDir() + File.separator + "Models" + File.separator + "vocoder-model.gguf"
     )
-    .progressCallback(progress -> {
+    .progressCallback((progress, status, downloadedBytes, totalBytes) -> {
         System.out.println("Vocoder download progress: " + (int)(progress * 100) + "%");
     })
     .build();
@@ -603,12 +605,32 @@ public void downloadVocoderModel() {
 
 ### How It Works
 
-1. **Parameter Validation**: The API validates the input parameters and prepares the download request
+1. **Parameter Validation**: The API validates input parameters and prepares the download request
 2. **Directory Creation**: Automatically creates the destination directory if it doesn't exist
-3. **Progress Tracking**: Provides real-time progress updates through the callback
+3. **Progress Tracking**: Provides real-time progress updates through callback
 4. **Authentication**: Supports bearer token authentication for private repositories
 5. **Error Handling**: Captures and reports errors at each stage of the download process
 6. **Cleanup**: Properly frees all allocated resources
+
+### Platform-Specific Implementations
+
+#### iOS Implementation
+
+The iOS SDK uses **URLSession** for native networking:
+
+- **Built-in SSL/TLS**: No external dependencies required
+- **Native Progress Tracking**: Uses KVO (Key-Value Observing) for progress updates
+- **Error Handling**: Comprehensive error messages for network issues
+- **Automatic Retry**: Built-in retry logic for transient failures
+
+#### Android Implementation
+
+The Android SDK uses **HttpURLConnection** for native networking:
+
+- **Built-in SSL/TLS**: No external dependencies required (no OpenSSL needed)
+- **Native Progress Tracking**: Real-time progress updates during download
+- **Error Handling**: Comprehensive error messages for network issues
+- **Thread Safety**: Designed to work with Android's threading model
 
 ### Key Features
 
@@ -617,6 +639,7 @@ public void downloadVocoderModel() {
 3. **Authentication Support**: Handles private repositories with API tokens
 4. **Error Reporting**: Detailed error messages for debugging
 5. **Automatic Directory Creation**: Ensures the destination directory exists
+6. **Platform-Native**: Uses platform-specific networking APIs for optimal performance
 
 ## Best Practices
 
@@ -657,25 +680,25 @@ func downloadModelInBackground() {
 
 #### Android Kotlin {#android-kotlin-background-threads}
 
+Use Kotlin coroutines for background downloads:
+
 ```kotlin
 fun downloadModelInBackground() {
-    val params = DownloadParams(
-        url = "meta-llama/Llama-3.2-1B-Instruct",
-        localPath = "${context.filesDir}/Models/Llama-3.2-1B-Instruct.Q4_K_M.gguf",
-        progressCallback = { progress ->
-            // Update UI with progress on main thread
-            Handler(Looper.getMainLooper()).post {
-                println("Download progress: ${(progress * 100).toInt()}%")
+    CoroutineScope(Dispatchers.IO).launch {
+        val params = DownloadParams(
+            url = "meta-llama/Llama-3.2-1B-Instruct",
+            localPath = "${context.filesDir}/Models/Llama-3.2-1B-Instruct.Q4_K_M.gguf",
+            progressCallback = { progress ->
+                withContext(Dispatchers.Main) {
+                    // Update UI with progress
+                    println("Download progress: ${(progress * 100).toInt()}%")
+                }
             }
-        }
-    )
-    
-    // Run download on a background thread
-    Thread {
+        )
+        
         val result = LlamaMobile.download(params)
         
-        // Update UI on main thread
-        Handler(Looper.getMainLooper()).post {
+        withContext(Dispatchers.Main) {
             if (result.success) {
                 println("Model downloaded successfully to: ${result.localPath}")
                 // Update UI to reflect success
@@ -684,330 +707,188 @@ fun downloadModelInBackground() {
                 // Update UI to reflect error
             }
         }
-    }.start()
-}
-
-// Using Kotlin Coroutines (recommended)
-suspend fun downloadModelWithCoroutines() {
-    val params = DownloadParams(
-        url = "meta-llama/Llama-3.2-1B-Instruct",
-        localPath = "${context.filesDir}/Models/Llama-3.2-1B-Instruct.Q4_K_M.gguf",
-        progressCallback = { progress ->
-            // Update UI with progress
-            println("Download progress: ${(progress * 100).toInt()}%")
-        }
-    )
-    
-    // Run download in a background coroutine
-    val result = withContext(Dispatchers.IO) {
-        LlamaMobile.download(params)
-    }
-    
-    // Handle result (already on main thread if called from lifecycleScope)
-    if (result.success) {
-        println("Model downloaded successfully to: ${result.localPath}")
-        // Update UI to reflect success
-    } else {
-        println("Error downloading model: ${result.errorMessage ?: "Unknown error"}")
-        // Update UI to reflect error
     }
 }
 ```
 
 #### Android Java {#android-java-background-threads}
 
+Use threads for background downloads:
+
 ```java
 public void downloadModelInBackground() {
-    final LlamaMobile.DownloadParams params = new LlamaMobile.DownloadParams.Builder(
-        "meta-llama/Llama-3.2-1B-Instruct",
-        getFilesDir() + File.separator + "Models" + File.separator + "Llama-3.2-1B-Instruct.Q4_K_M.gguf"
-    )
-    .progressCallback(new LlamaMobile.ProgressCallback() {
-        @Override
-        public void onProgress(float progress) {
-            // Update UI with progress on main thread
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    System.out.println("Download progress: " + (int)(progress * 100) + "%");
-                }
+    new Thread(() -> {
+        LlamaMobile.DownloadParams params = new LlamaMobile.DownloadParams.Builder(
+            "meta-llama/Llama-3.2-1B-Instruct",
+            getFilesDir() + File.separator + "Models" + File.separator + "Llama-3.2-1B-Instruct.Q4_K_M.gguf"
+        )
+        .progressCallback((progress, status, downloadedBytes, totalBytes) -> {
+            runOnUiThread(() -> {
+                // Update UI with progress
+                System.out.println("Download progress: " + (int)(progress * 100) + "%");
             });
-        }
-    })
-    .build();
-    
-    // Run download on a background thread
-    new Thread(new Runnable() {
-        @Override
-        public void run() {
-            final LlamaMobile.DownloadResult result = LlamaMobile.download(params);
-            
-            // Update UI on main thread
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    if (result.isSuccess()) {
-                        System.out.println("Model downloaded successfully to: " + result.getLocalPath());
-                        // Update UI to reflect success
-                    } else {
-                        System.out.println("Error downloading model: " + (result.getErrorMessage() != null ? result.getErrorMessage() : "Unknown error"));
-                        // Update UI to reflect error
-                    }
-                }
-            });
-        }
+        })
+        .build();
+        
+        LlamaMobile.DownloadResult result = LlamaMobile.download(params);
+        
+        runOnUiThread(() -> {
+            if (result.isSuccess()) {
+                System.out.println("Model downloaded successfully to: " + result.getLocalPath());
+                // Update UI to reflect success
+            } else {
+                System.out.println("Error downloading model: " + (result.getErrorMessage() != null ? result.getErrorMessage() : "Unknown error"));
+                // Update UI to reflect error
+            }
+        });
     }).start();
 }
 ```
 
-### 2. Error Handling
+### 2. Error Handling {#error-handling}
 
 #### iOS {#ios-error-handling}
 
-Always handle download errors gracefully:
+The iOS SDK provides detailed error messages for common scenarios:
 
-```swift
-func handleDownloadError(_ result: LlamaMobile.DownloadResult) {
-    if !result.success {
-        switch result.errorMessage {
-        case let message where message?.contains("401") == true:
-            print("Authentication error: Please check your API token")
-        case let message where message?.contains("404") == true:
-            print("Not found error: Please check the repository and filename")
-        case let message where message?.contains("network") == true:
-            print("Network error: Please check your internet connection")
-        default:
-            print("Download error: \(result.errorMessage ?? "Unknown error")")
-        }
-    }
-}
-```
+- **Network Connection Lost**: "Network connection lost. Please check your internet connection and try again."
+- **Connection Timeout**: "Connection timed out. Please check your internet connection and try again."
+- **No Internet Connection**: "No internet connection. Please check your network settings."
+- **HTTP Errors**: "HTTP error: {status_code}"
+- **File System Errors**: "Failed to create destination directory: {error}"
 
 #### Android Kotlin {#android-kotlin-error-handling}
 
-```kotlin
-fun handleDownloadError(result: DownloadResult) {
-    if (!result.success) {
-        val errorMessage = result.errorMessage
-        when {
-            errorMessage?.contains("401") == true -> {
-                println("Authentication error: Please check your API token")
-            }
-            errorMessage?.contains("404") == true -> {
-                println("Not found error: Please check the repository and filename")
-            }
-            errorMessage?.contains("network") == true -> {
-                println("Network error: Please check your internet connection")
-            }
-            else -> {
-                println("Download error: ${errorMessage ?: "Unknown error"}")
-            }
-        }
-    }
-}
-```
+The Android SDK provides detailed error messages for common scenarios:
+
+- **Socket Timeout**: Connection timeout errors
+- **Unknown Host**: DNS resolution failures
+- **IOException**: General I/O errors
+- **HTTP Errors**: HTTP status code errors
 
 #### Android Java {#android-java-error-handling}
 
-```java
-public void handleDownloadError(LlamaMobile.DownloadResult result) {
-    if (!result.isSuccess()) {
-        String errorMessage = result.getErrorMessage();
-        if (errorMessage != null) {
-            if (errorMessage.contains("401")) {
-                System.out.println("Authentication error: Please check your API token");
-            } else if (errorMessage.contains("404")) {
-                System.out.println("Not found error: Please check the repository and filename");
-            } else if (errorMessage.contains("network")) {
-                System.out.println("Network error: Please check your internet connection");
-            } else {
-                System.out.println("Download error: " + errorMessage);
-            }
-        } else {
-            System.out.println("Download error: Unknown error");
-        }
-    }
-}
-```
+The Android SDK provides detailed error messages for common scenarios:
 
-### 3. Storage Management
+- **Socket Timeout**: "Connection timed out. Please check your internet connection and try again."
+- **Unknown Host**: "No internet connection. Please check your network settings."
+- **IOException**: "Download failed: {error_message}"
+- **HTTP Errors**: "HTTP error: {status_code}"
 
-Be mindful of storage constraints when downloading large models:
+### 3. Storage Management {#storage-management}
 
 #### iOS {#ios-storage-management}
 
+iOS apps should use appropriate directories for storing downloaded models:
+
 ```swift
-func checkStorageBeforeDownload() {
-    let fileManager = FileManager.default
-    let temporaryDirectory = NSTemporaryDirectory()
-    
-    do {
-        let attributes = try fileManager.attributesOfItem(atPath: temporaryDirectory)
-        if let freeSize = attributes[.systemFreeSize] as? Int64 {
-            let freeSizeMB = Double(freeSize) / (1024 * 1024)
-            
-            // Check if there's enough space (assuming model is ~2GB)
-            if freeSizeMB < 2500 { // 2.5GB buffer
-                print("Warning: Low storage space. Consider freeing up space before downloading.")
-                return
-            }
-        }
-    } catch {
-        print("Error checking storage: \(error)")
-        return
-    }
-    
-    // Proceed with download
-    downloadModel()
-}
+// Use documents directory for persistent storage
+let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+let modelsDir = documentsDir.appendingPathComponent("models")
+
+// Use temporary directory for temporary files
+let tempDir = FileManager.default.temporaryDirectory
 ```
 
 #### Android Kotlin {#android-kotlin-storage-management}
 
+Android apps should use appropriate directories for storing downloaded models:
+
 ```kotlin
-fun checkStorageBeforeDownload() {
-    val path = context.filesDir
-    
-    try {
-        val statFs = StatFs(path.absolutePath)
-        val blockSize = statFs.blockSizeLong
-        val availableBlocks = statFs.availableBlocksLong
-        val freeSize = availableBlocks * blockSize
-        val freeSizeMB = freeSize / (1024 * 1024)
-        
-        // Check if there's enough space (assuming model is ~2GB)
-        if (freeSizeMB < 2500) { // 2.5GB buffer
-            println("Warning: Low storage space. Consider freeing up space before downloading.")
-            return
-        }
-    } catch (e: Exception) {
-        println("Error checking storage: ${e.message}")
-        return
-    }
-    
-    // Proceed with download
-    downloadModel()
-}
+// Use files directory for persistent storage
+val modelsDir = context.filesDir
+val modelsPath = File(modelsDir, "Models")
+
+// Use cache directory for temporary files
+val cacheDir = context.cacheDir
 ```
 
 #### Android Java {#android-java-storage-management}
 
+Android apps should use appropriate directories for storing downloaded models:
+
 ```java
-public void checkStorageBeforeDownload() {
-    File path = getFilesDir();
-    
-    try {
-        StatFs statFs = new StatFs(path.getAbsolutePath());
-        long blockSize = statFs.getBlockSizeLong();
-        long availableBlocks = statFs.getAvailableBlocksLong();
-        long freeSize = availableBlocks * blockSize;
-        long freeSizeMB = freeSize / (1024 * 1024);
-        
-        // Check if there's enough space (assuming model is ~2GB)
-        if (freeSizeMB < 2500) { // 2.5GB buffer
-            System.out.println("Warning: Low storage space. Consider freeing up space before downloading.");
-            return;
-        }
-    } catch (Exception e) {
-        System.out.println("Error checking storage: " + e.getMessage());
-        return;
-    }
-    
-    // Proceed with download
-    downloadModel();
-}
+// Use files directory for persistent storage
+File modelsDir = context.getFilesDir();
+File modelsPath = new File(modelsDir, "Models");
+
+// Use cache directory for temporary files
+File cacheDir = context.getCacheDir();
 ```
 
-### 4. Caching
-
-Consider implementing a caching mechanism to avoid redundant downloads:
+### 4. Caching {#caching}
 
 #### iOS {#ios-caching}
 
+Consider implementing caching for frequently downloaded models:
+
 ```swift
-func downloadModelIfNeeded() {
-    let modelPath = "\(NSTemporaryDirectory())Llama-3.2-1B-Instruct.Q4_K_M.gguf"
+func downloadModelWithCache() {
+    let cacheKey = "meta-llama/Llama-3.2-1B-Instruct"
+    let cachePath = getCacheDirectory().appendingPathComponent(cacheKey)
     
-    // Check if model already exists
-    if FileManager.default.fileExists(atPath: modelPath) {
-        print("Model already exists at: \(modelPath)")
-        // Use existing model
-        return
+    if FileManager.default.fileExists(atPath: cachePath.path) {
+        print("Model found in cache: \(cachePath.path)")
+        return DownloadResult(success: true, localPath: cachePath.path)
     }
     
-    // Download if not exists
+    // Download to cache
     let params = LlamaMobile.DownloadParams(
         url: "meta-llama/Llama-3.2-1B-Instruct",
-        localPath: modelPath
+        localPath: cachePath.path
     )
     
     let result = llamaMobile.download(with: params)
-    
-    if result.success {
-        print("Model downloaded successfully")
-    } else {
-        print("Error downloading model: \(result.errorMessage ?? "Unknown error")")
-    }
+    return result
 }
 ```
 
 #### Android Kotlin {#android-kotlin-caching}
 
+Consider implementing caching for frequently downloaded models:
+
 ```kotlin
-fun downloadModelIfNeeded() {
-    val modelPath = "${context.filesDir}/Models/Llama-3.2-1B-Instruct.Q4_K_M.gguf"
+fun downloadModelWithCache() {
+    val cacheKey = "meta-llama/Llama-3.2-1B-Instruct"
+    val cachePath = File(context.cacheDir, cacheKey)
     
-    // Check if model already exists
-    val file = File(modelPath)
-    if (file.exists()) {
-        println("Model already exists at: $modelPath")
-        // Use existing model
-        return
+    if (cachePath.exists()) {
+        println("Model found in cache: ${cachePath.absolutePath}")
+        return DownloadResult(success = true, localPath = cachePath.absolutePath)
     }
     
-    // Download if not exists
+    // Download to cache
     val params = DownloadParams(
         url = "meta-llama/Llama-3.2-1B-Instruct",
-        localPath = modelPath
+        localPath = cachePath.absolutePath
     )
     
     val result = LlamaMobile.download(params)
-    
-    if (result.success) {
-        println("Model downloaded successfully")
-    } else {
-        println("Error downloading model: ${result.errorMessage ?: "Unknown error"}")
-    }
+    return result
 }
 ```
 
 #### Android Java {#android-java-caching}
 
+Consider implementing caching for frequently downloaded models:
+
 ```java
-public void downloadModelIfNeeded() {
-    String modelPath = getFilesDir() + File.separator + "Models" + File.separator + "Llama-3.2-1B-Instruct.Q4_K_M.gguf";
+public void downloadModelWithCache() {
+    String cacheKey = "meta-llama/Llama-3.2-1B-Instruct";
+    File cachePath = new File(context.getCacheDir(), cacheKey);
     
-    // Check if model already exists
-    File file = new File(modelPath);
-    if (file.exists()) {
-        System.out.println("Model already exists at: " + modelPath);
-        // Use existing model
+    if (cachePath.exists()) {
+        System.out.println("Model found in cache: " + cachePath.getAbsolutePath());
         return;
     }
     
-    // Download if not exists
+    // Download to cache
     LlamaMobile.DownloadParams params = new LlamaMobile.DownloadParams.Builder(
         "meta-llama/Llama-3.2-1B-Instruct",
-        modelPath
+        cachePath.getAbsolutePath()
     ).build();
     
-    LlamaMobile.DownloadResult result = LlamaMobile.download(params);
-    
-    if (result.isSuccess()) {
-        System.out.println("Model downloaded successfully");
-    } else {
-        System.out.println("Error downloading model: " + (result.getErrorMessage() != null ? result.getErrorMessage() : "Unknown error"));
-    }
+    LlamaMobile.download(params);
 }
 ```
 
@@ -1015,32 +896,50 @@ public void downloadModelIfNeeded() {
 
 ### Common Error Scenarios
 
-| Error Type | Possible Causes | Solutions |
-|------------|----------------|-----------|
-| Authentication Error | Invalid API token | Check your Hugging Face API token |
-| Not Found Error | Invalid repository or filename | Verify the repository ID and filename |
-| Network Error | No internet connection | Check network connectivity |
-| Storage Error | Insufficient space or permissions | Free up space and check permissions |
-| Directory Creation Error | Invalid path or permissions | Use a valid path with write permissions |
+1. **Network Issues**: Check internet connection and VPN settings
+2. **Authentication Failures**: Verify API tokens and permissions
+3. **Storage Issues**: Ensure sufficient disk space and write permissions
+4. **HTTP Errors**: Check status codes and server availability
+5. **File System Errors**: Verify directory permissions and disk space
 
 ### Error Recovery Strategies
 
-1. **Retry Mechanism**: Implement automatic retries for transient errors
-2. **Fallback Models**: Provide smaller model alternatives if downloads fail
-3. **Offline Mode**: Check for existing models before attempting downloads
+1. **Retry Logic**: Implement exponential backoff for retries
+2. **Fallback URLs**: Use mirror sites if primary fails
+3. **Partial Downloads**: Resume interrupted downloads if supported
 4. **User Feedback**: Provide clear error messages and recovery options
 
 ## Security Considerations
 
-1. **API Token Handling**: Never hardcode API tokens in your application
-2. **Secure Storage**: Store authentication credentials securely
-3. **Network Security**: Ensure downloads use HTTPS
-4. **Permission Management**: Request appropriate storage permissions
+### API Token Management
+
+1. **Never Hardcode Tokens**: Use secure storage (Keychain, Keystore)
+2. **Token Rotation**: Implement token refresh mechanisms
+3. **Token Scoping**: Use tokens with minimal required permissions
+4. **Token Revocation**: Handle token expiration gracefully
+
+### Network Security
+
+1. **HTTPS Only**: Always use HTTPS for downloads
+2. **Certificate Validation**: Enable certificate pinning for sensitive downloads
+3. **Proxy Support**: Respect system proxy settings
+4. **VPN Compatibility**: Ensure downloads work with VPN connections
+
+### Data Privacy
+
+1. **User Consent**: Obtain user consent before downloading large files
+2. **Storage Location**: Use app-specific directories
+3. **Data Deletion**: Provide options to clear downloaded models
+4. **Usage Tracking**: Track download usage for analytics (with consent)
 
 ## Conclusion
 
-The Download API in the Llama Mobile SDK provides a convenient and powerful way to download models and files, particularly from Hugging Face. By following the examples and best practices outlined in this documentation, you can implement robust download functionality in your iOS, Android Kotlin, and Android Java applications.
+The Download API provides a robust, cross-platform solution for downloading models and files from Hugging Face and other sources. With platform-specific implementations for iOS (URLSession) and Android (HttpURLConnection), the API offers:
 
-The API's cross-platform design ensures a consistent experience across all supported platforms, with platform-specific optimizations and patterns to follow each language's best practices. Whether you're building for iOS or Android, the Download API simplifies the process of acquiring models and files, enabling you to focus on creating great user experiences with the Llama Mobile SDK.
+- **Native Performance**: Optimized for each platform
+- **Built-in Security**: SSL/TLS support without external dependencies
+- **Progress Tracking**: Real-time download progress updates
+- **Error Handling**: Comprehensive error messages and recovery
+- **Authentication Support**: Handles private repositories with API tokens
 
-With support for progress tracking, authentication, and comprehensive error handling, the Download API simplifies the process of acquiring models for use with the Llama Mobile SDK, enabling a seamless user experience even when working with large model files.
+For more information, see the LLM API documentation for loading models and the TTS API documentation for vocoder model downloads.
