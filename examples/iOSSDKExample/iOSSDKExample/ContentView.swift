@@ -1050,7 +1050,7 @@ struct SettingsView: View {
         // Set up download parameters
         let repoID = "microsoft/Phi-3-mini-4k-instruct-gguf"
         let filename = "Phi-3-mini-4k-instruct-q4.gguf"
-        let bearerToken = "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"
+        let bearerToken = "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"
         
         // Get models directory
         guard let modelsDir = getModelsDirectory() else {

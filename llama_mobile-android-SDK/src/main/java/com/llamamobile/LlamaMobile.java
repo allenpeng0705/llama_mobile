@@ -1564,7 +1564,31 @@ public class LlamaMobile {
      * @param progressCallback Callback for download progress updates
      * @return Download result, or null if download failed
      */
-    public static native DownloadResult downloadModel(DownloadParams params, DownloadProgressCallback progressCallback);
+    public static DownloadResult downloadModel(DownloadParams params, DownloadProgressCallback progressCallback) {
+        String url;
+        String filename;
+        String destinationPath = params.getDestinationPath();
+        
+        if (params.getRepoId().contains("://")) {
+            url = params.getRepoId();
+            filename = params.getFilename();
+        } else {
+            String[] components = params.getRepoId().split("/");
+            if (components.length < 2) {
+                return new DownloadResult(false, destinationPath + "/" + params.getFilename(), 
+                    "Invalid Hugging Face repo ID format. Expected: owner/repo/filename");
+            }
+            
+            String owner = components[0];
+            String repo = components[1];
+            String file = components.length > 2 ? String.join("/", java.util.Arrays.copyOfRange(components, 2, components.length)) : params.getFilename();
+            
+            filename = file;
+            url = "https://huggingface.co/" + owner + "/" + repo + "/resolve/main/" + file;
+        }
+        
+        return downloadFromURL(url, filename, destinationPath, params.getBearerToken(), progressCallback);
+    }
 
     /**
      * Downloads a specific file from Hugging Face repository
@@ -1577,13 +1601,104 @@ public class LlamaMobile {
      * @param progressCallback Callback for download progress updates
      * @return Download result, or null if download failed
      */
-    public static native DownloadResult downloadHfFile(
+    public static DownloadResult downloadHfFile(
             String repoId,
             String filename,
             String destinationPath,
             String bearerToken,
             boolean offline,
-            DownloadProgressCallback progressCallback);
+            DownloadProgressCallback progressCallback) {
+        
+        String url = "https://huggingface.co/" + repoId + "/resolve/main/" + filename;
+        return downloadFromURL(url, filename, destinationPath, bearerToken, progressCallback);
+    }
+
+    /**
+     * Downloads a file from a URL using Android's native networking
+     *
+     * @param url URL to download from
+     * @param filename Name of the file
+     * @param destinationPath Local path to save the file
+     * @param bearerToken Bearer token for authentication (optional)
+     * @param progressCallback Callback for download progress updates
+     * @return Download result
+     */
+    private static DownloadResult downloadFromURL(
+            String url,
+            String filename,
+            String destinationPath,
+            String bearerToken,
+            DownloadProgressCallback progressCallback) {
+        
+        java.io.File destDir = new java.io.File(destinationPath);
+        if (!destDir.exists()) {
+            if (!destDir.mkdirs()) {
+                return new DownloadResult(false, destinationPath + "/" + filename, 
+                    "Failed to create destination directory");
+            }
+        }
+        
+        java.io.File destFile = new java.io.File(destDir, filename);
+        
+        try {
+            java.net.URL downloadUrl = new java.net.URL(url);
+            java.net.HttpURLConnection connection = (java.net.HttpURLConnection) downloadUrl.openConnection();
+            
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(30000);
+            connection.setReadTimeout(30000);
+            
+            if (bearerToken != null && !bearerToken.isEmpty()) {
+                connection.setRequestProperty("Authorization", "Bearer " + bearerToken);
+            }
+            
+            connection.connect();
+            
+            int responseCode = connection.getResponseCode();
+            if (responseCode != 200) {
+                return new DownloadResult(false, destFile.getAbsolutePath(), 
+                    "HTTP error: " + responseCode);
+            }
+            
+            int contentLength = connection.getContentLength();
+            java.io.InputStream inputStream = connection.getInputStream();
+            java.io.FileOutputStream outputStream = new java.io.FileOutputStream(destFile);
+            
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            long totalBytesRead = 0;
+            
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+                totalBytesRead += bytesRead;
+                
+                if (progressCallback != null && contentLength > 0) {
+                    float progress = (float) totalBytesRead / contentLength;
+                    String status = "Downloading...";
+                    progressCallback.onProgress(progress, status, totalBytesRead, contentLength);
+                }
+            }
+            
+            outputStream.close();
+            inputStream.close();
+            connection.disconnect();
+            
+            return new DownloadResult(true, destFile.getAbsolutePath(), null);
+            
+        } catch (java.net.SocketTimeoutException e) {
+            return new DownloadResult(false, destFile.getAbsolutePath(), 
+                "Connection timed out. Please check your internet connection and try again.");
+        } catch (java.net.UnknownHostException e) {
+            return new DownloadResult(false, destFile.getAbsolutePath(), 
+                "No internet connection. Please check your network settings.");
+        } catch (java.io.IOException e) {
+            return new DownloadResult(false, destFile.getAbsolutePath(), 
+                "Download failed: " + e.getMessage());
+        } catch (Exception e) {
+            return new DownloadResult(false, destFile.getAbsolutePath(), 
+                "Download failed: " + e.getMessage());
+        }
+    }
 
     /**
      * Convenience method for generating text completion with simplified parameters

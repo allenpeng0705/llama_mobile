@@ -286,7 +286,7 @@ for ABI in "${ABI_LIST[@]}"; do
         -DCMAKE_BUILD_TYPE=\"$CMAKE_BUILD_TYPE\" \
         -DANDROID_STL=c++_shared \
         -DBUILD_SHARED_LIBS=ON \
-        -DLLAMA_USE_HTTPLIB=ON \
+        -DLLAMA_USE_HTTPLIB=OFF \
         $PLATFORM_FLAGS"
     
     verbose_output "Shared library CMake command: $SHARED_CMAKE_COMMAND"
@@ -392,7 +392,7 @@ for ABI in "${ABI_LIST[@]}"; do
         -DCMAKE_BUILD_TYPE=\"$CMAKE_BUILD_TYPE\" \
         -DANDROID_STL=c++_static \
         -DBUILD_SHARED_LIBS=OFF \
-        -DLLAMA_USE_HTTPLIB=ON \
+        -DLLAMA_USE_HTTPLIB=OFF \
         $PLATFORM_FLAGS"
     
     verbose_output "Static library CMake command: $STATIC_CMAKE_COMMAND"
