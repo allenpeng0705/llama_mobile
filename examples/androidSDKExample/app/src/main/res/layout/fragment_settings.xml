@@ -276,6 +276,38 @@
                 android:text="Unload Model"
                 android:textColor="@android:color/white"
                 android:textSize="16sp"
+                android:padding="12dp"
+                android:layout_marginBottom="8dp" />
+
+            <!-- Model Download Section -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Model Download"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="8dp" />
+
+            <Button
+                android:id="@+id/downloadFromHFButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?android:attr/colorPrimary"
+                android:text="Download Model from HF"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                android:padding="12dp"
+                android:layout_marginBottom="8dp" />
+
+            <Button
+                android:id="@+id/downloadFromURLButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?android:attr/colorPrimary"
+                android:text="Download from URL"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
                 android:padding="12dp" />
         </LinearLayout>
 

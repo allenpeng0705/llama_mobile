@@ -357,12 +357,38 @@ if(LLAMA_USE_CURL)
         message(FATAL_ERROR "CURL not found but LLAMA_USE_CURL is ON")
     endif()
 elseif(LLAMA_USE_HTTPLIB)
+    # Debug: Print current directory and cpp-httplib path
+    message(STATUS "Current source directory: ${CMAKE_CURRENT_SOURCE_DIR}")
+    message(STATUS "Looking for cpp-httplib at: ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/cpp-httplib")
+    
+    # Check if the directory exists
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/cpp-httplib")
+        message(STATUS "cpp-httplib directory exists")
+        # Check if httplib.h exists
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/cpp-httplib/httplib.h")
+            message(STATUS "httplib.h file exists")
+        else()
+            message(STATUS "httplib.h file does NOT exist")
+        endif()
+    else()
+        message(STATUS "cpp-httplib directory does NOT exist")
+    endif()
+    
     # Find cpp-httplib header-only library
-    find_path(CPP_HTTPLIB_INCLUDE_DIR
-        NAMES httplib.h
-        PATHS ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/cpp-httplib
-        NO_DEFAULT_PATH
-    )
+    # Instead of using find_path, directly check if the directory exists
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/cpp-httplib/httplib.h")
+        set(CPP_HTTPLIB_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/cpp-httplib")
+        message(STATUS "Directly set CPP_HTTPLIB_INCLUDE_DIR to: ${CPP_HTTPLIB_INCLUDE_DIR}")
+    else()
+        message(STATUS "httplib.h not found, using find_path as fallback")
+        find_path(CPP_HTTPLIB_INCLUDE_DIR
+            NAMES httplib.h
+            PATHS ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp/cpp-httplib
+            NO_DEFAULT_PATH
+        )
+    endif()
+    
+    message(STATUS "Find path result: ${CPP_HTTPLIB_INCLUDE_DIR}")
     
     if(CPP_HTTPLIB_INCLUDE_DIR)
         message(STATUS "Found cpp-httplib at ${CPP_HTTPLIB_INCLUDE_DIR}")
@@ -371,19 +397,21 @@ elseif(LLAMA_USE_HTTPLIB)
         target_include_directories(llama_mobile_core_shared PUBLIC ${CPP_HTTPLIB_INCLUDE_DIR})
         
         # Find OpenSSL for HTTPS support
-        find_package(OpenSSL REQUIRED)
-        if(OPENSSL_FOUND)
-            message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")
-            target_include_directories(llama_mobile_core_lib PUBLIC ${OPENSSL_INCLUDE_DIR})
-            target_include_directories(llama_mobile_core_static PUBLIC ${OPENSSL_INCLUDE_DIR})
-            target_include_directories(llama_mobile_core_shared PUBLIC ${OPENSSL_INCLUDE_DIR})
-            target_link_libraries(llama_mobile_core_lib PUBLIC ${OPENSSL_LIBRARIES})
-            target_link_libraries(llama_mobile_core_static PUBLIC ${OPENSSL_LIBRARIES})
-            target_link_libraries(llama_mobile_core_shared PUBLIC ${OPENSSL_LIBRARIES})
-            target_compile_definitions(llama_mobile_core_lib PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
-            target_compile_definitions(llama_mobile_core_static PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
-            target_compile_definitions(llama_mobile_core_shared PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
-        endif()
+    find_package(OpenSSL)
+    if(OPENSSL_FOUND)
+        message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")
+        target_include_directories(llama_mobile_core_lib PUBLIC ${OPENSSL_INCLUDE_DIR})
+        target_include_directories(llama_mobile_core_static PUBLIC ${OPENSSL_INCLUDE_DIR})
+        target_include_directories(llama_mobile_core_shared PUBLIC ${OPENSSL_INCLUDE_DIR})
+        target_link_libraries(llama_mobile_core_lib PUBLIC ${OPENSSL_LIBRARIES})
+        target_link_libraries(llama_mobile_core_static PUBLIC ${OPENSSL_LIBRARIES})
+        target_link_libraries(llama_mobile_core_shared PUBLIC ${OPENSSL_LIBRARIES})
+        target_compile_definitions(llama_mobile_core_lib PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+        target_compile_definitions(llama_mobile_core_static PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+        target_compile_definitions(llama_mobile_core_shared PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+    else()
+        message(WARNING "OpenSSL not found, HTTPS support will be disabled")
+    endif()
         
         target_compile_definitions(llama_mobile_core_lib PRIVATE LLAMA_USE_HTTPLIB)
         target_compile_definitions(llama_mobile_core_static PRIVATE LLAMA_USE_HTTPLIB)

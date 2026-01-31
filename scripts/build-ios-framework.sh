@@ -350,7 +350,9 @@ build_library() {
         -DCMAKE_IOS_INSTALL_COMBINED=YES \
         -DCMAKE_XCODE_ATTRIBUTE_SDKROOT="$SYSROOT" \
         -DCMAKE_XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET="17.0" \
-        -DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH="NO"
+        -DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH="NO" \
+        -DLLAMA_USE_HTTPLIB=ON \
+        -DLLAMA_USE_HTTPLIB=ON
     
     if [[ $? -ne 0 ]]; then
         handle_error 1 "CMake configuration failed for $LIB_TYPE library $OUTPUT_SUBDIR!"

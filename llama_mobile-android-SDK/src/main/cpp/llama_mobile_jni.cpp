@@ -613,6 +613,7 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
             params.stop_sequences[i] = strdup(stopSequences[i].c_str());
         }
         params.stop_sequences[stopSequences.size()] = nullptr;
+        params.stop_sequence_count = static_cast<int>(stopSequences.size());
     }
     
     // Don't delete the jstring objects here - they need to be kept alive

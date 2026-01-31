@@ -76,32 +76,23 @@ private var embeddingCallbackContext: (([Float]) -> Void)? = nil
 
 // C-compatible callback functions
 private func cProgressCallback(progress: Float, user_data: UnsafeMutableRawPointer?) -> Void {
-    guard let userData = user_data else { return }
-    let instance = Unmanaged<LlamaMobile>.fromOpaque(userData).takeUnretainedValue()
-    
-    instance.callbackQueue.sync {
-        instance.progressCallbackContext?(progress)
+    callbackQueue.sync {
+        progressCallbackContext?(progress)
     }
 }
 
 private func cDownloadProgressCallback(progress: Float, status: UnsafePointer<CChar>?, downloadedBytes: Int64, totalBytes: Int64, user_data: UnsafeMutableRawPointer?) -> Void {
-    guard let userData = user_data else { return }
-    let instance = Unmanaged<LlamaMobile>.fromOpaque(userData).takeUnretainedValue()
-    
-    instance.callbackQueue.sync {
-        instance.downloadProgressCallbackContext?(progress)
+    callbackQueue.sync {
+        downloadProgressCallbackContext?(progress)
     }
 }
 
 private func cTokenCallback(token: UnsafePointer<CChar>?, user_data: UnsafeMutableRawPointer?) -> Bool {
-    guard let userData = user_data else { return true }
-    let instance = Unmanaged<LlamaMobile>.fromOpaque(userData).takeUnretainedValue()
-    
     guard let token = token else { return true }
     let tokenString = String(cString: token)
     var shouldContinue = true
-    instance.callbackQueue.sync {
-        shouldContinue = instance.tokenCallbackContext?(tokenString) ?? true
+    callbackQueue.sync {
+        shouldContinue = tokenCallbackContext?(tokenString) ?? true
     }
     return shouldContinue
 }
@@ -945,9 +936,9 @@ public class LlamaMobile {
             stopStringsToFree.append(grammarCString)
         }
         
-        // Set callback with self as user_data
+        // Set callback
         cParams.token_callback = tokenCallbackPtr
-        cParams.token_callback_user_data = Unmanaged.passUnretained(self).toOpaque()
+        cParams.token_callback_user_data = nil
         
         // Handle chat messages if provided
         if !params.chatMessages.isEmpty {
@@ -2227,15 +2218,15 @@ public class LlamaMobile {
         }
         
         // Create token callback wrapper if needed
-        typealias TokenCallbackType = @convention(c) (UnsafePointer<CChar>?) -> Bool
+        typealias TokenCallbackType = @convention(c) (UnsafePointer<CChar>?, UnsafeMutableRawPointer?) -> Bool
         var tokenCallbackPtr: TokenCallbackType? = nil
         
         if tokenCallback != nil {
             // Store the closure in global context
             tokenCallbackContext = tokenCallback
             // Use the global C-compatible function
-            tokenCallbackPtr = { (token: UnsafePointer<CChar>?) -> Bool in
-                cTokenCallback(token: token)
+            tokenCallbackPtr = { (token: UnsafePointer<CChar>?, user_data: UnsafeMutableRawPointer?) -> Bool in
+                cTokenCallback(token: token, user_data: user_data)
             }
         }
         
@@ -2244,7 +2235,8 @@ public class LlamaMobile {
                 context,
                 messageC,
                 maxTokens,
-                tokenCallbackPtr
+                tokenCallbackPtr,
+                nil // user_data
             )
             
             defer { llama_mobile_free_conversation_result_members_c(&cResult) }

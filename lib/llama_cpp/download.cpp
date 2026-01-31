@@ -23,6 +23,7 @@
 #include <curl/curl.h>
 #include <curl/easy.h>
 #elif defined(LLAMA_USE_HTTPLIB)
+#include "cpp-httplib/httplib.h"
 #include "http.h"
 #endif
 

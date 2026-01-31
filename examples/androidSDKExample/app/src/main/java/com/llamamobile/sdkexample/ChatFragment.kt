@@ -224,27 +224,9 @@ class ChatFragment : Fragment() {
                 
                 // Log the model input
                 Log.d(TAG, "Model Input: $chatMessages")
-
-                // Determine which grammar to use
-                val grammarToUse = if (currentAppState.selectedGrammar != null) {
-                    currentAppState.selectedGrammar
-                } else if (currentAppState.jsonResponse) {
-                    currentAppState.jsonGrammar
-                } else {
-                    null
-                }
                 
-                // Log grammar usage for debugging
-                if (grammarToUse != null) {
-                    val grammarMessage = if (grammarToUse == currentAppState.jsonGrammar) {
-                        "[Chat Messages] Using built-in JSON grammar"
-                    } else {
-                        "[Chat Messages] Using selected grammar"
-                    }
-                    Log.d(TAG, grammarMessage)
-                } else {
-                    Log.d(TAG, "[Chat Messages] No grammar being used")
-                }
+                // No grammar being used
+                Log.d(TAG, "[Chat Messages] No grammar being used")
                 
                 // Create completion params similar to iOS implementation
                 val params = LlamaMobile.CompletionParams(
@@ -266,7 +248,7 @@ class ChatFragment : Fragment() {
                     0.1, // mirostatEta
                     false, // ignoreEos
                     0, // nProbs
-                    grammarToUse, // grammar
+                    null, // grammar (not used)
                     listOf("<|im_end|>"), // stopSequences
                     emptyList(), // mediaPaths
                     null, // tokenCallback
@@ -325,7 +307,7 @@ class ChatFragment : Fragment() {
             0.1,
             false,
             0,
-            null,
+            params.grammar,
             params.stopSequences,
             emptyList(),
             object : LlamaMobile.TokenCallback {

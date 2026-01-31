@@ -11,6 +11,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import com.llamamobile.sdkexample.databinding.FragmentSettingsBinding
 import android.content.DialogInterface
+import android.app.ProgressDialog
 
 class SettingsFragment : Fragment() {
 
@@ -396,6 +397,16 @@ class SettingsFragment : Fragment() {
         binding.unloadModelButton.setOnClickListener {
             unloadModel()
         }
+
+        // Download from HF button
+        binding.downloadFromHFButton.setOnClickListener {
+            downloadFromHuggingFace()
+        }
+
+        // Download from URL button
+        binding.downloadFromURLButton.setOnClickListener {
+            downloadFromURL()
+        }
     }
 
     private fun setupSystemPrompt() {
@@ -462,6 +473,143 @@ class SettingsFragment : Fragment() {
         updateModelStatusUI()
         binding.unloadModelButton.isEnabled = false
         hideError()
+    }
+
+    private fun downloadFromHuggingFace() {
+        val activity = activity ?: return
+        val modelsDir = getModelsDirectory(activity)
+        
+        // HF token from test_download.cpp
+        val bearerToken = "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"
+        // Repo ID and filename from test_download.cpp
+        val repoId = "microsoft/Phi-3-mini-4k-instruct-gguf"
+        val filename = "Phi-3-mini-4k-instruct-q4.gguf"
+        
+        showDownloadProgressDialog {dialog ->
+            Thread {
+                try {
+                    val params = com.llamamobile.LlamaMobile.DownloadParams.Builder(
+                        repoId,
+                        filename,
+                        modelsDir
+                    )
+                        .bearerToken(bearerToken)
+                        .progressCallback {
+                            progress, status, downloadedBytes, totalBytes ->
+                            activity.runOnUiThread {
+                                val progressPercentage = (progress * 100).toInt()
+                                dialog.setProgress(progressPercentage)
+                                dialog.setMessage("$status\n${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}")
+                            }
+                        }
+                        .build()
+                    
+                    val result = com.llamamobile.LlamaMobile.download(params)
+                    
+                    activity.runOnUiThread {
+                        dialog.dismiss()
+                        if (result.isSuccess) {
+                            Toast.makeText(activity, "Model downloaded successfully", Toast.LENGTH_SHORT).show()
+                            // Update available models list
+                            updateAvailableModels()
+                        } else {
+                            Toast.makeText(activity, "Download failed: ${result.errorMessage}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    activity.runOnUiThread {
+                        dialog.dismiss()
+                        Toast.makeText(activity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }.start()
+        }
+    }
+
+    private fun downloadFromURL() {
+        val activity = activity ?: return
+        val modelsDir = getModelsDirectory(activity)
+        
+        // Static model URL from test_download.cpp
+        val modelUrl = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
+        val filename = "Phi-3-mini-4k-instruct-q4.gguf"
+        val localPath = "$modelsDir/$filename"
+        
+        showDownloadProgressDialog {dialog ->
+            Thread {
+                try {
+                    val params = com.llamamobile.LlamaMobile.DownloadParams.Builder(
+                        modelUrl,
+                        filename,
+                        modelsDir
+                    )
+                        .progressCallback {
+                            progress, status, downloadedBytes, totalBytes ->
+                            activity.runOnUiThread {
+                                val progressPercentage = (progress * 100).toInt()
+                                dialog.setProgress(progressPercentage)
+                                dialog.setMessage("$status\n${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}")
+                            }
+                        }
+                        .build()
+                    
+                    val result = com.llamamobile.LlamaMobile.download(params)
+                    
+                    activity.runOnUiThread {
+                        dialog.dismiss()
+                        if (result.isSuccess) {
+                            Toast.makeText(activity, "Model downloaded successfully", Toast.LENGTH_SHORT).show()
+                            // Update available models list
+                            updateAvailableModels()
+                        } else {
+                            Toast.makeText(activity, "Download failed: ${result.errorMessage}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                } catch (e: Exception) {
+                    activity.runOnUiThread {
+                        dialog.dismiss()
+                        Toast.makeText(activity, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }.start()
+        }
+    }
+
+    private fun showDownloadProgressDialog(onStart: (android.app.ProgressDialog) -> Unit) {
+        val activity = activity ?: return
+        
+        val dialog = android.app.ProgressDialog(activity)
+        dialog.setTitle("Downloading Model")
+        dialog.setMessage("Preparing download...")
+        dialog.setProgressStyle(android.app.ProgressDialog.STYLE_HORIZONTAL)
+        dialog.setMax(100)
+        dialog.setCancelable(false)
+        dialog.show()
+        
+        onStart(dialog)
+    }
+
+    private fun getModelsDirectory(context: android.content.Context): String {
+        // Use the same directory structure that AppState is scanning
+        val modelsDir = java.io.File(context.getExternalFilesDir(null), "models")
+        if (!modelsDir.exists()) {
+            modelsDir.mkdirs()
+        }
+        return modelsDir.absolutePath
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        if (bytes < 1024) return "$bytes B"
+        val k = 1024
+        val sizes = arrayOf("B", "KB", "MB", "GB")
+        val i = (Math.log(bytes.toDouble()) / Math.log(k.toDouble())).toInt()
+        return String.format("%.2f %s", bytes.toDouble() / Math.pow(k.toDouble(), i.toDouble()), sizes[i])
+    }
+
+    private fun updateAvailableModels() {
+        val activity = activity as? MainActivity ?: return
+        activity.appState.extractModelsFromAssets(activity)
+        setupModelSpinner()
     }
 
     private fun updateUI() {

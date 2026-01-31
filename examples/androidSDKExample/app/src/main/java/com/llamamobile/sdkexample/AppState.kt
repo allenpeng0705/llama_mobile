@@ -16,8 +16,6 @@ class AppState {
         private const val MODELS_ASSET_DIR = "models"
         private const val EXTERNAL_MODELS_DIR = "models"
         private const val EXTERNAL_MODELS_ALT_DIR = "LlamaMobile/models"
-        private const val GRAMMARS_ASSET_DIR = "grammars"
-        private const val JSON_GRAMMAR_FILE = "json.gbnf"
     }
 
     var isModelLoaded = false
@@ -49,13 +47,6 @@ class AppState {
     var nThreads = 4
     var nCtx = 2048
 
-    // JSON grammar content
-    var jsonGrammar: String? = null
-    
-    // Selected grammar for generation
-    var selectedGrammar: String? = null
-    var selectedGrammarFile: String? = null
-
     // Model context handle
     var contextHandle: Long = 0
 
@@ -68,9 +59,6 @@ class AppState {
             try {
                 // Extract models from assets to local storage
                 extractModelsFromAssets(context)
-                
-                // Extract and load JSON grammar
-                jsonGrammar = loadGrammarFromAssets(context, JSON_GRAMMAR_FILE)
             } catch (e: Exception) {
                 Log.e(TAG, "Error during app state initialization: ${e.message}")
             }
@@ -400,32 +388,6 @@ class AppState {
         } catch (e: Exception) {
             Log.e(TAG, "Unexpected error in extractModelsFromAssets: ${e.message}", e)
         }
-    }
-
-    fun loadGrammarFromAssets(context: Context, grammarFileName: String): String? {
-        val assetManager = context.assets
-        val localGrammarDir = File(context.filesDir, GRAMMARS_ASSET_DIR)
-
-        // Create local grammar directory if it doesn't exist
-        if (!localGrammarDir.exists()) {
-            localGrammarDir.mkdirs()
-        }
-
-        try {
-            val localFile = File(localGrammarDir, grammarFileName)
-            
-            // Extract file if it doesn't exist locally
-            if (!localFile.exists() || localFile.length() == 0L) {
-                extractAssetFile(assetManager, "$GRAMMARS_ASSET_DIR/$grammarFileName", localFile)
-            }
-            
-            // Return grammar content
-            return localFile.readText()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error loading grammar from assets: ${e.message}")
-        }
-        
-        return null
     }
 
     private fun extractAssetFile(assetManager: AssetManager, assetPath: String, localFile: File) {

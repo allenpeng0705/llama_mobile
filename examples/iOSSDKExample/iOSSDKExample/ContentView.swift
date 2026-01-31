@@ -27,7 +27,7 @@ class AppState: ObservableObject {
     @Published var enableEmbedding = false
     
     // Chat configuration
-    @Published var systemPrompt = "You are a local AI assistant. Please respond to user queries in a polite, helpful, and clear manner. Focus on providing accurate information and maintaining a friendly tone."
+    @Published var systemPrompt = "You are a local AI assistant. Please respond to user queries in a polite, helpful, and clear manner. Focus on providing accurate information and maintaining a friendly tone.Please think simple and not reply too many content in <think> </think>, it will truncate the reply simply."
     
     // Feature switches
     @Published var useStreaming = false
@@ -176,6 +176,7 @@ struct Message: Identifiable, Equatable {
     let id = UUID()
     let role: String
     var text: String
+    var thought: String? = nil
 }
 
 // Chat View
@@ -236,7 +237,7 @@ struct ChatView: View {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: true) {
                         ForEach(messages) { message in
-                            MessageBubble(message: message)
+                            MessageBubble(message: message, useJsonResponse: appState.useJsonResponse)
                                 .padding(.horizontal)
                                 .padding(.vertical, 4)
                         }
@@ -286,7 +287,7 @@ struct ChatView: View {
         }
     }
     
-   
+    
     func sendMessage() {
         guard !message.isEmpty else { return }
         
@@ -306,7 +307,7 @@ struct ChatView: View {
             proxy.scrollTo("bottom", anchor: .bottom)
         }
     }
-        
+    
     
     func generateResponse(for prompt: String) async {
         defer {
@@ -353,17 +354,17 @@ struct ChatView: View {
                 // System prompt is set when initializing the model
                 params = LlamaMobile.CompletionParams(prompt: prompt)
                 /*
-                if !appState.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    let fullPrompt = "\(appState.systemPrompt)\n\(prompt)"
-                    params = LlamaMobile.CompletionParams(prompt: prompt)
-                } else {
-                    params = LlamaMobile.CompletionParams(prompt: prompt)
-                }
-                */
+                 if !appState.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                 let fullPrompt = "\(appState.systemPrompt)\n\(prompt)"
+                 params = LlamaMobile.CompletionParams(prompt: prompt)
+                 } else {
+                 params = LlamaMobile.CompletionParams(prompt: prompt)
+                 }
+                 */
             }
             
             // Set common parameters
-            params.maxTokens = 200
+            params.maxTokens = 4096
             params.temperature = 0.7
             params.topK = 40
             params.topP = 0.9
@@ -427,16 +428,6 @@ struct ChatView: View {
                 
                 if let result = result {
                     print("[INFO] Streaming completed successfully")
-                    
-                    // If JSON response is enabled, replace the accumulated text with the JSON-wrapped text
-                    if appState.useJsonResponse {
-                        DispatchQueue.main.async {
-                            if var lastMessage = self.messages.last, lastMessage.role == "assistant" {
-                                lastMessage.text = result.text
-                                self.messages[self.messages.count - 1] = lastMessage
-                            }
-                        }
-                    }
                 } else {
                     print("[ERROR] Streaming generation failed")
                     DispatchQueue.main.async {
@@ -486,10 +477,19 @@ struct ChatView: View {
                         // Trim whitespace
                         let assistantResponse = cleanedText.trimmingCharacters(in: .whitespacesAndNewlines)
                         
+                        // Parse response to extract thought and reply if JSON response is enabled
+                        var finalText = assistantResponse
+                        var messageThought: String? = nil
+                        
+                        if appState.useJsonResponse {
+                            (finalText, messageThought) = parseResponseForThoughtAndReply(assistantResponse)
+                        }
+                        
                         // Always append the message to UI
-                        print("[DEBUG] Final assistant response: \(assistantResponse)")
+                        print("[DEBUG] Final assistant response: \(finalText)")
+                        print("[DEBUG] Extracted thought: \(messageThought ?? "nil")")
                         print("[DEBUG] Current messages count before append: \(self.messages.count)")
-                        self.messages.append(Message(role: "assistant", text: assistantResponse))
+                        self.messages.append(Message(role: "assistant", text: finalText, thought: messageThought))
                         print("[DEBUG] Current messages count after append: \(self.messages.count)")
                         print("[DEBUG] Last message: \(self.messages.last?.text ?? "nil")")
                     }
@@ -513,11 +513,47 @@ struct ChatView: View {
             }
         }
     }
-}    
+}
+// Parse response to extract thought (between <think> tags) and reply (after </think>)
+func parseResponseForThoughtAndReply(_ response: String) -> (String, String?) {
+    // First, extract "choices[0]['text']" field content from the JSON response
+    var textContent = response
+    
+    // Try to parse as JSON and extract the "choices[0]['text']" field
+    if let data = response.data(using: .utf8),
+       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+       let choices = json["choices"] as? [[String: Any]],
+       let firstChoice = choices.first,
+       let extractedText = firstChoice["text"] as? String {
+        textContent = extractedText
+    }
+    
+    var thought: String? = nil
+    var reply = textContent
+    
+    // Extract thought if found using simple string operations
+    let openingTag = "<think>"
+    let closingTag = "</think>"
+    
+    if let openRange = textContent.range(of: openingTag),
+       let closeRange = textContent.range(of: closingTag, options: [], range: openRange.upperBound..<textContent.endIndex) {
+        // Extract thought content between tags
+        let thoughtRange = openRange.upperBound..<closeRange.lowerBound
+        thought = String(textContent[thoughtRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Extract reply content after closing tag
+        let replyRange = closeRange.upperBound..<textContent.endIndex
+        reply = String(textContent[replyRange]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    return (reply, thought)
+} 
 
 // Message Bubble View Component
 struct MessageBubble: View {
     let message: Message
+    let useJsonResponse: Bool
+    @State private var isShowingThought = false
     
     var body: some View {
         HStack {
@@ -536,16 +572,50 @@ struct MessageBubble: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
             } else {
-                VStack(alignment: .leading) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Llama")
                         .font(.caption)
                         .foregroundColor(.gray)
-                        .padding(.bottom, 2)
+                    
                     Text(message.text)
                         .padding(12)
                         .background(Color.white)
                         .foregroundColor(.black)
                         .cornerRadius(16)
+                    
+                    // Thought button if thought exists and JSON response is enabled
+                    if useJsonResponse && message.thought != nil {
+                        HStack {
+                            Spacer()
+                            Button(action: {
+                                // Tap action - toggle thought visibility
+                                isShowingThought.toggle()
+                            }) {
+                                Text("Thought")
+                                    .font(.caption2)
+                                    .foregroundColor(.blue)
+                                    .padding(4)
+                                    .background(Color.blue.opacity(0.1))
+                                    .cornerRadius(8)
+                            }
+                        }
+                        
+                        // Thought popup
+                        if isShowingThought, let thought = message.thought {
+                            ZStack {
+                                Text(thought)
+                                    .padding(8)
+                                    .background(Color.gray.opacity(0.9))
+                                    .foregroundColor(.white)
+                                    .cornerRadius(8)
+                                    .font(.caption)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .zIndex(1)
+                            }
+                            .frame(maxWidth: 200)
+                            .position(x: 150, y: 30)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer()
@@ -557,12 +627,21 @@ struct MessageBubble: View {
 // Settings View
 struct SettingsView: View {
     @ObservedObject var appState: AppState
-    @State private var nGpuLayers = 50
+    @State private var nGpuLayers = 99
     @State private var nThreads = 4
-    @State private var nCtx = 2048
+    @State private var nCtx = 4096
+    
+    // Download progress variables
+    @State private var isDownloading = false
+    @State private var downloadProgress = 0.0
+    @State private var downloadStatus = ""
+    @State private var downloadSpeed = ""
+    @State private var downloadSize = ""
+    @State private var downloadError: String? = nil
     
     var body: some View {
-        Form {
+        ZStack {
+            Form {
                 Section(header: Text("Model Configuration")) {
                     if appState.availableModels.isEmpty {
                         Text("No models found in the bundle")
@@ -681,6 +760,30 @@ struct SettingsView: View {
                     .tint(.red)
                 }
                 
+                Section(header: Text("Model Download")) {
+                    Button(action: downloadFromHuggingFace) {
+                        HStack {
+                            Spacer()
+                            Text("Download Model from HF")
+                                .foregroundColor(.white)
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+                    
+                    Button(action: downloadFromURL) {
+                        HStack {
+                            Spacer()
+                            Text("Download from URL")
+                                .foregroundColor(.white)
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                }
+                
                 Section(header: Text("Feature Configuration")) {
                     Toggle("Enable Embedding", isOn: $appState.enableEmbedding)
                 }
@@ -749,6 +852,89 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            
+            // Download progress popup
+            if isDownloading {
+                ZStack {
+                    Color.black.opacity(0.5)
+                        .edgesIgnoringSafeArea(.all)
+                    
+                    VStack(spacing: 20) {
+                        Text("Downloading Model")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        
+                        ProgressView(value: downloadProgress, total: 1.0)
+                            .frame(width: 300)
+                            .tint(.blue)
+                        
+                        Text(String(format: "%.1f%%", downloadProgress * 100))
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        Text(downloadStatus)
+                            .font(.body)
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                        
+                        if !downloadSize.isEmpty {
+                            Text(downloadSize)
+                                .font(.caption)
+                                .foregroundColor(.white)
+                        }
+                        
+                        if !downloadSpeed.isEmpty {
+                            Text(downloadSpeed)
+                                .font(.caption)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .padding(30)
+                    .background(Color(.systemBackground))
+                    .cornerRadius(20)
+                    .shadow(radius: 10)
+                }
+            }
+            
+            // Download error popup
+            if let error = downloadError {
+                ZStack {
+                    Color.black.opacity(0.5)
+                        .edgesIgnoringSafeArea(.all)
+                    
+                    VStack(spacing: 20) {
+                        Text("Download Error")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(.red)
+                        
+                        Text(error)
+                            .font(.body)
+                            .foregroundColor(.primary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                        
+                        Button(action: {
+                            downloadError = nil
+                        }) {
+                            Text("OK")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 40)
+                                .padding(.vertical, 12)
+                                .background(Color.blue)
+                                .cornerRadius(10)
+                        }
+                    }
+                    .padding(30)
+                    .background(Color(.systemBackground))
+                    .cornerRadius(20)
+                    .shadow(radius: 10)
+                }
+            }
+        }
     }
     
     func loadModel() {
@@ -815,6 +1001,169 @@ struct SettingsView: View {
         DispatchQueue.main.async {
             self.appState.isModelLoaded = false
         }
+    }
+    
+    func downloadFromHuggingFace() {
+        // Set up download parameters
+        let repoID = "microsoft/Phi-3-mini-4k-instruct-gguf"
+        let filename = "Phi-3-mini-4k-instruct-q4.gguf"
+        let bearerToken = "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"
+        
+        // Get models directory
+        guard let modelsDir = getModelsDirectory() else {
+            downloadError = "Failed to get models directory"
+            return
+        }
+        
+        // Start download
+        startDownload(repoID: repoID, filename: filename, destinationPath: modelsDir, bearerToken: bearerToken, isHuggingFace: true)
+    }
+    
+    func downloadFromURL() {
+        // Set up download parameters
+        let url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
+        let filename = "Phi-3-mini-4k-instruct-q4.gguf"
+        let bearerToken = "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"
+        
+        // Get models directory
+        guard let modelsDir = getModelsDirectory() else {
+            downloadError = "Failed to get models directory"
+            return
+        }
+        
+        // Start download
+        startDownload(repoID: url, filename: filename, destinationPath: modelsDir, bearerToken: bearerToken, isHuggingFace: false)
+    }
+    
+    func getModelsDirectory() -> String? {
+        // Get documents directory
+        guard let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        
+        // Create models directory if it doesn't exist
+        let modelsDir = documentsDir.appendingPathComponent("models").path
+        
+        if !FileManager.default.fileExists(atPath: modelsDir) {
+            do {
+                try FileManager.default.createDirectory(atPath: modelsDir, withIntermediateDirectories: true)
+            } catch {
+                print("Error creating models directory: \(error)")
+                return nil
+            }
+        }
+        
+        return modelsDir
+    }
+    
+    func startDownload(repoID: String, filename: String, destinationPath: String, bearerToken: String, isHuggingFace: Bool) {
+        // Reset download state
+        downloadProgress = 0.0
+        downloadStatus = "Preparing download..."
+        downloadSpeed = ""
+        downloadSize = ""
+        downloadError = nil
+        isDownloading = true
+        
+        // Create local path for the downloaded file
+        let localPath = destinationPath + "/" + filename
+        
+        // Set up progress callback
+        let progressCallback: (Float) -> Void = { [ self] progress in
+            DispatchQueue.main.async {
+                self.downloadProgress = Double(progress)
+                self.downloadStatus = "Downloading..."
+            }
+        }
+        
+        // Start download in a background thread
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Create download parameters
+            let params = LlamaMobile.DownloadParams(
+                url: repoID,
+                localPath: localPath,
+                password: bearerToken,
+                progressCallback: progressCallback
+            )
+            
+            // Create a temporary LlamaMobile instance to call the download method
+            //let tempLlamaMobile = LlamaMobile(modelPath: "")
+            let result = appState.llamaMobile?.download(with: params)
+            
+            // Update UI on main thread
+            DispatchQueue.main.async {
+                self.isDownloading = false
+                
+                if result?.success != nil {
+                    // Download successful, update available models
+                    self.updateAvailableModels()
+                } else {
+                    // Download failed
+                    self.downloadError = result?.errorMessage ?? "Unknown error"
+                }
+            }
+        }
+    }
+    
+    func updateAvailableModels() {
+        // Get models directory
+        guard let modelsDir = getModelsDirectory() else {
+            return
+        }
+        
+        do {
+            let files = try FileManager.default.contentsOfDirectory(atPath: modelsDir)
+            
+            // Populate main models (GGUF format)
+            let ggufFiles = files.filter { $0.hasSuffix(".gguf") }
+            appState.availableModels = ggufFiles.map { fileName in
+                (name: fileName, path: modelsDir + "/" + fileName)
+            }
+            
+            // Set default model path if any models are found
+            if let firstModel = appState.availableModels.first {
+                appState.modelPath = firstModel.path
+            }
+            
+            // Populate mmproj models (for multimodal) - show all models plus "Empty" option
+            appState.availableMmprojModels = [
+                (name: "Empty", path: "")
+            ] + appState.availableModels
+            
+            // Set default mmproj model path to "Empty"
+            appState.mmprojModelPath = ""
+            
+            // Populate vocoder models (for TTS) - show all models plus "Empty" option
+            appState.availableVocoderModels = [
+                (name: "Empty", path: "")
+            ] + appState.availableModels
+            
+            // Set default vocoder model path to "Empty"
+            appState.vocoderModelPath = ""
+            
+            // Populate LoRA models - show all models plus "Empty" option
+            appState.availableLoRAModels = [
+                (name: "Empty", path: "")
+            ] + appState.availableModels
+            
+            // Set default LoRA model path to "Empty"
+            appState.loraModelPath = ""
+        } catch {
+            print("Error listing models: \(error)")
+        }
+    }
+    
+    func formatBytes(_ bytes: Int64) -> String {
+        let units = ["B", "KB", "MB", "GB"]
+        var size = Double(bytes)
+        var unitIndex = 0
+        
+        while size >= 1024.0 && unitIndex < 3 {
+            size /= 1024.0
+            unitIndex += 1
+        }
+        
+        return String(format: "%.2f %@", size, units[unitIndex])
     }
 }
 
@@ -1702,7 +2051,7 @@ struct MultimodalTestView: View {
             
             var params = LlamaMobile.CompletionParams(
                 prompt: text,
-                maxTokens: 200,
+                maxTokens: 1024,
                 temperature: 0.7,
                 topK: 40,
                 topP: 0.9
