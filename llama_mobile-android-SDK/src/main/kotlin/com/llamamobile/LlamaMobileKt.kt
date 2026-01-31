@@ -194,9 +194,9 @@ fun chatMessageFromJson(json: String): ChatMessage {
     val jsonObject = JSONObject(json)
     val role = jsonObject.optString("role")
     val content = jsonObject.optString("content")
-    val reasoningContent = jsonObject.optString("reasoning_content", null)
-    val toolName = jsonObject.optString("tool_name", null)
-    val toolCallId = jsonObject.optString("tool_call_id", null)
+    val reasoningContent = jsonObject.optString("reasoning_content").let { if (it.isEmpty()) null else it }
+    val toolName = jsonObject.optString("tool_name").let { if (it.isEmpty()) null else it }
+    val toolCallId = jsonObject.optString("tool_call_id").let { if (it.isEmpty()) null else it }
     return ChatMessage(role, content, reasoningContent, toolName, toolCallId)
 }
 

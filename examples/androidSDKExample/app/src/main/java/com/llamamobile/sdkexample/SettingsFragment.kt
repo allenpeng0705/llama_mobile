@@ -53,43 +53,6 @@ class SettingsFragment : Fragment() {
         }
     }
     
-    private fun showGrammarSelection() {
-        // Get available grammar files from assets
-        val grammarFiles = listOf(
-            "arithmetic.gbnf",
-            "c.gbnf",
-            "chess.gbnf",
-            "english.gbnf",
-            "japanese.gbnf",
-            "json.gbnf",
-            "json_arr.gbnf",
-            "list.gbnf"
-        )
-
-        activity?.let { activity ->
-            // Show alert dialog with grammar file options
-            AlertDialog.Builder(activity)
-                .setTitle("Select Grammar File")
-                .setItems(grammarFiles.toTypedArray()) { dialog: DialogInterface, which: Int ->
-                    val selectedGrammarFile = grammarFiles[which]
-                    val grammarContent = appState?.loadGrammarFromAssets(activity, selectedGrammarFile)
-                    
-                    if (grammarContent != null) {
-                        // Set the selected grammar in app state
-                        appState?.selectedGrammar = grammarContent
-                        appState?.selectedGrammarFile = selectedGrammarFile
-                        
-                        // Show success message
-                        Toast.makeText(activity, "Grammar '$selectedGrammarFile' selected", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(activity, "Failed to load grammar file", Toast.LENGTH_SHORT).show()
-                    }
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
-        }
-    }
-
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null
@@ -170,12 +133,6 @@ class SettingsFragment : Fragment() {
                 android.util.Log.e("SettingsFragment", "Navigation error: ${e.message}")
                 activity?.let { Toast.makeText(it, "Navigation error: ${e.message}", Toast.LENGTH_SHORT).show()}
             }
-        }
-
-        // Grammar feature button
-        binding.grammarButton.setOnClickListener {
-            // Handle grammar feature - show grammar selection
-            showGrammarSelection()
         }
 
         // TTS feature button

@@ -328,7 +328,7 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     jfieldID promptField = env->GetFieldID(paramsClass, "prompt", "Ljava/lang/String;");
     jfieldID temperatureField = env->GetFieldID(paramsClass, "temperature", "F");
     jfieldID maxTokensField = env->GetFieldID(paramsClass, "maxTokens", "I");
-    jfieldID nThreadsField = env->GetFieldID(paramsClass, "nThreads", "Ljava/lang/Integer;");
+    jfieldID nThreadsField = env->GetFieldID(paramsClass, "nThreads", "I");
     jfieldID seedField = env->GetFieldID(paramsClass, "seed", "I");
     jfieldID topKField = env->GetFieldID(paramsClass, "topK", "I");
     jfieldID topPField = env->GetFieldID(paramsClass, "topP", "D");
@@ -360,19 +360,10 @@ static bool extractCompletionParams(JNIEnv* env, jobject completionParamsObj, ll
     jfloat temperature = env->GetFloatField(completionParamsObj, temperatureField);
     jint maxTokens = env->GetIntField(completionParamsObj, maxTokensField);
     
-    // Handle Integer nThreads
+    // Handle int nThreads
     jint nThreads = 4; // Default value
     if (nThreadsField != nullptr) {
-        jobject nThreadsObj = env->GetObjectField(completionParamsObj, nThreadsField);
-        if (nThreadsObj != nullptr) {
-            jclass integerClass = env->GetObjectClass(nThreadsObj);
-            jmethodID intValueMethod = env->GetMethodID(integerClass, "intValue", "()I");
-            if (intValueMethod != nullptr) {
-                nThreads = env->CallIntMethod(nThreadsObj, intValueMethod);
-            }
-            env->DeleteLocalRef(integerClass);
-            env->DeleteLocalRef(nThreadsObj);
-        }
+        nThreads = env->GetIntField(completionParamsObj, nThreadsField);
     }
     
     jint seed = (seedField != nullptr) ? env->GetIntField(completionParamsObj, seedField) : -1;

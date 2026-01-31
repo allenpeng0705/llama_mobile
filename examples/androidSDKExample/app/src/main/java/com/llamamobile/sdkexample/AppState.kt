@@ -480,22 +480,24 @@ class AppState {
             Log.i(TAG, "- System prompt: $safeSystemPrompt")
 
             val params = LlamaMobile.InitParams(
-                modelPath = safeModelPath,
-                nCtx = safeNCtx,
-                systemPrompt = safeSystemPrompt.takeIf { it.isNotEmpty() },  // Use null for empty string
-                chatTemplate = null,  // Use null for optional parameter
-                nBatch = 512,
-                nUBatch = 512,
-                nGpuLayers = safeNGpuLayers,
-                nThreads = safeNThreads,
-                useMmap = true,
-                useMlock = false,
-                embedding = enableEmbedding,
-                poolingType = 0,
-                embdNormalize = 0,
-                flashAttention = false,
-                cacheTypeK = null,  // Use null for optional parameter
-                cacheTypeV = null  // Use null for optional parameter
+                safeModelPath,
+                safeNCtx,
+                null,  // chatTemplate
+                safeSystemPrompt.takeIf { it.isNotEmpty() },  // systemPrompt - Use null for empty string
+                512,  // nBatch
+                512,  // nUBatch
+                safeNGpuLayers,
+                safeNThreads,
+                true,  // useMmap
+                false,  // useMlock
+                enableEmbedding,
+                0,  // poolingType
+                0,  // embdNormalize
+                false,  // flashAttention
+                null,  // cacheTypeK
+                null,  // cacheTypeV
+                true,  // enableChatTemplate
+                null  // progressCallback
             )
 
             // Initialize the context handle directly on UI thread with extensive safety checks
@@ -544,7 +546,7 @@ class AppState {
                 Log.i(TAG, "- Context size: ${params.nCtx}")
                 Log.i(TAG, "- GPU layers: ${params.nGpuLayers}")
                 Log.i(TAG, "- Threads: ${params.nThreads}")
-                Log.i(TAG, "- Embedding enabled: ${params.embedding}")
+                Log.i(TAG, "- Embedding enabled: ${params.isEmbedding()}")
                 Log.i(TAG, "- System prompt length: ${params.systemPrompt?.length ?: 0} characters")
             } catch (e: Exception) {
                 Log.e(TAG, "Error during pre-validation:", e)

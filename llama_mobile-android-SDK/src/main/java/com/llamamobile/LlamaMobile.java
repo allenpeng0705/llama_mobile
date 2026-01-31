@@ -1108,14 +1108,84 @@ public class LlamaMobile {
             return null;
         }
         
-        // Generate audio tokens
-        int[] audioTokens = getAudioGuideTokens(contextHandle, formattedPrompt);
+        // Get audio guide tokens
+        int[] guideTokens = getAudioGuideTokens(contextHandle, formattedPrompt);
+        if (guideTokens == null) {
+            return null;
+        }
+        
+        // Set guide tokens for audio generation
+        setGuideTokens(contextHandle, guideTokens);
+        
+        // Generate completion using the formatted prompt with proper constructor
+        CompletionParams completionParams = new CompletionParams(
+            formattedPrompt, // prompt
+            0.0f, // temperature
+            200, // maxTokens
+            null, // nThreads
+            -1, // seed
+            40, // topK
+            0.95, // topP
+            0.05, // minP
+            1.0, // typicalP
+            64, // penaltyLastN
+            1.1, // penaltyRepeat
+            0.0, // penaltyFreq
+            0.0, // penaltyPresent
+            0, // mirostat
+            5.0, // mirostatTau
+            0.1, // mirostatEta
+            false, // ignoreEos
+            0, // nProbs
+            null, // grammar
+            null, // stopSequences
+            null, // mediaPaths
+            null, // tokenCallback
+            null, // chatMessages
+            true, // useJsonResponse
+            null, // jsonSchema
+            null, // tools
+            false, // parallelToolCalls
+            null // toolChoice
+        );
+        
+        CompletionResult completionResult = generateCompletion(contextHandle, completionParams);
+        if (completionResult == null) {
+            return null;
+        }
+        
+        // Tokenize only the completion (not the prompt + completion)
+        int[] audioTokens = tokenize(contextHandle, completionResult.text);
         if (audioTokens == null) {
             return null;
         }
         
+        // Filter audio tokens - match iOS implementation
+        java.util.ArrayList<Integer> filteredTokens = new java.util.ArrayList<>();
+        int audioEndToken = 151668; // <|audio_end|>
+        int minAudioToken = 151672;
+        int maxAudioToken = 155772;
+        
+        for (int token : audioTokens) {
+            // Check if token is in audio range
+            if (token >= minAudioToken && token <= maxAudioToken) {
+                filteredTokens.add(token);
+            }
+            
+            // Check for end token
+            if (token == audioEndToken) {
+                break;
+            }
+        }
+        
+        // Convert ArrayList to int array
+        int[] filteredTokenArray = new int[filteredTokens.size()];
+        for (int i = 0; i < filteredTokens.size(); i++) {
+            filteredTokenArray[i] = filteredTokens.get(i);
+        }
+        
         // Decode audio tokens to samples
-        return decodeAudioTokens(contextHandle, audioTokens);
+        return decodeAudioTokens(contextHandle, filteredTokenArray);
     }
 
     /**

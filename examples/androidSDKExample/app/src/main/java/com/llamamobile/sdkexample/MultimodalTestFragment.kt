@@ -333,23 +333,17 @@ class MultimodalTestFragment : Fragment() {
                 // Create completion params - try both multimodal and regular to see differences
                 val params = try {
                     // First try multimodal params
-                    val multimodalParams = CompletionParams.multimodal(
-                        prompt = fullPrompt,
-                        mediaPaths = mediaPaths,
-                        maxTokens = 1024
-                    ).copy(
-                        grammar = currentAppState.selectedGrammar
+                    val multimodalParams = LlamaMobile.CompletionParams.multimodal(
+                        fullPrompt,
+                        mediaPaths,
+                        1024
                     )
                     Log.d(TAG, "Successfully created multimodal params")
                     multimodalParams
                 } catch (e: Exception) {
                     Log.e(TAG, "Error creating multimodal params: ${e.localizedMessage}", e)
                     // Fallback to regular params for debugging
-                    CompletionParams(
-                        prompt = fullPrompt,
-                        maxTokens = 1024,
-                        grammar = currentAppState.selectedGrammar
-                    )
+                    LlamaMobile.CompletionParams(fullPrompt)
                 }
                 
                 // Debug log params type
@@ -358,11 +352,11 @@ class MultimodalTestFragment : Fragment() {
                 // Call the generateCompletion method with params
                 Log.d(TAG, "Calling generateCompletion with context handle: ${currentAppState.contextHandle}")
                 val result = LlamaMobile.generateCompletion(
-                    contextHandle = currentAppState.contextHandle,
-                    params = params
+                    currentAppState.contextHandle,
+                    params
                 )
                 
-                val response = result?.text ?: ""
+                val response = result?.getText() ?: ""
                 Log.d(TAG, "Model response length: ${response.length} characters")
                 Log.d(TAG, "Model response: $response")
                 

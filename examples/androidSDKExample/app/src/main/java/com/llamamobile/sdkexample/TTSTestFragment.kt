@@ -297,9 +297,8 @@ class TTSTestFragment : Fragment() {
         
         // Use the built-in TTS method
         val samples = LlamaMobile.generateAudioFromText(
-            contextHandle = currentAppState.contextHandle,
-            text = text,
-            speakerJson = "{\"speaker\": \"default\"}"
+            currentAppState.contextHandle,
+            text
         )
         
         if (samples != null && samples.isNotEmpty()) {
@@ -322,9 +321,8 @@ class TTSTestFragment : Fragment() {
         Thread {
             try {
                 val samples = LlamaMobile.generateAudioFromText(
-                    contextHandle = currentAppState.contextHandle,
-                    text = text,
-                    speakerJson = "{\"speaker\": \"default\"}"
+                    currentAppState.contextHandle,
+                    text
                 )
                 
                 if (samples != null && samples.isNotEmpty()) {
@@ -358,10 +356,10 @@ class TTSTestFragment : Fragment() {
             tempFilePath = File(tempDir, tempFileName).absolutePath
             
             saveSuccess = LlamaMobile.saveAudioToWav(
-                contextHandle = currentAppState.contextHandle,
-                filePath = tempFilePath,
-                audioData = audioSamples,
-                sampleRate = sampleRate
+                currentAppState.contextHandle,
+                tempFilePath,
+                audioSamples,
+                sampleRate
             )
         }
         

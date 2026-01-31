@@ -200,16 +200,16 @@ class ChatFragment : Fragment() {
                 
                 // Add system message
                 chatMessages.add(LlamaMobile.ChatMessage(
-                    role = "system",
-                    content = systemMsg
+                    "system",
+                    systemMsg
                 ))
                 
                 // Add conversation history (all messages except last empty assistant placeholder)
                 while (messageIndex < messages.size - 1) {
                     val currentMsg = messages[messageIndex]
                     chatMessages.add(LlamaMobile.ChatMessage(
-                        role = currentMsg.role,
-                        content = currentMsg.text
+                        currentMsg.role,
+                        currentMsg.text
                     ))
                     messageIndex++
                 }
@@ -217,8 +217,8 @@ class ChatFragment : Fragment() {
                 // Add the user's latest message (which is the last non-empty message)
                 if (prompt.isNotEmpty()) {
                     chatMessages.add(LlamaMobile.ChatMessage(
-                        role = Message.ROLE_USER,
-                        content = prompt
+                        Message.ROLE_USER,
+                        prompt
                     ))
                 }
                 
@@ -248,16 +248,34 @@ class ChatFragment : Fragment() {
                 
                 // Create completion params similar to iOS implementation
                 val params = LlamaMobile.CompletionParams(
-                    prompt = "", // Prompt is empty when using chatMessages
-                    maxTokens = 256, // Match iOS maxTokens
-                    temperature = 0.7f, // Match iOS temperature
-                    topP = 0.9f,
-                    topK = 40,
-                    penaltyRepeat = 1.1f,
-                    penaltyFreq = 0.0f,
-                    penaltyPresent = 0.0f,
-                    stopSequences = listOf("<|im_end|>"), // Match iOS stop sequences
-                    chatMessages = chatMessages
+                    "", // prompt - empty when using chatMessages
+                    0.7f, // temperature
+                    256, // maxTokens
+                    null, // nThreads
+                    -1, // seed
+                    40, // topK
+                    0.9, // topP
+                    0.05, // minP
+                    1.0, // typicalP
+                    64, // penaltyLastN
+                    1.1, // penaltyRepeat
+                    0.0, // penaltyFreq
+                    0.0, // penaltyPresent
+                    0, // mirostat
+                    5.0, // mirostatTau
+                    0.1, // mirostatEta
+                    false, // ignoreEos
+                    0, // nProbs
+                    grammarToUse, // grammar
+                    listOf("<|im_end|>"), // stopSequences
+                    emptyList(), // mediaPaths
+                    null, // tokenCallback
+                    chatMessages, // chatMessages
+                    appState?.jsonResponse ?: false, // useJsonResponse
+                    null, // jsonSchema
+                    null, // tools
+                    false, // parallelToolCalls
+                    null // toolChoice
                 )
                 
                 if (currentAppState.streaming) {
@@ -289,50 +307,52 @@ class ChatFragment : Fragment() {
         
         // Create updated params with token callback
         val streamingParams = LlamaMobile.CompletionParams(
-            prompt = params.prompt,
-            temperature = params.temperature,
-            maxTokens = params.maxTokens,
-            nThreads = 4,
-            seed = -1,
-            topK = params.topK,
-            topP = params.topP,
-            minP = 0.05f,
-            typicalP = 1.0f,
-            penaltyLastN = 64,
-            penaltyRepeat = params.penaltyRepeat,
-            penaltyFreq = params.penaltyFreq,
-            penaltyPresent = params.penaltyPresent,
-            mirostat = 0,
-            mirostatTau = 5.0f,
-            mirostatEta = 0.1f,
-            ignoreEos = false,
-            nProbs = 0,
-            grammar = null,
-            stopSequences = params.stopSequences,
-            mediaPaths = emptyList(),
-            tokenCallback = { token ->
-                // Update the response builder with each token
-                responseBuilder.append(token)
-                
-                // Update the UI with the current response
-                activity?.runOnUiThread {
-                    if (messages.isNotEmpty() && messages.last().role == Message.ROLE_ASSISTANT) {
-                        val updatedMessage = messages.last().copy(text = responseBuilder.toString())
-                        messages[messages.size - 1] = updatedMessage
-                        chatAdapter.notifyItemChanged(messages.size - 1)
-                        scrollToBottom()
+            params.prompt,
+            params.temperature,
+            params.maxTokens,
+            4,
+            -1,
+            params.topK,
+            params.topP,
+            0.05,
+            1.0,
+            64,
+            params.penaltyRepeat,
+            params.penaltyFreq,
+            params.penaltyPresent,
+            0,
+            5.0,
+            0.1,
+            false,
+            0,
+            null,
+            params.stopSequences,
+            emptyList(),
+            object : LlamaMobile.TokenCallback {
+                override fun onToken(token: String): Boolean {
+                    // Update the response builder with each token
+                    responseBuilder.append(token)
+                    
+                    // Update the UI with the current response
+                    activity?.runOnUiThread {
+                        if (messages.isNotEmpty() && messages.last().role == Message.ROLE_ASSISTANT) {
+                            val updatedMessage = messages.last().copy(text = responseBuilder.toString())
+                            messages[messages.size - 1] = updatedMessage
+                            chatAdapter.notifyItemChanged(messages.size - 1)
+                            scrollToBottom()
+                        }
                     }
+                    
+                    // Continue streaming
+                    return true
                 }
-                
-                // Continue streaming
-                true
             },
-            chatMessages = params.chatMessages,
-            useJsonResponse = appState.jsonResponse,
-            jsonSchema = null,
-            tools = null,
-            parallelToolCalls = false,
-            toolChoice = null
+            params.chatMessages,
+            appState.jsonResponse,
+            null,
+            null,
+            false,
+            null
         )
         
         // Generate response with streaming
