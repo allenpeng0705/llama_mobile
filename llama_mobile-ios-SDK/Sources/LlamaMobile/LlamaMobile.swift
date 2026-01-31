@@ -69,6 +69,7 @@ private func allocateCStringArray(from strings: [String]) -> (UnsafeMutablePoint
 private let callbackQueue = DispatchQueue(label: "com.llamamobile.callbacks", attributes: .concurrent)
 private var progressCallbackContext: ((Float) -> Void)? = nil
 private var downloadProgressCallbackContext: ((Float) -> Void)? = nil
+private var hfDownloadProgressCallbackContext: ((Float) -> Void)? = nil
 private var tokenCallbackContext: ((String) -> Bool)? = nil
 private var completionCallbackContext: ((String) -> Void)? = nil
 private var chunkCallbackContext: ((String) -> Void)? = nil
@@ -124,7 +125,7 @@ private func cEmbeddingCallback(embedding: UnsafePointer<Float>?, count: Int) ->
 /// This class provides a Swift-friendly interface to the llama_mobile C API, 
 /// offering the same feature set but with simplified parameter design and 
 /// automatic memory management.
-public class LlamaMobile {
+public class LlamaMobile: NSObject {
     
     /// Error types for LlamaMobile operations
     public enum Error: Swift.Error {
@@ -698,6 +699,39 @@ public class LlamaMobile {
         public var progressCallback: ((Float) -> Void)? = nil
     }
     
+    /// Parameters for downloading Hugging Face files
+    ///
+    /// Used specifically for downloading files from Hugging Face repositories.
+    public struct HuggingFaceDownloadParams {
+        /// Default initializer with all parameters
+        public init(repoID: String, filename: String, destinationPath: String, bearerToken: String? = nil, offline: Bool = false, progressCallback: ((Float) -> Void)? = nil) {
+            self.repoID = repoID
+            self.filename = filename
+            self.destinationPath = destinationPath
+            self.bearerToken = bearerToken
+            self.offline = offline
+            self.progressCallback = progressCallback
+        }
+        
+        /// Hugging Face repository ID (e.g., "microsoft/Phi-3-mini-4k-instruct-gguf")
+        public var repoID: String
+        
+        /// Filename to download from the repository
+        public var filename: String
+        
+        /// Local directory path where the file will be saved
+        public var destinationPath: String
+        
+        /// Bearer token for authentication (optional)
+        public var bearerToken: String? = nil
+        
+        /// Whether to operate in offline mode
+        public var offline: Bool = false
+        
+        /// Callback for download progress (0.0 to 1.0)
+        public var progressCallback: ((Float) -> Void)? = nil
+    }
+    
     /// Result of a download operation
     ///
     /// Contains the outcome of a model or file download.
@@ -733,7 +767,7 @@ public class LlamaMobile {
         params.nGpuLayers = nGpuLayers
         params.nThreads = nThreads
         params.progressCallback = progressCallback
-        
+        super.init()
         guard initialize(with: params) else {
             return nil
         }
@@ -742,6 +776,7 @@ public class LlamaMobile {
     /// Initialize a new llama_mobile context with detailed parameters
     /// - Parameter params: Initialization parameters
     public init?(with params: InitParams) {
+        super.init()
         guard initialize(with: params) else {
             return nil
         }
@@ -1163,18 +1198,10 @@ public class LlamaMobile {
     /// - Parameter params: Download parameters
     /// - Returns: Download result containing success status and local path
     public func download(with params: DownloadParams) -> DownloadResult {
-        // Create a progress callback wrapper if needed
-        typealias DownloadProgressCallbackType = @convention(c) (Float, UnsafePointer<CChar>?, Int64, Int64, UnsafeMutableRawPointer?) -> Void
-        var callbackWrapper: DownloadProgressCallbackType? = nil
+        var result: DownloadResult?
+        let semaphore = DispatchSemaphore(value: 0)
         
-        if params.progressCallback != nil {
-            // Store the closure in instance context
-            downloadProgressCallbackContext = params.progressCallback
-            // Use the C-compatible function with self as user_data
-            callbackWrapper = { (progress: Float, status: UnsafePointer<CChar>?, downloadedBytes: Int64, totalBytes: Int64, user_data: UnsafeMutableRawPointer?) -> Void in
-                cDownloadProgressCallback(progress: progress, status: status, downloadedBytes: downloadedBytes, totalBytes: totalBytes, user_data: user_data)
-            }
-        }
+        log("Starting download from: \(params.url)", level: .info)
         
         // Create destination directory if it doesn't exist
         let destinationURL = URL(fileURLWithPath: params.localPath)
@@ -1182,36 +1209,346 @@ public class LlamaMobile {
         
         do {
             try FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
+            log("Created destination directory: \(destinationDir.path)", level: .debug)
         } catch {
+            let errorMsg = "Failed to create destination directory: \(error.localizedDescription)"
+            log(errorMsg, level: .error)
             return DownloadResult(
                 success: false,
                 localPath: params.localPath,
-                errorMessage: "Failed to create destination directory: \(error.localizedDescription)"
+                errorMessage: errorMsg
             )
         }
         
-        // Use the download model function with appropriate parameters
-        var cParams = llama_mobile_download_params_c_t()
-        cParams.repo_id = params.url.withCString { $0 }
-        cParams.filename = destinationURL.lastPathComponent.withCString { $0 }
-        cParams.destination_path = destinationDir.path.withCString { $0 }
-        cParams.bearer_token = params.password?.withCString { $0 } // password field used for bearer token
-        cParams.offline = false
-        cParams.progress_callback = callbackWrapper
-        cParams.progress_callback_user_data = Unmanaged.passUnretained(self).toOpaque()
+        // Parse URL to determine if it's a Hugging Face repo ID or direct URL
+        var downloadURL: URL?
+        var filename: String?
         
-        var cResult = llama_mobile_download_model_c(&cParams)
-        
-        // Convert C result to Swift result
-        defer {
-            // Free the C result
-            llama_mobile_free_download_result_c(&cResult)
+        if params.url.contains("://") {
+            // Direct URL
+            downloadURL = URL(string: params.url)
+            filename = destinationURL.lastPathComponent
+            log("Using direct URL: \(params.url)", level: .debug)
+        } else {
+            // Hugging Face repo ID format: owner/repo
+            let components = params.url.split(separator: "/")
+            guard components.count >= 2 else {
+                let errorMsg = "Invalid Hugging Face repo ID format. Expected: owner/repo/filename"
+                log(errorMsg, level: .error)
+                return DownloadResult(
+                    success: false,
+                    localPath: params.localPath,
+                    errorMessage: errorMsg
+                )
+            }
+            
+            let owner = String(components[0])
+            let repo = String(components[1])
+            let file = components.count > 2 ? Array(components[2...]).joined(separator: "/") : destinationURL.lastPathComponent
+            
+            filename = file
+            downloadURL = URL(string: "https://huggingface.co/\(owner)/\(repo)/resolve/main/\(file)")
+            log("Using Hugging Face URL: \(downloadURL?.absoluteString ?? "invalid")", level: .debug)
         }
         
-        return DownloadResult(
-            success: cResult.success,
-            localPath: cResult.local_path != nil ? String(cString: cResult.local_path!) : params.localPath,
-            errorMessage: cResult.error_message != nil ? String(cString: cResult.error_message!) : nil
+        guard let url = downloadURL else {
+            let errorMsg = "Invalid URL"
+            log(errorMsg, level: .error)
+            return DownloadResult(
+                success: false,
+                localPath: params.localPath,
+                errorMessage: errorMsg
+            )
+        }
+        
+        // Create URL request
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        log("Created request for: \(url.absoluteString)", level: .debug)
+        
+        // Add authentication if provided
+        if let username = params.username, let password = params.password {
+            let credentials = "\(username):\(password)"
+            if let credentialsData = credentials.data(using: .utf8) {
+                let base64Credentials = credentialsData.base64EncodedString()
+                request.setValue("Basic \(base64Credentials)", forHTTPHeaderField: "Authorization")
+                log("Added Basic authentication", level: .debug)
+            }
+        } else if let bearerToken = params.password {
+            // Use password field as bearer token for Hugging Face
+            request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
+            log("Added Bearer token authentication", level: .debug)
+        }
+        
+        // Add custom headers if provided
+        if let headers = params.headers {
+            for (key, value) in headers {
+                request.setValue(value, forHTTPHeaderField: key)
+                log("Added header: \(key)", level: .debug)
+            }
+        }
+        
+        // Create download task with progress tracking
+        var lastProgress: Float = 0.0
+        let task = URLSession.shared.downloadTask(with: request) { tempURL, response, error in
+            defer {
+                semaphore.signal()
+            }
+            
+            if let error = error {
+                let nsError = error as NSError
+                let errorMsg: String
+                
+                if nsError.domain == NSURLErrorDomain && nsError.code == -1005 {
+                    errorMsg = "Network connection lost. Please check your internet connection and try again."
+                } else if nsError.domain == NSURLErrorDomain && nsError.code == -1001 {
+                    errorMsg = "Connection timed out. Please check your internet connection and try again."
+                } else if nsError.domain == NSURLErrorDomain && nsError.code == -1009 {
+                    errorMsg = "No internet connection. Please check your network settings."
+                } else {
+                    errorMsg = "Download failed: \(error.localizedDescription)"
+                }
+                
+                log(errorMsg, level: .error)
+                log("Error details: \(error)", level: .debug)
+                result = DownloadResult(
+                    success: false,
+                    localPath: params.localPath,
+                    errorMessage: errorMsg
+                )
+                return
+            }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                let errorMsg = "Invalid response"
+                log(errorMsg, level: .error)
+                result = DownloadResult(
+                    success: false,
+                    localPath: params.localPath,
+                    errorMessage: errorMsg
+                )
+                return
+            }
+            
+            log("HTTP status code: \(httpResponse.statusCode)", level: .debug)
+            
+            guard httpResponse.statusCode == 200 else {
+                let errorMsg = "HTTP error: \(httpResponse.statusCode)"
+                log(errorMsg, level: .error)
+                result = DownloadResult(
+                    success: false,
+                    localPath: params.localPath,
+                    errorMessage: errorMsg
+                )
+                return
+            }
+            
+            guard let tempURL = tempURL else {
+                let errorMsg = "No file received"
+                log(errorMsg, level: .error)
+                result = DownloadResult(
+                    success: false,
+                    localPath: params.localPath,
+                    errorMessage: errorMsg
+                )
+                return
+            }
+            
+            // Move temp file to destination
+            do {
+                if FileManager.default.fileExists(atPath: params.localPath) {
+                    try FileManager.default.removeItem(atPath: params.localPath)
+                    log("Removed existing file: \(params.localPath)", level: .debug)
+                }
+                try FileManager.default.moveItem(at: tempURL, to: destinationURL)
+                log("Successfully saved file to: \(params.localPath)", level: .info)
+                result = DownloadResult(
+                    success: true,
+                    localPath: params.localPath
+                )
+            } catch {
+                let errorMsg = "Failed to save file: \(error.localizedDescription)"
+                log(errorMsg, level: .error)
+                result = DownloadResult(
+                    success: false,
+                    localPath: params.localPath,
+                    errorMessage: errorMsg
+                )
+            }
+        }
+        
+        // Add progress observation with better tracking
+        if let progressCallback = params.progressCallback {
+            task.progress.addObserver(self, forKeyPath: "fractionCompleted", options: [.new], context: nil)
+            // Store callback for KVO
+            hfDownloadProgressCallbackContext = progressCallback
+            log("Progress callback registered", level: .debug)
+        }
+        
+        log("Starting download task", level: .info)
+        task.resume()
+        semaphore.wait()
+        
+        return result ?? DownloadResult(
+            success: false,
+            localPath: params.localPath,
+            errorMessage: "Unknown error"
+        )
+    }
+    
+    override public func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+        if keyPath == "fractionCompleted", let progress = object as? Progress {
+            let fraction = Float(progress.fractionCompleted)
+            log("Download progress: \(Int(fraction * 100))%", level: .debug)
+            DispatchQueue.main.async {
+                downloadProgressCallbackContext?(fraction)
+                hfDownloadProgressCallbackContext?(fraction)
+            }
+        }
+    }
+    
+    /// Download a file from Hugging Face repository
+    /// - Parameter params: Hugging Face download parameters
+    /// - Returns: Download result containing success status and local path
+    public func downloadHuggingFaceFile(with params: HuggingFaceDownloadParams) -> DownloadResult {
+        var result: DownloadResult?
+        let semaphore = DispatchSemaphore(value: 0)
+        
+        log("Starting Hugging Face download: \(params.repoID)/\(params.filename)", level: .info)
+        
+        // Create destination directory if it doesn't exist
+        let destinationDir = URL(fileURLWithPath: params.destinationPath)
+        
+        do {
+            try FileManager.default.createDirectory(at: destinationDir, withIntermediateDirectories: true)
+            log("Created destination directory: \(destinationDir.path)", level: .debug)
+        } catch {
+            let errorMsg = "Failed to create destination directory: \(error.localizedDescription)"
+            log(errorMsg, level: .error)
+            return DownloadResult(
+                success: false,
+                localPath: params.destinationPath + "/" + params.filename,
+                errorMessage: errorMsg
+            )
+        }
+        
+        // Build Hugging Face URL
+        let urlString = "https://huggingface.co/\(params.repoID)/resolve/main/\(params.filename)"
+        guard let url = URL(string: urlString) else {
+            let errorMsg = "Invalid URL"
+            log(errorMsg, level: .error)
+            return DownloadResult(
+                success: false,
+                localPath: params.destinationPath + "/" + params.filename,
+                errorMessage: errorMsg
+            )
+        }
+        
+        log("Using Hugging Face URL: \(url.absoluteString)", level: .debug)
+        
+        // Create URL request
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        log("Created request for: \(url.absoluteString)", level: .debug)
+        
+        // Add bearer token if provided
+        if let bearerToken = params.bearerToken {
+            request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
+            log("Added Bearer token authentication", level: .debug)
+        }
+        
+        // Create download task with progress tracking
+        let task = URLSession.shared.downloadTask(with: request) { tempURL, response, error in
+            defer {
+                semaphore.signal()
+            }
+            
+            if let error = error {
+                let errorMsg = "Download failed: \(error.localizedDescription)"
+                log(errorMsg, level: .error)
+                result = DownloadResult(
+                    success: false,
+                    localPath: params.destinationPath + "/" + params.filename,
+                    errorMessage: errorMsg
+                )
+                return
+            }
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                let errorMsg = "Invalid response"
+                log(errorMsg, level: .error)
+                result = DownloadResult(
+                    success: false,
+                    localPath: params.destinationPath + "/" + params.filename,
+                    errorMessage: errorMsg
+                )
+                return
+            }
+            
+            log("HTTP status code: \(httpResponse.statusCode)", level: .debug)
+            
+            guard httpResponse.statusCode == 200 else {
+                let errorMsg = "HTTP error: \(httpResponse.statusCode)"
+                log(errorMsg, level: .error)
+                result = DownloadResult(
+                    success: false,
+                    localPath: params.destinationPath + "/" + params.filename,
+                    errorMessage: errorMsg
+                )
+                return
+            }
+            
+            guard let tempURL = tempURL else {
+                let errorMsg = "No file received"
+                log(errorMsg, level: .error)
+                result = DownloadResult(
+                    success: false,
+                    localPath: params.destinationPath + "/" + params.filename,
+                    errorMessage: errorMsg
+                )
+                return
+            }
+            
+            // Move temp file to destination
+            let destinationURL = destinationDir.appendingPathComponent(params.filename)
+            do {
+                if FileManager.default.fileExists(atPath: destinationURL.path) {
+                    try FileManager.default.removeItem(atPath: destinationURL.path)
+                    log("Removed existing file: \(destinationURL.path)", level: .debug)
+                }
+                try FileManager.default.moveItem(at: tempURL, to: destinationURL)
+                log("Successfully saved file to: \(destinationURL.path)", level: .info)
+                result = DownloadResult(
+                    success: true,
+                    localPath: destinationURL.path
+                )
+            } catch {
+                let errorMsg = "Failed to save file: \(error.localizedDescription)"
+                log(errorMsg, level: .error)
+                result = DownloadResult(
+                    success: false,
+                    localPath: params.destinationPath + "/" + params.filename,
+                    errorMessage: errorMsg
+                )
+            }
+        }
+        
+        // Add progress observation with better tracking
+        if let progressCallback = params.progressCallback {
+            task.progress.addObserver(self, forKeyPath: "fractionCompleted", options: [.new], context: nil)
+            // Store callback for KVO
+            downloadProgressCallbackContext = progressCallback
+            log("Progress callback registered", level: .debug)
+        }
+        
+        log("Starting download task", level: .info)
+        task.resume()
+        semaphore.wait()
+        
+        return result ?? DownloadResult(
+            success: false,
+            localPath: params.destinationPath + "/" + params.filename,
+            errorMessage: "Unknown error"
         )
     }
     

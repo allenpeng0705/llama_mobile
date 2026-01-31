@@ -480,7 +480,7 @@ class SettingsFragment : Fragment() {
         val modelsDir = getModelsDirectory(activity)
         
         // HF token from test_download.cpp
-        val bearerToken = "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"
+        val bearerToken = "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"
         // Repo ID and filename from test_download.cpp
         val repoId = "microsoft/Phi-3-mini-4k-instruct-gguf"
         val filename = "Phi-3-mini-4k-instruct-q4.gguf"
@@ -534,6 +534,8 @@ class SettingsFragment : Fragment() {
         val modelUrl = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
         val filename = "Phi-3-mini-4k-instruct-q4.gguf"
         val localPath = "$modelsDir/$filename"
+        // HF token for authentication
+        val bearerToken = "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"
         
         showDownloadProgressDialog {dialog ->
             Thread {
@@ -543,6 +545,7 @@ class SettingsFragment : Fragment() {
                         filename,
                         modelsDir
                     )
+                        .bearerToken(bearerToken)
                         .progressCallback {
                             progress, status, downloadedBytes, totalBytes ->
                             activity.runOnUiThread {

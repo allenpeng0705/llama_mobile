@@ -916,6 +916,49 @@ struct SettingsView: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 40)
                         
+                        if error.contains("HTTP error") || error.contains("401") {
+                            VStack(spacing: 8) {
+                                Text("Possible causes:")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text("• Invalid or expired Hugging Face access token")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text("• File does not exist or is private")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text("• Network connectivity issues")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(Color.red.opacity(0.1))
+                            .cornerRadius(8)
+                        } else if error.contains("Network connection lost") || error.contains("Connection timed out") || error.contains("No internet connection") {
+                            VStack(spacing: 8) {
+                                Text("Network Problem:")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text("• No internet connection")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text("• WiFi or cellular data disabled")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text("• Firewall or VPN blocking connection")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                                Text("• Try switching between WiFi and cellular")
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(8)
+                        }
+                        
                         Button(action: {
                             downloadError = nil
                         }) {
@@ -1023,7 +1066,7 @@ struct SettingsView: View {
         // Set up download parameters
         let url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
         let filename = "Phi-3-mini-4k-instruct-q4.gguf"
-        let bearerToken = "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"
+        let bearerToken = "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"
         
         // Get models directory
         guard let modelsDir = getModelsDirectory() else {
