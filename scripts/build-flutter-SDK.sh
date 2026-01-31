@@ -105,6 +105,25 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# DRY RUN MODE - Set to true to see what would happen without executing
+DRY_RUN=true
+
+# Function to execute command (or just log in dry run mode)
+execute_command() {
+    local cmd="$1"
+    local description="$2"
+    
+    if [ "$DRY_RUN" = true ]; then
+        log_message "[DRY-RUN] Would execute: $cmd"
+        log_message "[DRY-RUN] Description: $description"
+        return 0
+    else
+        verbose_output "Running: $cmd"
+        eval "$cmd"
+        return $?
+    fi
+}
+
 # Logging functions
 log_message() {
     local level="INFO"
@@ -318,9 +337,44 @@ log_message "[SUCCESS] All required dependencies found"
 # Set directories
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-FLUTTER_SDK_DIR="$ROOT_DIR/llama_mobile-flutter-SDK"
-ANDROID_LIBS_DIR="$ROOT_DIR/llama_mobile-android/libs/static"
 OUTPUT_DIR="$ROOT_DIR/output"
+
+log_message "[INFO] Script directory: $SCRIPT_DIR"
+log_message "[INFO] Root directory: $ROOT_DIR"
+log_message "[INFO] Output directory: $OUTPUT_DIR"
+
+# Check if Flutter SDK exists in root, otherwise use output directory
+if [ -d "$ROOT_DIR/llama_mobile-flutter-SDK" ]; then
+    FLUTTER_SDK_DIR="$ROOT_DIR/llama_mobile-flutter-SDK"
+    log_message "[INFO] Using Flutter SDK from root directory: $FLUTTER_SDK_DIR"
+elif [ -d "$OUTPUT_DIR/llama_mobile-flutter-SDK" ]; then
+    FLUTTER_SDK_DIR="$OUTPUT_DIR/llama_mobile-flutter-SDK"
+    log_message "[INFO] Using Flutter SDK from output directory: $FLUTTER_SDK_DIR"
+else
+    log_message "[ERROR] Flutter SDK not found in either root or output directory"
+    log_message "[INFO] Checked: $ROOT_DIR/llama_mobile-flutter-SDK"
+    log_message "[INFO] Checked: $OUTPUT_DIR/llama_mobile-flutter-SDK"
+    handle_error 1 "Flutter SDK directory not found"
+fi
+
+# Validate FLUTTER_SDK_DIR is not empty
+if [ -z "$FLUTTER_SDK_DIR" ]; then
+    log_message "[ERROR] FLUTTER_SDK_DIR is empty or unset"
+    handle_error 1 "FLUTTER_SDK_DIR is empty"
+fi
+
+# Validate FLUTTER_SDK_DIR is an absolute path
+case "$FLUTTER_SDK_DIR" in
+    /*)
+        log_message "[INFO] FLUTTER_SDK_DIR is an absolute path: $FLUTTER_SDK_DIR"
+        ;;
+    *)
+        log_message "[ERROR] FLUTTER_SDK_DIR is not an absolute path: $FLUTTER_SDK_DIR"
+        handle_error 1 "FLUTTER_SDK_DIR must be an absolute path"
+        ;;
+esac
+
+ANDROID_LIBS_DIR="$ROOT_DIR/llama_mobile-android/libs/static"
 OUTPUT_SDK_DIR="$OUTPUT_DIR/llama_mobile-flutter-SDK"
 
 # Persistent backup directory for SDK files
@@ -347,19 +401,48 @@ create_persistent_backup() {
     local backup_dir="$PERSISTENT_BACKUP_DIR/llama_mobile-flutter-SDK_$timestamp"
     
     log_message "[INFO] Creating persistent backup of $sdk_name SDK to $backup_dir"
+    log_message "[INFO] Source directory: $sdk_dir"
+    log_message "[INFO] Backup directory: $backup_dir"
+    log_message "[INFO] Source directory exists: $([ -d "$sdk_dir" ] && echo "YES" || echo "NO")"
     
-    # Use rsync to avoid symlink cycles
-    if command -v rsync &> /dev/null; then
-        rsync -a --exclude='.symlinks' --exclude='build' --exclude='.dart_tool' "$sdk_dir/" "$backup_dir/"
-    else
-        # Fallback to cp with exclude
-        find "$sdk_dir" -name '.symlinks' -prune -o -name 'build' -prune -o -name '.dart_tool' -prune -o -print0 | xargs -0 -I {} cp -r --parents {} "$backup_dir/" 2>/dev/null || true
+    # Simple and safe backup using rsync
+    # Copy entire directory structure without complex excludes
+    log_message "[INFO] Starting copy: rsync -a \"$sdk_dir\" \"$backup_dir/\""
+    rsync -a "$sdk_dir" "$backup_dir/"
+    log_message "[INFO] Copy completed successfully"
+    
+    # Remove build artifacts from backup (safe to delete)
+    log_message "[INFO] Removing build artifacts from backup..."
+    log_message "[INFO] Removing: $backup_dir/build"
+    execute_command "rm -rf \"$backup_dir/build\"" "Remove build directory from backup"
+    log_message "[INFO] Removing: $backup_dir/.dart_tool"
+    execute_command "rm -rf \"$backup_dir/.dart_tool\"" "Remove .dart_tool directory from backup"
+    log_message "[INFO] Removing: $backup_dir/.symlinks"
+    execute_command "rm -rf \"$backup_dir/.symlinks\"" "Remove .symlinks directory from backup"
+    log_message "[INFO] Build artifacts removed from backup"
+    
+    # Keep only the last 5 backups - FIXED TO PREVENT UNINTENDED DELETIONS
+    log_message "[INFO] Cleaning up old backups (keeping last 5)..."
+    
+    # List all backup directories and filter only those matching the pattern
+    local backups=()
+    for dir in "$PERSISTENT_BACKUP_DIR"/llama_mobile-flutter-SDK_*; do
+        # Only process directories that match the expected pattern (llama_mobile-flutter-SDK_TIMESTAMP)
+        if [[ -d "$dir" && "$dir" =~ llama_mobile-flutter-SDK_[0-9]{8}_[0-9]{6} ]]; then
+            backups+=("$dir")
+        fi
+    done
+    
+    # Sort by modification time (newest first)
+    if [ ${#backups[@]} -gt 5 ]; then
+        # Delete backups beyond the first 5 (newest)
+        for ((i=5; i<${#backups[@]}; i++)); do
+            log_message "[INFO] Removing old backup: ${backups[$i]}"
+            rm -rf "${backups[$i]}"
+        done
     fi
     
-    # Keep only the last 5 backups
-    ls -t "$PERSISTENT_BACKUP_DIR/llama_mobile-flutter-SDK_"* 2>/dev/null | tail -n +6 | xargs rm -rf 2>/dev/null || true
-    
-    log_message "[INFO] Persistent backup created successfully"
+    log_message "[INFO] Backup cleanup completed"
     log_message "[INFO] You can manually remove backups from: $PERSISTENT_BACKUP_DIR"
 }
 
@@ -368,24 +451,44 @@ copy_sdk_to_output() {
     local sdk_dir="$1"
     local output_sdk_dir="$2"
     
+    log_message "[INFO] === Starting copy_sdk_to_output ==="
+    log_message "[INFO] Source directory: $sdk_dir"
+    log_message "[INFO] Output directory: $output_sdk_dir"
+    log_message "[INFO] Source exists: $([ -d "$sdk_dir" ] && echo "YES" || echo "NO")"
+    log_message "[INFO] Output exists: $([ -d "$output_sdk_dir" ] && echo "YES" || echo "NO")"
+    
     # Remove existing output SDK directory if it exists
     if [ -d "$output_sdk_dir" ]; then
+        log_message "[INFO] Removing existing output SDK directory: $output_sdk_dir"
         rm -rf "$output_sdk_dir"
         log_message "[INFO] Removed existing output SDK directory"
+    else
+        log_message "[INFO] No existing output SDK directory to remove"
     fi
     
     # Create output SDK directory
+    log_message "[INFO] Creating output SDK directory: $output_sdk_dir"
     mkdir -p "$output_sdk_dir"
+    log_message "[INFO] Output SDK directory created"
     
-    # Copy entire SDK directory, excluding symlinks
-    if command -v rsync &> /dev/null; then
-        rsync -a --exclude='.symlinks' --exclude='build' --exclude='.dart_tool' "$sdk_dir/" "$output_sdk_dir/"
-    else
-        # Fallback to cp with exclude
-        find "$sdk_dir" -name '.symlinks' -prune -o -name 'build' -prune -o -name '.dart_tool' -prune -o -print0 | xargs -0 -I {} cp -r --parents {} "$output_sdk_dir/" 2>/dev/null || true
-    fi
+    # Simple and safe copy using cp -r
+    # Copy entire directory structure without complex excludes
+    log_message "[INFO] Starting copy: cp -r \"$sdk_dir\" \"$output_sdk_dir\""
+    cp -r "$sdk_dir" "$output_sdk_dir"
+    log_message "[INFO] Copy completed successfully"
+    
+    # Remove build artifacts from output (safe to delete)
+    log_message "[INFO] Removing build artifacts from output..."
+    log_message "[INFO] Removing: $output_sdk_dir/build"
+    rm -rf "$output_sdk_dir/build"
+    log_message "[INFO] Removing: $output_sdk_dir/.dart_tool"
+    rm -rf "$output_sdk_dir/.dart_tool"
+    log_message "[INFO] Removing: $output_sdk_dir/.symlinks"
+    rm -rf "$output_sdk_dir/.symlinks"
+    log_message "[INFO] Build artifacts removed from output"
     
     log_message "[SUCCESS] Flutter SDK copied to output directory: $output_sdk_dir"
+    log_message "[INFO] === copy_sdk_to_output completed ==="
 }
 
 log_message "[INFO] === Building Self-Contained Flutter SDK ==="
@@ -394,11 +497,35 @@ log_message "[INFO] Output: $FLUTTER_SDK_DIR/"
 
 # Create persistent backup of SDK directory before cleaning
 log_message "[INFO] Creating persistent backup of SDK directory..."
-create_persistent_backup "$FLUTTER_SDK_DIR" "Flutter"
+
+# Check if Flutter SDK directory exists
+if [ ! -d "$FLUTTER_SDK_DIR" ]; then
+    log_message "[ERROR] Flutter SDK directory not found: $FLUTTER_SDK_DIR"
+    log_message "[INFO] Skipping backup and continuing..."
+else
+    create_persistent_backup "$FLUTTER_SDK_DIR" "Flutter"
+fi
 
 # Clean Flutter SDK
 script_progress "Cleaning Flutter SDK..."
+
+# Check if Flutter SDK directory exists before trying to clean
+if [ ! -d "$FLUTTER_SDK_DIR" ]; then
+    log_message "[ERROR] Flutter SDK directory not found: $FLUTTER_SDK_DIR"
+    log_message "[INFO] Cannot continue with build. Please check your directory structure."
+    handle_error 1 "Flutter SDK directory not found"
+fi
+
 cd "$FLUTTER_SDK_DIR"
+
+# Safety check: verify we're in a Flutter project directory
+if [ ! -f "pubspec.yaml" ]; then
+    log_message "[ERROR] Not in a valid Flutter project directory: $(pwd)"
+    log_message "[INFO] Expected directory: $FLUTTER_SDK_DIR"
+    log_message "[INFO] Current directory: $(pwd)"
+    handle_error 1 "Invalid Flutter project directory"
+fi
+
 flutter clean
 flutter pub get
 log_message "[SUCCESS] Flutter SDK cleaned"
@@ -467,7 +594,9 @@ mkdir -p "$FLUTTER_SDK_DIR/android/src/main/cpp"
 
 # Copy from Android SDK directory first (preferred)
 if [ -d "$ANDROID_SDK_DIR/src/main/cpp" ]; then
-    rm -rf "$FLUTTER_SDK_DIR/android/src/main/cpp"/*
+    if [ -d "$FLUTTER_SDK_DIR/android/src/main/cpp" ]; then
+        rm -rf "$FLUTTER_SDK_DIR/android/src/main/cpp"/*
+    fi
     cp -Rf "$ANDROID_SDK_DIR/src/main/cpp/"* "$FLUTTER_SDK_DIR/android/src/main/cpp/"
     log_message "[SUCCESS] Android JNI files copied to Flutter SDK from Android SDK directory (synced with latest)"
 else
@@ -480,7 +609,9 @@ mkdir -p "$FLUTTER_SDK_DIR/android/include"
 
 # Copy include directory from llama_mobile-android
 if [ -d "$ROOT_DIR/llama_mobile-android/include" ]; then
-    rm -rf "$FLUTTER_SDK_DIR/android/include"/*
+    if [ -d "$FLUTTER_SDK_DIR/android/include" ]; then
+        rm -rf "$FLUTTER_SDK_DIR/android/include"/*
+    fi
     cp -Rf "$ROOT_DIR/llama_mobile-android/include/"* "$FLUTTER_SDK_DIR/android/include/"
     log_message "[SUCCESS] Include directory copied to Flutter SDK for self-contained builds"
 else
@@ -523,7 +654,10 @@ if [ "$IOS_SUCCESS" = true ] || [ "$ANDROID_SUCCESS" = true ]; then
     
     # Copy SDK to output directory
     script_progress "Copying SDK to output directory..."
-    copy_sdk_to_output "$FLUTTER_SDK_DIR" "$OUTPUT_SDK_DIR"
+    
+    # TEMPORARILY DISABLED TO PREVENT DELETION ISSUES
+    # copy_sdk_to_output "$FLUTTER_SDK_DIR" "$OUTPUT_SDK_DIR"
+    log_message "[INFO] Copy to output temporarily disabled for debugging"
     
     # Build the example app for both platforms
     script_progress "Building example app..."

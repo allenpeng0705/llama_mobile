@@ -48,7 +48,7 @@ create_persistent_backup() {
     cp -r "$sdk_dir" "$backup_dir"
     
     # Keep only the last 5 backups
-    ls -t "$PERSISTENT_BACKUP_DIR/llama_mobile-ios-SDK_"* 2>/dev/null | tail -n +6 | xargs rm -rf 2>/dev/null || true
+    #ls -t "$PERSISTENT_BACKUP_DIR/llama_mobile-ios-SDK_"* 2>/dev/null | tail -n +6 | xargs rm -rf 2>/dev/null || true
     
     log_message "INFO" "Persistent backup created successfully"
     log_message "INFO" "You can manually remove backups from: $PERSISTENT_BACKUP_DIR"
