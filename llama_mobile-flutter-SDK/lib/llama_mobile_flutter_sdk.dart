@@ -185,7 +185,6 @@ class CompletionParams {
   final String? toolChoice;
   final List<String> mediaPaths;
   final List<ChatMessage> chatMessages;
-  final String? chatTemplate;
 
   CompletionParams({
     required this.prompt,
@@ -215,8 +214,37 @@ class CompletionParams {
     this.toolChoice,
     this.mediaPaths = const [],
     this.chatMessages = const [],
-    this.chatTemplate,
   });
+
+  CompletionParams.forChat({
+    required List<ChatMessage> chatMessages,
+    this.maxTokens = 1024,
+    this.nThreads,
+    this.seed = -1,
+    this.temperature = 0.7,
+    this.topK = 40,
+    this.topP = 0.95,
+    this.minP = 0.05,
+    this.typicalP = 1.0,
+    this.penaltyLastN = 64,
+    this.penaltyRepeat = 1.1,
+    this.penaltyFreq = 0.0,
+    this.penaltyPresent = 0.0,
+    this.mirostat = 0,
+    this.mirostatTau = 5.0,
+    this.mirostatEta = 0.1,
+    this.ignoreEos = false,
+    this.stopSequences = const [],
+    this.grammar,
+    this.useJsonResponse = true,
+    this.nProbs = 0,
+    this.jsonSchema,
+    this.tools,
+    this.parallelToolCalls = false,
+    this.toolChoice,
+    this.mediaPaths = const [],
+  }) : prompt = '',
+       chatMessages = chatMessages;
 
   Map<String, dynamic> toMap() {
     return {
@@ -247,7 +275,6 @@ class CompletionParams {
       'toolChoice': toolChoice,
       'mediaPaths': mediaPaths,
       'chatMessages': chatMessages.map((m) => m.toMap()).toList(),
-      'chatTemplate': chatTemplate,
     };
   }
 
@@ -890,7 +917,6 @@ class LlamaContext {
     List<String> stopSequences = const [],
     String? grammar,
     bool useJsonResponse = true,
-    String? chatTemplate,
   }) async {
     final params = CompletionParams(
       prompt: prompt,
@@ -1069,7 +1095,6 @@ class LlamaContext {
   /// - [stopSequences]: List of sequences to stop generation at.
   /// - [grammar]: Grammar string to constrain output to a specific format.
   /// - [useJsonResponse]: Whether to format response as JSON.
-  /// - [chatTemplate]: Custom chat template for this completion.
   Future<CompletionResult?> generateCompletion({
     required String prompt,
     int maxTokens = 1024,
@@ -1091,7 +1116,6 @@ class LlamaContext {
     List<String> stopSequences = const [],
     String? grammar,
     bool useJsonResponse = true,
-    String? chatTemplate,
   }) async {
     final params = CompletionParams(
       prompt: prompt,
@@ -1229,117 +1253,6 @@ class LlamaContext {
         );
     if (result != null) {
       return CompletionResult.fromMap(result);
-    }
-    return null;
-  }
-
-  /// Generates a conversation response based on the given chat history.
-  ///
-  /// Parameters:
-  /// - [chatMessages]: List of chat messages representing the conversation history.
-  /// - [maxTokens]: Maximum number of tokens to generate in the response.
-  /// - [nThreads]: Number of CPU threads to use (overrides context setting).
-  /// - [seed]: Random seed for generation (-1 = random).
-  /// - [temperature]: Sampling temperature (higher = more creative, lower = more deterministic).
-  /// - [topK]: Top-k sampling parameter (consider only top k tokens).
-  /// - [topP]: Top-p sampling parameter (consider only top tokens with cumulative probability p).
-  /// - [minP]: Minimum probability for top-p filtering.
-  /// - [typicalP]: Typical sampling parameter for locally typical sampling.
-  /// - [penaltyLastN]: Number of last tokens to consider for repetition penalty.
-  /// - [penaltyRepeat]: Penalty for repeated tokens (higher = more penalty).
-  /// - [penaltyFreq]: Frequency penalty (higher = penalize frequent tokens more).
-  /// - [penaltyPresent]: Penalty for tokens present in the prompt.
-  /// - [mirostat]: Mirostat sampling method (0 = disabled, 1 = v1, 2 = v2).
-  /// - [mirostatTau]: Mirostat target entropy.
-  /// - [mirostatEta]: Mirostat learning rate.
-  /// - [ignoreEos]: Whether to ignore end-of-sequence tokens.
-  /// - [stopSequences]: List of sequences to stop generation at.
-  /// - [grammar]: Grammar string to constrain output to a specific format.
-  /// - [useJsonResponse]: Whether to format response as JSON.
-  /// - [chatTemplate]: Custom chat template for formatting the conversation.
-  Future<ConversationResult?> generateConversation({
-    required List<ChatMessage> chatMessages,
-    int maxTokens = 256,
-    int? nThreads,
-    int seed = -1,
-    double temperature = 0.7,
-    int topK = 40,
-    double topP = 0.95,
-    double minP = 0.05,
-    double typicalP = 1.0,
-    int penaltyLastN = 64,
-    double penaltyRepeat = 1.2,
-    double penaltyFreq = 0.0,
-    double penaltyPresent = 0.0,
-    int mirostat = 0,
-    double mirostatTau = 5.0,
-    double mirostatEta = 0.1,
-    bool ignoreEos = false,
-    List<String> stopSequences = const [],
-    String? grammar,
-    bool useJsonResponse = false,
-    String? chatTemplate,
-  }) async {
-    final params = CompletionParams(
-      prompt: '',
-      maxTokens: maxTokens,
-      nThreads: nThreads,
-      seed: seed,
-      temperature: temperature,
-      topK: topK,
-      topP: topP,
-      minP: minP,
-      typicalP: typicalP,
-      penaltyLastN: penaltyLastN,
-      penaltyRepeat: penaltyRepeat,
-      penaltyFreq: penaltyFreq,
-      penaltyPresent: penaltyPresent,
-      mirostat: mirostat,
-      mirostatTau: mirostatTau,
-      mirostatEta: mirostatEta,
-      ignoreEos: ignoreEos,
-      stopSequences: stopSequences,
-      grammar: grammar,
-      useJsonResponse: useJsonResponse,
-      chatMessages: chatMessages,
-    );
-    return generateConversationWithParams(params);
-  }
-
-  /// Generates a conversation response using CompletionParams.
-  ///
-  /// Parameters:
-  /// - [params]: Completion parameters.
-  Future<ConversationResult?> generateConversationWithParams(
-    CompletionParams params,
-  ) async {
-    final messagesJson = params.chatMessages.map((msg) => msg.toMap()).toList();
-    final paramsMap = {
-      'maxTokens': params.maxTokens,
-      'nThreads': params.nThreads,
-      'seed': params.seed,
-      'temperature': params.temperature,
-      'topK': params.topK,
-      'topP': params.topP,
-      'minP': params.minP,
-      'typicalP': params.typicalP,
-      'penaltyLastN': params.penaltyLastN,
-      'penaltyRepeat': params.penaltyRepeat,
-      'penaltyFreq': params.penaltyFreq,
-      'penaltyPresent': params.penaltyPresent,
-      'mirostat': params.mirostat,
-      'mirostatTau': params.mirostatTau,
-      'mirostatEta': params.mirostatEta,
-      'ignoreEos': params.ignoreEos,
-      'stopSequences': params.stopSequences,
-      'grammar': params.grammar,
-      'useJsonResponse': params.useJsonResponse,
-    };
-
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateConversation(_contextHandle, paramsMap, messagesJson);
-    if (result != null) {
-      return ConversationResult.fromMap(result);
     }
     return null;
   }
@@ -1793,8 +1706,9 @@ class LlamaContext {
     double mirostatTau = 5.0,
     double mirostatEta = 0.1,
     bool ignoreEos = false,
+    List<String> stopSequences = const [],
     String? grammar,
-    List<String>? stopSequences,
+    bool useJsonResponse = true,
     List<String>? mediaPaths,
   }) async {
     final params = CompletionParams(
@@ -1815,8 +1729,9 @@ class LlamaContext {
       mirostatTau: mirostatTau,
       mirostatEta: mirostatEta,
       ignoreEos: ignoreEos,
+      stopSequences: stopSequences,
       grammar: grammar,
-      stopSequences: stopSequences ?? [],
+      useJsonResponse: useJsonResponse,
       mediaPaths: mediaPaths ?? [],
     );
     return generateCompletionWithParamsAsync(params);
@@ -1826,8 +1741,20 @@ class LlamaContext {
   Future<CompletionResult?> generateCompletionWithParamsAsync(
     CompletionParams params,
   ) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateCompletionAsync(_contextHandle, params.toMap());
+    Map<String, dynamic>? result;
+    if (params.mediaPaths.isNotEmpty) {
+      // Use multimodal completion for media
+      result = await LlamaMobileFlutterSdkPlatform.instance
+          .generateMultimodalCompletionAsync(
+            _contextHandle,
+            params.toMap(),
+            params.mediaPaths,
+          );
+    } else {
+      // Use regular completion
+      result = await LlamaMobileFlutterSdkPlatform.instance
+          .generateCompletionAsync(_contextHandle, params.toMap());
+    }
     if (result != null) {
       return CompletionResult(
         text: result['text'] as String,
@@ -1911,71 +1838,6 @@ class LlamaContext {
         stoppedWord: result['stoppedWord'] as bool,
         stoppedLimit: result['stoppedLimit'] as bool,
         stoppingWord: result['stoppingWord'] as String?,
-      );
-    }
-    return null;
-  }
-
-  /// Generates a conversation asynchronously (runs in background thread)
-  Future<ConversationResult?> generateConversationAsync({
-    required List<ChatMessage> chatMessages,
-    int maxTokens = 1024,
-    int? nThreads,
-    int seed = -1,
-    double temperature = 0.8,
-    int topK = 40,
-    double topP = 0.95,
-    double minP = 0.05,
-    double typicalP = 1.0,
-    int penaltyLastN = 64,
-    double penaltyRepeat = 1.1,
-    double penaltyFreq = 0.0,
-    double penaltyPresent = 0.0,
-    int mirostat = 0,
-    double mirostatTau = 5.0,
-    double mirostatEta = 0.1,
-    bool ignoreEos = false,
-    String? grammar,
-    List<String>? stopSequences,
-  }) async {
-    final params = CompletionParams(
-      prompt: '',
-      maxTokens: maxTokens,
-      nThreads: nThreads,
-      seed: seed,
-      temperature: temperature,
-      topK: topK,
-      topP: topP,
-      minP: minP,
-      typicalP: typicalP,
-      penaltyLastN: penaltyLastN,
-      penaltyRepeat: penaltyRepeat,
-      penaltyFreq: penaltyFreq,
-      penaltyPresent: penaltyPresent,
-      mirostat: mirostat,
-      mirostatTau: mirostatTau,
-      mirostatEta: mirostatEta,
-      ignoreEos: ignoreEos,
-      grammar: grammar,
-      stopSequences: stopSequences ?? [],
-    );
-    return generateConversationWithParamsAsync(params, chatMessages);
-  }
-
-  /// Generates a conversation with CompletionParams and chat messages asynchronously
-  Future<ConversationResult?> generateConversationWithParamsAsync(
-    CompletionParams params,
-    List<ChatMessage> chatMessages,
-  ) async {
-    final messagesMap = chatMessages.map((msg) => msg.toMap()).toList();
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateConversationAsync(_contextHandle, params.toMap(), messagesMap);
-    if (result != null) {
-      return ConversationResult(
-        text: result['text'] as String,
-        tokensGenerated: result['tokensGenerated'] as int,
-        timeToFirstToken: result['timeToFirstToken'] as int? ?? 0,
-        totalTime: result['totalTime'] as int? ?? 0,
       );
     }
     return null;

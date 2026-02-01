@@ -83,27 +83,7 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     );
   }
 
-  // Chat methods
-  Future<Map<String, dynamic>?> generateConversation(
-    int contextHandle,
-    Map<String, dynamic> params,
-    List<Map<String, String?>> chatMessages,
-  ) {
-    throw UnimplementedError(
-      'generateConversation() has not been implemented.',
-    );
-  }
-
-  Future<Map<String, dynamic>?> generateConversationAsync(
-    int contextHandle,
-    Map<String, dynamic> params,
-    List<Map<String, String?>> chatMessages,
-  ) {
-    throw UnimplementedError(
-      'generateConversationAsync() has not been implemented.',
-    );
-  }
-
+  
   Future<String?> formatChatMessages(
     int contextHandle,
     List<Map<String, String?>> messages,

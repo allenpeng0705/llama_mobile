@@ -33,6 +33,7 @@ class AppState extends ChangeNotifier {
 
   // Feature switches - matching iOSSDKExample
   bool useStreaming = false;
+  bool useAsync = false;
   bool useJsonResponse = true;
   bool useChatMode = true;
   bool useCustomTemplate = false;
@@ -904,8 +905,30 @@ class AppState extends ChangeNotifier {
 
       // Initialize the context with all parameters
       print("Initializing model context with path: $finalModelPath");
+      // Qwen3 chat template - using proper Jinja format
+      final qwen3Template =
+          "{%- for message in messages -%}\n" +
+          "  {{- '<|im_start|>' + message.role + '\n' + message.content + '<|im_end|>\n' -}}\n" +
+          "{%- endfor -%}\n" +
+          "{%- if add_generation_prompt -%}\n" +
+          "  {{- '<|im_start|>assistant\n' -}}\n" +
+          "{%- endif -%}";
+
+      // Determine which chat template to use
+      String? chatTemplateToUse;
+      if (useCustomTemplate) {
+        chatTemplateToUse = qwen3Template;
+        print("[INFO] Using custom Qwen3 chat template");
+      } else {
+        print("[INFO] Using model's built-in chat template");
+      }
+
       print("Parameters:");
-      print("  chatTemplate: <|im_start|>{{role}}\n{{content}}<|im_end|>\n");
+      if (chatTemplateToUse != null) {
+        print("  chatTemplate: $chatTemplateToUse");
+      } else {
+        print("  chatTemplate: (using built-in template)");
+      }
       print("  nCtx: $nCtx");
       print("  nGpuLayers: $nGpuLayers");
       print("  nThreads: $nThreads");
@@ -916,13 +939,13 @@ class AppState extends ChangeNotifier {
       print("  nUBatch: 1024");
       final context = await llamaMobile!.initContextAsync(
         modelPath: finalModelPath,
-        chatTemplate: "<|im_start|>{{role}}\n{{content}}<|im_end|>\n",
+        //chatTemplate: chatTemplateToUse,
         nCtx: nCtx,
         nGpuLayers: nGpuLayers, // Use user-specified GPU layers
         nThreads: nThreads,
         embedding: enableEmbedding,
         poolingType: 0,
-        embdNormalize: 0,
+        embdNormalize: 1,
         nBatch: 1024,
         nUBatch: 1024,
         flashAttention: true, // Enable flash attention for better performance
@@ -1310,7 +1333,7 @@ class AppState extends ChangeNotifier {
             : null,
       );
 
-      final result = await LlamaMobile().downloadModelWithParams(params);
+      final result = await LlamaMobile().downloadModelWithParamsAsync(params);
 
       isDownloading = false;
 
@@ -1350,8 +1373,17 @@ class Message {
   final String text;
   final String? thought;
 
-  Message({required this.role, required this.text, this.thought})
-    : id = DateTime.now().millisecondsSinceEpoch.toString();
+  Message({required this.role, required this.text, this.thought, String? id})
+    : id = id ?? DateTime.now().millisecondsSinceEpoch.toString();
+
+  Message copyWith({String? text, String? thought}) {
+    return Message(
+      role: role,
+      text: text ?? this.text,
+      thought: thought ?? this.thought,
+      id: id,
+    );
+  }
 }
 
 // Parse response to extract thought (between <think> tags) and reply (after </think>)
@@ -1553,14 +1585,6 @@ class _ChatViewState extends State<ChatView> {
   Future<void> generateResponse(String prompt) async {
     try {
       if (widget.appState.llamaContext != null) {
-        // Load grammar content if selected
-        String? grammarContent;
-        if (widget.appState.selectedGrammar != null) {
-          grammarContent = await widget.appState.loadGrammarContent(
-            widget.appState.selectedGrammar!,
-          );
-        }
-
         // Generate response based on Streaming switch
         if (widget.appState.useStreaming) {
           // Use streaming generation
@@ -1594,10 +1618,9 @@ class _ChatViewState extends State<ChatView> {
             }
 
             // Create completion parameters with structured chat messages
-            params = CompletionParams(
-              prompt: prompt,
+            params = CompletionParams.forChat(
               chatMessages: chatMessages,
-              maxTokens: 4096,
+              maxTokens: 2048,
               temperature: 0.7,
               topK: 40,
               topP: 0.9,
@@ -1607,7 +1630,7 @@ class _ChatViewState extends State<ChatView> {
               penaltyFreq: 0.0,
               penaltyPresent: 0.0,
               stopSequences: ["<|im_end|>"],
-              grammar: grammarContent,
+              useJsonResponse: widget.appState.useJsonResponse,
             );
           } else {
             // Direct prompt mode: use prompt only
@@ -1626,7 +1649,7 @@ class _ChatViewState extends State<ChatView> {
               penaltyFreq: 0.0,
               penaltyPresent: 0.0,
               stopSequences: ["<|im_end|>"],
-              grammar: grammarContent,
+              useJsonResponse: widget.appState.useJsonResponse,
             );
           }
 
@@ -1638,17 +1661,16 @@ class _ChatViewState extends State<ChatView> {
                   // Update last message with new token
                   if (messages.isNotEmpty &&
                       messages.last.role == "assistant") {
-                    messages[messages.length - 1] = Message(
-                      role: "assistant",
+                    messages[messages.length - 1] = messages.last.copyWith(
                       text: messages.last.text + token,
                     );
                   }
                 });
               });
 
-          // Generate completion with streaming
+          // Generate completion with streaming (async version)
           final result = await widget.appState.llamaContext
-              ?.generateStreamingCompletionWithParams(params);
+              ?.generateStreamingCompletionWithParamsAsync(params);
 
           // Cancel token subscription
           await tokenSubscription?.cancel();
@@ -1663,8 +1685,7 @@ class _ChatViewState extends State<ChatView> {
                   parseResponseForThoughtAndReply(lastMessage.text);
 
               setState(() {
-                messages[messages.length - 1] = Message(
-                  role: "assistant",
+                messages[messages.length - 1] = lastMessage.copyWith(
                   text: parsedReply,
                   thought: parsedThought,
                 );
@@ -1708,8 +1729,7 @@ class _ChatViewState extends State<ChatView> {
             }
 
             // Create completion parameters with structured chat messages
-            params = CompletionParams(
-              prompt: prompt,
+            params = CompletionParams.forChat(
               chatMessages: chatMessages,
               maxTokens: 4096,
               temperature: 0.7,
@@ -1721,13 +1741,21 @@ class _ChatViewState extends State<ChatView> {
               penaltyFreq: 0.0,
               penaltyPresent: 0.0,
               stopSequences: ["<|im_end|>"],
-              grammar: grammarContent,
+              useJsonResponse: widget.appState.useJsonResponse,
             );
 
-            // Generate completion with chat messages
-            final result = await widget.appState.llamaContext
-                ?.generateCompletionWithParams(params);
-            response = result?.text ?? "";
+            // Generate completion with chat messages (sync or async version based on useAsync flag)
+            if (widget.appState.useAsync) {
+              print("[INFO] Using Async API for chat");
+              final result = await widget.appState.llamaContext
+                  ?.generateCompletionWithParamsAsync(params);
+              response = result?.text ?? "";
+            } else {
+              print("[INFO] Using Sync API for chat");
+              final result = await widget.appState.llamaContext
+                  ?.generateCompletionWithParams(params);
+              response = result?.text ?? "";
+            }
           } else {
             // Direct prompt mode: use prompt only
             print("[INFO] Using Direct Prompt mode");
@@ -1745,13 +1773,21 @@ class _ChatViewState extends State<ChatView> {
               penaltyFreq: 0.0,
               penaltyPresent: 0.0,
               stopSequences: ["<|im_end|>"],
-              grammar: grammarContent,
+              useJsonResponse: widget.appState.useJsonResponse,
             );
 
-            // Generate completion
-            final result = await widget.appState.llamaContext
-                ?.generateCompletionWithParams(params);
-            response = result?.text ?? "";
+            // Generate completion (sync or async version based on useAsync flag)
+            if (widget.appState.useAsync) {
+              print("[INFO] Using Async API for completion");
+              final result = await widget.appState.llamaContext
+                  ?.generateCompletionWithParamsAsync(params);
+              response = result?.text ?? "";
+            } else {
+              print("[INFO] Using Sync API for completion");
+              final result = await widget.appState.llamaContext
+                  ?.generateCompletionWithParams(params);
+              response = result?.text ?? "";
+            }
           }
 
           // Log complete raw response from LLM
@@ -1844,6 +1880,21 @@ class _ChatViewState extends State<ChatView> {
                           onChanged: (value) {
                             setState(() {
                               widget.appState.useStreaming = value;
+                            });
+                          },
+                          activeColor: Colors.blue,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Row(
+                      children: [
+                        const Text("Async:"),
+                        Switch(
+                          value: widget.appState.useAsync,
+                          onChanged: (value) {
+                            setState(() {
+                              widget.appState.useAsync = value;
                             });
                           },
                           activeColor: Colors.blue,
@@ -2132,34 +2183,52 @@ class _EmbeddingTestViewState extends State<EmbeddingTestView> {
   bool isProcessing = false;
 
   void generateEmbedding() async {
+    print("[DEBUG] Flutter: generateEmbedding called");
+
     if (_textController.text.isEmpty ||
         !widget.appState.isModelLoaded ||
-        isProcessing)
+        isProcessing) {
+      print(
+        "[DEBUG] Flutter: generateEmbedding - Skipping: text empty: ${_textController.text.isEmpty}, model loaded: ${widget.appState.isModelLoaded}, processing: $isProcessing",
+      );
       return;
+    }
 
     try {
       setState(() {
         isProcessing = true;
       });
+      print(
+        "[DEBUG] Flutter: generateEmbedding - Starting embedding generation for text: ${_textController.text}",
+      );
       // Use the actual embedding method
       final result = await widget.appState.llamaContext?.generateEmbeddingAsync(
         _textController.text,
       );
+      print(
+        "[DEBUG] Flutter: generateEmbedding - Embedding result received: $result",
+      );
       if (result != null) {
+        print(
+          "[DEBUG] Flutter: generateEmbedding - Embedding successful, length: ${result.length}",
+        );
         setState(() {
           embedding = result;
           embeddingLength = result.length.toString();
         });
       } else {
+        print("[DEBUG] Flutter: generateEmbedding - Embedding returned null");
         widget.appState.errorMessage =
             "Error generating embedding: Embedding returned null";
       }
     } catch (e) {
+      print("[DEBUG] Flutter: generateEmbedding - Error: $e");
       widget.appState.errorMessage = "Error generating embedding: $e";
     } finally {
       setState(() {
         isProcessing = false;
       });
+      print("[DEBUG] Flutter: generateEmbedding - Processing complete");
     }
   }
 
@@ -3301,7 +3370,7 @@ class _LoRATestViewState extends State<LoRATestView> {
     });
 
     try {
-      await widget.appState.llamaContext?.freeLoraAdapter();
+      await widget.appState.llamaContext?.freeLoraAdapterAsync();
       setState(() {
         loraApplied = false;
       });
@@ -3560,7 +3629,7 @@ class _MultimodalTestViewState extends State<MultimodalTestView> {
         multimodalResult = "Processing...";
       });
 
-      // Use the actual multimodal completion method
+      // Use generateCompletionWithParamsAsync with mediaPaths for multimodal
       if (widget.appState.llamaContext != null) {
         // Handle asset image paths by copying to temp
         String imagePath = widget.appState.selectedImagePath!;
@@ -3572,13 +3641,16 @@ class _MultimodalTestViewState extends State<MultimodalTestView> {
           }
         }
 
+        // Create completion parameters with media paths
+        final params = CompletionParams(
+          prompt: _promptController.text,
+          mediaPaths: [imagePath],
+          maxTokens: 512,
+          temperature: 0.7,
+        );
+
         final result = await widget.appState.llamaContext
-            ?.generateMultimodalCompletionAsync(
-              prompt: _promptController.text,
-              mediaPaths: [imagePath],
-              maxTokens: 512,
-              temperature: 0.7,
-            );
+            ?.generateCompletionWithParamsAsync(params);
 
         if (result != null) {
           setState(() {
@@ -3807,7 +3879,7 @@ class _TTSTestViewState extends State<TTSTestView> {
         audioGenerated = false;
       });
 
-      final result = await widget.appState.llamaContext?.generateSpeech(
+      final result = await widget.appState.llamaContext?.generateSpeechAsync(
         _ttsController.text,
       );
       print("TTS Audio Generated successfully (Async)");

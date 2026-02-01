@@ -120,40 +120,6 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
-  Future<Map<String, dynamic>?> generateConversation(
-    int contextHandle,
-    Map<String, dynamic> params,
-    List<Map<String, String?>> chatMessages,
-  ) async {
-    final result = await methodChannel.invokeMapMethod<String, dynamic>(
-      'generateConversation',
-      {
-        'contextHandle': contextHandle,
-        'params': params,
-        'chatMessages': chatMessages,
-      },
-    );
-    return result;
-  }
-
-  @override
-  Future<Map<String, dynamic>?> generateConversationAsync(
-    int contextHandle,
-    Map<String, dynamic> params,
-    List<Map<String, String?>> chatMessages,
-  ) async {
-    final result = await methodChannel.invokeMapMethod<String, dynamic>(
-      'generateConversationAsync',
-      {
-        'contextHandle': contextHandle,
-        'params': params,
-        'chatMessages': chatMessages,
-      },
-    );
-    return result;
-  }
-
-  @override
   Future<String?> formatChatMessages(
     int contextHandle,
     List<Map<String, String?>> messages,
@@ -278,6 +244,23 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
       'audioData': audioData,
       'sampleRate': sampleRate,
     });
+    return result ?? false;
+  }
+
+  @override
+  Future<bool> saveAudioToWavAsync(
+    int contextHandle,
+    String filePath,
+    List<int> audioData,
+    int sampleRate,
+  ) async {
+    final result = await methodChannel
+        .invokeMethod<bool>('saveAudioToWavAsync', {
+          'contextHandle': contextHandle,
+          'filePath': filePath,
+          'audioData': audioData,
+          'sampleRate': sampleRate,
+        });
     return result ?? false;
   }
 
@@ -552,11 +535,52 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
     String text,
     Map<String, dynamic> params,
   ) async {
-    final result = await methodChannel.invokeListMethod<double>(
-      'generateEmbedding',
-      {'contextHandle': contextHandle, 'text': text, 'params': params},
+    print(
+      "[DEBUG] Dart: generateEmbedding called - contextHandle: $contextHandle, text: $text, params: $params",
     );
-    return result;
+
+    try {
+      print("[DEBUG] Dart: Invoking method channel for generateEmbedding");
+      final result = await methodChannel.invokeListMethod<double>(
+        'generateEmbedding',
+        {'contextHandle': contextHandle, 'text': text, 'params': params},
+      );
+
+      print(
+        "[DEBUG] Dart: generateEmbedding result received: ${result != null ? 'Success, length: ${result.length}' : 'Null'}",
+      );
+      return result;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in generateEmbedding: $e");
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<double>?> generateEmbeddingAsync(
+    int contextHandle,
+    String text,
+    Map<String, dynamic> params,
+  ) async {
+    print(
+      "[DEBUG] Dart: generateEmbeddingAsync called - contextHandle: $contextHandle, text: $text, params: $params",
+    );
+
+    try {
+      print("[DEBUG] Dart: Invoking method channel for generateEmbeddingAsync");
+      final result = await methodChannel.invokeListMethod<double>(
+        'generateEmbeddingAsync',
+        {'contextHandle': contextHandle, 'text': text, 'params': params},
+      );
+
+      print(
+        "[DEBUG] Dart: generateEmbeddingAsync result received: ${result != null ? 'Success, length: ${result.length}' : 'Null'}",
+      );
+      return result;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in generateEmbeddingAsync: $e");
+      rethrow;
+    }
   }
 
   @override
@@ -643,18 +667,6 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
-  Future<String?> loadGrammarAsync(
-    int contextHandle,
-    String grammarPath,
-  ) async {
-    final result = await methodChannel.invokeMethod<String>(
-      'loadGrammarAsync',
-      {'contextHandle': contextHandle, 'grammarPath': grammarPath},
-    );
-    return result;
-  }
-
-  @override
   Future<Map<String, dynamic>?> generateOpenAICompletion(
     int contextHandle,
     String openAIJSON,
@@ -732,11 +744,20 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
     int contextHandle,
     Map<String, dynamic> params,
   ) async {
-    final result = await methodChannel.invokeMapMethod<String, dynamic>(
-      'generateStreamingCompletion',
-      {'contextHandle': contextHandle, 'params': params},
+    print(
+      "[DEBUG] Dart: generateStreamingCompletion called - contextHandle: $contextHandle, params: $params",
     );
-    return result;
+    try {
+      final result = await methodChannel.invokeMapMethod<String, dynamic>(
+        'generateStreamingCompletion',
+        {'contextHandle': contextHandle, 'params': params},
+      );
+      print("[DEBUG] Dart: generateStreamingCompletion result: $result");
+      return result;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in generateStreamingCompletion: $e");
+      rethrow;
+    }
   }
 
   @override
@@ -744,11 +765,20 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
     int contextHandle,
     Map<String, dynamic> params,
   ) async {
-    final result = await methodChannel.invokeMapMethod<String, dynamic>(
-      'generateStreamingCompletionAsync',
-      {'contextHandle': contextHandle, 'params': params},
+    print(
+      "[DEBUG] Dart: generateStreamingCompletionAsync called - contextHandle: $contextHandle, params: $params",
     );
-    return result;
+    try {
+      final result = await methodChannel.invokeMapMethod<String, dynamic>(
+        'generateStreamingCompletionAsync',
+        {'contextHandle': contextHandle, 'params': params},
+      );
+      print("[DEBUG] Dart: generateStreamingCompletionAsync result: $result");
+      return result;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in generateStreamingCompletionAsync: $e");
+      rethrow;
+    }
   }
 
   @override
@@ -757,15 +787,24 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
     String openAIJSON,
     String? grammar,
   ) async {
-    final result = await methodChannel.invokeMapMethod<String, dynamic>(
-      'generateStreamingOpenAICompletion',
-      {
-        'contextHandle': contextHandle,
-        'openAIJSON': openAIJSON,
-        'grammar': grammar,
-      },
+    print(
+      "[DEBUG] Dart: generateStreamingOpenAICompletion called - contextHandle: $contextHandle, openAIJSON: $openAIJSON, grammar: $grammar",
     );
-    return result;
+    try {
+      final result = await methodChannel.invokeMapMethod<String, dynamic>(
+        'generateStreamingOpenAICompletion',
+        {
+          'contextHandle': contextHandle,
+          'openAIJSON': openAIJSON,
+          'grammar': grammar,
+        },
+      );
+      print("[DEBUG] Dart: generateStreamingOpenAICompletion result: $result");
+      return result;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in generateStreamingOpenAICompletion: $e");
+      rethrow;
+    }
   }
 
   @override
@@ -774,140 +813,272 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
     String openAIJSON,
     String? grammar,
   ) async {
-    final result = await methodChannel.invokeMapMethod<String, dynamic>(
-      'generateStreamingOpenAICompletionAsync',
-      {
-        'contextHandle': contextHandle,
-        'openAIJSON': openAIJSON,
-        'grammar': grammar,
-      },
+    print(
+      "[DEBUG] Dart: generateStreamingOpenAICompletionAsync called - contextHandle: $contextHandle, openAIJSON: $openAIJSON, grammar: $grammar",
     );
-    return result;
+    try {
+      final result = await methodChannel.invokeMapMethod<String, dynamic>(
+        'generateStreamingOpenAICompletionAsync',
+        {
+          'contextHandle': contextHandle,
+          'openAIJSON': openAIJSON,
+          'grammar': grammar,
+        },
+      );
+      print(
+        "[DEBUG] Dart: generateStreamingOpenAICompletionAsync result: $result",
+      );
+      return result;
+    } catch (e) {
+      print(
+        "[DEBUG] Dart: Error in generateStreamingOpenAICompletionAsync: $e",
+      );
+      rethrow;
+    }
   }
 
   @override
   Future<bool> stopCompletion(int contextHandle) async {
-    final result = await methodChannel.invokeMethod<bool>('stopCompletion', {
-      'contextHandle': contextHandle,
-    });
-    return result ?? false;
+    print(
+      "[DEBUG] Dart: stopCompletion called - contextHandle: $contextHandle",
+    );
+    try {
+      final result = await methodChannel.invokeMethod<bool>('stopCompletion', {
+        'contextHandle': contextHandle,
+      });
+      print("[DEBUG] Dart: stopCompletion result: $result");
+      return result ?? false;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in stopCompletion: $e");
+      rethrow;
+    }
   }
 
   @override
   Future<List<Map<String, dynamic>>?> getLoadedLoraAdapters(
     int contextHandle,
   ) async {
-    final result = await methodChannel.invokeListMethod<Map<String, dynamic>>(
-      'getLoadedLoraAdapters',
-      {'contextHandle': contextHandle},
+    print(
+      "[DEBUG] Dart: getLoadedLoraAdapters called - contextHandle: $contextHandle",
     );
-    return result;
+    try {
+      final result = await methodChannel.invokeListMethod<Map<String, dynamic>>(
+        'getLoadedLoraAdapters',
+        {'contextHandle': contextHandle},
+      );
+      print(
+        "[DEBUG] Dart: getLoadedLoraAdapters result length: ${result?.length}",
+      );
+      return result;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in getLoadedLoraAdapters: $e");
+      rethrow;
+    }
   }
 
   @override
   Future<int?> getContextWindowSize(int contextHandle) async {
-    final result = await methodChannel.invokeMethod<int>(
-      'getContextWindowSize',
-      {'contextHandle': contextHandle},
+    print(
+      "[DEBUG] Dart: getContextWindowSize called - contextHandle: $contextHandle",
     );
-    return result;
+    try {
+      final result = await methodChannel.invokeMethod<int>(
+        'getContextWindowSize',
+        {'contextHandle': contextHandle},
+      );
+      print("[DEBUG] Dart: getContextWindowSize result: $result");
+      return result;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in getContextWindowSize: $e");
+      rethrow;
+    }
   }
 
   @override
   Future<int?> getEmbeddingDimension(int contextHandle) async {
-    final result = await methodChannel.invokeMethod<int>(
-      'getEmbeddingDimension',
-      {'contextHandle': contextHandle},
+    print(
+      "[DEBUG] Dart: getEmbeddingDimension called - contextHandle: $contextHandle",
     );
-    return result;
+    try {
+      final result = await methodChannel.invokeMethod<int>(
+        'getEmbeddingDimension',
+        {'contextHandle': contextHandle},
+      );
+      print("[DEBUG] Dart: getEmbeddingDimension result: $result");
+      return result;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in getEmbeddingDimension: $e");
+      rethrow;
+    }
   }
 
   @override
   Future<String?> getModelDescription(int contextHandle) async {
-    final result = await methodChannel.invokeMethod<String>(
-      'getModelDescription',
-      {'contextHandle': contextHandle},
+    print(
+      "[DEBUG] Dart: getModelDescription called - contextHandle: $contextHandle",
     );
-    return result;
+    try {
+      final result = await methodChannel.invokeMethod<String>(
+        'getModelDescription',
+        {'contextHandle': contextHandle},
+      );
+      print("[DEBUG] Dart: getModelDescription result: $result");
+      return result;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in getModelDescription: $e");
+      rethrow;
+    }
   }
 
   @override
   Future<int?> getModelSize(int contextHandle) async {
-    final result = await methodChannel.invokeMethod<int>('getModelSize', {
-      'contextHandle': contextHandle,
-    });
-    return result;
+    print("[DEBUG] Dart: getModelSize called - contextHandle: $contextHandle");
+    try {
+      final result = await methodChannel.invokeMethod<int>('getModelSize', {
+        'contextHandle': contextHandle,
+      });
+      print("[DEBUG] Dart: getModelSize result: $result");
+      return result;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in getModelSize: $e");
+      rethrow;
+    }
   }
 
   @override
   Future<int?> getModelParametersCount(int contextHandle) async {
-    final result = await methodChannel.invokeMethod<int>(
-      'getModelParametersCount',
-      {'contextHandle': contextHandle},
+    print(
+      "[DEBUG] Dart: getModelParametersCount called - contextHandle: $contextHandle",
     );
-    return result;
+    try {
+      final result = await methodChannel.invokeMethod<int>(
+        'getModelParametersCount',
+        {'contextHandle': contextHandle},
+      );
+      print("[DEBUG] Dart: getModelParametersCount result: $result");
+      return result;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in getModelParametersCount: $e");
+      rethrow;
+    }
   }
 
   @override
   Future<Map<String, dynamic>?> downloadHfFile(
     Map<String, dynamic> params,
   ) async {
-    final result = await methodChannel.invokeMapMethod<String, dynamic>(
-      'downloadHfFile',
-      params,
-    );
-    return result;
+    print("[DEBUG] Dart: downloadHfFile called - params: $params");
+    try {
+      final result = await methodChannel.invokeMapMethod<String, dynamic>(
+        'downloadHfFile',
+        params,
+      );
+      print("[DEBUG] Dart: downloadHfFile result: $result");
+      return result;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in downloadHfFile: $e");
+      rethrow;
+    }
   }
 
   @override
   Future<Map<String, dynamic>?> downloadHfFileAsync(
     Map<String, dynamic> params,
   ) async {
-    final result = await methodChannel.invokeMapMethod<String, dynamic>(
-      'downloadHfFileAsync',
-      params,
-    );
-    return result;
+    print("[DEBUG] Dart: downloadHfFileAsync called - params: $params");
+    try {
+      final result = await methodChannel.invokeMapMethod<String, dynamic>(
+        'downloadHfFileAsync',
+        params,
+      );
+      print("[DEBUG] Dart: downloadHfFileAsync result: $result");
+      return result;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in downloadHfFileAsync: $e");
+      rethrow;
+    }
   }
 
   @override
   Future<bool> isMultimodalEnabled(int contextHandle) async {
-    final result = await methodChannel.invokeMethod<bool>(
-      'isMultimodalEnabled',
-      {'contextHandle': contextHandle},
+    print(
+      "[DEBUG] Dart: isMultimodalEnabled called - contextHandle: $contextHandle",
     );
-    return result ?? false;
+    try {
+      final result = await methodChannel.invokeMethod<bool>(
+        'isMultimodalEnabled',
+        {'contextHandle': contextHandle},
+      );
+      print("[DEBUG] Dart: isMultimodalEnabled result: $result");
+      return result ?? false;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in isMultimodalEnabled: $e");
+      rethrow;
+    }
   }
 
   @override
   Future<bool> supportsVision(int contextHandle) async {
-    final result = await methodChannel.invokeMethod<bool>('supportsVision', {
-      'contextHandle': contextHandle,
-    });
-    return result ?? false;
+    print(
+      "[DEBUG] Dart: supportsVision called - contextHandle: $contextHandle",
+    );
+    try {
+      final result = await methodChannel.invokeMethod<bool>('supportsVision', {
+        'contextHandle': contextHandle,
+      });
+      print("[DEBUG] Dart: supportsVision result: $result");
+      return result ?? false;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in supportsVision: $e");
+      rethrow;
+    }
   }
 
   @override
   Future<bool> supportsAudio(int contextHandle) async {
-    final result = await methodChannel.invokeMethod<bool>('supportsAudio', {
-      'contextHandle': contextHandle,
-    });
-    return result ?? false;
+    print("[DEBUG] Dart: supportsAudio called - contextHandle: $contextHandle");
+    try {
+      final result = await methodChannel.invokeMethod<bool>('supportsAudio', {
+        'contextHandle': contextHandle,
+      });
+      print("[DEBUG] Dart: supportsAudio result: $result");
+      return result ?? false;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in supportsAudio: $e");
+      rethrow;
+    }
   }
 
   @override
   Future<bool> isVocoderEnabled(int contextHandle) async {
-    final result = await methodChannel.invokeMethod<bool>('isVocoderEnabled', {
-      'contextHandle': contextHandle,
-    });
-    return result ?? false;
+    print(
+      "[DEBUG] Dart: isVocoderEnabled called - contextHandle: $contextHandle",
+    );
+    try {
+      final result = await methodChannel.invokeMethod<bool>(
+        'isVocoderEnabled',
+        {'contextHandle': contextHandle},
+      );
+      print("[DEBUG] Dart: isVocoderEnabled result: $result");
+      return result ?? false;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in isVocoderEnabled: $e");
+      rethrow;
+    }
   }
 
   @override
   Future<int?> getTTSType(int contextHandle) async {
-    final result = await methodChannel.invokeMethod<int>('getTTSType', {
-      'contextHandle': contextHandle,
-    });
-    return result;
+    print("[DEBUG] Dart: getTTSType called - contextHandle: $contextHandle");
+    try {
+      final result = await methodChannel.invokeMethod<int>('getTTSType', {
+        'contextHandle': contextHandle,
+      });
+      print("[DEBUG] Dart: getTTSType result: $result");
+      return result;
+    } catch (e) {
+      print("[DEBUG] Dart: Error in getTTSType: $e");
+      rethrow;
+    }
   }
 }
