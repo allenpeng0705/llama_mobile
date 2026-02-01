@@ -28,18 +28,32 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
     switch call.method {
     case "initContext":
       handleInitContext(call, result: result)
+    case "initContextAsync":
+      handleInitContextAsync(call, result: result)
     case "freeContext":
       handleFreeContext(call, result: result)
+    case "freeContextAsync":
+      handleFreeContextAsync(call, result: result)
     case "generateCompletion":
       handleGenerateCompletion(call, result: result)
+    case "generateCompletionAsync":
+      handleGenerateCompletionAsync(call, result: result)
     case "generateMultimodalCompletion":
       handleGenerateMultimodalCompletion(call, result: result)
+    case "generateMultimodalCompletionAsync":
+      handleGenerateMultimodalCompletionAsync(call, result: result)
     case "generateConversation":
       handleGenerateConversation(call, result: result)
+    case "generateConversationAsync":
+      handleGenerateConversationAsync(call, result: result)
     case "generateStreamingCompletion":
       handleGenerateStreamingCompletion(call, result: result)
+    case "generateStreamingCompletionAsync":
+      handleGenerateStreamingCompletionAsync(call, result: result)
     case "generateStreamingOpenAICompletion":
       handleGenerateStreamingOpenAICompletion(call, result: result)
+    case "generateStreamingOpenAICompletionAsync":
+      handleGenerateStreamingOpenAICompletionAsync(call, result: result)
     case "stopCompletion":
       handleStopCompletion(call, result: result)
     case "getContextWindowSize":
@@ -56,6 +70,8 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
       handleGetLoadedLoraAdapters(call, result: result)
     case "downloadHfFile":
       handleDownloadHfFile(call, result: result)
+    case "downloadHfFileAsync":
+      handleDownloadHfFileAsync(call, result: result)
     case "isMultimodalEnabled":
       handleIsMultimodalEnabled(call, result: result)
     case "supportsVision":
@@ -68,9 +84,13 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
       handleGetTTSType(call, result: result)
     case "formatChatMessages":
       handleFormatChatMessages(call, result: result)
+    case "formatChatMessagesAsync":
+      handleFormatChatMessagesAsync(call, result: result)
 
     case "loadGrammar":
       handleLoadGrammar(call, result: result)
+    case "loadGrammarAsync":
+      handleLoadGrammarAsync(call, result: result)
     case "generateEmbedding":
       handleGenerateEmbedding(call, result: result)
     case "tokenize":
@@ -79,30 +99,48 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
       handleDetokenize(call, result: result)
     case "loadLoraAdapter":
       handleLoadLoraAdapter(call, result: result)
+    case "loadLoraAdapterAsync":
+      handleLoadLoraAdapterAsync(call, result: result)
     case "freeLoraAdapter":
       handleFreeLoraAdapter(call, result: result)
+    case "freeLoraAdapterAsync":
+      handleFreeLoraAdapterAsync(call, result: result)
     case "loadTTSModel":
       handleLoadTTSModel(call, result: result)
+    case "loadTTSModelAsync":
+      handleLoadTTSModelAsync(call, result: result)
     case "generateAudio":
       handleGenerateAudio(call, result: result)
     case "freeTTSModel":
       handleFreeTTSModel(call, result: result)
+    case "freeTTSModelAsync":
+      handleFreeTTSModelAsync(call, result: result)
     case "saveAudioToWav":
       handleSaveAudioToWav(call, result: result)
     case "initMultimodal":
       handleInitMultimodal(call, result: result)
+    case "initMultimodalAsync":
+      handleInitMultimodalAsync(call, result: result)
     case "releaseMultimodal":
       handleReleaseMultimodal(call, result: result)
+    case "releaseMultimodalAsync":
+      handleReleaseMultimodalAsync(call, result: result)
     case "initVocoder":
       handleInitVocoder(call, result: result)
+    case "initVocoderAsync":
+      handleInitVocoderAsync(call, result: result)
     case "releaseVocoder":
       handleReleaseVocoder(call, result: result)
+    case "releaseVocoderAsync":
+      handleReleaseVocoderAsync(call, result: result)
     case "clearConversation":
       handleClearConversation(call, result: result)
     case "isConversationActive":
       handleIsConversationActive(call, result: result)
     case "removeLoraAdapters":
       handleRemoveLoraAdapters(call, result: result)
+    case "removeLoraAdaptersAsync":
+      handleRemoveLoraAdaptersAsync(call, result: result)
     case "generateAudioFromText":
       handleGenerateAudioFromText(call, result: result)
     case "getFormattedAudioCompletion":
@@ -117,16 +155,26 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
       handleGenerateSpeechSync(call, result: result)
     case "generateSpeech":
       handleGenerateSpeech(call, result: result)
+    case "generateSpeechAsync":
+      handleGenerateSpeechAsync(call, result: result)
     case "generateSpeechStream":
       handleGenerateSpeechStream(call, result: result)
+    case "generateSpeechStreamAsync":
+      handleGenerateSpeechStreamAsync(call, result: result)
     case "generateSpeechStreamForLongText":
       handleGenerateSpeechStreamForLongText(call, result: result)
+    case "generateSpeechStreamForLongTextAsync":
+      handleGenerateSpeechStreamForLongTextAsync(call, result: result)
     case "setLogLevel":
       handleSetLogLevel(call, result: result)
     case "downloadModel":
       handleDownloadModel(call, result: result)
+    case "downloadModelAsync":
+      handleDownloadModelAsync(call, result: result)
     case "generateOpenAICompletion":
       handleGenerateOpenAICompletion(call, result: result)
+    case "generateOpenAICompletionAsync":
+      handleGenerateOpenAICompletionAsync(call, result: result)
     case "getPlatformVersion":
       result("iOS " + UIDevice.current.systemVersion)
     default:
@@ -218,6 +266,96 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
     }
   }
 
+  private func handleInitContextAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    print("[DEBUG] Flutter Plugin: handleInitContextAsync called")
+    guard let args = call.arguments as? [String: Any] else {
+      print("[DEBUG] Flutter Plugin: Missing arguments")
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+    
+    print("[DEBUG] Flutter Plugin: Args received: \(args.description)")
+    
+    guard let modelPath = args["modelPath"] as? String else {
+      print("[DEBUG] Flutter Plugin: Missing modelPath")
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    print("[DEBUG] Flutter Plugin: Extracting parameters")
+    let chatTemplate = args["chatTemplate"] as? String
+    let systemPrompt = args["systemPrompt"] as? String
+    let nCtx = args["nCtx"] as? Int32 ?? 2048
+    let nBatch = args["nBatch"] as? Int32 ?? 512
+    let nUBatch = args["nUBatch"] as? Int32 ?? 512
+    let nGpuLayers = args["nGpuLayers"] as? Int32 ?? 0
+    let nThreads = args["nThreads"] as? Int32 ?? 4
+    let useMmap = args["useMmap"] as? Bool ?? true
+    let useMlock = args["useMlock"] as? Bool ?? false
+    let embedding = args["embedding"] as? Bool ?? false
+    let poolingType = args["poolingType"] as? Int32 ?? 0
+    let embdNormalize = args["embdNormalize"] as? Int32 ?? 0
+    let flashAttention = args["flashAttention"] as? Bool ?? false
+    let cacheTypeK = args["cacheTypeK"] as? String
+    let cacheTypeV = args["cacheTypeV"] as? String
+
+    print("[DEBUG] Flutter Plugin: Creating InitParams")
+    print("[DEBUG] Flutter Plugin: modelPath: \(modelPath)")
+    print("[DEBUG] Flutter Plugin: chatTemplate: \(chatTemplate ?? "nil")")
+    print("[DEBUG] Flutter Plugin: systemPrompt: \(systemPrompt ?? "nil")")
+    print("[DEBUG] Flutter Plugin: nCtx: \(nCtx)")
+    print("[DEBUG] Flutter Plugin: nBatch: \(nBatch)")
+    print("[DEBUG] Flutter Plugin: nUBatch: \(nUBatch)")
+    print("[DEBUG] Flutter Plugin: nGpuLayers: \(nGpuLayers)")
+    print("[DEBUG] Flutter Plugin: nThreads: \(nThreads)")
+    print("[DEBUG] Flutter Plugin: useMmap: \(useMmap ? 1 : 0)")
+    print("[DEBUG] Flutter Plugin: useMlock: \(useMlock ? 1 : 0)")
+    print("[DEBUG] Flutter Plugin: embedding: \(embedding ? 1 : 0)")
+    print("[DEBUG] Flutter Plugin: poolingType: \(poolingType)")
+    print("[DEBUG] Flutter Plugin: embdNormalize: \(embdNormalize)")
+    print("[DEBUG] Flutter Plugin: flashAttention: \(flashAttention ? 1 : 0)")
+    print("[DEBUG] Flutter Plugin: cacheTypeK: \(cacheTypeK ?? "nil")")
+    print("[DEBUG] Flutter Plugin: cacheTypeV: \(cacheTypeV ?? "nil")")
+
+    // Create InitParams like iOSSDKExample does
+    var initParams = LlamaMobile.InitParams(modelPath: modelPath)
+    initParams.chatTemplate = chatTemplate
+    initParams.systemPrompt = systemPrompt
+    initParams.nCtx = nCtx
+    initParams.nBatch = nBatch
+    initParams.nUBatch = nUBatch
+    initParams.nGpuLayers = nGpuLayers
+    initParams.nThreads = nThreads
+    initParams.useMmap = useMmap
+    initParams.useMlock = useMlock
+    initParams.embedding = embedding
+    initParams.poolingType = poolingType
+    initParams.embdNormalize = embdNormalize
+    initParams.flashAttention = flashAttention
+    initParams.cacheTypeK = cacheTypeK
+    initParams.cacheTypeV = cacheTypeV
+
+    // Run the initialization asynchronously
+    DispatchQueue.global(qos: .userInitiated).async {
+      print("[DEBUG] Flutter Plugin: Calling LlamaMobile(with: initParams) asynchronously")
+      if let llamaMobile = LlamaMobile(with: initParams) {
+        print("[DEBUG] Flutter Plugin: LlamaMobile instance created successfully")
+        let handle = self.nextContextHandle
+        self.nextContextHandle += 1
+        self.contexts[handle] = llamaMobile
+        print("[DEBUG] Flutter Plugin: Returning contextHandle: \(handle)")
+        DispatchQueue.main.async {
+          result(["contextHandle": handle])
+        }
+      } else {
+        print("[DEBUG] Flutter Plugin: Failed to create LlamaMobile instance")
+        DispatchQueue.main.async {
+          result(FlutterError(code: "INIT_FAILED", message: "Failed to initialize LlamaMobile context", details: nil))
+        }
+      }
+    }
+  }
+
   private func handleFreeContext(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let contextHandle = args["contextHandle"] as? Int else {
@@ -227,6 +365,306 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
 
     contexts.removeValue(forKey: contextHandle)
     result(true)
+  }
+
+  private func handleFreeContextAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing contextHandle", details: nil))
+      return
+    }
+
+    // Run asynchronously
+    DispatchQueue.global(qos: .userInitiated).async {
+      self.contexts.removeValue(forKey: contextHandle)
+      DispatchQueue.main.async {
+        result(true)
+      }
+    }
+  }
+
+  private func handleGenerateCompletionAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      self.handleGenerateCompletion(call, result: result)
+    }
+  }
+
+  private func handleGenerateMultimodalCompletionAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      self.handleGenerateMultimodalCompletion(call, result: result)
+    }
+  }
+
+  private func handleGenerateConversationAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      self.handleGenerateConversation(call, result: result)
+    }
+  }
+
+  private func handleGenerateStreamingCompletionAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      self.handleGenerateStreamingCompletion(call, result: result)
+    }
+  }
+
+  private func handleGenerateStreamingOpenAICompletionAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      self.handleGenerateStreamingOpenAICompletion(call, result: result)
+    }
+  }
+
+  private func handleDownloadHfFileAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      self.handleDownloadHfFile(call, result: result)
+    }
+  }
+
+  private func handleFormatChatMessagesAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      self.handleFormatChatMessages(call, result: result)
+    }
+  }
+
+  private func handleLoadGrammarAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      self.handleLoadGrammar(call, result: result)
+    }
+  }
+
+  private func handleLoadLoraAdapterAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      self.handleLoadLoraAdapter(call, result: result)
+    }
+  }
+
+  private func handleFreeLoraAdapterAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      self.handleFreeLoraAdapter(call, result: result)
+    }
+  }
+
+  private func handleLoadTTSModelAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      self.handleLoadTTSModel(call, result: result)
+    }
+  }
+
+  private func handleFreeTTSModelAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = self.contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      llamaMobile.releaseVocoder()
+      DispatchQueue.main.async {
+        result(true)
+      }
+    }
+  }
+
+  private func handleInitMultimodalAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = self.contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      // iOS SDK doesn't currently support explicit multimodal initialization
+      DispatchQueue.main.async {
+        result(true)
+      }
+    }
+  }
+
+  private func handleReleaseMultimodalAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = self.contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      // iOS SDK doesn't currently support explicit multimodal release
+      DispatchQueue.main.async {
+        result(true)
+      }
+    }
+  }
+
+  private func handleInitVocoderAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let modelPath = args["modelPath"] as? String,
+          let llamaMobile = self.contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let success = llamaMobile.initVocoder(vocoderModelPath: modelPath)
+      DispatchQueue.main.async {
+        result(success)
+      }
+    }
+  }
+
+  private func handleReleaseVocoderAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = self.contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      llamaMobile.releaseVocoder()
+      DispatchQueue.main.async {
+        result(true)
+      }
+    }
+  }
+
+  private func handleRemoveLoraAdaptersAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = self.contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      llamaMobile.removeLoraAdapters()
+      DispatchQueue.main.async {
+        result(true)
+      }
+    }
+  }
+
+  private func handleGenerateSpeechAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let text = args["text"] as? String,
+          let llamaMobile = self.contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      // iOS SDK doesn't currently support this method directly
+      DispatchQueue.main.async {
+        result(FlutterError(code: "NOT_SUPPORTED", message: "Method not supported on iOS", details: nil))
+      }
+    }
+  }
+
+  private func handleGenerateSpeechStreamAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let text = args["text"] as? String,
+          let llamaMobile = self.contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      // iOS SDK doesn't currently support this method directly
+      DispatchQueue.main.async {
+        result(FlutterError(code: "NOT_SUPPORTED", message: "Method not supported on iOS", details: nil))
+      }
+    }
+  }
+
+  private func handleGenerateSpeechStreamForLongTextAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let text = args["text"] as? String,
+          let llamaMobile = self.contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      // iOS SDK doesn't currently support this method directly
+      DispatchQueue.main.async {
+        result(FlutterError(code: "NOT_SUPPORTED", message: "Method not supported on iOS", details: nil))
+      }
+    }
+  }
+
+  private func handleDownloadModelAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let modelUrl = args["modelUrl"] as? String,
+          let localPath = args["localPath"] as? String else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      // iOS SDK doesn't currently support this method directly
+      DispatchQueue.main.async {
+        result(FlutterError(code: "NOT_SUPPORTED", message: "Method not supported on iOS", details: nil))
+      }
+    }
+  }
+
+  private func handleGenerateOpenAICompletionAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let openAIJSON = args["openAIJSON"] as? String,
+          let llamaMobile = self.contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      // Parse OpenAI JSON to extract messages
+      if let data = openAIJSON.data(using: .utf8),
+         let json = try? JSONSerialization.jsonObject(with: data, options: []),
+         let openAIRequest = json as? [String: Any],
+         let chatMessages = openAIRequest["messages"] as? [[String: String]] {
+        
+        // Convert chat messages to LlamaMobile.ChatMessage
+        var messages: [LlamaMobile.ChatMessage] = []
+        for msg in chatMessages {
+            if let role = msg["role"], let content = msg["content"] {
+                messages.append(LlamaMobile.ChatMessage(role: role, content: content))
+            }
+        }
+
+        // Create completion params for chat messages
+        let completionParams = LlamaMobile.CompletionParams(chatMessages: messages)
+
+        if let completionResult = llamaMobile.generateCompletion(with: completionParams) {
+            let resultDict: [String: Any] = [
+                "text": completionResult.text,
+                "tokensGenerated": completionResult.tokensGenerated,
+                "tokensEvaluated": completionResult.tokensEvaluated,
+                "truncated": completionResult.truncated,
+                "stoppedEos": completionResult.stoppedEos,
+                "stoppedWord": completionResult.stoppedWord,
+                "stoppedLimit": completionResult.stoppedLimit,
+                "stoppingWord": completionResult.stoppingWord
+            ]
+            DispatchQueue.main.async {
+              result(resultDict)
+            }
+        } else {
+            DispatchQueue.main.async {
+              result(FlutterError(code: "OPENAI_COMPLETION_FAILED", message: "Failed to generate OpenAI completion", details: nil))
+            }
+        }
+      } else {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "INVALID_OPENAI_JSON", message: "Failed to parse OpenAI JSON format", details: nil))
+        }
+      }
+    }
   }
 
   // MARK: - Streaming Methods
@@ -1458,5 +1896,665 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
         }
     }
     return nil
+  }
+
+  // MARK: - Async Methods
+
+  private func handleGenerateCompletionAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let params = args["params"] as? [String: Any],
+          let prompt = params["prompt"] as? String,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    let completionParams = createCompletionParams(from: params, prompt: prompt)
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      if let completionResult = llamaMobile.generateCompletion(with: completionParams) {
+        let resultDict: [String: Any] = [
+          "text": completionResult.text,
+          "tokensGenerated": completionResult.tokensGenerated,
+          "tokensEvaluated": completionResult.tokensEvaluated,
+          "truncated": completionResult.truncated,
+          "stoppedEos": completionResult.stoppedEos,
+          "stoppedWord": completionResult.stoppedWord,
+          "stoppedLimit": completionResult.stoppedLimit,
+          "stoppingWord": completionResult.stoppingWord
+        ]
+        DispatchQueue.main.async {
+          result(resultDict)
+        }
+      } else {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "COMPLETION_FAILED", message: "Failed to generate completion", details: nil))
+        }
+      }
+    }
+  }
+
+  private func handleGenerateMultimodalCompletionAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let params = args["params"] as? [String: Any],
+          let mediaPaths = args["mediaPaths"] as? [String],
+          let prompt = params["prompt"] as? String,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    let completionParams = createCompletionParams(from: params, prompt: prompt)
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      if let completionResult = llamaMobile.generateCompletion(with: completionParams) {
+        let resultDict: [String: Any] = [
+          "text": completionResult.text,
+          "tokensGenerated": completionResult.tokensGenerated,
+          "tokensEvaluated": completionResult.tokensEvaluated,
+          "truncated": completionResult.truncated,
+          "stoppedEos": completionResult.stoppedEos,
+          "stoppedWord": completionResult.stoppedWord,
+          "stoppedLimit": completionResult.stoppedLimit,
+          "stoppingWord": completionResult.stoppingWord
+        ]
+        DispatchQueue.main.async {
+          result(resultDict)
+        }
+      } else {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "COMPLETION_FAILED", message: "Failed to generate multimodal completion", details: nil))
+        }
+      }
+    }
+  }
+
+  private func handleGenerateConversationAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let params = args["params"] as? [String: Any],
+          let chatMessages = args["chatMessages"] as? [[String: String]],
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    var messages: [LlamaMobile.ChatMessage] = []
+    for msg in chatMessages {
+      if let role = msg["role"], let content = msg["content"] {
+        messages.append(LlamaMobile.ChatMessage(role: role, content: content))
+      }
+    }
+
+    let completionParams = LlamaMobile.CompletionParams(chatMessages: messages)
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      if let completionResult = llamaMobile.generateCompletion(with: completionParams) {
+        let resultDict: [String: Any] = [
+          "text": completionResult.text,
+          "tokensGenerated": completionResult.tokensGenerated,
+          "tokensEvaluated": completionResult.tokensEvaluated,
+          "truncated": completionResult.truncated,
+          "stoppedEos": completionResult.stoppedEos,
+          "stoppedWord": completionResult.stoppedWord,
+          "stoppedLimit": completionResult.stoppedLimit,
+          "stoppingWord": completionResult.stoppingWord
+        ]
+        DispatchQueue.main.async {
+          result(resultDict)
+        }
+      } else {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "CONVERSATION_FAILED", message: "Failed to generate conversation", details: nil))
+        }
+      }
+    }
+  }
+
+  private func handleGenerateStreamingCompletionAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let params = args["params"] as? [String: Any],
+          let prompt = params["prompt"] as? String,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    let completionParams = createCompletionParams(from: params, prompt: prompt)
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      if let completionResult = llamaMobile.generateCompletion(with: completionParams) {
+        let resultDict: [String: Any] = [
+          "text": completionResult.text,
+          "tokensGenerated": completionResult.tokensGenerated,
+          "tokensEvaluated": completionResult.tokensEvaluated,
+          "truncated": completionResult.truncated,
+          "stoppedEos": completionResult.stoppedEos,
+          "stoppedWord": completionResult.stoppedWord,
+          "stoppedLimit": completionResult.stoppedLimit,
+          "stoppingWord": completionResult.stoppingWord
+        ]
+        DispatchQueue.main.async {
+          result(resultDict)
+        }
+      } else {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "COMPLETION_FAILED", message: "Failed to generate streaming completion", details: nil))
+        }
+      }
+    }
+  }
+
+  private func handleGenerateStreamingOpenAICompletionAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let openAIJSON = args["openAIJSON"] as? String,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    let grammar = args["grammar"] as? String
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      if let data = openAIJSON.data(using: .utf8),
+         let json = try? JSONSerialization.jsonObject(with: data, options: []),
+         let openAIRequest = json as? [String: Any],
+         let chatMessages = openAIRequest["messages"] as? [[String: String]] {
+        
+        var messages: [LlamaMobile.ChatMessage] = []
+        for msg in chatMessages {
+          if let role = msg["role"], let content = msg["content"] {
+            messages.append(LlamaMobile.ChatMessage(role: role, content: content))
+          }
+        }
+
+        let completionParams = LlamaMobile.CompletionParams(chatMessages: messages)
+
+        if let completionResult = llamaMobile.generateCompletion(with: completionParams) {
+          let resultDict: [String: Any] = [
+            "text": completionResult.text,
+            "tokensGenerated": completionResult.tokensGenerated,
+            "tokensEvaluated": completionResult.tokensEvaluated,
+            "truncated": completionResult.truncated,
+            "stoppedEos": completionResult.stoppedEos,
+            "stoppedWord": completionResult.stoppedWord,
+            "stoppedLimit": completionResult.stoppedLimit,
+            "stoppingWord": completionResult.stoppingWord
+          ]
+          DispatchQueue.main.async {
+            result(resultDict)
+          }
+        } else {
+          DispatchQueue.main.async {
+            result(FlutterError(code: "OPENAI_COMPLETION_FAILED", message: "Failed to generate streaming OpenAI completion", details: nil))
+          }
+        }
+      } else {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "INVALID_OPENAI_JSON", message: "Failed to parse OpenAI JSON format", details: nil))
+        }
+      }
+    }
+  }
+
+  private func handleFormatChatMessagesAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let messages = args["messages"] as? [[String: String]],
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    let chatTemplate = args["chatTemplate"] as? String
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      var chatMessages: [LlamaMobile.ChatMessage] = []
+      for msg in messages {
+        if let role = msg["role"], let content = msg["content"] {
+          chatMessages.append(LlamaMobile.ChatMessage(role: role, content: content))
+        }
+      }
+
+      let formatted = llamaMobile.formatChatMessages(chatMessages, chatTemplate: chatTemplate)
+      DispatchQueue.main.async {
+        result(formatted)
+      }
+    }
+  }
+
+  private func handleLoadGrammarAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let grammarPath = args["grammarPath"] as? String,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let grammar = llamaMobile.loadGrammar(from: grammarPath)
+      DispatchQueue.main.async {
+        result(grammar)
+      }
+    }
+  }
+
+  private func handleGenerateEmbeddingAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let text = args["text"] as? String,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      if let embedding = llamaMobile.generateEmbedding(for: text) {
+        DispatchQueue.main.async {
+          result(embedding)
+        }
+      } else {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "EMBEDDING_FAILED", message: "Failed to generate embedding", details: nil))
+        }
+      }
+    }
+  }
+
+  private func handleLoadLoraAdapterAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let adapterPath = args["adapterPath"] as? String,
+          let scale = args["scale"] as? Double,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let success = llamaMobile.loadLoraAdapter(from: adapterPath, scale: Float(scale))
+      DispatchQueue.main.async {
+        result(success)
+      }
+    }
+  }
+
+  private func handleFreeLoraAdapterAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let success = llamaMobile.freeLoraAdapter()
+      DispatchQueue.main.async {
+        result(success)
+      }
+    }
+  }
+
+  private func handleLoadTTSModelAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let modelPath = args["modelPath"] as? String,
+          let params = args["params"] as? [String: Any],
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    let sampleRate = params["sampleRate"] as? Int ?? 24000
+    let voice = params["voice"] as? String
+    let speed = params["speed"] as? Double ?? 1.0
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let ttsOptions = LlamaMobile.TTSOptions()
+      ttsOptions.sampleRate = Int32(sampleRate)
+      ttsOptions.voice = voice
+      ttsOptions.speed = Float(speed)
+
+      let success = llamaMobile.loadTTSModel(from: modelPath, options: ttsOptions)
+      DispatchQueue.main.async {
+        result(["success": success])
+      }
+    }
+  }
+
+  private func handleFreeTTSModelAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let success = llamaMobile.freeTTSModel()
+      DispatchQueue.main.async {
+        result(success)
+      }
+    }
+  }
+
+  private func handleInitMultimodalAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let mmprojPath = args["mmprojPath"] as? String,
+          let useGpu = args["useGpu"] as? Bool,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let success = llamaMobile.initMultimodal(from: mmprojPath, useGpu: useGpu)
+      DispatchQueue.main.async {
+        result(success)
+      }
+    }
+  }
+
+  private func handleReleaseMultimodalAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      llamaMobile.releaseMultimodal()
+      DispatchQueue.main.async {
+        result(nil)
+      }
+    }
+  }
+
+  private func handleInitVocoderAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let vocoderModelPath = args["vocoderModelPath"] as? String,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let success = llamaMobile.initVocoder(from: vocoderModelPath)
+      DispatchQueue.main.async {
+        result(success)
+      }
+    }
+  }
+
+  private func handleReleaseVocoderAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      llamaMobile.releaseVocoder()
+      DispatchQueue.main.async {
+        result(nil)
+      }
+    }
+  }
+
+  private func handleRemoveLoraAdaptersAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      llamaMobile.removeLoraAdapters()
+      DispatchQueue.main.async {
+        result(nil)
+      }
+    }
+  }
+
+  private func handleGenerateSpeechAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let text = args["text"] as? String,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    let options = args["options"] as? [String: Any]
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      if let speechResult = llamaMobile.generateSpeech(for: text, options: options) {
+        let resultDict: [String: Any] = [
+          "audioData": speechResult.audioData,
+          "sampleRate": speechResult.sampleRate,
+          "duration": speechResult.duration,
+          "outputFilePath": speechResult.outputFilePath ?? "",
+          "methodUsed": speechResult.methodUsed.rawValue
+        ]
+        DispatchQueue.main.async {
+          result(resultDict)
+        }
+      } else {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "SPEECH_FAILED", message: "Failed to generate speech", details: nil))
+        }
+      }
+    }
+  }
+
+  private func handleGenerateSpeechStreamAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let text = args["text"] as? String,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    let options = args["options"] as? [String: Any]
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      if let speechResult = llamaMobile.generateSpeechStream(for: text, options: options) {
+        let resultDict: [String: Any] = [
+          "audioData": speechResult.audioData,
+          "sampleRate": speechResult.sampleRate,
+          "duration": speechResult.duration,
+          "outputFilePath": speechResult.outputFilePath ?? "",
+          "methodUsed": speechResult.methodUsed.rawValue
+        ]
+        DispatchQueue.main.async {
+          result(resultDict)
+        }
+      } else {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "SPEECH_FAILED", message: "Failed to generate speech stream", details: nil))
+        }
+      }
+    }
+  }
+
+  private func handleGenerateSpeechStreamForLongTextAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let text = args["text"] as? String,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    let options = args["options"] as? [String: Any]
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      if let speechResult = llamaMobile.generateSpeechStreamForLongText(for: text, options: options) {
+        let resultDict: [String: Any] = [
+          "audioData": speechResult.audioData,
+          "sampleRate": speechResult.sampleRate,
+          "duration": speechResult.duration,
+          "outputFilePath": speechResult.outputFilePath ?? "",
+          "methodUsed": speechResult.methodUsed.rawValue
+        ]
+        DispatchQueue.main.async {
+          result(resultDict)
+        }
+      } else {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "SPEECH_FAILED", message: "Failed to generate speech stream for long text", details: nil))
+        }
+      }
+    }
+  }
+
+  private func handleDownloadModelAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let url = args["url"] as? String,
+          let localPath = args["localPath"] as? String else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    let username = args["username"] as? String
+    let password = args["password"] as? String
+    let headers = args["headers"] as? [String: String]
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let downloadParams = LlamaMobile.DownloadParams(
+        url: url,
+        localPath: localPath,
+        username: username,
+        password: password,
+        headers: headers,
+        progressCallback: nil
+      )
+
+      let downloader = LlamaMobile(modelPath: "")
+      if let downloadResult = downloader?.download(with: downloadParams) {
+        DispatchQueue.main.async {
+          result([
+            "success": downloadResult.success,
+            "localPath": downloadResult.localPath,
+            "errorMessage": downloadResult.errorMessage
+          ])
+        }
+      } else {
+        DispatchQueue.main.async {
+          result([
+            "success": false,
+            "localPath": "",
+            "errorMessage": "Failed to create downloader"
+          ])
+        }
+      }
+    }
+  }
+
+  private func handleDownloadHfFileAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let repoId = args["repoId"] as? String,
+          let filename = args["filename"] as? String,
+          let localPath = args["localPath"] as? String else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    let bearerToken = args["bearerToken"] as? String
+    let offline = args["offline"] as? Bool ?? false
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      let downloadParams = LlamaMobile.DownloadParams(
+        url: "",
+        localPath: localPath,
+        username: nil,
+        password: nil,
+        headers: nil,
+        progressCallback: nil
+      )
+
+      let downloader = LlamaMobile(modelPath: "")
+      if let downloadResult = downloader?.downloadHfFile(with: downloadParams, repoId: repoId, filename: filename, bearerToken: bearerToken, offline: offline) {
+        DispatchQueue.main.async {
+          result([
+            "success": downloadResult.success,
+            "localPath": downloadResult.localPath,
+            "errorMessage": downloadResult.errorMessage
+          ])
+        }
+      } else {
+        DispatchQueue.main.async {
+          result([
+            "success": false,
+            "localPath": "",
+            "errorMessage": "Failed to create downloader"
+          ])
+        }
+      }
+    }
+  }
+
+  private func handleGenerateOpenAICompletionAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let contextHandle = args["contextHandle"] as? Int,
+          let openAIJSON = args["openAIJSON"] as? String,
+          let llamaMobile = contexts[contextHandle] else {
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      return
+    }
+
+    let grammar = args["grammar"] as? String
+
+    DispatchQueue.global(qos: .userInitiated).async {
+      if let data = openAIJSON.data(using: .utf8),
+         let json = try? JSONSerialization.jsonObject(with: data, options: []),
+         let openAIRequest = json as? [String: Any],
+         let chatMessages = openAIRequest["messages"] as? [[String: String]] {
+        
+        var messages: [LlamaMobile.ChatMessage] = []
+        for msg in chatMessages {
+          if let role = msg["role"], let content = msg["content"] {
+            messages.append(LlamaMobile.ChatMessage(role: role, content: content))
+          }
+        }
+
+        let completionParams = LlamaMobile.CompletionParams(chatMessages: messages)
+
+        if let completionResult = llamaMobile.generateCompletion(with: completionParams) {
+          let resultDict: [String: Any] = [
+            "text": completionResult.text,
+            "tokensGenerated": completionResult.tokensGenerated,
+            "tokensEvaluated": completionResult.tokensEvaluated,
+            "truncated": completionResult.truncated,
+            "stoppedEos": completionResult.stoppedEos,
+            "stoppedWord": completionResult.stoppedWord,
+            "stoppedLimit": completionResult.stoppedLimit,
+            "stoppingWord": completionResult.stoppingWord
+          ]
+          DispatchQueue.main.async {
+            result(resultDict)
+          }
+        } else {
+          DispatchQueue.main.async {
+            result(FlutterError(code: "OPENAI_COMPLETION_FAILED", message: "Failed to generate OpenAI completion", details: nil))
+          }
+        }
+      } else {
+        DispatchQueue.main.async {
+          result(FlutterError(code: "INVALID_OPENAI_JSON", message: "Failed to parse OpenAI JSON format", details: nil))
+        }
+      }
+    }
   }
 }
