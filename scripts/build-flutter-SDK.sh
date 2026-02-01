@@ -656,7 +656,7 @@ if [ "$IOS_SUCCESS" = true ] || [ "$ANDROID_SUCCESS" = true ]; then
     script_progress "Copying SDK to output directory..."
     
     # TEMPORARILY DISABLED TO PREVENT DELETION ISSUES
-    # copy_sdk_to_output "$FLUTTER_SDK_DIR" "$OUTPUT_SDK_DIR"
+    copy_sdk_to_output "$FLUTTER_SDK_DIR" "$OUTPUT_SDK_DIR"
     log_message "[INFO] Copy to output temporarily disabled for debugging"
     
     # Build the example app for both platforms

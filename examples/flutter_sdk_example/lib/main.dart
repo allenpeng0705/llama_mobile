@@ -31,6 +31,12 @@ class AppState extends ChangeNotifier {
   // Feature flags
   bool enableEmbedding = false;
 
+  // Feature switches - matching iOSSDKExample
+  bool useStreaming = false;
+  bool useJsonResponse = true;
+  bool useChatMode = true;
+  bool useCustomTemplate = false;
+
   // Model configuration parameters
   int nGpuLayers = 99;
   int nThreads = 4;
@@ -47,6 +53,14 @@ class AppState extends ChangeNotifier {
   // Image-related properties
   String? selectedImagePath;
   List<Map<String, String>> availablePackagedImages = [];
+
+  // Download state
+  bool isDownloading = false;
+  double downloadProgress = 0.0;
+  String downloadStatus = "";
+  String downloadSpeed = "";
+  String downloadSize = "";
+  String? downloadError;
 
   // Load grammar content from assets
   Future<String?> loadGrammarContent(String grammarName) async {
@@ -1181,6 +1195,141 @@ class AppState extends ChangeNotifier {
       return {};
     }
   }
+
+  // Get models directory for downloads
+  Future<String> getModelsDirectory() async {
+    Directory modelsDir;
+
+    if (Platform.isAndroid) {
+      final externalDir = await getExternalStorageDirectory();
+      if (externalDir != null) {
+        modelsDir = Directory('${externalDir.path}/models');
+      } else {
+        modelsDir = Directory(
+          '${(await getApplicationDocumentsDirectory()).path}/models',
+        );
+      }
+    } else {
+      final documentsDir = await getApplicationDocumentsDirectory();
+      modelsDir = Directory('${documentsDir.path}/models');
+    }
+
+    if (!await modelsDir.exists()) {
+      await modelsDir.create(recursive: true);
+      print("Created models directory: ${modelsDir.path}");
+    }
+
+    return modelsDir.path;
+  }
+
+  // Format bytes to human readable format
+  String formatBytes(int bytes) {
+    const units = ['B', 'KB', 'MB', 'GB'];
+    double size = bytes.toDouble();
+    int unitIndex = 0;
+
+    while (size >= 1024.0 && unitIndex < 3) {
+      size /= 1024.0;
+      unitIndex++;
+    }
+
+    return '${size.toStringAsFixed(2)} ${units[unitIndex]}';
+  }
+
+  // Download model from Hugging Face
+  Future<void> downloadFromHuggingFace() async {
+    const repoID = "microsoft/Phi-3-mini-4k-instruct-gguf";
+    const filename = "Phi-3-mini-4k-instruct-q4.gguf";
+    const bearerToken = "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";
+
+    final modelsDir = await getModelsDirectory();
+    await startDownload(
+      repoID: repoID,
+      filename: filename,
+      destinationPath: modelsDir,
+      bearerToken: bearerToken,
+      isHuggingFace: true,
+    );
+  }
+
+  // Download model from URL
+  Future<void> downloadFromURL() async {
+    const url =
+        "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf";
+    const filename = "Phi-3-mini-4k-instruct-q4.gguf";
+    const bearerToken = "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";
+
+    final modelsDir = await getModelsDirectory();
+    await startDownload(
+      repoID: url,
+      filename: filename,
+      destinationPath: modelsDir,
+      bearerToken: bearerToken,
+      isHuggingFace: false,
+    );
+  }
+
+  // Start download with progress tracking
+  Future<void> startDownload({
+    required String repoID,
+    required String filename,
+    required String destinationPath,
+    required String bearerToken,
+    required bool isHuggingFace,
+  }) async {
+    downloadProgress = 0.0;
+    downloadStatus = "Preparing download...";
+    downloadSpeed = "";
+    downloadSize = "";
+    downloadError = null;
+    isDownloading = true;
+    notifyListeners();
+
+    final localPath = '$destinationPath/$filename';
+    print("Starting download: $repoID to $localPath");
+
+    try {
+      final params = DownloadParams(
+        url: repoID,
+        localPath: localPath,
+        username: isHuggingFace ? null : null,
+        password: bearerToken,
+        headers: isHuggingFace
+            ? {'Authorization': 'Bearer $bearerToken'}
+            : null,
+      );
+
+      final result = await LlamaMobile().downloadModelWithParams(params);
+
+      isDownloading = false;
+
+      if (result != null && result.success) {
+        downloadStatus = "Download completed!";
+        downloadProgress = 1.0;
+        print("Download successful: ${result.localPath}");
+
+        final file = File(result.localPath);
+        if (await file.exists()) {
+          final fileSize = await file.length();
+          downloadSize = formatBytes(fileSize);
+        }
+
+        await loadAvailableModels();
+        notifyListeners();
+      } else {
+        downloadError = result?.errorMessage ?? "Unknown error";
+        downloadStatus = "Download failed";
+        print("Download failed: ${downloadError}");
+        notifyListeners();
+      }
+    } catch (e) {
+      isDownloading = false;
+      downloadError = "Download error: $e";
+      downloadStatus = "Download failed";
+      print("Download exception: $e");
+      notifyListeners();
+    }
+  }
 }
 
 // Message model
@@ -1188,42 +1337,173 @@ class Message {
   final String id;
   final String role;
   final String text;
+  final String? thought;
 
-  Message({required this.role, required this.text})
+  Message({required this.role, required this.text, this.thought})
     : id = DateTime.now().millisecondsSinceEpoch.toString();
 }
 
-// Message Bubble Widget
-class MessageBubble extends StatelessWidget {
-  final Message message;
+// Parse response to extract thought (between <think> tags) and reply (after </think>)
+Map<String, String?> parseResponseForThoughtAndReply(String response) {
+  // First, extract "choices[0]['text']" field content from the JSON response
+  var textContent = response;
 
-  const MessageBubble({Key? key, required this.message}) : super(key: key);
+  // Try to parse as JSON and extract the "choices[0]['text']" field
+  try {
+    final json = jsonDecode(response);
+    if (json is Map<String, dynamic>) {
+      final choices = json['choices'];
+      if (choices is List && choices.isNotEmpty) {
+        final firstChoice = choices[0];
+        if (firstChoice is Map<String, dynamic>) {
+          final extractedText = firstChoice['text'];
+          if (extractedText is String) {
+            textContent = extractedText;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // Not JSON, use response as-is
+  }
+
+  String? thought;
+  String reply = textContent;
+
+  // Extract thought if found using simple string operations
+  const openingTag = "<think>";
+  const closingTag = "</think>";
+
+  int openIndex = textContent.indexOf(openingTag);
+  if (openIndex != -1) {
+    int closeIndex = textContent.indexOf(closingTag, openIndex);
+    if (closeIndex != -1) {
+      // Extract thought content between tags
+      thought = textContent
+          .substring(openIndex + openingTag.length, closeIndex)
+          .trim();
+
+      // Extract reply content after closing tag
+      reply = textContent.substring(closeIndex + closingTag.length).trim();
+    }
+  }
+
+  return {'reply': reply, 'thought': thought};
+}
+
+// Message Bubble Widget
+class MessageBubble extends StatefulWidget {
+  final Message message;
+  final bool useJsonResponse;
+
+  const MessageBubble({
+    Key? key,
+    required this.message,
+    this.useJsonResponse = true,
+  }) : super(key: key);
+
+  @override
+  _MessageBubbleState createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends State<MessageBubble> {
+  bool _isShowingThought = false;
 
   @override
   Widget build(BuildContext context) {
-    bool isUser = message.role == "user";
+    bool isUser = widget.message.role == "user";
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-        decoration: BoxDecoration(
-          color: isUser ? Colors.blue : Colors.grey[200],
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(20),
-            topRight: const Radius.circular(20),
-            bottomLeft: isUser
-                ? const Radius.circular(20)
-                : const Radius.circular(0),
-            bottomRight: isUser
-                ? const Radius.circular(0)
-                : const Radius.circular(20),
-          ),
-        ),
-        child: Text(
-          message.text,
-          style: TextStyle(color: isUser ? Colors.white : Colors.black),
+        constraints: const BoxConstraints(maxWidth: 300),
+        child: Column(
+          crossAxisAlignment: isUser
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
+          children: [
+            if (!isUser &&
+                widget.message.thought != null &&
+                widget.message.thought!.isNotEmpty)
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _isShowingThought = !_isShowingThought;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 8,
+                    horizontal: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.amber[50],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.amber[200]!),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _isShowingThought
+                                ? Icons.expand_less
+                                : Icons.expand_more,
+                            size: 16,
+                            color: Colors.amber[800],
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            "Thought",
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.amber[800],
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_isShowingThought) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.message.thought!,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.amber[900],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            if (!isUser &&
+                widget.message.thought != null &&
+                widget.message.thought!.isNotEmpty)
+              const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+              decoration: BoxDecoration(
+                color: isUser ? Colors.blue : Colors.grey[200],
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(20),
+                  topRight: const Radius.circular(20),
+                  bottomLeft: isUser
+                      ? const Radius.circular(20)
+                      : const Radius.circular(0),
+                  bottomRight: isUser
+                      ? const Radius.circular(0)
+                      : const Radius.circular(20),
+                ),
+              ),
+              child: Text(
+                widget.message.text,
+                style: TextStyle(color: isUser ? Colors.white : Colors.black),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1244,7 +1524,6 @@ class _ChatViewState extends State<ChatView> {
   TextEditingController _textController = TextEditingController();
   List<Message> messages = [];
   bool isLoading = false;
-  bool useOpenAIJSONAPI = true;
 
   void sendMessage() {
     if (_textController.text.trim().isEmpty || isLoading) return;
@@ -1277,58 +1556,184 @@ class _ChatViewState extends State<ChatView> {
           );
         }
 
-        String response;
-        if (useOpenAIJSONAPI) {
-          // Use OpenAI JSON format
-          final openAIRequest = {"messages": chatMessages};
+        // Generate response based on Streaming switch
+        if (widget.appState.useStreaming) {
+          // Use streaming generation
+          print("[INFO] Using streaming generation");
 
-          final jsonRequest = json.encode(openAIRequest);
-          print("OpenAI JSON Request: $jsonRequest");
+          // Add initial assistant message
+          setState(() {
+            messages.add(Message(role: "assistant", text: ""));
+          });
 
-          // Generate completion with OpenAI JSON format
-          final result = await widget.appState.llamaContext
-              ?.generateOpenAICompletion(
-                openAIJSON: jsonRequest,
-                grammar: grammarContent,
-              );
-          response = result?.text ?? "";
-        } else {
-          // Use standard completion - iOS SDK Example style
-          // Format chat messages as a single prompt
-          String formattedPrompt = "";
-          for (var msg in chatMessages) {
-            formattedPrompt +=
-                "${msg['role'] == 'user'
-                    ? 'User:'
-                    : msg['role'] == 'assistant'
-                    ? 'Assistant:'
-                    : 'System:'} ${msg['content']}\n";
+          // Create completion parameters
+          CompletionParams params;
+          if (widget.appState.useChatMode) {
+            // Chat mode: use chatMessages with history
+            print("[INFO] Using Chat mode with message history");
+
+            // Create chat messages from conversation history
+            List<ChatMessage> chatMessages = [];
+
+            // Add system message
+            chatMessages.add(
+              ChatMessage(
+                role: "system",
+                content: widget.appState.systemPrompt,
+              ),
+            );
+
+            // Add all conversation messages
+            for (var msg in messages) {
+              chatMessages.add(ChatMessage(role: msg.role, content: msg.text));
+            }
+
+            // Create completion parameters with structured chat messages
+            params = CompletionParams(
+              prompt: prompt,
+              chatMessages: chatMessages,
+              maxTokens: 4096,
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.9,
+              minP: 0.1,
+              penaltyLastN: 64,
+              penaltyRepeat: 1.0,
+              penaltyFreq: 0.0,
+              penaltyPresent: 0.0,
+              stopSequences: ["<|im_end|>"],
+              grammar: grammarContent,
+            );
+          } else {
+            // Direct prompt mode: use prompt only
+            print("[INFO] Using Direct Prompt mode");
+
+            // Create completion parameters with direct prompt
+            params = CompletionParams(
+              prompt: prompt,
+              maxTokens: 4096,
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.9,
+              minP: 0.1,
+              penaltyLastN: 64,
+              penaltyRepeat: 1.0,
+              penaltyFreq: 0.0,
+              penaltyPresent: 0.0,
+              stopSequences: ["<|im_end|>"],
+              grammar: grammarContent,
+            );
           }
-          formattedPrompt += "Assistant:";
 
-          // Generate completion
-          final result = await widget.appState.llamaContext?.generateCompletion(
-            prompt: formattedPrompt,
-            maxTokens: 512,
-            temperature: 0.7,
-            stopSequences: ["User:", "Assistant:", "System:"],
-            grammar: grammarContent,
+          // Listen to token stream
+          StreamSubscription<String>? tokenSubscription;
+          tokenSubscription = widget.appState.llamaContext?.onTokenStream
+              .listen((token) {
+                setState(() {
+                  // Update last message with new token
+                  if (messages.isNotEmpty &&
+                      messages.last.role == "assistant") {
+                    messages[messages.length - 1] = Message(
+                      role: "assistant",
+                      text: messages.last.text + token,
+                    );
+                  }
+                });
+              });
+
+          // Generate completion with streaming
+          final result = await widget.appState.llamaContext
+              ?.generateStreamingCompletionWithParams(params);
+
+          // Cancel token subscription
+          await tokenSubscription?.cancel();
+
+          if (result != null) {
+            print("[INFO] Streaming completed successfully");
+          } else {
+            print("[ERROR] Streaming generation failed");
+            setState(() {
+              widget.appState.errorMessage = "Failed to generate response";
+            });
+          }
+
+          setState(() {
+            isLoading = false;
+          });
+        } else {
+          // Use normal generation
+          print("[INFO] Using normal generation");
+
+          String response;
+          if (widget.appState.useJsonResponse) {
+            // Use OpenAI JSON format
+            final openAIRequest = {"messages": chatMessages};
+
+            final jsonRequest = json.encode(openAIRequest);
+            print("OpenAI JSON Request: $jsonRequest");
+
+            // Generate completion with OpenAI JSON format
+            final result = await widget.appState.llamaContext
+                ?.generateOpenAICompletion(
+                  openAIJSON: jsonRequest,
+                  grammar: grammarContent,
+                );
+            response = result?.text ?? "";
+          } else {
+            // Use standard completion - iOS SDK Example style
+            // Format chat messages as a single prompt
+            String formattedPrompt = "";
+            for (var msg in chatMessages) {
+              formattedPrompt +=
+                  "${msg['role'] == 'user'
+                      ? 'User:'
+                      : msg['role'] == 'assistant'
+                      ? 'Assistant:'
+                      : 'System:'} ${msg['content']}\n";
+            }
+            formattedPrompt += "Assistant:";
+
+            // Generate completion
+            final result = await widget.appState.llamaContext
+                ?.generateCompletion(
+                  prompt: formattedPrompt,
+                  maxTokens: 512,
+                  temperature: 0.7,
+                  stopSequences: ["User:", "Assistant:", "System:"],
+                  grammar: grammarContent,
+                );
+            response = result?.text ?? "";
+          }
+
+          // Parse response to match iOS SDK Example behavior
+          response = response.trim();
+          // Remove any trailing stop words
+          response = response.replaceAll(
+            RegExp(r'\s*(User:|Assistant:|System:)$'),
+            '',
           );
-          response = result?.text ?? "";
+
+          // Parse response to extract thought and reply if JSON response is enabled
+          var finalText = response;
+          String? messageThought;
+
+          if (widget.appState.useJsonResponse) {
+            final parsed = parseResponseForThoughtAndReply(response);
+            finalText = parsed['reply'] ?? response;
+            messageThought = parsed['thought'];
+          }
+
+          setState(() {
+            messages.add(
+              Message(
+                role: "assistant",
+                text: finalText,
+                thought: messageThought,
+              ),
+            );
+            isLoading = false;
+          });
         }
-
-        // Parse response to match iOS SDK Example behavior
-        response = response.trim();
-        // Remove any trailing stop words
-        response = response.replaceAll(
-          RegExp(r'\s*(User:|Assistant:|System:)$'),
-          '',
-        );
-
-        setState(() {
-          messages.add(Message(role: "assistant", text: response));
-          isLoading = false;
-        });
       } else {
         setState(() {
           widget.appState.errorMessage = "Model not loaded";
@@ -1363,17 +1768,36 @@ class _ChatViewState extends State<ChatView> {
                   color: Colors.grey[200],
                   border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
                 ),
-                child: Row(
+                child: Column(
                   children: [
-                    const Text("Use OpenAI JSON API:"),
-                    Switch(
-                      value: useOpenAIJSONAPI,
-                      onChanged: (value) {
-                        setState(() {
-                          useOpenAIJSONAPI = value;
-                        });
-                      },
-                      activeColor: Colors.blue,
+                    Row(
+                      children: [
+                        const Text("Streaming:"),
+                        Switch(
+                          value: widget.appState.useStreaming,
+                          onChanged: (value) {
+                            setState(() {
+                              widget.appState.useStreaming = value;
+                            });
+                          },
+                          activeColor: Colors.blue,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Row(
+                      children: [
+                        const Text("JSON Response:"),
+                        Switch(
+                          value: widget.appState.useJsonResponse,
+                          onChanged: (value) {
+                            setState(() {
+                              widget.appState.useJsonResponse = value;
+                            });
+                          },
+                          activeColor: Colors.blue,
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1412,7 +1836,10 @@ class _ChatViewState extends State<ChatView> {
                       child: ListView.builder(
                         itemCount: messages.length,
                         itemBuilder: (context, index) {
-                          return MessageBubble(message: messages[index]);
+                          return MessageBubble(
+                            message: messages[index],
+                            useJsonResponse: widget.appState.useJsonResponse,
+                          );
                         },
                       ),
                     ),
@@ -1778,726 +2205,973 @@ class _SettingsViewState extends State<SettingsView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: GestureDetector(
-        onTap: () {
-          // Dismiss keyboard when tapping outside text fields
-          FocusScope.of(context).unfocus();
-        },
-        child: Form(
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              // Model Configuration Section
-              const SectionHeader(title: "Model Configuration"),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey[200]!),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Main Model Picker
-                      widget.appState.availableModels.isEmpty
-                          ? const Text(
-                              "No models found in the bundle",
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
-                              ),
-                            )
-                          : Column(
-                              children: [
-                                DropdownButtonFormField<Map<String, String>?>(
-                                  isExpanded: true,
-                                  value:
-                                      widget
-                                              .appState
-                                              .availableModels
-                                              .isNotEmpty &&
-                                          widget.appState.modelPath.isNotEmpty
-                                      ? widget.appState.availableModels
-                                            .firstWhere(
-                                              (model) =>
-                                                  model["path"] ==
-                                                  widget.appState.modelPath,
-                                              orElse: () => widget
-                                                  .appState
-                                                  .availableModels
-                                                  .first,
-                                            )
-                                      : null,
-                                  items: [
-                                    const DropdownMenuItem<
+      body: Stack(
+        children: [
+          GestureDetector(
+            onTap: () {
+              // Dismiss keyboard when tapping outside text fields
+              FocusScope.of(context).unfocus();
+            },
+            child: Form(
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  // Model Configuration Section
+                  const SectionHeader(title: "Model Configuration"),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[200]!),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Main Model Picker
+                          widget.appState.availableModels.isEmpty
+                              ? const Text(
+                                  "No models found in the bundle",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                  ),
+                                )
+                              : Column(
+                                  children: [
+                                    DropdownButtonFormField<
                                       Map<String, String>?
                                     >(
-                                      value: null,
-                                      child: Text(
-                                        "Empty",
-                                        overflow: TextOverflow.ellipsis,
+                                      isExpanded: true,
+                                      value:
+                                          widget
+                                                  .appState
+                                                  .availableModels
+                                                  .isNotEmpty &&
+                                              widget
+                                                  .appState
+                                                  .modelPath
+                                                  .isNotEmpty
+                                          ? widget.appState.availableModels
+                                                .firstWhere(
+                                                  (model) =>
+                                                      model["path"] ==
+                                                      widget.appState.modelPath,
+                                                  orElse: () => widget
+                                                      .appState
+                                                      .availableModels
+                                                      .first,
+                                                )
+                                          : null,
+                                      items: [
+                                        const DropdownMenuItem<
+                                          Map<String, String>?
+                                        >(
+                                          value: null,
+                                          child: Text(
+                                            "Empty",
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        ...widget.appState.availableModels.map((
+                                          model,
+                                        ) {
+                                          return DropdownMenuItem<
+                                            Map<String, String>?
+                                          >(
+                                            value: model,
+                                            child: Text(
+                                              model["name"]!,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ],
+                                      onChanged: widget.appState.isModelLoaded
+                                          ? null
+                                          : (Map<String, String>? value) {
+                                              setState(() {
+                                                widget.appState.modelPath =
+                                                    value?["path"] ?? "";
+                                              });
+                                            },
+                                      decoration: const InputDecoration(
+                                        labelText: "Select Main Model",
+                                        border: OutlineInputBorder(),
                                       ),
                                     ),
-                                    ...widget.appState.availableModels.map((
-                                      model,
-                                    ) {
-                                      return DropdownMenuItem<
-                                        Map<String, String>?
-                                      >(
-                                        value: model,
-                                        child: Text(
-                                          model["name"]!,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      );
-                                    }).toList(),
+                                    const SizedBox(height: 16),
                                   ],
-                                  onChanged: widget.appState.isModelLoaded
-                                      ? null
-                                      : (Map<String, String>? value) {
-                                          setState(() {
-                                            widget.appState.modelPath =
-                                                value?["path"] ?? "";
-                                          });
-                                        },
-                                  decoration: const InputDecoration(
-                                    labelText: "Select Main Model",
-                                    border: OutlineInputBorder(),
-                                  ),
                                 ),
-                                const SizedBox(height: 16),
-                              ],
-                            ),
 
-                      // MMProj Model Picker
-                      Container(
-                        width: double.infinity,
-                        child: DropdownButtonFormField<Map<String, String>>(
-                          isExpanded: true,
-                          value:
-                              widget.appState.availableMmprojModels.isNotEmpty
-                              ? widget.appState.availableMmprojModels.firstWhere(
-                                  (model) {
-                                    // Handle empty path case
-                                    if (widget
-                                        .appState
-                                        .mmprojModelPath
-                                        .isEmpty) {
-                                      return model["path"] == "";
-                                    }
-                                    // Find by filename instead of full path
-                                    // because path changes when copied to temp
-                                    final modelFilename = model["path"]!
-                                        .split('/')
-                                        .last;
-                                    final currentFilename = widget
-                                        .appState
-                                        .mmprojModelPath
-                                        .split('/')
-                                        .last;
-                                    return modelFilename == currentFilename ||
-                                        model["path"] ==
-                                            widget.appState.mmprojModelPath;
-                                  },
-                                  orElse: () => widget
+                          // MMProj Model Picker
+                          Container(
+                            width: double.infinity,
+                            child: DropdownButtonFormField<Map<String, String>>(
+                              isExpanded: true,
+                              value:
+                                  widget
                                       .appState
                                       .availableMmprojModels
-                                      .first,
-                                )
-                              : null,
-                          items: [
-                            const DropdownMenuItem<Map<String, String>>(
-                              value: null,
-                              child: Text(
-                                "Empty",
-                                overflow: TextOverflow.ellipsis,
+                                      .isNotEmpty
+                                  ? widget.appState.availableMmprojModels.firstWhere(
+                                      (model) {
+                                        // Handle empty path case
+                                        if (widget
+                                            .appState
+                                            .mmprojModelPath
+                                            .isEmpty) {
+                                          return model["path"] == "";
+                                        }
+                                        // Find by filename instead of full path
+                                        // because path changes when copied to temp
+                                        final modelFilename = model["path"]!
+                                            .split('/')
+                                            .last;
+                                        final currentFilename = widget
+                                            .appState
+                                            .mmprojModelPath
+                                            .split('/')
+                                            .last;
+                                        return modelFilename ==
+                                                currentFilename ||
+                                            model["path"] ==
+                                                widget.appState.mmprojModelPath;
+                                      },
+                                      orElse: () => widget
+                                          .appState
+                                          .availableMmprojModels
+                                          .first,
+                                    )
+                                  : null,
+                              items: [
+                                const DropdownMenuItem<Map<String, String>>(
+                                  value: null,
+                                  child: Text(
+                                    "Empty",
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                ...widget.appState.availableMmprojModels.map((
+                                  model,
+                                ) {
+                                  return DropdownMenuItem<Map<String, String>>(
+                                    value: model,
+                                    child: Text(
+                                      model["name"]!,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  );
+                                }).toList(),
+                              ],
+                              onChanged: widget.appState.isModelLoaded
+                                  ? null
+                                  : (Map<String, String>? value) {
+                                      setState(() {
+                                        widget.appState.mmprojModelPath =
+                                            value?["path"] ?? "";
+                                      });
+                                    },
+                              decoration: const InputDecoration(
+                                labelText: "Select MMProj Model",
+                                border: OutlineInputBorder(),
                               ),
                             ),
-                            ...widget.appState.availableMmprojModels.map((
-                              model,
-                            ) {
-                              return DropdownMenuItem<Map<String, String>>(
-                                value: model,
-                                child: Text(
-                                  model["name"]!,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                          ],
-                          onChanged: widget.appState.isModelLoaded
-                              ? null
-                              : (Map<String, String>? value) {
-                                  setState(() {
-                                    widget.appState.mmprojModelPath =
-                                        value?["path"] ?? "";
-                                  });
-                                },
-                          decoration: const InputDecoration(
-                            labelText: "Select MMProj Model",
-                            border: OutlineInputBorder(),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
+                          const SizedBox(height: 16),
 
-                      // Vocoder Model Picker
-                      Container(
-                        width: double.infinity,
-                        child: DropdownButtonFormField<Map<String, String>>(
-                          isExpanded: true,
-                          value:
-                              widget.appState.availableVocoderModels.isNotEmpty
-                              ? widget.appState.availableVocoderModels.firstWhere(
-                                  (model) {
-                                    // Handle empty path case
-                                    if (widget
-                                        .appState
-                                        .vocoderModelPath
-                                        .isEmpty) {
-                                      return model["path"] == "";
-                                    }
-                                    // Find by filename instead of full path
-                                    // because path changes when copied to temp
-                                    final modelFilename = model["path"]!
-                                        .split('/')
-                                        .last;
-                                    final currentFilename = widget
-                                        .appState
-                                        .vocoderModelPath
-                                        .split('/')
-                                        .last;
-                                    return modelFilename == currentFilename ||
-                                        model["path"] ==
-                                            widget.appState.vocoderModelPath;
-                                  },
-                                  orElse: () => widget
+                          // Vocoder Model Picker
+                          Container(
+                            width: double.infinity,
+                            child: DropdownButtonFormField<Map<String, String>>(
+                              isExpanded: true,
+                              value:
+                                  widget
                                       .appState
                                       .availableVocoderModels
-                                      .first,
-                                )
-                              : null,
-                          items: [
-                            const DropdownMenuItem<Map<String, String>>(
-                              value: null,
-                              child: Text(
-                                "Empty",
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            ...widget.appState.availableVocoderModels.map((
-                              model,
-                            ) {
-                              return DropdownMenuItem<Map<String, String>>(
-                                value: model,
-                                child: Text(
-                                  model["name"]!,
-                                  overflow: TextOverflow.ellipsis,
+                                      .isNotEmpty
+                                  ? widget.appState.availableVocoderModels.firstWhere(
+                                      (model) {
+                                        // Handle empty path case
+                                        if (widget
+                                            .appState
+                                            .vocoderModelPath
+                                            .isEmpty) {
+                                          return model["path"] == "";
+                                        }
+                                        // Find by filename instead of full path
+                                        // because path changes when copied to temp
+                                        final modelFilename = model["path"]!
+                                            .split('/')
+                                            .last;
+                                        final currentFilename = widget
+                                            .appState
+                                            .vocoderModelPath
+                                            .split('/')
+                                            .last;
+                                        return modelFilename ==
+                                                currentFilename ||
+                                            model["path"] ==
+                                                widget
+                                                    .appState
+                                                    .vocoderModelPath;
+                                      },
+                                      orElse: () => widget
+                                          .appState
+                                          .availableVocoderModels
+                                          .first,
+                                    )
+                                  : null,
+                              items: [
+                                const DropdownMenuItem<Map<String, String>>(
+                                  value: null,
+                                  child: Text(
+                                    "Empty",
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                              );
-                            }).toList(),
-                          ],
-                          onChanged: widget.appState.isModelLoaded
-                              ? null
-                              : (Map<String, String>? value) {
-                                  setState(() {
-                                    widget.appState.vocoderModelPath =
-                                        value?["path"] ?? "";
-                                  });
-                                },
-                          decoration: const InputDecoration(
-                            labelText: "Select Vocoder Model",
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // LoRA Model Picker
-                      Container(
-                        width: double.infinity,
-                        child: DropdownButtonFormField<Map<String, String>>(
-                          isExpanded: true,
-                          value: widget.appState.availableLoRAModels.isNotEmpty
-                              ? widget.appState.availableLoRAModels.firstWhere(
-                                  (model) {
-                                    // Handle empty path case
-                                    if (widget.appState.loraModelPath.isEmpty) {
-                                      return model["path"] == "";
-                                    }
-                                    // Find by filename instead of full path
-                                    // because path changes when copied to temp
-                                    final modelFilename = model["path"]!
-                                        .split('/')
-                                        .last;
-                                    final currentFilename = widget
-                                        .appState
-                                        .loraModelPath
-                                        .split('/')
-                                        .last;
-                                    return modelFilename == currentFilename ||
-                                        model["path"] ==
-                                            widget.appState.loraModelPath;
-                                  },
-                                  orElse: () =>
-                                      widget.appState.availableLoRAModels.first,
-                                )
-                              : null,
-                          items: [
-                            const DropdownMenuItem<Map<String, String>>(
-                              value: null,
-                              child: Text(
-                                "Empty",
-                                overflow: TextOverflow.ellipsis,
+                                ...widget.appState.availableVocoderModels.map((
+                                  model,
+                                ) {
+                                  return DropdownMenuItem<Map<String, String>>(
+                                    value: model,
+                                    child: Text(
+                                      model["name"]!,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  );
+                                }).toList(),
+                              ],
+                              onChanged: widget.appState.isModelLoaded
+                                  ? null
+                                  : (Map<String, String>? value) {
+                                      setState(() {
+                                        widget.appState.vocoderModelPath =
+                                            value?["path"] ?? "";
+                                      });
+                                    },
+                              decoration: const InputDecoration(
+                                labelText: "Select Vocoder Model",
+                                border: OutlineInputBorder(),
                               ),
                             ),
-                            ...widget.appState.availableLoRAModels.map((model) {
-                              return DropdownMenuItem<Map<String, String>>(
-                                value: model,
-                                child: Text(
-                                  model["name"]!,
-                                  overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 16),
+
+                          // LoRA Model Picker
+                          Container(
+                            width: double.infinity,
+                            child: DropdownButtonFormField<Map<String, String>>(
+                              isExpanded: true,
+                              value:
+                                  widget.appState.availableLoRAModels.isNotEmpty
+                                  ? widget.appState.availableLoRAModels.firstWhere(
+                                      (model) {
+                                        // Handle empty path case
+                                        if (widget
+                                            .appState
+                                            .loraModelPath
+                                            .isEmpty) {
+                                          return model["path"] == "";
+                                        }
+                                        // Find by filename instead of full path
+                                        // because path changes when copied to temp
+                                        final modelFilename = model["path"]!
+                                            .split('/')
+                                            .last;
+                                        final currentFilename = widget
+                                            .appState
+                                            .loraModelPath
+                                            .split('/')
+                                            .last;
+                                        return modelFilename ==
+                                                currentFilename ||
+                                            model["path"] ==
+                                                widget.appState.loraModelPath;
+                                      },
+                                      orElse: () => widget
+                                          .appState
+                                          .availableLoRAModels
+                                          .first,
+                                    )
+                                  : null,
+                              items: [
+                                const DropdownMenuItem<Map<String, String>>(
+                                  value: null,
+                                  child: Text(
+                                    "Empty",
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                              );
-                            }).toList(),
-                          ],
-                          onChanged: widget.appState.isModelLoaded
-                              ? null
-                              : (Map<String, String>? value) {
-                                  setState(() {
-                                    widget.appState.loraModelPath =
-                                        value?["path"] ?? "";
-                                  });
-                                },
-                          decoration: const InputDecoration(
-                            labelText: "Select LoRA Model",
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Grammar Picker
-                      Container(
-                        width: double.infinity,
-                        child: DropdownButtonFormField<String?>(
-                          value: widget.appState.selectedGrammar,
-                          items: [
-                            const DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text(
-                                "Empty",
-                                overflow: TextOverflow.ellipsis,
+                                ...widget.appState.availableLoRAModels.map((
+                                  model,
+                                ) {
+                                  return DropdownMenuItem<Map<String, String>>(
+                                    value: model,
+                                    child: Text(
+                                      model["name"]!,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  );
+                                }).toList(),
+                              ],
+                              onChanged: widget.appState.isModelLoaded
+                                  ? null
+                                  : (Map<String, String>? value) {
+                                      setState(() {
+                                        widget.appState.loraModelPath =
+                                            value?["path"] ?? "";
+                                      });
+                                    },
+                              decoration: const InputDecoration(
+                                labelText: "Select LoRA Model",
+                                border: OutlineInputBorder(),
                               ),
                             ),
-                            ...widget.appState.availableGrammars.map((grammar) {
-                              return DropdownMenuItem<String?>(
-                                value: grammar,
-                                child: Text(
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Grammar Picker
+                          Container(
+                            width: double.infinity,
+                            child: DropdownButtonFormField<String?>(
+                              value: widget.appState.selectedGrammar,
+                              items: [
+                                const DropdownMenuItem<String?>(
+                                  value: null,
+                                  child: Text(
+                                    "Empty",
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                ...widget.appState.availableGrammars.map((
                                   grammar,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                          ],
-                          onChanged: widget.appState.isModelLoaded
-                              ? null
-                              : (value) {
-                                  setState(() {
-                                    widget.appState.selectedGrammar = value;
-                                  });
-                                },
-                          decoration: const InputDecoration(
-                            labelText: "Select Grammar",
-                            border: OutlineInputBorder(),
+                                ) {
+                                  return DropdownMenuItem<String?>(
+                                    value: grammar,
+                                    child: Text(
+                                      grammar,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  );
+                                }).toList(),
+                              ],
+                              onChanged: widget.appState.isModelLoaded
+                                  ? null
+                                  : (value) {
+                                      setState(() {
+                                        widget.appState.selectedGrammar = value;
+                                      });
+                                    },
+                              decoration: const InputDecoration(
+                                labelText: "Select Grammar",
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
+                          const SizedBox(height: 16),
 
-                      // Enable Embedding Toggle
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          // Chat Mode Toggle
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text("Chat Mode"),
+                              Switch(
+                                value: widget.appState.useChatMode,
+                                onChanged: widget.appState.isModelLoaded
+                                    ? null
+                                    : (value) {
+                                        setState(() {
+                                          widget.appState.useChatMode = value;
+                                        });
+                                      },
+                                activeColor: Colors.blue,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Custom Template Toggle
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text("Custom Template"),
+                              Switch(
+                                value: widget.appState.useCustomTemplate,
+                                onChanged: widget.appState.isModelLoaded
+                                    ? null
+                                    : (value) {
+                                        setState(() {
+                                          widget.appState.useCustomTemplate =
+                                              value;
+                                        });
+                                      },
+                                activeColor: Colors.blue,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Enable Embedding Toggle
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text("Enable Embedding"),
+                              Switch(
+                                value: widget.appState.enableEmbedding,
+                                onChanged: widget.appState.isModelLoaded
+                                    ? null
+                                    : (value) {
+                                        setState(() {
+                                          widget.appState.enableEmbedding =
+                                              value;
+                                        });
+                                      },
+                                activeColor: Colors.blue,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // GPU Layers
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text("GPU Layers"),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.remove),
+                                    onPressed: widget.appState.isModelLoaded
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              if (widget.appState.nGpuLayers >
+                                                  0) {
+                                                widget.appState.nGpuLayers--;
+                                              }
+                                            });
+                                          },
+                                  ),
+                                  SizedBox(
+                                    width: 40,
+                                    child: Text(
+                                      widget.appState.nGpuLayers.toString(),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.add),
+                                    onPressed: widget.appState.isModelLoaded
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              if (widget.appState.nGpuLayers <
+                                                  16) {
+                                                widget.appState.nGpuLayers++;
+                                              }
+                                            });
+                                          },
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Threads
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text("Threads"),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.remove),
+                                    onPressed: widget.appState.isModelLoaded
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              if (widget.appState.nThreads >
+                                                  1) {
+                                                widget.appState.nThreads--;
+                                              }
+                                            });
+                                          },
+                                  ),
+                                  SizedBox(
+                                    width: 40,
+                                    child: Text(
+                                      widget.appState.nThreads.toString(),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.add),
+                                    onPressed: widget.appState.isModelLoaded
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              if (widget.appState.nThreads <
+                                                  8) {
+                                                widget.appState.nThreads++;
+                                              }
+                                            });
+                                          },
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Context Size
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text("Context Size"),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.remove),
+                                    onPressed: widget.appState.isModelLoaded
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              if (widget.appState.nCtx > 512) {
+                                                widget.appState.nCtx -= 512;
+                                              }
+                                            });
+                                          },
+                                  ),
+                                  SizedBox(
+                                    width: 60,
+                                    child: Text(
+                                      widget.appState.nCtx.toString(),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.add),
+                                    onPressed: widget.appState.isModelLoaded
+                                        ? null
+                                        : () {
+                                            setState(() {
+                                              if (widget.appState.nCtx < 4096) {
+                                                widget.appState.nCtx += 512;
+                                              }
+                                            });
+                                          },
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Model Actions Section
+                  const SectionHeader(title: "Model Actions"),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[200]!),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
                         children: [
-                          const Text("Enable Embedding"),
-                          Switch(
-                            value: widget.appState.enableEmbedding,
+                          // Load Model Button
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: widget.appState.isModelLoaded
+                                  ? null
+                                  : () async {
+                                      await widget.appState.loadModel();
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              child: const Text(
+                                "Load Model",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Unload Model Button
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: !widget.appState.isModelLoaded
+                                  ? null
+                                  : () async {
+                                      await widget.appState.unloadModel();
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              child: const Text(
+                                "Unload Model",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Download Model from HF Button
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: widget.appState.isDownloading
+                                  ? null
+                                  : () async {
+                                      await widget.appState
+                                          .downloadFromHuggingFace();
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              child: const Text(
+                                "Download Model from HF",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Download from URL Button
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: widget.appState.isDownloading
+                                  ? null
+                                  : () async {
+                                      await widget.appState.downloadFromURL();
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              child: const Text(
+                                "Download from URL",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Chat Configuration Section
+                  const SectionHeader(title: "Chat Configuration"),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[200]!),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        children: [
+                          // System Prompt
+                          TextField(
+                            controller: TextEditingController(
+                              text: widget.appState.systemPrompt,
+                            ),
                             onChanged: widget.appState.isModelLoaded
                                 ? null
                                 : (value) {
-                                    setState(() {
-                                      widget.appState.enableEmbedding = value;
-                                    });
+                                    widget.appState.systemPrompt = value;
                                   },
-                            activeColor: Colors.blue,
+                            maxLines: 4,
+                            decoration: const InputDecoration(
+                              labelText: "System Prompt",
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            "Note: System prompt changes require reloading the model",
+                            style: TextStyle(fontSize: 12, color: Colors.grey),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-
-                      // GPU Layers
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text("GPU Layers"),
-                          Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.remove),
-                                onPressed: widget.appState.isModelLoaded
-                                    ? null
-                                    : () {
-                                        setState(() {
-                                          if (widget.appState.nGpuLayers > 0) {
-                                            widget.appState.nGpuLayers--;
-                                          }
-                                        });
-                                      },
-                              ),
-                              SizedBox(
-                                width: 40,
-                                child: Text(
-                                  widget.appState.nGpuLayers.toString(),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.add),
-                                onPressed: widget.appState.isModelLoaded
-                                    ? null
-                                    : () {
-                                        setState(() {
-                                          if (widget.appState.nGpuLayers < 16) {
-                                            widget.appState.nGpuLayers++;
-                                          }
-                                        });
-                                      },
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Threads
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text("Threads"),
-                          Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.remove),
-                                onPressed: widget.appState.isModelLoaded
-                                    ? null
-                                    : () {
-                                        setState(() {
-                                          if (widget.appState.nThreads > 1) {
-                                            widget.appState.nThreads--;
-                                          }
-                                        });
-                                      },
-                              ),
-                              SizedBox(
-                                width: 40,
-                                child: Text(
-                                  widget.appState.nThreads.toString(),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.add),
-                                onPressed: widget.appState.isModelLoaded
-                                    ? null
-                                    : () {
-                                        setState(() {
-                                          if (widget.appState.nThreads < 8) {
-                                            widget.appState.nThreads++;
-                                          }
-                                        });
-                                      },
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Context Size
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text("Context Size"),
-                          Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.remove),
-                                onPressed: widget.appState.isModelLoaded
-                                    ? null
-                                    : () {
-                                        setState(() {
-                                          if (widget.appState.nCtx > 512) {
-                                            widget.appState.nCtx -= 512;
-                                          }
-                                        });
-                                      },
-                              ),
-                              SizedBox(
-                                width: 60,
-                                child: Text(
-                                  widget.appState.nCtx.toString(),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.add),
-                                onPressed: widget.appState.isModelLoaded
-                                    ? null
-                                    : () {
-                                        setState(() {
-                                          if (widget.appState.nCtx < 4096) {
-                                            widget.appState.nCtx += 512;
-                                          }
-                                        });
-                                      },
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
 
-              // Model Actions Section
-              const SectionHeader(title: "Model Actions"),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey[200]!),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    children: [
-                      // Load Model Button
-                      SizedBox(
+                  // Model Status Section
+                  if (widget.appState.isModelLoaded) ...[
+                    const SectionHeader(title: "Model Status"),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[200]!),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: const [
+                                Text("Status"),
+                                Text(
+                                  "Loaded",
+                                  style: TextStyle(
+                                    color: Colors.green,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text("Multimodal"),
+                                Text(
+                                  widget.appState.mmprojModelPath.isNotEmpty
+                                      ? "Yes"
+                                      : "No",
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text("Vision Support"),
+                                Text(
+                                  widget.appState.mmprojModelPath.isNotEmpty
+                                      ? "Yes"
+                                      : "No",
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text("Audio Support"),
+                                Text(
+                                  widget.appState.vocoderModelPath.isNotEmpty
+                                      ? "Yes"
+                                      : "No",
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text("Embedding"),
+                                Text(
+                                  widget.appState.enableEmbedding
+                                      ? "Yes"
+                                      : "No",
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  // LoRA Test Button
+                  const SectionHeader(title: "LoRA Testing"),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[200]!),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: widget.appState.isModelLoaded
-                              ? null
-                              : () async {
-                                  await widget.appState.loadModel();
-                                },
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    LoRATestView(appState: widget.appState),
+                              ),
+                            );
+                          },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
+                            backgroundColor: Colors.purple,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           child: const Text(
-                            "Load Model",
+                            "Open LoRA Test Page",
                             style: TextStyle(fontSize: 16, color: Colors.white),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                    ),
+                  ),
 
-                      // Unload Model Button
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: !widget.appState.isModelLoaded
-                              ? null
-                              : () async {
-                                  await widget.appState.unloadModel();
-                                },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text(
-                            "Unload Model",
-                            style: TextStyle(fontSize: 16, color: Colors.white),
-                          ),
+                  // Error Section
+                  if (widget.appState.errorMessage != null) ...[
+                    const SectionHeader(title: "Error", isError: true),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.red[200]!),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          widget.appState.errorMessage ?? "",
+                          style: const TextStyle(color: Colors.red),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ),
+                    ),
+                  ],
 
-              // Chat Configuration Section
-              const SectionHeader(title: "Chat Configuration"),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey[200]!),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  // Bottom padding
+                  const SizedBox(height: 40),
+                ],
+              ),
+            ),
+          ),
+          // Download progress popup
+          if (widget.appState.isDownloading)
+            Container(
+              color: Colors.black54,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      // System Prompt
-                      TextField(
-                        controller: TextEditingController(
-                          text: widget.appState.systemPrompt,
+                      const Text(
+                        "Downloading Model",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
-                        onChanged: widget.appState.isModelLoaded
-                            ? null
-                            : (value) {
-                                widget.appState.systemPrompt = value;
-                              },
-                        maxLines: 4,
-                        decoration: const InputDecoration(
-                          labelText: "System Prompt",
-                          border: OutlineInputBorder(),
-                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      LinearProgressIndicator(
+                        value: widget.appState.downloadProgress,
+                        backgroundColor: Colors.grey[200],
                       ),
                       const SizedBox(height: 8),
+                      Text(
+                        "${(widget.appState.downloadProgress * 100).toStringAsFixed(1)}%",
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        widget.appState.downloadStatus,
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                      const SizedBox(height: 8),
+                      if (widget.appState.downloadSize.isNotEmpty)
+                        Text(
+                          widget.appState.downloadSize,
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      const SizedBox(height: 8),
+                      if (widget.appState.downloadSpeed.isNotEmpty)
+                        Text(
+                          widget.appState.downloadSpeed,
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          // Download error popup
+          if (widget.appState.downloadError != null)
+            Container(
+              color: Colors.black54,
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        color: Colors.red,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 16),
                       const Text(
-                        "Note: System prompt changes require reloading the model",
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                        "Download Error",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        widget.appState.downloadError ?? "",
+                        style: const TextStyle(color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            widget.appState.downloadError = null;
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                        ),
+                        child: const Text(
+                          "OK",
+                          style: TextStyle(color: Colors.white),
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-
-              // Model Status Section
-              if (widget.appState.isModelLoaded) ...[
-                const SectionHeader(title: "Model Status"),
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey[200]!),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: const [
-                            Text("Status"),
-                            Text(
-                              "Loaded",
-                              style: TextStyle(
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text("Multimodal"),
-                            Text(
-                              widget.appState.mmprojModelPath.isNotEmpty
-                                  ? "Yes"
-                                  : "No",
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text("Vision Support"),
-                            Text(
-                              widget.appState.mmprojModelPath.isNotEmpty
-                                  ? "Yes"
-                                  : "No",
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text("Audio Support"),
-                            Text(
-                              widget.appState.vocoderModelPath.isNotEmpty
-                                  ? "Yes"
-                                  : "No",
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text("Embedding"),
-                            Text(
-                              widget.appState.enableEmbedding ? "Yes" : "No",
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-
-              // LoRA Test Button
-              const SectionHeader(title: "LoRA Testing"),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey[200]!),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                LoRATestView(appState: widget.appState),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.purple,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      child: const Text(
-                        "Open LoRA Test Page",
-                        style: TextStyle(fontSize: 16, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // Error Section
-              if (widget.appState.errorMessage != null) ...[
-                const SectionHeader(title: "Error", isError: true),
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.red[200]!),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      widget.appState.errorMessage ?? "",
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  ),
-                ),
-              ],
-
-              // Bottom padding
-              const SizedBox(height: 40),
-            ],
-          ),
-        ),
+            ),
+        ],
       ),
     );
   }

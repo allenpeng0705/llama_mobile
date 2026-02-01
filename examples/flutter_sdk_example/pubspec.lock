@@ -334,7 +334,7 @@ packages:
       path: "../../llama_mobile-flutter-SDK"
       relative: true
     source: path
-    version: "0.0.1"
+    version: "1.0.0"
   matcher:
     dependency: transitive
     description:
