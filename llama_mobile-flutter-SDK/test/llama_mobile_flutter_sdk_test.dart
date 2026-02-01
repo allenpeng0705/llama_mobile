@@ -638,29 +638,8 @@ void main() {
       expect(result, isTrue);
     });
 
-    test('generateAudio creates audio from text', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/chat_model.gguf',
-      );
-
-      await context?.loadTTSModel(
-        'test/tts_model.gguf',
-        TTSModelType.outETTSv02,
-      );
-
-      AudioResult? result = await context?.generateAudio(
-        'Hello, this is a test.',
-      );
-
-      expect(result, isNotNull);
-      expect(result?.audioData, isNotNull);
-      expect(result?.audioData?.length, greaterThan(0));
-    });
+    // generateAudio test removed as this method is now private
+    // Use generateSpeechSync or generateSpeech instead
 
     test('freeTTSModel frees a TTS model', () async {
       LlamaMobile llamaMobile = LlamaMobile();
@@ -1150,92 +1129,11 @@ void main() {
   });
 
   group('LlamaContext New Methods', () {
-    test('generateAudioFromText generates audio', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/chat_model.gguf',
-      );
-
-      List<double>? result = await context?.generateAudioFromText(
-        'Hello, this is a test.',
-        speakerJson: '{"speaker": "default"}',
-      );
-
-      expect(result, isNotNull);
-      expect(result?.length, greaterThan(0));
-    });
-
-    test('getFormattedAudioCompletion gets formatted completion', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/chat_model.gguf',
-      );
-
-      String? result = await context?.getFormattedAudioCompletion(
-        '{"speaker": "default"}',
-        'Hello, this is a test.',
-      );
-
-      expect(result, isNotNull);
-      expect(result, 'Formatted audio completion');
-    });
-
-    test('getAudioGuideTokens gets guide tokens', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/chat_model.gguf',
-      );
-
-      List<int>? result = await context?.getAudioGuideTokens(
-        'Hello, this is a test.',
-      );
-
-      expect(result, isNotNull);
-      expect(result?.length, greaterThan(0));
-    });
-
-    test('setGuideTokens sets guide tokens', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/chat_model.gguf',
-      );
-
-      await context?.setGuideTokens([1, 2, 3, 4, 5]);
-
-      expect(true, isTrue);
-    });
-
-    test('decodeAudioTokens decodes tokens', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/chat_model.gguf',
-      );
-
-      List<double>? result = await context?.decodeAudioTokens([1, 2, 3, 4, 5]);
-
-      expect(result, isNotNull);
-      expect(result?.length, greaterThan(0));
-    });
+    // generateAudioFromText test removed as this method is now private
+    // getFormattedAudioCompletion test removed as this method is now private
+    // getAudioGuideTokens test removed as this method is now private
+    // setGuideTokens test removed as this method is now private
+    // decodeAudioTokens test removed as this method is now private
 
     test('initVocoder initializes vocoder', () async {
       LlamaMobile llamaMobile = LlamaMobile();

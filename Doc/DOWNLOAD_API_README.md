@@ -10,32 +10,39 @@ The Llama Mobile SDK provides a robust Download API that simplifies the process 
    - [iOS](#ios-download)
    - [Android Kotlin](#android-kotlin-download)
    - [Android Java](#android-java-download)
+   - [Flutter](#flutter-download)
 2. [Supporting Types](#supporting-types)
    - [iOS](#ios-download-types)
    - [Android Kotlin](#android-kotlin-download-types)
    - [Android Java](#android-java-download-types)
+   - [Flutter](#flutter-download-types)
 3. [Usage Examples](#usage-examples)
    - [iOS](#ios-download-examples)
    - [Android Kotlin](#android-kotlin-download-examples)
    - [Android Java](#android-java-download-examples)
+   - [Flutter](#flutter-download-examples)
 4. [Implementation Details](#implementation-details)
 5. [Best Practices](#best-practices)
    - [1. Use Background Threads](#use-background-threads)
      - [iOS](#ios-background-threads)
      - [Android Kotlin](#android-kotlin-background-threads)
      - [Android Java](#android-java-background-threads)
+     - [Flutter](#flutter-background-threads)
    - [2. Error Handling](#error-handling)
      - [iOS](#ios-error-handling)
      - [Android Kotlin](#android-kotlin-error-handling)
      - [Android Java](#android-java-error-handling)
+     - [Flutter](#flutter-error-handling)
    - [3. Storage Management](#storage-management)
      - [iOS](#ios-storage-management)
      - [Android Kotlin](#android-kotlin-storage-management)
      - [Android Java](#android-java-storage-management)
+     - [Flutter](#flutter-storage-management)
    - [4. Caching](#caching)
      - [iOS](#ios-caching)
      - [Android Kotlin](#android-kotlin-caching)
      - [Android Java](#android-java-caching)
+     - [Flutter](#flutter-caching)
 6. [Error Handling](#error-handling-section)
 7. [Security Considerations](#security-considerations)
 8. [Conclusion](#conclusion)
@@ -84,6 +91,58 @@ public static DownloadResult download(DownloadParams params)
 
 #### Returns:
 - `DownloadResult`: Contains download outcome, local path, and error information if applicable
+
+### Flutter {#flutter-download}
+
+#### Download Model from URL
+
+```dart
+Future<DownloadResult?> downloadModel({
+  required String url,
+  required String localPath,
+  String? username,
+  String? password,
+  Map<String, String>? headers,
+})
+```
+
+#### Download Model with Params
+
+```dart
+Future<DownloadResult?> downloadModelWithParams(DownloadParams params)
+```
+
+#### Download from Hugging Face
+
+```dart
+Future<DownloadResult?> downloadHfFile({
+  required String repoId,
+  required String filename,
+  required String localPath,
+  String? bearerToken,
+  bool? offline,
+})
+```
+
+#### Download from Hugging Face with Params
+
+```dart
+Future<DownloadResult?> downloadHfFileWithParams(HuggingFaceDownloadParams params)
+```
+
+#### Parameters:
+- `url`: URL to download the model from
+- `localPath`: Local path to save the model
+- `username`: Username for authentication (optional)
+- `password`: Password for authentication (optional)
+- `headers`: Additional HTTP headers (optional)
+- `repoId`: Hugging Face repository ID
+- `filename`: Filename to download
+- `bearerToken`: Hugging Face authentication token (optional)
+- `offline`: Use cached version if available (default: false)
+
+#### Returns:
+- `DownloadResult?`: Contains download outcome, local path, and error information if applicable
 
 ## Supporting Types
 
@@ -282,6 +341,92 @@ public static class DownloadResult {
     public boolean isSuccess() { return success; }
     public String getLocalPath() { return localPath; }
     public String getErrorMessage() { return errorMessage; }
+}
+```
+
+### Flutter {#flutter-download-types}
+
+#### DownloadParams
+
+```dart
+class DownloadParams {
+  final String url;
+  final String localPath;
+  final String? username;
+  final String? password;
+  final Map<String, String>? headers;
+
+  DownloadParams({
+    required this.url,
+    required this.localPath,
+    this.username,
+    this.password,
+    this.headers,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'url': url,
+      'localPath': localPath,
+      'username': username,
+      'password': password,
+      'headers': headers,
+    };
+  }
+}
+```
+
+#### HuggingFaceDownloadParams
+
+```dart
+class HuggingFaceDownloadParams {
+  final String repoId;
+  final String filename;
+  final String localPath;
+  final String? bearerToken;
+  final bool offline;
+
+  HuggingFaceDownloadParams({
+    required this.repoId,
+    required this.filename,
+    required this.localPath,
+    this.bearerToken,
+    this.offline = false,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'repoId': repoId,
+      'filename': filename,
+      'localPath': localPath,
+      'bearerToken': bearerToken,
+      'offline': offline,
+    };
+  }
+}
+```
+
+#### DownloadResult
+
+```dart
+class DownloadResult {
+  final bool success;
+  final String localPath;
+  final String? errorMessage;
+
+  DownloadResult({
+    required this.success,
+    required this.localPath,
+    this.errorMessage,
+  });
+
+  factory DownloadResult.fromMap(Map<String, dynamic> map) {
+    return DownloadResult(
+      success: map['success'] as bool,
+      localPath: map['localPath'] as String,
+      errorMessage: map['errorMessage'] as String?,
+    );
+  }
 }
 ```
 
@@ -601,6 +746,121 @@ public void downloadVocoderModel() {
 }
 ```
 
+### Flutter {#flutter-download-examples}
+
+#### 1. Basic Download from Hugging Face
+
+```dart
+import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
+
+final llamaMobile = LlamaMobile();
+
+final downloadResult = await llamaMobile.downloadHfFile(
+  repoId: 'meta-llama/Llama-3.2-1B-Instruct',
+  filename: 'Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+  localPath: '/tmp/Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+);
+
+if (downloadResult?.success == true) {
+  print('Model downloaded successfully to: ${downloadResult?.localPath}');
+  // Now you can load the model
+  final context = await llamaMobile.initContext(
+    modelPath: downloadResult!.localPath,
+  );
+} else {
+  print('Error downloading model: ${downloadResult?.errorMessage ?? "Unknown error"}');
+}
+```
+
+#### 2. Download from URL
+
+```dart
+final downloadResult = await llamaMobile.downloadModel(
+  url: 'https://example.com/model.gguf',
+  localPath: '/tmp/model.gguf',
+);
+
+if (downloadResult?.success == true) {
+  print('Model downloaded successfully to: ${downloadResult?.localPath}');
+} else {
+  print('Error downloading model: ${downloadResult?.errorMessage ?? "Unknown error"}');
+}
+```
+
+#### 3. Download with Authentication
+
+```dart
+final downloadResult = await llamaMobile.downloadHfFile(
+  repoId: 'username/private-model',
+  filename: 'private-model.gguf',
+  localPath: '/tmp/private-model.gguf',
+  bearerToken: 'your-huggingface-token', // Use your Hugging Face API token here
+);
+
+if (downloadResult?.success == true) {
+  print('Private model downloaded successfully to: ${downloadResult?.localPath}');
+} else {
+  print('Error downloading private model: ${downloadResult?.errorMessage ?? "Unknown error"}');
+}
+```
+
+#### 4. Downloading a Vocoder Model for TTS
+
+```dart
+final downloadResult = await llamaMobile.downloadHfFile(
+  repoId: 'facebook/tts-transformer',
+  filename: 'vocoder-model.gguf',
+  localPath: '/tmp/vocoder-model.gguf',
+);
+
+if (downloadResult?.success == true) {
+  print('Vocoder model downloaded successfully to: ${downloadResult?.localPath}');
+  // Now you can set this as the vocoder model path
+} else {
+  print('Error downloading vocoder model: ${downloadResult?.errorMessage ?? "Unknown error"}');
+}
+```
+
+#### 5. Using DownloadParams for More Control
+
+```dart
+final params = DownloadParams(
+  url: 'https://example.com/model.gguf',
+  localPath: '/tmp/model.gguf',
+  username: 'your-username',
+  password: 'your-password',
+  headers: {
+    'Authorization': 'Bearer your-token',
+    'Custom-Header': 'value',
+  },
+);
+
+final downloadResult = await llamaMobile.downloadModelWithParams(params);
+
+if (downloadResult?.success == true) {
+  print('Model downloaded successfully to: ${downloadResult?.localPath}');
+} else {
+  print('Error downloading model: ${downloadResult?.errorMessage ?? "Unknown error"}');
+}
+```
+
+#### 6. Offline Mode (Use Cached Version)
+
+```dart
+final downloadResult = await llamaMobile.downloadHfFile(
+  repoId: 'meta-llama/Llama-3.2-1B-Instruct',
+  filename: 'Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+  localPath: '/tmp/Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+  offline: true, // Use cached version if available
+);
+
+if (downloadResult?.success == true) {
+  print('Model loaded from cache: ${downloadResult?.localPath}');
+} else {
+  print('Error: ${downloadResult?.errorMessage ?? "Unknown error"}');
+}
+```
+
 ## Implementation Details
 
 ### How It Works
@@ -745,6 +1005,29 @@ public void downloadModelInBackground() {
 }
 ```
 
+#### Flutter {#flutter-background-threads}
+
+The Flutter SDK's download methods are asynchronous and won't block the UI thread. However, you should still handle the results properly:
+
+```dart
+Future<void> downloadModelInBackground() async {
+  final params = DownloadParams(
+    url: 'meta-llama/Llama-3.2-1B-Instruct',
+    localPath: '/tmp/Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+  );
+
+  final result = await llamaMobile.downloadModelWithParams(params);
+
+  if (result?.success == true) {
+    print('Model downloaded successfully to: ${result?.localPath}');
+    // Update UI to reflect success
+  } else {
+    print('Error downloading model: ${result?.errorMessage ?? "Unknown error"}');
+    // Update UI to reflect error
+  }
+}
+```
+
 ### 2. Error Handling {#error-handling}
 
 #### iOS {#ios-error-handling}
@@ -774,6 +1057,41 @@ The Android SDK provides detailed error messages for common scenarios:
 - **Unknown Host**: "No internet connection. Please check your network settings."
 - **IOException**: "Download failed: {error_message}"
 - **HTTP Errors**: "HTTP error: {status_code}"
+
+#### Flutter {#flutter-error-handling}
+
+The Flutter SDK provides detailed error messages for common scenarios:
+
+- **Network Connection Lost**: Check for network errors in the result
+- **Connection Timeout**: Timeout errors are returned in errorMessage
+- **No Internet Connection**: Network-related errors
+- **HTTP Errors**: HTTP status code errors
+- **File System Errors**: File system-related errors
+
+Example error handling:
+
+```dart
+final result = await llamaMobile.downloadModel(
+  url: 'https://example.com/model.gguf',
+  localPath: '/tmp/model.gguf',
+);
+
+if (result?.success == true) {
+  print('Model downloaded successfully');
+} else {
+  final error = result?.errorMessage ?? 'Unknown error';
+  print('Error downloading model: $error');
+  
+  // Handle specific errors
+  if (error.contains('network') || error.contains('connection')) {
+    print('Please check your internet connection');
+  } else if (error.contains('timeout')) {
+    print('Connection timed out. Please try again');
+  } else if (error.contains('HTTP')) {
+    print('Server error. Please try again later');
+  }
+}
+```
 
 ### 3. Storage Management {#storage-management}
 
@@ -814,6 +1132,21 @@ File modelsPath = new File(modelsDir, "Models");
 
 // Use cache directory for temporary files
 File cacheDir = context.getCacheDir();
+```
+
+#### Flutter {#flutter-storage-management}
+
+Flutter apps should use appropriate directories for storing downloaded models:
+
+```dart
+import 'package:path_provider/path_provider.dart';
+
+// Use application documents directory for persistent storage
+final documentsDir = await getApplicationDocumentsDirectory();
+final modelsDir = Directory('${documentsDir.path}/models');
+
+// Use temporary directory for temporary files
+final tempDir = await getTemporaryDirectory();
 ```
 
 ### 4. Caching {#caching}
@@ -890,6 +1223,46 @@ public void downloadModelWithCache() {
     
     LlamaMobile.download(params);
 }
+```
+
+#### Flutter {#flutter-caching}
+
+Consider implementing caching for frequently downloaded models:
+
+```dart
+Future<DownloadResult?> downloadModelWithCache() async {
+  final cacheKey = 'meta-llama/Llama-3.2-1B-Instruct';
+  final cacheDir = await getTemporaryDirectory();
+  final cachePath = File('${cacheDir.path}/$cacheKey');
+  
+  if (await cachePath.exists()) {
+    print('Model found in cache: ${cachePath.path}');
+    return DownloadResult(
+      success: true,
+      localPath: cachePath.path,
+    );
+  }
+  
+  // Download to cache
+  final result = await llamaMobile.downloadHfFile(
+    repoId: 'meta-llama/Llama-3.2-1B-Instruct',
+    filename: 'Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+    localPath: cachePath.path,
+  );
+  
+  return result;
+}
+```
+
+Or use the built-in offline mode for Hugging Face downloads:
+
+```dart
+final result = await llamaMobile.downloadHfFile(
+  repoId: 'meta-llama/Llama-3.2-1B-Instruct',
+  filename: 'Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+  localPath: '/tmp/model.gguf',
+  offline: true, // Use cached version if available
+);
 ```
 
 ## Error Handling {#error-handling-section}

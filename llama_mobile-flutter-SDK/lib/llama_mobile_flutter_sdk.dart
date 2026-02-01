@@ -1302,9 +1302,9 @@ class LlamaContext {
   ///
   /// Returns:
   /// An [AudioResult] object containing the generated audio data and format information.
-  Future<AudioResult?> generateAudio(String text) async {
+  Future<AudioResult?> _generateAudio(String text) async {
     print(
-      "[DEBUG] Dart LlamaContext: generateAudio called - text: $text, contextHandle: $_contextHandle",
+      "[DEBUG] Dart LlamaContext: _generateAudio called - text: $text, contextHandle: $_contextHandle",
     );
 
     try {
@@ -1314,7 +1314,7 @@ class LlamaContext {
       );
 
       print(
-        "[DEBUG] Dart LlamaContext: generateAudio result received: $result",
+        "[DEBUG] Dart LlamaContext: _generateAudio result received: $result",
       );
 
       if (result != null) {
@@ -1335,7 +1335,7 @@ class LlamaContext {
       print("[DEBUG] Dart LlamaContext: TTS Audio Generated NULL");
       return null;
     } catch (e) {
-      print("[DEBUG] Dart LlamaContext: Error in generateAudio: $e");
+      print("[DEBUG] Dart LlamaContext: Error in _generateAudio: $e");
       rethrow;
     }
   }
@@ -1440,7 +1440,7 @@ class LlamaContext {
   ///
   /// Returns:
   /// A list of floating-point audio samples, or null if an error occurred.
-  Future<List<double>?> generateAudioFromText(
+  Future<List<double>?> _generateAudioFromText(
     String text, {
     String speakerJson = '{"speaker": "default"}',
   }) async {
@@ -1459,7 +1459,7 @@ class LlamaContext {
   ///
   /// Returns:
   /// The formatted audio completion string, or null if an error occurred.
-  Future<String?> getFormattedAudioCompletion(
+  Future<String?> _getFormattedAudioCompletion(
     String speakerJson,
     String textToSpeak,
   ) async {
@@ -1474,7 +1474,7 @@ class LlamaContext {
   ///
   /// Returns:
   /// A list of guide tokens, or null if an error occurred.
-  Future<List<int>?> getAudioGuideTokens(String textToSpeak) async {
+  Future<List<int>?> _getAudioGuideTokens(String textToSpeak) async {
     return await LlamaMobileFlutterSdkPlatform.instance.getAudioGuideTokens(
       _contextHandle,
       textToSpeak,
@@ -1485,7 +1485,7 @@ class LlamaContext {
   ///
   /// Parameters:
   /// - [tokens]: Guide tokens to set for audio generation.
-  Future<void> setGuideTokens(List<int> tokens) async {
+  Future<void> _setGuideTokens(List<int> tokens) async {
     await LlamaMobileFlutterSdkPlatform.instance.setGuideTokens(
       _contextHandle,
       tokens,
@@ -1499,7 +1499,7 @@ class LlamaContext {
   ///
   /// Returns:
   /// A list of floating-point audio samples, or null if an error occurred.
-  Future<List<double>?> decodeAudioTokens(List<int> tokens) async {
+  Future<List<double>?> _decodeAudioTokens(List<int> tokens) async {
     return await LlamaMobileFlutterSdkPlatform.instance.decodeAudioTokens(
       _contextHandle,
       tokens,

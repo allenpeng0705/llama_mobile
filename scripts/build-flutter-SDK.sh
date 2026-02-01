@@ -106,7 +106,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # DRY RUN MODE - Set to true to see what would happen without executing
-DRY_RUN=true
+DRY_RUN=false
 
 # Function to execute command (or just log in dry run mode)
 execute_command() {
@@ -474,7 +474,7 @@ copy_sdk_to_output() {
     # Simple and safe copy using cp -r
     # Copy entire directory structure without complex excludes
     log_message "[INFO] Starting copy: cp -r \"$sdk_dir\" \"$output_sdk_dir\""
-    cp -r "$sdk_dir" "$output_sdk_dir"
+    rsync -a --copy-links --exclude='.symlinks' "$sdk_dir/" "$output_sdk_dir/"
     log_message "[INFO] Copy completed successfully"
     
     # Remove build artifacts from output (safe to delete)
@@ -528,6 +528,30 @@ fi
 
 flutter clean
 flutter pub get
+
+# Sync version from llama_mobile_version.h to pubspec.yaml
+log_message "[INFO] Syncing version from llama_mobile_version.h..."
+VERSION_FILE="$ROOT_DIR/lib/llama_mobile_version.h"
+PUBSPEC_FILE="$ROOT_DIR/llama_mobile-flutter-SDK/pubspec.yaml"
+
+if [ ! -f "$VERSION_FILE" ]; then
+    log_message "[ERROR] Version file not found: $VERSION_FILE"
+else
+    if [ ! -f "$PUBSPEC_FILE" ]; then
+        log_message "[ERROR] pubspec.yaml not found: $PUBSPEC_FILE"
+    else
+        MAJOR=$(grep "^#define LLAMA_MOBILE_VERSION_MAJOR" "$VERSION_FILE" | awk '{print $3}')
+        MINOR=$(grep "^#define LLAMA_MOBILE_VERSION_MINOR" "$VERSION_FILE" | awk '{print $3}')
+        PATCH=$(grep "^#define LLAMA_MOBILE_VERSION_PATCH" "$VERSION_FILE" | awk '{print $3}')
+        
+        VERSION_STRING="${MAJOR}.${MINOR}.${PATCH}"
+        
+        log_message "[INFO] Extracted version from llama_mobile_version.h: $VERSION_STRING"
+        sed -i '' "s/^version: .*/version: ${VERSION_STRING}/" "$PUBSPEC_FILE"
+        
+        log_message "[INFO] Updated pubspec.yaml version to: $VERSION_STRING"
+    fi
+fi
 log_message "[SUCCESS] Flutter SDK cleaned"
 
 # Check iOS framework exists

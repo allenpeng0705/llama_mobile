@@ -1111,16 +1111,38 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
         let speechResult = llamaMobile.generateSpeechSync(text: text, options: options)
 
         switch speechResult {
-        case .success(let result):
+        case .success(let speechResult):
+            let methodUsed = speechResult.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
             result([
-                "audioSamples": result.audioSamples,
-                "sampleRate": result.sampleRate,
-                "duration": result.duration,
-                "outputFilePath": result.outputFilePath ?? NSNull(),
-                "methodUsed": result.methodUsed.rawValue
+                "audioSamples": speechResult.audioSamples,
+                "sampleRate": speechResult.sampleRate,
+                "duration": speechResult.duration,
+                "outputFilePath": speechResult.outputFilePath ?? NSNull(),
+                "methodUsed": methodUsed
             ])
         case .failure(let error):
-            result(FlutterError(code: "SPEECH_GENERATION_FAILED", message: error.message, details: nil))
+            var errorMessage = "Unknown error"
+            switch error {
+            case .noModelLoaded:
+                errorMessage = "No model loaded"
+            case .noVocoderEnabled:
+                errorMessage = "No vocoder enabled"
+            case .invalidText:
+                errorMessage = "Invalid text"
+            case .generationFailed:
+                errorMessage = "Generation failed"
+            case .formattingFailed:
+                errorMessage = "Formatting failed"
+            case .tokenizationFailed:
+                errorMessage = "Tokenization failed"
+            case .audioDecodingFailed:
+                errorMessage = "Audio decoding failed"
+            case .fileSaveFailed:
+                errorMessage = "File save failed"
+            case .unknownError(let message):
+                errorMessage = message
+            }
+            result(FlutterError(code: "SPEECH_GENERATION_FAILED", message: errorMessage, details: nil))
         }
     }
 
@@ -1140,16 +1162,38 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
             let speechResult = await llamaMobile.generateSpeech(text: text, options: options)
 
             switch speechResult {
-            case .success(let result):
+            case .success(let speechResult):
+                let methodUsed = speechResult.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
                 result([
-                    "audioSamples": result.audioSamples,
-                    "sampleRate": result.sampleRate,
-                    "duration": result.duration,
-                    "outputFilePath": result.outputFilePath ?? NSNull(),
-                    "methodUsed": result.methodUsed.rawValue
+                    "audioSamples": speechResult.audioSamples,
+                    "sampleRate": speechResult.sampleRate,
+                    "duration": speechResult.duration,
+                    "outputFilePath": speechResult.outputFilePath ?? NSNull(),
+                    "methodUsed": methodUsed
                 ])
             case .failure(let error):
-                result(FlutterError(code: "SPEECH_GENERATION_FAILED", message: error.message, details: nil))
+                var errorMessage = "Unknown error"
+                switch error {
+                case .noModelLoaded:
+                    errorMessage = "No model loaded"
+                case .noVocoderEnabled:
+                    errorMessage = "No vocoder enabled"
+                case .invalidText:
+                    errorMessage = "Invalid text"
+                case .generationFailed:
+                    errorMessage = "Generation failed"
+                case .formattingFailed:
+                    errorMessage = "Formatting failed"
+                case .tokenizationFailed:
+                    errorMessage = "Tokenization failed"
+                case .audioDecodingFailed:
+                    errorMessage = "Audio decoding failed"
+                case .fileSaveFailed:
+                    errorMessage = "File save failed"
+                case .unknownError(let message):
+                    errorMessage = message
+                }
+                result(FlutterError(code: "SPEECH_GENERATION_FAILED", message: errorMessage, details: nil))
             }
         }
     }
@@ -1167,7 +1211,7 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
         let options = parseTTSOptions(optionsDict)
 
         Task {
-            let speechResult = await llamaMobile.generateSpeechStream(
+            let speechResult = await llamaMobile.generateSpeechStreamForLongText(
                 text: text,
                 options: options,
                 progressHandler: { progress in
@@ -1180,14 +1224,36 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
 
             switch speechResult {
             case .success(let metadata):
+                let methodUsed = metadata.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
                 result([
                     "sampleRate": metadata.sampleRate,
                     "duration": metadata.duration,
                     "outputFilePath": metadata.outputFilePath ?? NSNull(),
-                    "methodUsed": metadata.methodUsed.rawValue
+                    "methodUsed": methodUsed
                 ])
             case .failure(let error):
-                result(FlutterError(code: "SPEECH_STREAM_FAILED", message: error.message, details: nil))
+                var errorMessage = "Unknown error"
+                switch error {
+                case .noModelLoaded:
+                    errorMessage = "No model loaded"
+                case .noVocoderEnabled:
+                    errorMessage = "No vocoder enabled"
+                case .invalidText:
+                    errorMessage = "Invalid text"
+                case .generationFailed:
+                    errorMessage = "Generation failed"
+                case .formattingFailed:
+                    errorMessage = "Formatting failed"
+                case .tokenizationFailed:
+                    errorMessage = "Tokenization failed"
+                case .audioDecodingFailed:
+                    errorMessage = "Audio decoding failed"
+                case .fileSaveFailed:
+                    errorMessage = "File save failed"
+                case .unknownError(let message):
+                    errorMessage = message
+                }
+                result(FlutterError(code: "SPEECH_STREAM_FAILED", message: errorMessage, details: nil))
             }
         }
     }
@@ -1218,27 +1284,49 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
 
             switch speechResult {
             case .success(let metadata):
+                let methodUsed = metadata.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
                 result([
                     "sampleRate": metadata.sampleRate,
                     "duration": metadata.duration,
                     "outputFilePath": metadata.outputFilePath ?? NSNull(),
-                    "methodUsed": metadata.methodUsed.rawValue
+                    "methodUsed": methodUsed
                 ])
             case .failure(let error):
-                result(FlutterError(code: "SPEECH_STREAM_FAILED", message: error.message, details: nil))
+                var errorMessage = "Unknown error"
+                switch error {
+                case .noModelLoaded:
+                    errorMessage = "No model loaded"
+                case .noVocoderEnabled:
+                    errorMessage = "No vocoder enabled"
+                case .invalidText:
+                    errorMessage = "Invalid text"
+                case .generationFailed:
+                    errorMessage = "Generation failed"
+                case .formattingFailed:
+                    errorMessage = "Formatting failed"
+                case .tokenizationFailed:
+                    errorMessage = "Tokenization failed"
+                case .audioDecodingFailed:
+                    errorMessage = "Audio decoding failed"
+                case .fileSaveFailed:
+                    errorMessage = "File save failed"
+                case .unknownError(let message):
+                    errorMessage = message
+                }
+                result(FlutterError(code: "SPEECH_STREAM_FAILED", message: errorMessage, details: nil))
             }
         }
     }
 
-    private func parseTTSOptions(_ optionsDict: [String: Any]?) -> TTSOptions {
+    private func parseTTSOptions(_ optionsDict: [String: Any]?) -> LlamaMobile.TTSOptions {
         guard let optionsDict = optionsDict else {
-            return TTSOptions()
+            return LlamaMobile.TTSOptions()
         }
 
-        return TTSOptions(
+        return LlamaMobile.TTSOptions(
             sampleRate: optionsDict["sampleRate"] as? Int ?? 24000,
             voice: optionsDict["voice"] as? String,
-            speed: optionsDict["speed"] as? Double ?? 1.0,
+            speed: Float(optionsDict["speed"] as? Double ?? 1.0),
             saveToFile: optionsDict["saveToFile"] as? Bool ?? false,
             outputFilePath: optionsDict["outputFilePath"] as? String
         )

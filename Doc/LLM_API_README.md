@@ -604,6 +604,154 @@ public void loadModelAdvanced() {
 }
 ```
 
+### Flutter {#flutter-loading}
+
+#### Initialization Methods
+
+##### Basic Initialization
+
+```dart
+Future<LlamaContext?> initContext({
+  required String modelPath,
+  String? chatTemplate,
+  String? systemPrompt,
+  int nCtx = 2048,
+  int nBatch = 512,
+  int nUBatch = 512,
+  int nGpuLayers = 0,
+  int nThreads = 4,
+  bool useMmap = true,
+  bool useMlock = false,
+  bool embedding = false,
+  int poolingType = 0,
+  int embdNormalize = 0,
+  bool flashAttention = false,
+  String? cacheTypeK,
+  String? cacheTypeV,
+  bool enableChatTemplate = true,
+})
+```
+
+##### Advanced Initialization
+
+```dart
+Future<LlamaContext?> initContextWithParams(InitParams params)
+```
+
+#### InitParams Structure
+
+```dart
+class InitParams {
+  final String modelPath;
+  final String? chatTemplate;
+  final String? systemPrompt;
+  final int nCtx;
+  final int nBatch;
+  final int nUBatch;
+  final int nGpuLayers;
+  final int nThreads;
+  final bool useMmap;
+  final bool useMlock;
+  final bool embedding;
+  final int poolingType;
+  final int embdNormalize;
+  final bool flashAttention;
+  final String? cacheTypeK;
+  final String? cacheTypeV;
+  final bool enableChatTemplate;
+
+  InitParams({
+    required this.modelPath,
+    this.chatTemplate,
+    this.systemPrompt,
+    this.nCtx = 2048,
+    this.nBatch = 512,
+    this.nUBatch = 512,
+    this.nGpuLayers = 0,
+    this.nThreads = 4,
+    this.useMmap = true,
+    this.useMlock = false,
+    this.embedding = false,
+    this.poolingType = 0,
+    this.embdNormalize = 0,
+    this.flashAttention = false,
+    this.cacheTypeK,
+    this.cacheTypeV,
+    this.enableChatTemplate = true,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'modelPath': modelPath,
+      'chatTemplate': chatTemplate,
+      'systemPrompt': systemPrompt,
+      'nCtx': nCtx,
+      'nBatch': nBatch,
+      'nUBatch': nUBatch,
+      'nGpuLayers': nGpuLayers,
+      'nThreads': nThreads,
+      'useMmap': useMmap,
+      'useMlock': useMlock,
+      'embedding': embedding,
+      'poolingType': poolingType,
+      'embdNormalize': embdNormalize,
+      'flashAttention': flashAttention,
+      'cacheTypeK': cacheTypeK,
+      'cacheTypeV': cacheTypeV,
+      'enableChatTemplate': enableChatTemplate,
+    };
+  }
+}
+```
+
+#### Usage Examples
+
+##### Basic Model Loading
+
+```dart
+import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
+
+final llamaMobile = LlamaMobile();
+
+final context = await llamaMobile.initContext(
+  modelPath: 'assets/models/your-model.gguf',
+  nCtx: 2048,
+  nGpuLayers: 4,
+  nThreads: 4,
+);
+
+if (context != null) {
+  print('Model loaded successfully');
+  // Use the model for completions, embeddings, etc.
+} else {
+  print('Failed to load model');
+}
+```
+
+##### Advanced Model Loading
+
+```dart
+final params = InitParams(
+  modelPath: 'assets/models/your-model.gguf',
+  nCtx: 4096,
+  nBatch: 1024,
+  nGpuLayers: 4,
+  nThreads: 4,
+  useMmap: true,
+  flashAttention: true,
+  enableChatTemplate: true,
+  systemPrompt: 'You are a helpful assistant',
+);
+
+final context = await llamaMobile.initContextWithParams(params);
+
+if (context != null) {
+  print('Model loaded successfully with advanced parameters');
+} else {
+  print('Failed to load model');
+}
+```
+
 ## 2. Completion APIs
 
 ### Core Completion Method
@@ -1537,6 +1685,280 @@ public void generateOpenAICompletion() {
 }
 ```
 
+### Flutter {#flutter-completion}
+
+#### Core Completion Methods
+
+##### Basic Completion
+
+```dart
+Future<CompletionResult?> generateCompletion({
+  required String prompt,
+  int maxTokens = 1024,
+  int? nThreads,
+  int seed = -1,
+  double temperature = 0.8,
+  int topK = 40,
+  double topP = 0.95,
+  double minP = 0.05,
+  double typicalP = 1.0,
+  int penaltyLastN = 64,
+  double penaltyRepeat = 1.1,
+  double penaltyFreq = 0.0,
+  double penaltyPresent = 0.0,
+  int mirostat = 0,
+  double mirostatTau = 5.0,
+  double mirostatEta = 0.1,
+  bool ignoreEos = false,
+  List<String> stopSequences = const [],
+  String? grammar,
+  bool useJsonResponse = true,
+  String? chatTemplate,
+})
+```
+
+##### Completion with Params
+
+```dart
+Future<CompletionResult?> generateCompletionWithParams(CompletionParams params)
+```
+
+##### Streaming Completion
+
+```dart
+Future<CompletionResult?> generateStreamingCompletion({
+  required String prompt,
+  int maxTokens = 1024,
+  int? nThreads,
+  int seed = -1,
+  double temperature = 0.8,
+  int topK = 40,
+  double topP = 0.95,
+  double minP = 0.05,
+  double typicalP = 1.0,
+  int penaltyLastN = 64,
+  double penaltyRepeat = 1.1,
+  double penaltyFreq = 0.0,
+  double penaltyPresent = 0.0,
+  int mirostat = 0,
+  double mirostatTau = 5.0,
+  double mirostatEta = 0.1,
+  bool ignoreEos = false,
+  List<String> stopSequences = const [],
+  String? grammar,
+  bool useJsonResponse = true,
+  String? chatTemplate,
+})
+```
+
+##### Conversation Generation
+
+```dart
+Future<ConversationResult?> generateConversation({
+  required List<ChatMessage> chatMessages,
+  int maxTokens = 1024,
+  int? nThreads,
+  int seed = -1,
+  double temperature = 0.8,
+  int topK = 40,
+  double topP = 0.95,
+  double minP = 0.05,
+  double typicalP = 1.0,
+  int penaltyLastN = 64,
+  double penaltyRepeat = 1.1,
+  double penaltyFreq = 0.0,
+  double penaltyPresent = 0.0,
+  int mirostat = 0,
+  double mirostatTau = 5.0,
+  double mirostatEta = 0.1,
+  bool ignoreEos = false,
+  List<String> stopSequences = const [],
+  String? grammar,
+  bool useJsonResponse = true,
+  String? chatTemplate,
+})
+```
+
+##### OpenAI-Compatible Completion
+
+```dart
+Future<CompletionResult?> generateOpenAICompletion({
+  required String openAIJSON,
+  String? grammar,
+})
+```
+
+#### CompletionParams Structure
+
+```dart
+class CompletionParams {
+  final String prompt;
+  final int maxTokens;
+  final int? nThreads;
+  final int seed;
+  final double temperature;
+  final int topK;
+  final double topP;
+  final double minP;
+  final double typicalP;
+  final int penaltyLastN;
+  final double penaltyRepeat;
+  final double penaltyFreq;
+  final double penaltyPresent;
+  final int mirostat;
+  final double mirostatTau;
+  final double mirostatEta;
+  final bool ignoreEos;
+  final List<String> stopSequences;
+  final String? grammar;
+  final bool useJsonResponse;
+  final int nProbs;
+  final String? jsonSchema;
+  final String? tools;
+  final bool parallelToolCalls;
+  final String? toolChoice;
+  final List<String> mediaPaths;
+  final List<ChatMessage> chatMessages;
+  final String? chatTemplate;
+
+  CompletionParams({
+    required this.prompt,
+    this.maxTokens = 1024,
+    this.nThreads,
+    this.seed = -1,
+    this.temperature = 0.8,
+    this.topK = 40,
+    this.topP = 0.95,
+    this.minP = 0.05,
+    this.typicalP = 1.0,
+    this.penaltyLastN = 64,
+    this.penaltyRepeat = 1.1,
+    this.penaltyFreq = 0.0,
+    this.penaltyPresent = 0.0,
+    this.mirostat = 0,
+    this.mirostatTau = 5.0,
+    this.mirostatEta = 0.1,
+    this.ignoreEos = false,
+    this.stopSequences = const [],
+    this.grammar,
+    this.useJsonResponse = true,
+    this.nProbs = 0,
+    this.jsonSchema,
+    this.tools,
+    this.parallelToolCalls = false,
+    this.toolChoice,
+    this.mediaPaths = const [],
+    this.chatMessages = const [],
+    this.chatTemplate,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'prompt': prompt,
+      'maxTokens': maxTokens,
+      'nThreads': nThreads,
+      'seed': seed,
+      'temperature': temperature,
+      'topK': topK,
+      'topP': topP,
+      'minP': minP,
+      'typicalP': typicalP,
+      'penaltyLastN': penaltyLastN,
+      'penaltyRepeat': penaltyRepeat,
+      'penaltyFreq': penaltyFreq,
+      'penaltyPresent': penaltyPresent,
+      'mirostat': mirostat,
+      'mirostatTau': mirostatTau,
+      'mirostatEta': mirostatEta,
+      'ignoreEos': ignoreEos,
+      'stopSequences': stopSequences,
+      'grammar': grammar,
+      'useJsonResponse': useJsonResponse,
+      'nProbs': nProbs,
+      'jsonSchema': jsonSchema,
+      'tools': tools,
+      'parallelToolCalls': parallelToolCalls,
+      'toolChoice': toolChoice,
+      'mediaPaths': mediaPaths,
+      'chatMessages': chatMessages.map((m) => m.toMap()).toList(),
+      'chatTemplate': chatTemplate,
+    };
+  }
+}
+```
+
+#### Usage Examples
+
+##### Basic Completion
+
+```dart
+final result = await context?.generateCompletion(
+  prompt: 'Hello, how are you?',
+  maxTokens: 128,
+  temperature: 0.8,
+  topP: 0.95,
+  topK: 40,
+);
+
+if (result != null) {
+  print('Generated: ${result.text}');
+}
+```
+
+##### Conversation
+
+```dart
+final messages = [
+  ChatMessage(role: 'user', content: 'Hello, what is AI?'),
+];
+
+final response = await context?.generateConversation(
+  chatMessages: messages,
+  maxTokens: 256,
+);
+
+if (response != null) {
+  print('Response: ${response.text}');
+}
+```
+
+##### Streaming Completion
+
+```dart
+final result = await context?.generateStreamingCompletion(
+  prompt: 'Tell me a story',
+  maxTokens: 512,
+);
+
+if (result != null) {
+  print('Generated: ${result.text}');
+}
+```
+
+##### OpenAI-Compatible Completion
+
+```dart
+final openAIJSON = '''
+{
+  "model": "gpt-3.5-turbo",
+  "messages": [
+    {"role": "system", "content": "You are a helpful assistant."},
+    {"role": "user", "content": "Tell me a joke about computers."}
+  ],
+  "max_tokens": 150,
+  "temperature": 0.7
+}
+''';
+
+final result = await context?.generateOpenAICompletion(
+  openAIJSON: openAIJSON,
+);
+
+if (result != null) {
+  print('Generated: ${result.text}');
+}
+```
+
 ## Multimodal APIs
 
 ### Multimodal Completion
@@ -1722,6 +2144,80 @@ public void analyzeMultipleImages() {
     } else {
         System.out.println("Failed to analyze images");
     }
+}
+```
+
+### Flutter {#flutter-multimodal}
+
+#### Multimodal Completion
+
+```dart
+Future<CompletionResult?> generateMultimodalCompletion({
+  required String prompt,
+  required List<String> mediaPaths,
+  int maxTokens = 1024,
+  int? nThreads,
+  int seed = -1,
+  double temperature = 0.8,
+  int topK = 40,
+  double topP = 0.95,
+  double minP = 0.05,
+  double typicalP = 1.0,
+  int penaltyLastN = 64,
+  double penaltyRepeat = 1.1,
+  double penaltyFreq = 0.0,
+  double penaltyPresent = 0.0,
+  int mirostat = 0,
+  double mirostatTau = 5.0,
+  double mirostatEta = 0.1,
+  bool ignoreEos = false,
+  List<String> stopSequences = const [],
+  String? grammar,
+  bool useJsonResponse = true,
+  String? chatTemplate,
+})
+```
+
+#### Usage Examples
+
+##### Image Analysis
+
+```dart
+final imagePath = 'assets/images/cat.jpg';
+
+final result = await context?.generateMultimodalCompletion(
+  prompt: 'Describe this image in detail.',
+  mediaPaths: [imagePath],
+  maxTokens: 500,
+  temperature: 0.7,
+);
+
+if (result != null) {
+  print('Image description: ${result.text}');
+} else {
+  print('Failed to analyze image');
+}
+```
+
+##### Multiple Media Analysis
+
+```dart
+final imagePaths = [
+  'assets/images/cat.jpg',
+  'assets/images/dog.jpg',
+];
+
+final result = await context?.generateMultimodalCompletion(
+  prompt: 'Compare these two images and describe the differences.',
+  mediaPaths: imagePaths,
+  maxTokens: 600,
+  temperature: 0.7,
+);
+
+if (result != null) {
+  print('Comparison: ${result.text}');
+} else {
+  print('Failed to analyze images');
 }
 ```
 
@@ -1964,6 +2460,94 @@ public double cosineSimilarity(float[] vector1, float[] vector2) {
 }
 ```
 
+### Flutter {#flutter-embedding}
+
+#### Generate Embeddings
+
+```dart
+Future<List<double>?> generateEmbedding(String text)
+```
+
+#### Get Embedding Dimension
+
+```dart
+Future<int?> getEmbeddingDimension()
+```
+
+#### Usage Examples
+
+##### Basic Embedding Generation
+
+```dart
+final text = 'The quick brown fox jumps over the lazy dog';
+
+final embedding = await context?.generateEmbedding(text);
+
+if (embedding != null) {
+  print('Embedding generated successfully');
+  print('Embedding dimension: ${embedding.length}');
+  print('First 5 values: ${embedding.take(5)}');
+} else {
+  print('Failed to generate embedding');
+}
+```
+
+##### Semantic Search with Embeddings
+
+```dart
+final query = 'What is artificial intelligence?';
+final documents = [
+  'AI is the simulation of human intelligence by machines.',
+  'Machine learning is a subset of AI.',
+  'Deep learning uses neural networks.',
+];
+
+final queryEmbedding = await context?.generateEmbedding(query);
+final documentEmbeddings = await Future.wait(
+  documents.map((doc) => context?.generateEmbedding(doc)),
+);
+
+if (queryEmbedding != null && documentEmbeddings.every((e) => e != null)) {
+  final similarities = documentEmbeddings.asMap().entries.map((entry) {
+    final idx = entry.key;
+    final docEmbedding = entry.value!;
+    return {
+      'document': documents[idx],
+      'similarity': cosineSimilarity(queryEmbedding!, docEmbedding),
+    };
+  }).toList();
+
+  final sorted = similarities.toList()
+    ..sort((a, b) => (b['similarity'] as double).compareTo(a['similarity'] as double));
+
+  print('Most similar document:');
+  print('${sorted.first['document']}');
+  print('Similarity: ${sorted.first['similarity']}');
+}
+```
+
+##### Cosine Similarity Helper
+
+```dart
+double cosineSimilarity(List<double> vector1, List<double> vector2) {
+  if (vector1.length != vector2.length) return 0.0;
+
+  double dotProduct = 0.0;
+  double norm1 = 0.0;
+  double norm2 = 0.0;
+
+  for (int i = 0; i < vector1.length; i++) {
+    dotProduct += vector1[i] * vector2[i];
+    norm1 += vector1[i] * vector1[i];
+    norm2 += vector2[i] * vector2[i];
+  }
+
+  if (norm1 <= 0.0 || norm2 <= 0.0) return 0.0;
+
+  return dotProduct / (sqrt(norm1) * sqrt(norm2));
+}
+```
+
 ## 5. Vocoder Load APIs
 
 ### iOS {#ios-vocoder}
@@ -2140,6 +2724,272 @@ public void checkVocoderStatus() {
 public void cleanupVocoder() {
     LlamaMobile.releaseVocoder();
     System.out.println("Vocoder resources released");
+}
+```
+
+### Flutter {#flutter-vocoder}
+
+#### Initialize Vocoder
+
+```dart
+Future<bool> initVocoder(String vocoderModelPath)
+```
+
+#### Check Vocoder Status
+
+```dart
+Future<bool> isVocoderEnabled()
+```
+
+#### Release Vocoder
+
+```dart
+Future<void> releaseVocoder()
+```
+
+#### Usage Examples
+
+##### Initialize Vocoder for TTS
+
+```dart
+final vocoderPath = 'assets/models/vocoder-model.gguf';
+
+final success = await context?.initVocoder(vocoderPath);
+
+if (success ?? false) {
+  print('Vocoder initialized successfully');
+} else {
+  print('Failed to initialize vocoder');
+}
+```
+
+##### Check Vocoder Status
+
+```dart
+final isEnabled = await context?.isVocoderEnabled();
+
+if (isEnabled ?? false) {
+  print('Vocoder is enabled and ready for TTS');
+} else {
+  print('Vocoder is not enabled. Please initialize it first.');
+}
+```
+
+##### Release Vocoder Resources
+
+```dart
+  await context?.releaseVocoder();
+  print('Vocoder resources released');
+}
+```
+
+### Flutter {#flutter-types}
+
+#### CompletionResult
+
+Result of a text completion.
+
+```dart
+class CompletionResult {
+  final String text;
+  final int tokensGenerated;
+  final int tokensEvaluated;
+  final bool truncated;
+  final bool stoppedEos;
+  final bool stoppedWord;
+  final bool stoppedLimit;
+  final String? stoppingWord;
+
+  CompletionResult({
+    required this.text,
+    required this.tokensGenerated,
+    required this.tokensEvaluated,
+    required this.truncated,
+    required this.stoppedEos,
+    required this.stoppedWord,
+    required this.stoppedLimit,
+    this.stoppingWord,
+  });
+
+  factory CompletionResult.fromMap(Map<String, dynamic> map) {
+    return CompletionResult(
+      text: map['text'] as String,
+      tokensGenerated: map['tokensGenerated'] as int,
+      tokensEvaluated: map['tokensEvaluated'] as int,
+      truncated: map['truncated'] as bool,
+      stoppedEos: map['stoppedEos'] as bool,
+      stoppedWord: map['stoppedWord'] as bool,
+      stoppedLimit: map['stoppedLimit'] as bool,
+      stoppingWord: map['stoppingWord'] as String?,
+    );
+  }
+}
+```
+
+#### ConversationResult
+
+Result of a conversation generation.
+
+```dart
+class ConversationResult {
+  final String text;
+  final int timeToFirstToken;
+  final int totalTime;
+  final int tokensGenerated;
+
+  ConversationResult({
+    required this.text,
+    required this.timeToFirstToken,
+    required this.totalTime,
+    required this.tokensGenerated,
+  });
+
+  factory ConversationResult.fromMap(Map<String, dynamic> map) {
+    return ConversationResult(
+      text: map['text'] as String,
+      timeToFirstToken: map['timeToFirstToken'] as int,
+      totalTime: map['totalTime'] as int,
+      tokensGenerated: map['tokensGenerated'] as int,
+    );
+  }
+}
+```
+
+#### ChatMessage
+
+Represents a chat message.
+
+```dart
+class ChatMessage {
+  final String role;
+  final String content;
+  final String? reasoningContent;
+  final String? toolName;
+  final String? toolCallId;
+
+  ChatMessage({
+    required this.role,
+    required this.content,
+    this.reasoningContent,
+    this.toolName,
+    this.toolCallId,
+  });
+
+  Map<String, String?> toMap() {
+    return {
+      'role': role,
+      'content': content,
+      'reasoning_content': reasoningContent,
+      'tool_name': toolName,
+      'tool_call_id': toolCallId,
+    };
+  }
+
+  factory ChatMessage.fromMap(Map<String, dynamic> map) {
+    return ChatMessage(
+      role: map['role'] as String,
+      content: map['content'] as String,
+      reasoningContent: map['reasoning_content'] as String?,
+      toolName: map['tool_name'] as String?,
+      toolCallId: map['tool_call_id'] as String?,
+    );
+  }
+}
+```
+
+#### DownloadResult
+
+Result of a download operation.
+
+```dart
+class DownloadResult {
+  final bool success;
+  final String localPath;
+  final String? errorMessage;
+
+  DownloadResult({
+    required this.success,
+    required this.localPath,
+    this.errorMessage,
+  });
+
+  factory DownloadResult.fromMap(Map<String, dynamic> map) {
+    return DownloadResult(
+      success: map['success'] as bool,
+      localPath: map['localPath'] as String,
+      errorMessage: map['errorMessage'] as String?,
+    );
+  }
+}
+```
+
+#### TTSModelType
+
+TTS model types.
+
+```dart
+enum TTSModelType {
+  unknown,
+  outETTSv02,
+  outETTSv03;
+
+  int get rawValue {
+    switch (this) {
+      case unknown:
+        return -1;
+      case outETTSv02:
+        return 1;
+      case outETTSv03:
+        return 2;
+    }
+  }
+
+  factory TTSModelType.fromRawValue(int value) {
+    switch (value) {
+      case 1:
+        return outETTSv02;
+      case 2:
+        return outETTSv03;
+      default:
+        return unknown;
+    }
+  }
+}
+```
+
+#### LogLevel
+
+Log levels for the SDK.
+
+```dart
+enum LogLevel {
+  debug(0),
+  info(1),
+  warning(2),
+  error(3),
+  none(4);
+
+  final int value;
+  const LogLevel(this.value);
+
+  int get rawValue => value;
+
+  factory LogLevel.fromRawValue(int value) {
+    switch (value) {
+      case 0:
+        return debug;
+      case 1:
+        return info;
+      case 2:
+        return warning;
+      case 3:
+        return error;
+      case 4:
+        return none;
+      default:
+        return info;
+    }
+  }
 }
 ```
 

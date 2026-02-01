@@ -1344,7 +1344,7 @@ class Message {
 }
 
 // Parse response to extract thought (between <think> tags) and reply (after </think>)
-Map<String, String?> parseResponseForThoughtAndReply(String response) {
+(String, String?) parseResponseForThoughtAndReply(String response) {
   // First, extract "choices[0]['text']" field content from the JSON response
   var textContent = response;
 
@@ -1388,7 +1388,7 @@ Map<String, String?> parseResponseForThoughtAndReply(String response) {
     }
   }
 
-  return {'reply': reply, 'thought': thought};
+  return (reply, thought);
 }
 
 // Message Bubble Widget
@@ -1525,7 +1525,7 @@ class _ChatViewState extends State<ChatView> {
   List<Message> messages = [];
   bool isLoading = false;
 
-  void sendMessage() {
+  Future<void> sendMessage() async {
     if (_textController.text.trim().isEmpty || isLoading) return;
 
     String messageText = _textController.text.trim();
@@ -1536,18 +1536,12 @@ class _ChatViewState extends State<ChatView> {
     });
 
     // Generate response
-    generateResponse(messageText);
+    await generateResponse(messageText);
   }
 
   Future<void> generateResponse(String prompt) async {
     try {
       if (widget.appState.llamaContext != null) {
-        // Create chat messages
-        List<Map<String, String>> chatMessages = [
-          {"role": "system", "content": widget.appState.systemPrompt},
-          ...messages.map((msg) => {"role": msg.role, "content": msg.text}),
-        ];
-
         // Load grammar content if selected
         String? grammarContent;
         if (widget.appState.selectedGrammar != null) {
@@ -1650,6 +1644,21 @@ class _ChatViewState extends State<ChatView> {
 
           if (result != null) {
             print("[INFO] Streaming completed successfully");
+
+            // Parse the final response to extract thought and reply
+            if (messages.isNotEmpty && messages.last.role == "assistant") {
+              final lastMessage = messages.last;
+              final (parsedReply, parsedThought) =
+                  parseResponseForThoughtAndReply(lastMessage.text);
+
+              setState(() {
+                messages[messages.length - 1] = Message(
+                  role: "assistant",
+                  text: parsedReply,
+                  thought: parsedThought,
+                );
+              });
+            }
           } else {
             print("[ERROR] Streaming generation failed");
             setState(() {
@@ -1664,64 +1673,110 @@ class _ChatViewState extends State<ChatView> {
           // Use normal generation
           print("[INFO] Using normal generation");
 
+          CompletionParams params;
           String response;
-          if (widget.appState.useJsonResponse) {
-            // Use OpenAI JSON format
-            final openAIRequest = {"messages": chatMessages};
 
-            final jsonRequest = json.encode(openAIRequest);
-            print("OpenAI JSON Request: $jsonRequest");
+          if (widget.appState.useChatMode) {
+            // Chat mode: use chatMessages with history
+            print("[INFO] Using Chat mode with message history");
 
-            // Generate completion with OpenAI JSON format
+            // Create chat messages from conversation history
+            List<ChatMessage> chatMessages = [];
+
+            // Add system message
+            chatMessages.add(
+              ChatMessage(
+                role: "system",
+                content: widget.appState.systemPrompt,
+              ),
+            );
+
+            // Add all conversation messages
+            for (var msg in messages) {
+              chatMessages.add(ChatMessage(role: msg.role, content: msg.text));
+            }
+
+            // Create completion parameters with structured chat messages
+            params = CompletionParams(
+              prompt: prompt,
+              chatMessages: chatMessages,
+              maxTokens: 4096,
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.9,
+              minP: 0.1,
+              penaltyLastN: 64,
+              penaltyRepeat: 1.0,
+              penaltyFreq: 0.0,
+              penaltyPresent: 0.0,
+              stopSequences: ["<|im_end|>"],
+              grammar: grammarContent,
+            );
+
+            // Generate completion with chat messages
             final result = await widget.appState.llamaContext
-                ?.generateOpenAICompletion(
-                  openAIJSON: jsonRequest,
-                  grammar: grammarContent,
-                );
+                ?.generateCompletionWithParams(params);
             response = result?.text ?? "";
           } else {
-            // Use standard completion - iOS SDK Example style
-            // Format chat messages as a single prompt
-            String formattedPrompt = "";
-            for (var msg in chatMessages) {
-              formattedPrompt +=
-                  "${msg['role'] == 'user'
-                      ? 'User:'
-                      : msg['role'] == 'assistant'
-                      ? 'Assistant:'
-                      : 'System:'} ${msg['content']}\n";
-            }
-            formattedPrompt += "Assistant:";
+            // Direct prompt mode: use prompt only
+            print("[INFO] Using Direct Prompt mode");
+
+            // Create completion parameters with direct prompt
+            params = CompletionParams(
+              prompt: prompt,
+              maxTokens: 4096,
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.9,
+              minP: 0.1,
+              penaltyLastN: 64,
+              penaltyRepeat: 1.0,
+              penaltyFreq: 0.0,
+              penaltyPresent: 0.0,
+              stopSequences: ["<|im_end|>"],
+              grammar: grammarContent,
+            );
 
             // Generate completion
             final result = await widget.appState.llamaContext
-                ?.generateCompletion(
-                  prompt: formattedPrompt,
-                  maxTokens: 512,
-                  temperature: 0.7,
-                  stopSequences: ["User:", "Assistant:", "System:"],
-                  grammar: grammarContent,
-                );
+                ?.generateCompletionWithParams(params);
             response = result?.text ?? "";
           }
 
-          // Parse response to match iOS SDK Example behavior
-          response = response.trim();
-          // Remove any trailing stop words
-          response = response.replaceAll(
-            RegExp(r'\s*(User:|Assistant:|System:)$'),
-            '',
+          // Log complete raw response from LLM
+          final separator = List.filled(50, "=").join();
+          print("\n$separator");
+          print(
+            "[RAW MODEL RESPONSE] START (length: ${response.length} characters)",
           );
+          print(response);
+          print("[RAW MODEL RESPONSE] END");
+          print("$separator\n");
+
+          // Clean response by removing ending tags and stop sequences (iOS SDK Example style)
+          var cleanedText = response;
+
+          // Remove ending tags and stop sequences
+          cleanedText = cleanedText.replaceAll("<|im_end|>", "");
+          cleanedText = cleanedText.replaceAll("", "");
+
+          // Remove stop sequences that might still be present
+          for (var stopSeq in params.stopSequences ?? []) {
+            cleanedText = cleanedText.replaceAll(stopSeq, "");
+          }
+
+          // Trim whitespace
+          String assistantResponse = cleanedText.trim();
 
           // Parse response to extract thought and reply if JSON response is enabled
-          var finalText = response;
+          var finalText = assistantResponse;
           String? messageThought;
 
-          if (widget.appState.useJsonResponse) {
-            final parsed = parseResponseForThoughtAndReply(response);
-            finalText = parsed['reply'] ?? response;
-            messageThought = parsed['thought'];
-          }
+          final (parsedReply, parsedThought) = parseResponseForThoughtAndReply(
+            assistantResponse,
+          );
+          finalText = parsedReply;
+          messageThought = parsedThought;
 
           setState(() {
             messages.add(
@@ -3717,7 +3772,10 @@ class _TTSTestViewState extends State<TTSTestView> {
       print("TTS Audio Generated successfully (Async)");
 
       if (result != null) {
-        final audioSamples = result['audioSamples'] as List<int>;
+        final audioSamplesList = result['audioSamples'];
+        final audioSamples = audioSamplesList != null
+            ? List<int>.from(audioSamplesList as List)
+            : <int>[];
         final sampleRate = result['sampleRate'] as int;
         final duration = result['duration'] as double;
         final outputFilePath = result['outputFilePath'] as String?;
@@ -3786,7 +3844,10 @@ class _TTSTestViewState extends State<TTSTestView> {
       print("TTS Audio Generated successfully (Sync)");
 
       if (result != null) {
-        final audioSamples = result['audioSamples'] as List<int>;
+        final audioSamplesList = result['audioSamples'];
+        final audioSamples = audioSamplesList != null
+            ? List<int>.from(audioSamplesList as List)
+            : <int>[];
         final sampleRate = result['sampleRate'] as int;
         final duration = result['duration'] as double;
         final outputFilePath = result['outputFilePath'] as String?;
@@ -3955,22 +4016,47 @@ class _TTSTestViewState extends State<TTSTestView> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
+                      border: Border.all(
+                        color: isProcessing
+                            ? Colors.orange
+                            : ttsResult.startsWith("Error")
+                            ? Colors.red
+                            : Colors.green,
+                        width: 2,
+                      ),
                       borderRadius: BorderRadius.circular(8),
+                      color: isProcessing
+                          ? Colors.orange.withOpacity(0.1)
+                          : ttsResult.startsWith("Error")
+                          ? Colors.red.withOpacity(0.1)
+                          : Colors.green.withOpacity(0.1),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           ttsResult,
-                          style: const TextStyle(fontFamily: 'Courier'),
+                          style: TextStyle(
+                            fontFamily: 'Courier',
+                            color: isProcessing
+                                ? Colors.orange.shade900
+                                : ttsResult.startsWith("Error")
+                                ? Colors.red.shade900
+                                : Colors.green.shade900,
+                            fontWeight: isProcessing
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
                         ),
                         if (isPlaying)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 10),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
                             child: Text(
                               "Playing audio...",
-                              style: TextStyle(color: Colors.blue),
+                              style: TextStyle(
+                                color: Colors.blue.shade700,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                       ],

@@ -10,14 +10,17 @@ This document provides comprehensive documentation for the Text-to-Speech (TTS) 
    - [iOS](#ios)
    - [Android Kotlin](#android-kotlin)
    - [Android Java](#android-java)
+   - [Flutter](#flutter)
 2. [Supporting Types](#supporting-types)
    - [iOS](#ios-1)
    - [Android Kotlin](#android-kotlin-1)
    - [Android Java](#android-java-1)
+   - [Flutter](#flutter-1)
 3. [API Usage Examples](#api-usage-examples)
    - [iOS](#ios-2)
    - [Android Kotlin](#android-kotlin-2)
    - [Android Java](#android-java-2)
+   - [Flutter](#flutter-2)
 4. [Implementation Details](#implementation-details)
 5. [Streaming Implementation](#streaming-implementation)
 6. [Error Handling](#error-handling)
@@ -282,6 +285,167 @@ public static Result<SpeechMetadata, TTSError> generateSpeechStreamForLongText(l
 
 **Returns:**
 - `Result<SpeechMetadata, TTSError>`: Contains metadata on success, or error on failure
+
+### Flutter
+
+The Flutter SDK provides TTS functionality through the `LlamaContext` class. All TTS methods are available on a context instance after loading a TTS model.
+
+#### 1. Asynchronous API: `generateSpeech`
+
+Generates speech from text asynchronously.
+
+```dart
+Future<Map<String, dynamic>?> generateSpeech(
+  String text, {
+  Map<String, dynamic>? options,
+})
+```
+
+**Parameters:**
+- `text`: Text to convert to speech
+- `options`: Optional TTS options (sampleRate, voice, speed, saveToFile, outputFilePath)
+
+**Returns:**
+- A `Future<Map<String, dynamic>?>` containing audio data and metadata, or null if an error occurred
+
+**Example:**
+```dart
+final result = await context?.generateSpeech(
+  'Hello, world!',
+  options: {
+    'sampleRate': 24000,
+    'speed': 1.0,
+    'saveToFile': false,
+  },
+);
+
+if (result != null) {
+  final audioSamples = result['audioSamples'] as List<int>;
+  final sampleRate = result['sampleRate'] as int;
+  final duration = result['duration'] as double;
+  print('Generated ${audioSamples.length} samples at ${sampleRate}Hz');
+}
+```
+
+#### 2. Synchronous API: `generateSpeechSync`
+
+Generates speech from text synchronously (blocks the calling thread).
+
+```dart
+Future<Map<String, dynamic>?> generateSpeechSync(
+  String text, {
+  Map<String, dynamic>? options,
+})
+```
+
+**Parameters:**
+- `text`: Text to convert to speech
+- `options`: Optional TTS options (sampleRate, voice, speed, saveToFile, outputFilePath)
+
+**Returns:**
+- A `Future<Map<String, dynamic>?>` containing audio data and metadata, or null if an error occurred
+
+**Example:**
+```dart
+final result = await context?.generateSpeechSync(
+  'Hello, world!',
+  options: {
+    'sampleRate': 24000,
+    'speed': 1.0,
+  },
+);
+```
+
+#### 3. Streaming API: `generateSpeechStream`
+
+Generates speech from text with streaming support (simplified implementation).
+
+```dart
+Future<Map<String, dynamic>?> generateSpeechStream(
+  String text, {
+  Map<String, dynamic>? options,
+})
+```
+
+**Parameters:**
+- `text`: Text to convert to speech
+- `options`: Optional TTS options (sampleRate, voice, speed, saveToFile, outputFilePath)
+
+**Returns:**
+- A `Future<Map<String, dynamic>?>` containing stream metadata, or null if an error occurred
+
+**Example:**
+```dart
+final result = await context?.generateSpeechStream(
+  'Hello, world!',
+  options: {
+    'sampleRate': 24000,
+  },
+);
+```
+
+#### 4. Real Streaming for Long Text: `generateSpeechStreamForLongText`
+
+Generates speech from long text with real streaming capabilities.
+
+```dart
+Future<Map<String, dynamic>?> generateSpeechStreamForLongText(
+  String text, {
+  Map<String, dynamic>? options,
+})
+```
+
+**Parameters:**
+- `text`: Long text to convert to speech
+- `options`: Optional TTS options (sampleRate, voice, speed, saveToFile, outputFilePath)
+
+**Returns:**
+- A `Future<Map<String, dynamic>?>` containing stream metadata, or null if an error occurred
+
+**Example:**
+```dart
+final result = await context?.generateSpeechStreamForLongText(
+  'This is a long text that will be processed in chunks...',
+  options: {
+    'sampleRate': 24000,
+  },
+);
+```
+
+#### 5. Save Audio to WAV: `saveAudioToWav`
+
+Saves audio samples to a WAV file.
+
+```dart
+Future<bool> saveAudioToWav(
+  String filePath,
+  List<int> audioSamples,
+  int sampleRate,
+)
+```
+
+**Parameters:**
+- `filePath`: Path to save the WAV file
+- `audioSamples`: List of audio samples (int16 values)
+- `sampleRate`: Sample rate of the audio (Hz)
+
+**Returns:**
+- A `Future<bool>` indicating success
+
+**Example:**
+```dart
+final result = await context?.generateSpeech('Hello, world!');
+if (result != null) {
+  final audioSamples = result['audioSamples'] as List<int>;
+  final sampleRate = result['sampleRate'] as int;
+  final success = await context?.saveAudioToWav(
+    '/path/to/output.wav',
+    audioSamples,
+    sampleRate,
+  );
+  print('Saved to WAV: $success');
+}
+```
 
 ## Supporting Types
 
@@ -731,6 +895,173 @@ public static class Result<S, E> {
     public E getError() {
         return error;
     }
+}
+```
+
+### Flutter
+
+#### TTSOptions
+
+Configuration options for TTS operations in Flutter.
+
+```dart
+class TTSOptions {
+  final int sampleRate;
+  final String? voice;
+  final double speed;
+  final bool saveToFile;
+  final String? outputFilePath;
+
+  TTSOptions({
+    this.sampleRate = 24000,
+    this.voice,
+    this.speed = 1.0,
+    this.saveToFile = false,
+    this.outputFilePath,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'sampleRate': sampleRate,
+      'voice': voice,
+      'speed': speed,
+      'saveToFile': saveToFile,
+      'outputFilePath': outputFilePath,
+    };
+  }
+}
+```
+
+#### SpeechResult
+
+Result of successful speech generation in Flutter.
+
+```dart
+class SpeechResult {
+  final List<int> audioSamples;
+  final int sampleRate;
+  final double duration;
+  final String? outputFilePath;
+  final TTSMethod methodUsed;
+
+  SpeechResult({
+    required this.audioSamples,
+    required this.sampleRate,
+    required this.duration,
+    this.outputFilePath,
+    required this.methodUsed,
+  });
+
+  factory SpeechResult.fromMap(Map<String, dynamic> map) {
+    return SpeechResult(
+      audioSamples: List<int>.from(map['audioSamples'] as List),
+      sampleRate: map['sampleRate'] as int,
+      duration: map['duration'] as double,
+      outputFilePath: map['outputFilePath'] as String?,
+      methodUsed: TTSMethod.fromRawValue(map['methodUsed'] as int),
+    );
+  }
+}
+```
+
+#### SpeechMetadata
+
+Metadata for speech generation (used in streaming) in Flutter.
+
+```dart
+class SpeechMetadata {
+  final int sampleRate;
+  final double duration;
+  final TTSMethod methodUsed;
+  final String? outputFilePath;
+
+  SpeechMetadata({
+    required this.sampleRate,
+    required this.duration,
+    required this.methodUsed,
+    this.outputFilePath,
+  });
+
+  factory SpeechMetadata.fromMap(Map<String, dynamic> map) {
+    return SpeechMetadata(
+      sampleRate: map['sampleRate'] as int,
+      duration: map['duration'] as double,
+      methodUsed: TTSMethod.fromRawValue(map['methodUsed'] as int),
+      outputFilePath: map['outputFilePath'] as String?,
+    );
+  }
+}
+```
+
+#### TTSError
+
+Error types for TTS operations in Flutter.
+
+```dart
+enum TTSError {
+  noModelLoaded,
+  noVocoderEnabled,
+  invalidText,
+  generationFailed,
+  formattingFailed,
+  tokenizationFailed,
+  audioDecodingFailed,
+  fileSaveFailed,
+  unknownError;
+
+  String get message {
+    switch (this) {
+      case noModelLoaded:
+        return 'No model loaded';
+      case noVocoderEnabled:
+        return 'No vocoder enabled';
+      case invalidText:
+        return 'Invalid text';
+      case generationFailed:
+        return 'Generation failed';
+      case formattingFailed:
+        return 'Formatting failed';
+      case tokenizationFailed:
+        return 'Tokenization failed';
+      case audioDecodingFailed:
+        return 'Audio decoding failed';
+      case fileSaveFailed:
+        return 'File save failed';
+      case unknownError:
+        return 'Unknown error';
+    }
+  }
+}
+```
+
+#### TTSMethod
+
+Method used for speech generation in Flutter.
+
+```dart
+enum TTSMethod {
+  builtIn,
+  customWorkflow;
+
+  int get rawValue {
+    switch (this) {
+      case builtIn:
+        return 0;
+      case customWorkflow:
+        return 1;
+    }
+  }
+
+  factory TTSMethod.fromRawValue(int value) {
+    switch (value) {
+      case 0:
+        return builtIn;
+      case 1:
+        return customWorkflow;
+      default:
+        return builtIn;
+    }
+  }
 }
 ```
 
@@ -1524,6 +1855,122 @@ public void testErrorHandling() {
             }
         }
     );
+}
+```
+
+#### Flutter
+
+##### Basic TTS Usage
+
+```dart
+import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
+
+// Initialize context with TTS model
+final llamaMobile = LlamaMobile();
+final context = await llamaMobile.initContext(
+  modelPath: 'path/to/tts/model.gguf',
+);
+
+// Generate speech asynchronously
+final result = await context?.generateSpeech(
+  'Hello, world!',
+  options: {
+    'sampleRate': 24000,
+    'speed': 1.0,
+  },
+);
+
+if (result != null) {
+  final audioSamples = result['audioSamples'] as List<int>;
+  final sampleRate = result['sampleRate'] as int;
+  print('Generated ${audioSamples.length} samples at ${sampleRate}Hz');
+}
+
+// Clean up
+await context?.free();
+```
+
+##### Saving to WAV File
+
+```dart
+// Generate speech and save to WAV file
+final result = await context?.generateSpeech(
+  'Hello, this will be saved to a WAV file.',
+  options: {
+    'sampleRate': 24000,
+    'saveToFile': true,
+    'outputFilePath': '/path/to/output.wav',
+  },
+);
+
+if (result != null) {
+  print('Speech saved to: ${result['outputFilePath']}');
+}
+```
+
+##### Streaming for Long Text
+
+```dart
+// Generate speech for long text with streaming
+final longText = 'This is a very long text that will be processed in chunks...';
+
+final result = await context?.generateSpeechStreamForLongText(
+  longText,
+  options: {
+    'sampleRate': 24000,
+  },
+);
+
+if (result != null) {
+  final sampleRate = result['sampleRate'] as int;
+  final duration = result['duration'] as double;
+  print('Generated ${duration}s of audio at ${sampleRate}Hz');
+}
+```
+
+##### Custom TTS Options
+
+```dart
+// Use TTSOptions class for better type safety
+final options = TTSOptions(
+  sampleRate: 16000,
+  voice: 'en-us',
+  speed: 1.2,
+  saveToFile: true,
+  outputFilePath: '/path/to/custom_output.wav',
+);
+
+final result = await context?.generateSpeech(
+  'Custom TTS options example.',
+  options: options.toMap(),
+);
+
+if (result != null) {
+  print('Generated speech with custom options');
+}
+```
+
+##### Error Handling
+
+```dart
+try {
+  final result = await context?.generateSpeech(
+    'Hello, world!',
+    options: {
+      'sampleRate': 24000,
+    },
+  );
+
+  if (result == null) {
+    print('Failed to generate speech');
+    // Check for specific errors
+    final error = TTSError.unknownError;
+    print('Error: ${error.message}');
+  } else {
+    print('Speech generated successfully');
+  }
+} catch (e) {
+  print('Exception: $e');
 }
 ```
 
