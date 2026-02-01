@@ -447,6 +447,68 @@ if (result != null) {
 }
 ```
 
+#### 6. Async Save Audio to WAV: `saveAudioToWavAsync`
+
+Saves audio samples to a WAV file asynchronously (runs in background thread).
+
+```dart
+Future<bool> saveAudioToWavAsync(
+  String filePath,
+  List<int> audioSamples,
+  int sampleRate,
+)
+```
+
+**Parameters:**
+- `filePath`: Path to save the WAV file
+- `audioSamples`: List of audio samples (int16 values)
+- `sampleRate`: Sample rate of the audio (Hz)
+
+**Returns:**
+- A `Future<bool>` indicating success
+
+**Example:**
+```dart
+final result = await context?.generateSpeech('Hello, world!');
+if (result != null) {
+  final audioSamples = result['audioSamples'] as List<int>;
+  final sampleRate = result['sampleRate'] as int;
+  final success = await context?.saveAudioToWavAsync(
+    '/path/to/output.wav',
+    audioSamples,
+    sampleRate,
+  );
+  print('Saved to WAV: $success');
+}
+```
+
+#### 7. Async Load TTS Model: `loadTTSModelAsync`
+
+Loads a TTS model asynchronously (runs in background thread).
+
+```dart
+Future<bool> loadTTSModelAsync(
+  String modelPath,
+  TTSModelType modelType,
+)
+```
+
+**Parameters:**
+- `modelPath`: Path to the TTS model file
+- `modelType`: Type of TTS model to load
+
+**Returns:**
+- `true` if the model was loaded successfully, `false` otherwise
+
+**Example:**
+```dart
+final success = await context?.loadTTSModelAsync(
+  '/path/to/tts/model.bin',
+  TTSModelType.outETTSv02,
+);
+print('Loaded TTS model: $success');
+```
+
 ## Supporting Types
 
 ### iOS

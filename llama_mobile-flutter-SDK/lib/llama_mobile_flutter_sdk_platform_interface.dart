@@ -34,8 +34,16 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     throw UnimplementedError('initContext() has not been implemented.');
   }
 
+  Future<Map<String, dynamic>?> initContextAsync(Map<String, dynamic> params) {
+    throw UnimplementedError('initContextAsync() has not been implemented.');
+  }
+
   Future<bool> freeContext(int contextHandle) {
     throw UnimplementedError('freeContext() has not been implemented.');
+  }
+
+  Future<bool> freeContextAsync(int contextHandle) {
+    throw UnimplementedError('freeContextAsync() has not been implemented.');
   }
 
   // Completion methods
@@ -46,6 +54,15 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     throw UnimplementedError('generateCompletion() has not been implemented.');
   }
 
+  Future<Map<String, dynamic>?> generateCompletionAsync(
+    int contextHandle,
+    Map<String, dynamic> params,
+  ) {
+    throw UnimplementedError(
+      'generateCompletionAsync() has not been implemented.',
+    );
+  }
+
   Future<Map<String, dynamic>?> generateMultimodalCompletion(
     int contextHandle,
     Map<String, dynamic> params,
@@ -53,6 +70,16 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
   ) {
     throw UnimplementedError(
       'generateMultimodalCompletion() has not been implemented.',
+    );
+  }
+
+  Future<Map<String, dynamic>?> generateMultimodalCompletionAsync(
+    int contextHandle,
+    Map<String, dynamic> params,
+    List<String> mediaPaths,
+  ) {
+    throw UnimplementedError(
+      'generateMultimodalCompletionAsync() has not been implemented.',
     );
   }
 
@@ -67,12 +94,32 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     );
   }
 
+  Future<Map<String, dynamic>?> generateConversationAsync(
+    int contextHandle,
+    Map<String, dynamic> params,
+    List<Map<String, String?>> chatMessages,
+  ) {
+    throw UnimplementedError(
+      'generateConversationAsync() has not been implemented.',
+    );
+  }
+
   Future<String?> formatChatMessages(
     int contextHandle,
     List<Map<String, String?>> messages,
     String? chatTemplate,
   ) {
     throw UnimplementedError('formatChatMessages() has not been implemented.');
+  }
+
+  Future<String?> formatChatMessagesAsync(
+    int contextHandle,
+    List<Map<String, String?>> messages,
+    String? chatTemplate,
+  ) {
+    throw UnimplementedError(
+      'formatChatMessagesAsync() has not been implemented.',
+    );
   }
 
   // TTS methods
@@ -84,12 +131,24 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     throw UnimplementedError('loadTTSModel() has not been implemented.');
   }
 
+  Future<Map<String, dynamic>?> loadTTSModelAsync(
+    int contextHandle,
+    String modelPath,
+    Map<String, dynamic> params,
+  ) {
+    throw UnimplementedError('loadTTSModelAsync() has not been implemented.');
+  }
+
   Future<Map<String, dynamic>?> generateAudio(int contextHandle, String text) {
     throw UnimplementedError('generateAudio() has not been implemented.');
   }
 
   Future<bool> freeTTSModel(int contextHandle) {
     throw UnimplementedError('freeTTSModel() has not been implemented.');
+  }
+
+  Future<bool> freeTTSModelAsync(int contextHandle) {
+    throw UnimplementedError('freeTTSModelAsync() has not been implemented.');
   }
 
   /// Save audio samples to WAV file
@@ -102,6 +161,16 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     throw UnimplementedError('saveAudioToWav() has not been implemented.');
   }
 
+  /// Save audio samples to WAV file asynchronously
+  Future<bool> saveAudioToWavAsync(
+    int contextHandle,
+    String filePath,
+    List<int> audioData,
+    int sampleRate,
+  ) {
+    throw UnimplementedError('saveAudioToWavAsync() has not been implemented.');
+  }
+
   // Multimodal methods
   Future<bool> initMultimodal(
     int contextHandle,
@@ -111,8 +180,22 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     throw UnimplementedError('initMultimodal() has not been implemented.');
   }
 
+  Future<bool> initMultimodalAsync(
+    int contextHandle,
+    String mmprojPath,
+    bool useGpu,
+  ) {
+    throw UnimplementedError('initMultimodalAsync() has not been implemented.');
+  }
+
   Future<void> releaseMultimodal(int contextHandle) {
     throw UnimplementedError('releaseMultimodal() has not been implemented.');
+  }
+
+  Future<void> releaseMultimodalAsync(int contextHandle) {
+    throw UnimplementedError(
+      'releaseMultimodalAsync() has not been implemented.',
+    );
   }
 
   // Vocoder methods
@@ -120,8 +203,16 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     throw UnimplementedError('initVocoder() has not been implemented.');
   }
 
+  Future<bool> initVocoderAsync(int contextHandle, String vocoderModelPath) {
+    throw UnimplementedError('initVocoderAsync() has not been implemented.');
+  }
+
   Future<void> releaseVocoder(int contextHandle) {
     throw UnimplementedError('releaseVocoder() has not been implemented.');
+  }
+
+  Future<void> releaseVocoderAsync(int contextHandle) {
+    throw UnimplementedError('releaseVocoderAsync() has not been implemented.');
   }
 
   // Embedding methods
@@ -132,6 +223,17 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     Map<String, dynamic> params,
   ) {
     throw UnimplementedError('generateEmbedding() has not been implemented.');
+  }
+
+  /// Generate embedding for text asynchronously
+  Future<List<double>?> generateEmbeddingAsync(
+    int contextHandle,
+    String text,
+    Map<String, dynamic> params,
+  ) {
+    throw UnimplementedError(
+      'generateEmbeddingAsync() has not been implemented.',
+    );
   }
 
   /// Tokenize text into token IDs
@@ -164,12 +266,34 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     throw UnimplementedError('loadLoraAdapter() has not been implemented.');
   }
 
+  Future<bool> loadLoraAdapterAsync(
+    int contextHandle,
+    String adapterPath,
+    double scale,
+  ) {
+    throw UnimplementedError(
+      'loadLoraAdapterAsync() has not been implemented.',
+    );
+  }
+
   Future<bool> freeLoraAdapter(int contextHandle) {
     throw UnimplementedError('freeLoraAdapter() has not been implemented.');
   }
 
+  Future<bool> freeLoraAdapterAsync(int contextHandle) {
+    throw UnimplementedError(
+      'freeLoraAdapterAsync() has not been implemented.',
+    );
+  }
+
   Future<void> removeLoraAdapters(int contextHandle) {
     throw UnimplementedError('removeLoraAdapters() has not been implemented.');
+  }
+
+  Future<void> removeLoraAdaptersAsync(int contextHandle) {
+    throw UnimplementedError(
+      'removeLoraAdaptersAsync() has not been implemented.',
+    );
   }
 
   // TTS methods
@@ -224,6 +348,14 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     throw UnimplementedError('generateSpeech() has not been implemented.');
   }
 
+  Future<Map<String, dynamic>?> generateSpeechAsync(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) {
+    throw UnimplementedError('generateSpeechAsync() has not been implemented.');
+  }
+
   Future<Map<String, dynamic>?> generateSpeechStream(
     int contextHandle,
     String text,
@@ -234,6 +366,16 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     );
   }
 
+  Future<Map<String, dynamic>?> generateSpeechStreamAsync(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) {
+    throw UnimplementedError(
+      'generateSpeechStreamAsync() has not been implemented.',
+    );
+  }
+
   Future<Map<String, dynamic>?> generateSpeechStreamForLongText(
     int contextHandle,
     String text,
@@ -241,6 +383,16 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
   ) {
     throw UnimplementedError(
       'generateSpeechStreamForLongText() has not been implemented.',
+    );
+  }
+
+  Future<Map<String, dynamic>?> generateSpeechStreamForLongTextAsync(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) {
+    throw UnimplementedError(
+      'generateSpeechStreamForLongTextAsync() has not been implemented.',
     );
   }
 
@@ -271,6 +423,15 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     );
   }
 
+  Future<Map<String, dynamic>?> generateStreamingCompletionAsync(
+    int contextHandle,
+    Map<String, dynamic> params,
+  ) {
+    throw UnimplementedError(
+      'generateStreamingCompletionAsync() has not been implemented.',
+    );
+  }
+
   Future<Map<String, dynamic>?> generateStreamingOpenAICompletion(
     int contextHandle,
     String openAIJSON,
@@ -278,6 +439,16 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
   ) {
     throw UnimplementedError(
       'generateStreamingOpenAICompletion() has not been implemented.',
+    );
+  }
+
+  Future<Map<String, dynamic>?> generateStreamingOpenAICompletionAsync(
+    int contextHandle,
+    String openAIJSON,
+    String? grammar,
+  ) {
+    throw UnimplementedError(
+      'generateStreamingOpenAICompletionAsync() has not been implemented.',
     );
   }
 
@@ -324,9 +495,21 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     throw UnimplementedError('downloadModel() has not been implemented.');
   }
 
+  Future<Map<String, dynamic>?> downloadModelAsync(
+    Map<String, dynamic> params,
+  ) {
+    throw UnimplementedError('downloadModelAsync() has not been implemented.');
+  }
+
   // Hugging Face download methods
   Future<Map<String, dynamic>?> downloadHfFile(Map<String, dynamic> params) {
     throw UnimplementedError('downloadHfFile() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>?> downloadHfFileAsync(
+    Map<String, dynamic> params,
+  ) {
+    throw UnimplementedError('downloadHfFileAsync() has not been implemented.');
   }
 
   // OpenAI completion methods
@@ -337,6 +520,16 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
   ) {
     throw UnimplementedError(
       'generateOpenAICompletion() has not been implemented.',
+    );
+  }
+
+  Future<Map<String, dynamic>?> generateOpenAICompletionAsync(
+    int contextHandle,
+    String openAIJSON,
+    String? grammar,
+  ) {
+    throw UnimplementedError(
+      'generateOpenAICompletionAsync() has not been implemented.',
     );
   }
 

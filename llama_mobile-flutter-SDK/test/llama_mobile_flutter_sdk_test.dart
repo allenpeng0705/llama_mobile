@@ -16,12 +16,41 @@ class MockLlamaMobileFlutterSdkPlatform
   }
 
   @override
+  Future<Map<String, dynamic>?> initContextAsync(
+    Map<String, dynamic> params,
+  ) async {
+    return {'contextHandle': 1, 'success': true};
+  }
+
+  @override
   Future<bool> freeContext(int contextHandle) async {
     return true;
   }
 
   @override
+  Future<bool> freeContextAsync(int contextHandle) async {
+    return true;
+  }
+
+  @override
   Future<Map<String, dynamic>?> generateCompletion(
+    int contextHandle,
+    Map<String, dynamic> params,
+  ) async {
+    return {
+      'text': 'Generated completion text',
+      'tokensGenerated': 42,
+      'tokensEvaluated': 10,
+      'truncated': false,
+      'stoppedEos': true,
+      'stoppedWord': false,
+      'stoppedLimit': false,
+      'stoppingWord': null,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>?> generateCompletionAsync(
     int contextHandle,
     Map<String, dynamic> params,
   ) async {
@@ -56,7 +85,40 @@ class MockLlamaMobileFlutterSdkPlatform
   }
 
   @override
+  Future<Map<String, dynamic>?> generateMultimodalCompletionAsync(
+    int contextHandle,
+    Map<String, dynamic> params,
+    List<String> mediaPaths,
+  ) async {
+    return {
+      'text': 'Multimodal completion text',
+      'tokensGenerated': 56,
+      'tokensEvaluated': 15,
+      'truncated': false,
+      'stoppedEos': true,
+      'stoppedWord': false,
+      'stoppedLimit': false,
+      'stoppingWord': null,
+    };
+  }
+
+  @override
   Future<Map<String, dynamic>?> generateConversation(
+    int contextHandle,
+    Map<String, dynamic> params,
+    List<Map<String, String?>> chatMessages,
+  ) async {
+    return {
+      'text': 'Conversation response',
+      'tokensGenerated': 33,
+      'timeToFirstToken': 100,
+      'totalTime': 500,
+      'messages': chatMessages,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>?> generateConversationAsync(
     int contextHandle,
     Map<String, dynamic> params,
     List<Map<String, String?>> chatMessages,
@@ -80,7 +142,25 @@ class MockLlamaMobileFlutterSdkPlatform
   }
 
   @override
+  Future<String?> formatChatMessagesAsync(
+    int contextHandle,
+    List<Map<String, String?>> messages,
+    String? chatTemplate,
+  ) async {
+    return 'Formatted chat messages';
+  }
+
+  @override
   Future<Map<String, dynamic>?> loadTTSModel(
+    int contextHandle,
+    String modelPath,
+    Map<String, dynamic> params,
+  ) async {
+    return {'ttsModelLoaded': true, 'success': true};
+  }
+
+  @override
+  Future<Map<String, dynamic>?> loadTTSModelAsync(
     int contextHandle,
     String modelPath,
     Map<String, dynamic> params,
@@ -102,6 +182,11 @@ class MockLlamaMobileFlutterSdkPlatform
   }
 
   @override
+  Future<bool> freeTTSModelAsync(int contextHandle) async {
+    return true;
+  }
+
+  @override
   Future<List<double>?> generateEmbedding(
     int contextHandle,
     String text,
@@ -111,7 +196,35 @@ class MockLlamaMobileFlutterSdkPlatform
   }
 
   @override
+  Future<List<double>?> generateEmbeddingAsync(
+    int contextHandle,
+    String text,
+    Map<String, dynamic> params,
+  ) async {
+    return [0.1, 0.2, 0.3, 0.4, 0.5];
+  }
+
+  @override
+  Future<bool> saveAudioToWavAsync(
+    int contextHandle,
+    String filePath,
+    List<int> audioData,
+    int sampleRate,
+  ) async {
+    return true;
+  }
+
+  @override
   Future<bool> loadLoraAdapter(
+    int contextHandle,
+    String adapterPath,
+    double scale,
+  ) async {
+    return true;
+  }
+
+  @override
+  Future<bool> loadLoraAdapterAsync(
     int contextHandle,
     String adapterPath,
     double scale,
@@ -125,12 +238,28 @@ class MockLlamaMobileFlutterSdkPlatform
   }
 
   @override
+  Future<bool> freeLoraAdapterAsync(int contextHandle) async {
+    return true;
+  }
+
+  @override
   Future<String?> loadGrammar(int contextHandle, String grammarName) async {
     return '{grammar content}';
   }
 
   @override
   Future<Map<String, dynamic>?> downloadModel(
+    Map<String, dynamic> params,
+  ) async {
+    return {
+      'success': true,
+      'localPath': params['localPath'] ?? '',
+      'errorMessage': null,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>?> downloadModelAsync(
     Map<String, dynamic> params,
   ) async {
     return {
@@ -152,7 +281,35 @@ class MockLlamaMobileFlutterSdkPlatform
   }
 
   @override
+  Future<Map<String, dynamic>?> downloadHfFileAsync(
+    Map<String, dynamic> params,
+  ) async {
+    return {
+      'success': true,
+      'localPath': params['localPath'] ?? '',
+      'errorMessage': null,
+    };
+  }
+
+  @override
   Future<Map<String, dynamic>?> generateStreamingCompletion(
+    int contextHandle,
+    Map<String, dynamic> params,
+  ) async {
+    return {
+      'text': 'Streaming completion text',
+      'tokensGenerated': 42,
+      'tokensEvaluated': 10,
+      'truncated': false,
+      'stoppedEos': true,
+      'stoppedWord': false,
+      'stoppedLimit': false,
+      'stoppingWord': null,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>?> generateStreamingCompletionAsync(
     int contextHandle,
     Map<String, dynamic> params,
   ) async {
@@ -187,7 +344,43 @@ class MockLlamaMobileFlutterSdkPlatform
   }
 
   @override
+  Future<Map<String, dynamic>?> generateOpenAICompletionAsync(
+    int contextHandle,
+    String openAIJSON,
+    String? grammar,
+  ) async {
+    return {
+      'text': 'OpenAI completion text',
+      'tokensGenerated': 42,
+      'tokensEvaluated': 10,
+      'truncated': false,
+      'stoppedEos': true,
+      'stoppedWord': false,
+      'stoppedLimit': false,
+      'stoppingWord': null,
+    };
+  }
+
+  @override
   Future<Map<String, dynamic>?> generateStreamingOpenAICompletion(
+    int contextHandle,
+    String openAIJSON,
+    String? grammar,
+  ) async {
+    return {
+      'text': 'Streaming OpenAI completion text',
+      'tokensGenerated': 42,
+      'tokensEvaluated': 10,
+      'truncated': false,
+      'stoppedEos': true,
+      'stoppedWord': false,
+      'stoppedLimit': false,
+      'stoppingWord': null,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>?> generateStreamingOpenAICompletionAsync(
     int contextHandle,
     String openAIJSON,
     String? grammar,
@@ -314,13 +507,31 @@ class MockLlamaMobileFlutterSdkPlatform
   }
 
   @override
+  Future<bool> initVocoderAsync(
+    int contextHandle,
+    String vocoderModelPath,
+  ) async {
+    return true;
+  }
+
+  @override
   Future<bool> releaseVocoder(int contextHandle) async {
     return true;
   }
 
   @override
+  Future<void> releaseVocoderAsync(int contextHandle) async {
+    return;
+  }
+
+  @override
   Future<bool> releaseMultimodal(int contextHandle) async {
     return true;
+  }
+
+  @override
+  Future<void> releaseMultimodalAsync(int contextHandle) async {
+    return;
   }
 
   @override
@@ -336,6 +547,11 @@ class MockLlamaMobileFlutterSdkPlatform
   @override
   Future<bool> removeLoraAdapters(int contextHandle) async {
     return true;
+  }
+
+  @override
+  Future<void> removeLoraAdaptersAsync(int contextHandle) async {
+    return;
   }
 
   @override
@@ -361,6 +577,15 @@ class MockLlamaMobileFlutterSdkPlatform
 
   @override
   Future<bool> initMultimodal(
+    int contextHandle,
+    String mmprojPath,
+    bool useGpu,
+  ) async {
+    return true;
+  }
+
+  @override
+  Future<bool> initMultimodalAsync(
     int contextHandle,
     String mmprojPath,
     bool useGpu,
@@ -409,6 +634,21 @@ class MockLlamaMobileFlutterSdkPlatform
   }
 
   @override
+  Future<Map<String, dynamic>?> generateSpeechAsync(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) async {
+    return {
+      'audioSamples': List<int>.filled(100, 0),
+      'sampleRate': 24000,
+      'duration': 1.0,
+      'outputFilePath': null,
+      'methodUsed': 0,
+    };
+  }
+
+  @override
   Future<Map<String, dynamic>?> generateSpeechStream(
     int contextHandle,
     String text,
@@ -423,7 +663,35 @@ class MockLlamaMobileFlutterSdkPlatform
   }
 
   @override
+  Future<Map<String, dynamic>?> generateSpeechStreamAsync(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) async {
+    return {
+      'sampleRate': 24000,
+      'duration': 1.0,
+      'outputFilePath': null,
+      'methodUsed': 0,
+    };
+  }
+
+  @override
   Future<Map<String, dynamic>?> generateSpeechStreamForLongText(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) async {
+    return {
+      'sampleRate': 24000,
+      'duration': 1.0,
+      'outputFilePath': null,
+      'methodUsed': 0,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>?> generateSpeechStreamForLongTextAsync(
     int contextHandle,
     String text,
     Map<String, dynamic>? options,
@@ -1800,5 +2068,457 @@ void main() {
       expect(result, isNotNull);
       expect(result?.text, isNotNull);
     });
+  });
+
+  group('Async API Methods', () {
+    test('initContextAsync creates a new context asynchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContextAsync(
+        modelPath: 'test/model.gguf',
+      );
+
+      expect(context, isNotNull);
+      expect(context?.handle, isNotNull);
+    });
+
+    test('freeContextAsync releases a context asynchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContext(
+        modelPath: 'test/model.gguf',
+      );
+
+      bool result = await context?.freeAsync() ?? false;
+      expect(result, isTrue);
+    });
+
+    test(
+      'generateCompletionAsync creates completion text asynchronously',
+      () async {
+        LlamaMobile llamaMobile = LlamaMobile();
+        MockLlamaMobileFlutterSdkPlatform fakePlatform =
+            MockLlamaMobileFlutterSdkPlatform();
+        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+        LlamaContext? context = await llamaMobile.initContext(
+          modelPath: 'test/model.gguf',
+        );
+
+        CompletionResult? result = await context?.generateCompletionAsync(
+          prompt: 'Hello',
+        );
+
+        expect(result, isNotNull);
+        expect(result?.text, isNotNull);
+        expect(result?.tokensGenerated, isNotNull);
+      },
+    );
+
+    test(
+      'generateMultimodalCompletionAsync processes text and images asynchronously',
+      () async {
+        LlamaMobile llamaMobile = LlamaMobile();
+        MockLlamaMobileFlutterSdkPlatform fakePlatform =
+            MockLlamaMobileFlutterSdkPlatform();
+        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+        LlamaContext? context = await llamaMobile.initContext(
+          modelPath: 'test/multimodal_model.gguf',
+        );
+
+        CompletionResult? result = await context
+            ?.generateMultimodalCompletionAsync(
+              prompt: 'Describe this image',
+              mediaPaths: ['test/image.jpg'],
+            );
+
+        expect(result, isNotNull);
+        expect(result?.text, isNotNull);
+        expect(result?.tokensGenerated, isNotNull);
+      },
+    );
+
+    test(
+      'generateConversationAsync creates conversation responses asynchronously',
+      () async {
+        LlamaMobile llamaMobile = LlamaMobile();
+        MockLlamaMobileFlutterSdkPlatform fakePlatform =
+            MockLlamaMobileFlutterSdkPlatform();
+        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+        LlamaContext? context = await llamaMobile.initContext(
+          modelPath: 'test/chat_model.gguf',
+        );
+
+        List<ChatMessage> messages = [
+          ChatMessage(role: 'user', content: 'Hello'),
+        ];
+
+        ConversationResult? result = await context?.generateConversationAsync(
+          chatMessages: messages,
+        );
+
+        expect(result, isNotNull);
+        expect(result?.text, isNotNull);
+        expect(result?.tokensGenerated, isNotNull);
+      },
+    );
+
+    test('formatChatMessagesAsync formats messages asynchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContext(
+        modelPath: 'test/chat_model.gguf',
+      );
+
+      List<ChatMessage> messages = [
+        ChatMessage(role: 'user', content: 'Hello'),
+        ChatMessage(role: 'assistant', content: 'Hi there!'),
+      ];
+
+      String? formatted = await context?.formatChatMessagesAsync(
+        messages,
+        null,
+      );
+
+      expect(formatted, isNotNull);
+    });
+
+    test('loadTTSModelAsync loads a TTS model asynchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContext(
+        modelPath: 'test/chat_model.gguf',
+      );
+
+      bool? result = await context?.loadTTSModelAsync(
+        'test/tts_model.gguf',
+        TTSModelType.outETTSv02,
+      );
+
+      expect(result, isTrue);
+    });
+
+    test('freeTTSModelAsync frees a TTS model asynchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContext(
+        modelPath: 'test/chat_model.gguf',
+      );
+
+      await context?.loadTTSModelAsync(
+        'test/tts_model.gguf',
+        TTSModelType.outETTSv02,
+      );
+
+      bool result = await context?.freeTTSModelAsync() ?? false;
+
+      expect(result, isTrue);
+    });
+
+    test('loadLoraAdapterAsync loads a LoRA adapter asynchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContext(
+        modelPath: 'test/base_model.gguf',
+      );
+
+      bool? result = await context?.loadLoraAdapterAsync(
+        'test/lora_adapter.gguf',
+        0.75,
+      );
+
+      expect(result, isTrue);
+    });
+
+    test('freeLoraAdapterAsync frees a LoRA adapter asynchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContext(
+        modelPath: 'test/base_model.gguf',
+      );
+
+      await context?.loadLoraAdapterAsync('test/lora_adapter.gguf', 0.75);
+
+      bool? result = await context?.freeLoraAdapterAsync();
+
+      expect(result, isTrue);
+    });
+
+    test('downloadModelAsync downloads model file asynchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      DownloadResult? result = await llamaMobile.downloadModelAsync(
+        url: 'https://example.com/model.gguf',
+        localPath: '/local/path/model.gguf',
+      );
+
+      expect(result, isNotNull);
+      expect(result?.success, isTrue);
+    });
+
+    test(
+      'downloadHfFileAsync downloads from Hugging Face asynchronously',
+      () async {
+        LlamaMobile llamaMobile = LlamaMobile();
+        MockLlamaMobileFlutterSdkPlatform fakePlatform =
+            MockLlamaMobileFlutterSdkPlatform();
+        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+        DownloadResult? result = await llamaMobile.downloadHfFileAsync(
+          repoId: 'test/repo',
+          filename: 'model.gguf',
+          localPath: '/local/path',
+        );
+
+        expect(result, isNotNull);
+        expect(result?.success, isTrue);
+      },
+    );
+
+    test(
+      'generateStreamingCompletionAsync creates streaming completion asynchronously',
+      () async {
+        LlamaMobile llamaMobile = LlamaMobile();
+        MockLlamaMobileFlutterSdkPlatform fakePlatform =
+            MockLlamaMobileFlutterSdkPlatform();
+        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+        LlamaContext? context = await llamaMobile.initContext(
+          modelPath: 'test/model.gguf',
+        );
+
+        CompletionResult? result = await context
+            ?.generateStreamingCompletionAsync(prompt: 'Hello');
+
+        expect(result, isNotNull);
+        expect(result?.text, isNotNull);
+        expect(result?.tokensGenerated, isNotNull);
+      },
+    );
+
+    test(
+      'generateOpenAICompletionAsync creates OpenAI completion asynchronously',
+      () async {
+        LlamaMobile llamaMobile = LlamaMobile();
+        MockLlamaMobileFlutterSdkPlatform fakePlatform =
+            MockLlamaMobileFlutterSdkPlatform();
+        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+        LlamaContext? context = await llamaMobile.initContext(
+          modelPath: 'test/model.gguf',
+        );
+
+        CompletionResult? result = await context?.generateOpenAICompletionAsync(
+          openAIJSON:
+              '{"model": "test", "messages": [{"role": "user", "content": "Hello"}]}',
+        );
+
+        expect(result, isNotNull);
+        expect(result?.text, isNotNull);
+        expect(result?.tokensGenerated, isNotNull);
+      },
+    );
+
+    test(
+      'generateStreamingOpenAICompletionAsync creates streaming OpenAI completion asynchronously',
+      () async {
+        LlamaMobile llamaMobile = LlamaMobile();
+        MockLlamaMobileFlutterSdkPlatform fakePlatform =
+            MockLlamaMobileFlutterSdkPlatform();
+        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+        LlamaContext? context = await llamaMobile.initContext(
+          modelPath: 'test/model.gguf',
+        );
+
+        CompletionResult?
+        result = await context?.generateStreamingOpenAICompletionAsync(
+          openAIJSON:
+              '{"model": "test", "messages": [{"role": "user", "content": "Hello"}]}',
+        );
+
+        expect(result, isNotNull);
+        expect(result?.text, isNotNull);
+        expect(result?.tokensGenerated, isNotNull);
+      },
+    );
+
+    test('initVocoderAsync initializes vocoder asynchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContext(
+        modelPath: 'test/model.gguf',
+      );
+
+      bool result =
+          await context?.initVocoderAsync('/path/to/vocoder.gguf') ?? false;
+
+      expect(result, isTrue);
+    });
+
+    test('releaseVocoderAsync releases vocoder asynchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContext(
+        modelPath: 'test/model.gguf',
+      );
+
+      await context?.initVocoderAsync('/path/to/vocoder.gguf');
+      await context?.releaseVocoderAsync();
+
+      expect(true, isTrue);
+    });
+
+    test('releaseMultimodalAsync releases multimodal asynchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContext(
+        modelPath: 'test/model.gguf',
+      );
+
+      await context?.initMultimodalAsync('/path/to/mmproj.gguf', true);
+      await context?.releaseMultimodalAsync();
+
+      expect(true, isTrue);
+    });
+
+    test('initMultimodalAsync initializes multimodal asynchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContext(
+        modelPath: 'test/model.gguf',
+      );
+
+      bool result =
+          await context?.initMultimodalAsync('/path/to/mmproj.gguf', true) ??
+          false;
+
+      expect(result, isTrue);
+    });
+
+    test('generateSpeechAsync generates speech asynchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContext(
+        modelPath: 'test/chat_model.gguf',
+      );
+
+      Map<String, dynamic>? result = await context?.generateSpeechAsync(
+        'Hello, this is a test.',
+      );
+
+      expect(result, isNotNull);
+      expect(result?['audioSamples'], isNotNull);
+      expect(result?['sampleRate'], 24000);
+      expect(result?['duration'], 1.0);
+      expect(result?['methodUsed'], 0);
+    });
+
+    test(
+      'generateSpeechStreamAsync generates speech stream asynchronously',
+      () async {
+        LlamaMobile llamaMobile = LlamaMobile();
+        MockLlamaMobileFlutterSdkPlatform fakePlatform =
+            MockLlamaMobileFlutterSdkPlatform();
+        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+        LlamaContext? context = await llamaMobile.initContext(
+          modelPath: 'test/chat_model.gguf',
+        );
+
+        Map<String, dynamic>? result = await context?.generateSpeechStreamAsync(
+          'Hello, this is a test.',
+        );
+
+        expect(result, isNotNull);
+        expect(result?['sampleRate'], 24000);
+        expect(result?['duration'], 1.0);
+        expect(result?['methodUsed'], 0);
+      },
+    );
+
+    test(
+      'generateSpeechStreamForLongTextAsync generates speech stream for long text asynchronously',
+      () async {
+        LlamaMobile llamaMobile = LlamaMobile();
+        MockLlamaMobileFlutterSdkPlatform fakePlatform =
+            MockLlamaMobileFlutterSdkPlatform();
+        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+        LlamaContext? context = await llamaMobile.initContext(
+          modelPath: 'test/chat_model.gguf',
+        );
+
+        Map<String, dynamic>? result = await context
+            ?.generateSpeechStreamForLongTextAsync(
+              'This is a very long text that will be processed in chunks.',
+            );
+
+        expect(result, isNotNull);
+        expect(result?['sampleRate'], 24000);
+        expect(result?['duration'], 1.0);
+        expect(result?['methodUsed'], 0);
+      },
+    );
+
+    test(
+      'removeLoraAdaptersAsync removes LoRA adapters asynchronously',
+      () async {
+        LlamaMobile llamaMobile = LlamaMobile();
+        MockLlamaMobileFlutterSdkPlatform fakePlatform =
+            MockLlamaMobileFlutterSdkPlatform();
+        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+        LlamaContext? context = await llamaMobile.initContext(
+          modelPath: 'test/base_model.gguf',
+        );
+
+        await context?.loadLoraAdapterAsync('test/lora_adapter.gguf', 0.75);
+        await context?.removeLoraAdaptersAsync();
+
+        expect(true, isTrue);
+      },
+    );
   });
 }

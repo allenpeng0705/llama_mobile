@@ -503,6 +503,20 @@ class LlamaMobile {
     return null;
   }
 
+  /// Initializes a new LlamaMobile context with specified parameters asynchronously.
+  ///
+  /// Parameters:
+  /// - [params]: InitParams object containing all initialization parameters.
+  Future<LlamaContext?> initContextWithParamsAsync(InitParams params) async {
+    final result = await LlamaMobileFlutterSdkPlatform.instance
+        .initContextAsync(params.toMap());
+    if (result != null && result.containsKey('contextHandle')) {
+      final contextHandle = result['contextHandle'] as int;
+      return LlamaContext._internal(contextHandle);
+    }
+    return null;
+  }
+
   /// Initializes a new LlamaMobile context with the specified model.
   ///
   /// Parameters:
@@ -637,6 +651,122 @@ class LlamaMobile {
     }
     return null;
   }
+
+  /// Initializes a context asynchronously (runs in background thread)
+  Future<LlamaContext?> initContextAsync({
+    required String modelPath,
+    String? chatTemplate,
+    String? systemPrompt,
+    int nCtx = 2048,
+    int nBatch = 512,
+    int nUBatch = 512,
+    int nGpuLayers = 0,
+    int nThreads = 4,
+    bool useMmap = true,
+    bool useMlock = false,
+    bool embedding = false,
+    int poolingType = 0,
+    int embdNormalize = 0,
+    bool flashAttention = false,
+    String? cacheTypeK,
+    String? cacheTypeV,
+    bool enableChatTemplate = true,
+  }) async {
+    final params = InitParams(
+      modelPath: modelPath,
+      chatTemplate: chatTemplate,
+      systemPrompt: systemPrompt,
+      nCtx: nCtx,
+      nBatch: nBatch,
+      nUBatch: nUBatch,
+      nGpuLayers: nGpuLayers,
+      nThreads: nThreads,
+      useMmap: useMmap,
+      useMlock: useMlock,
+      embedding: embedding,
+      poolingType: poolingType,
+      embdNormalize: embdNormalize,
+      flashAttention: flashAttention,
+      cacheTypeK: cacheTypeK,
+      cacheTypeV: cacheTypeV,
+      enableChatTemplate: enableChatTemplate,
+    );
+    return initContextWithParamsAsync(params);
+  }
+
+  /// Downloads a model from a URL asynchronously
+  Future<DownloadResult?> downloadModelAsync({
+    required String url,
+    required String localPath,
+    String? username,
+    String? password,
+    Map<String, String>? headers,
+  }) async {
+    final params = DownloadParams(
+      url: url,
+      localPath: localPath,
+      username: username,
+      password: password,
+      headers: headers,
+    );
+    return downloadModelWithParamsAsync(params);
+  }
+
+  /// Downloads a model from a URL using DownloadParams asynchronously.
+  ///
+  /// Parameters:
+  /// - [params]: Download parameters.
+  Future<DownloadResult?> downloadModelWithParamsAsync(
+    DownloadParams params,
+  ) async {
+    final result = await LlamaMobileFlutterSdkPlatform.instance
+        .downloadModelAsync(params.toMap());
+    if (result != null) {
+      return DownloadResult(
+        success: result['success'] as bool,
+        localPath: result['localPath'] as String,
+        errorMessage: result['errorMessage'] as String?,
+      );
+    }
+    return null;
+  }
+
+  /// Downloads a file from Hugging Face asynchronously
+  Future<DownloadResult?> downloadHfFileAsync({
+    required String repoId,
+    required String filename,
+    required String localPath,
+    String? bearerToken,
+    bool? offline,
+  }) async {
+    final params = HuggingFaceDownloadParams(
+      repoId: repoId,
+      filename: filename,
+      localPath: localPath,
+      bearerToken: bearerToken,
+      offline: offline ?? false,
+    );
+    return downloadHfFileWithParamsAsync(params);
+  }
+
+  /// Downloads a file from Hugging Face using HuggingFaceDownloadParams asynchronously.
+  ///
+  /// Parameters:
+  /// - [params]: Hugging Face download parameters.
+  Future<DownloadResult?> downloadHfFileWithParamsAsync(
+    HuggingFaceDownloadParams params,
+  ) async {
+    final result = await LlamaMobileFlutterSdkPlatform.instance
+        .downloadHfFileAsync(params.toMap());
+    if (result != null) {
+      return DownloadResult(
+        success: result['success'] as bool,
+        localPath: result['localPath'] as String,
+        errorMessage: result['errorMessage'] as String?,
+      );
+    }
+    return null;
+  }
 }
 
 /// Represents a LlamaMobile context
@@ -665,6 +795,13 @@ class LlamaContext {
     );
   }
 
+  /// Frees the context asynchronously
+  Future<bool> freeAsync() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.freeContextAsync(
+      _contextHandle,
+    );
+  }
+
   /// Generates a completion using OpenAI-compatible JSON format
   Future<CompletionResult?> generateOpenAICompletion({
     required String openAIJSON,
@@ -672,6 +809,28 @@ class LlamaContext {
   }) async {
     final result = await LlamaMobileFlutterSdkPlatform.instance
         .generateOpenAICompletion(_contextHandle, openAIJSON, grammar);
+    if (result != null) {
+      return CompletionResult(
+        text: result['text'] as String,
+        tokensGenerated: result['tokensGenerated'] as int,
+        tokensEvaluated: result['tokensEvaluated'] as int,
+        truncated: result['truncated'] as bool,
+        stoppedEos: result['stoppedEos'] as bool,
+        stoppedWord: result['stoppedWord'] as bool,
+        stoppedLimit: result['stoppedLimit'] as bool,
+        stoppingWord: result['stoppingWord'] as String?,
+      );
+    }
+    return null;
+  }
+
+  /// Generates a completion using OpenAI-compatible JSON format asynchronously
+  Future<CompletionResult?> generateOpenAICompletionAsync({
+    required String openAIJSON,
+    String? grammar,
+  }) async {
+    final result = await LlamaMobileFlutterSdkPlatform.instance
+        .generateOpenAICompletionAsync(_contextHandle, openAIJSON, grammar);
     if (result != null) {
       return CompletionResult(
         text: result['text'] as String,
@@ -1229,6 +1388,23 @@ class LlamaContext {
     );
   }
 
+  /// Generates a vector embedding for the given text asynchronously (runs in background thread).
+  ///
+  /// Note: The context must have been initialized with `embedding: true`.
+  ///
+  /// Parameters:
+  /// - [text]: Input text to generate embedding for.
+  ///
+  /// Returns:
+  /// A list of doubles representing the embedding vector, or null if generation failed.
+  Future<List<double>?> generateEmbeddingAsync(String text) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.generateEmbeddingAsync(
+      _contextHandle,
+      text,
+      {},
+    );
+  }
+
   /// Tokenizes a text string into token IDs.
   ///
   /// Parameters:
@@ -1359,6 +1535,25 @@ class LlamaContext {
     int sampleRate,
   ) async {
     return await LlamaMobileFlutterSdkPlatform.instance.saveAudioToWav(
+      _contextHandle,
+      filePath,
+      audioData,
+      sampleRate,
+    );
+  }
+
+  /// Save audio samples to WAV file asynchronously (runs in background thread)
+  /// - Parameters:
+  ///   - filePath: Path to save the WAV file
+  ///   - audioData: Array of 16-bit integer audio samples
+  ///   - sampleRate: Sample rate for the audio (default: 24000 Hz)
+  /// - Returns: Boolean indicating whether the audio was saved successfully
+  Future<bool> saveAudioToWavAsync(
+    String filePath,
+    List<int> audioData,
+    int sampleRate,
+  ) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.saveAudioToWavAsync(
       _contextHandle,
       filePath,
       audioData,
@@ -1577,6 +1772,424 @@ class LlamaContext {
   }) async {
     return await LlamaMobileFlutterSdkPlatform.instance
         .generateSpeechStreamForLongText(_contextHandle, text, options);
+  }
+
+  /// Generates a completion asynchronously (runs in background thread)
+  Future<CompletionResult?> generateCompletionAsync({
+    required String prompt,
+    int maxTokens = 1024,
+    int? nThreads,
+    int seed = -1,
+    double temperature = 0.8,
+    int topK = 40,
+    double topP = 0.95,
+    double minP = 0.05,
+    double typicalP = 1.0,
+    int penaltyLastN = 64,
+    double penaltyRepeat = 1.1,
+    double penaltyFreq = 0.0,
+    double penaltyPresent = 0.0,
+    int mirostat = 0,
+    double mirostatTau = 5.0,
+    double mirostatEta = 0.1,
+    bool ignoreEos = false,
+    String? grammar,
+    List<String>? stopSequences,
+    List<String>? mediaPaths,
+  }) async {
+    final params = CompletionParams(
+      prompt: prompt,
+      maxTokens: maxTokens,
+      nThreads: nThreads,
+      seed: seed,
+      temperature: temperature,
+      topK: topK,
+      topP: topP,
+      minP: minP,
+      typicalP: typicalP,
+      penaltyLastN: penaltyLastN,
+      penaltyRepeat: penaltyRepeat,
+      penaltyFreq: penaltyFreq,
+      penaltyPresent: penaltyPresent,
+      mirostat: mirostat,
+      mirostatTau: mirostatTau,
+      mirostatEta: mirostatEta,
+      ignoreEos: ignoreEos,
+      grammar: grammar,
+      stopSequences: stopSequences ?? [],
+      mediaPaths: mediaPaths ?? [],
+    );
+    return generateCompletionWithParamsAsync(params);
+  }
+
+  /// Generates a completion with CompletionParams asynchronously
+  Future<CompletionResult?> generateCompletionWithParamsAsync(
+    CompletionParams params,
+  ) async {
+    final result = await LlamaMobileFlutterSdkPlatform.instance
+        .generateCompletionAsync(_contextHandle, params.toMap());
+    if (result != null) {
+      return CompletionResult(
+        text: result['text'] as String,
+        tokensGenerated: result['tokensGenerated'] as int,
+        tokensEvaluated: result['tokensEvaluated'] as int,
+        truncated: result['truncated'] as bool,
+        stoppedEos: result['stoppedEos'] as bool,
+        stoppedWord: result['stoppedWord'] as bool,
+        stoppedLimit: result['stoppedLimit'] as bool,
+        stoppingWord: result['stoppingWord'] as String?,
+      );
+    }
+    return null;
+  }
+
+  /// Generates a multimodal completion asynchronously (runs in background thread)
+  Future<CompletionResult?> generateMultimodalCompletionAsync({
+    required String prompt,
+    required List<String> mediaPaths,
+    int maxTokens = 1024,
+    int? nThreads,
+    int seed = -1,
+    double temperature = 0.8,
+    int topK = 40,
+    double topP = 0.95,
+    double minP = 0.05,
+    double typicalP = 1.0,
+    int penaltyLastN = 64,
+    double penaltyRepeat = 1.1,
+    double penaltyFreq = 0.0,
+    double penaltyPresent = 0.0,
+    int mirostat = 0,
+    double mirostatTau = 5.0,
+    double mirostatEta = 0.1,
+    bool ignoreEos = false,
+    String? grammar,
+    List<String>? stopSequences,
+  }) async {
+    final params = CompletionParams(
+      prompt: prompt,
+      maxTokens: maxTokens,
+      nThreads: nThreads,
+      seed: seed,
+      temperature: temperature,
+      topK: topK,
+      topP: topP,
+      minP: minP,
+      typicalP: typicalP,
+      penaltyLastN: penaltyLastN,
+      penaltyRepeat: penaltyRepeat,
+      penaltyFreq: penaltyFreq,
+      penaltyPresent: penaltyPresent,
+      mirostat: mirostat,
+      mirostatTau: mirostatTau,
+      mirostatEta: mirostatEta,
+      ignoreEos: ignoreEos,
+      grammar: grammar,
+      stopSequences: stopSequences ?? [],
+      mediaPaths: mediaPaths,
+    );
+    return generateMultimodalCompletionWithParamsAsync(params);
+  }
+
+  /// Generates a multimodal completion with CompletionParams asynchronously
+  Future<CompletionResult?> generateMultimodalCompletionWithParamsAsync(
+    CompletionParams params,
+  ) async {
+    final result = await LlamaMobileFlutterSdkPlatform.instance
+        .generateMultimodalCompletionAsync(
+          _contextHandle,
+          params.toMap(),
+          params.mediaPaths ?? [],
+        );
+    if (result != null) {
+      return CompletionResult(
+        text: result['text'] as String,
+        tokensGenerated: result['tokensGenerated'] as int,
+        tokensEvaluated: result['tokensEvaluated'] as int,
+        truncated: result['truncated'] as bool,
+        stoppedEos: result['stoppedEos'] as bool,
+        stoppedWord: result['stoppedWord'] as bool,
+        stoppedLimit: result['stoppedLimit'] as bool,
+        stoppingWord: result['stoppingWord'] as String?,
+      );
+    }
+    return null;
+  }
+
+  /// Generates a conversation asynchronously (runs in background thread)
+  Future<ConversationResult?> generateConversationAsync({
+    required List<ChatMessage> chatMessages,
+    int maxTokens = 1024,
+    int? nThreads,
+    int seed = -1,
+    double temperature = 0.8,
+    int topK = 40,
+    double topP = 0.95,
+    double minP = 0.05,
+    double typicalP = 1.0,
+    int penaltyLastN = 64,
+    double penaltyRepeat = 1.1,
+    double penaltyFreq = 0.0,
+    double penaltyPresent = 0.0,
+    int mirostat = 0,
+    double mirostatTau = 5.0,
+    double mirostatEta = 0.1,
+    bool ignoreEos = false,
+    String? grammar,
+    List<String>? stopSequences,
+  }) async {
+    final params = CompletionParams(
+      prompt: '',
+      maxTokens: maxTokens,
+      nThreads: nThreads,
+      seed: seed,
+      temperature: temperature,
+      topK: topK,
+      topP: topP,
+      minP: minP,
+      typicalP: typicalP,
+      penaltyLastN: penaltyLastN,
+      penaltyRepeat: penaltyRepeat,
+      penaltyFreq: penaltyFreq,
+      penaltyPresent: penaltyPresent,
+      mirostat: mirostat,
+      mirostatTau: mirostatTau,
+      mirostatEta: mirostatEta,
+      ignoreEos: ignoreEos,
+      grammar: grammar,
+      stopSequences: stopSequences ?? [],
+    );
+    return generateConversationWithParamsAsync(params, chatMessages);
+  }
+
+  /// Generates a conversation with CompletionParams and chat messages asynchronously
+  Future<ConversationResult?> generateConversationWithParamsAsync(
+    CompletionParams params,
+    List<ChatMessage> chatMessages,
+  ) async {
+    final messagesMap = chatMessages.map((msg) => msg.toMap()).toList();
+    final result = await LlamaMobileFlutterSdkPlatform.instance
+        .generateConversationAsync(_contextHandle, params.toMap(), messagesMap);
+    if (result != null) {
+      return ConversationResult(
+        text: result['text'] as String,
+        tokensGenerated: result['tokensGenerated'] as int,
+        timeToFirstToken: result['timeToFirstToken'] as int? ?? 0,
+        totalTime: result['totalTime'] as int? ?? 0,
+      );
+    }
+    return null;
+  }
+
+  /// Formats chat messages asynchronously (runs in background thread)
+  Future<String?> formatChatMessagesAsync(
+    List<ChatMessage> messages,
+    String? chatTemplate,
+  ) async {
+    final messagesMap = messages.map((msg) => msg.toMap()).toList();
+    return await LlamaMobileFlutterSdkPlatform.instance.formatChatMessagesAsync(
+      _contextHandle,
+      messagesMap,
+      chatTemplate,
+    );
+  }
+
+  /// Loads a TTS model asynchronously (runs in background thread)
+  Future<bool> loadTTSModelAsync(
+    String modelPath,
+    TTSModelType modelType,
+  ) async {
+    final params = <String, dynamic>{
+      'modelPath': modelPath,
+      'modelType': modelType.rawValue,
+    };
+    final result = await LlamaMobileFlutterSdkPlatform.instance
+        .loadTTSModelAsync(_contextHandle, modelPath, params);
+    return result?['success'] as bool? ?? false;
+  }
+
+  /// Frees the TTS model asynchronously (runs in background thread)
+  Future<bool> freeTTSModelAsync() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.freeTTSModelAsync(
+      _contextHandle,
+    );
+  }
+
+  /// Loads a LoRA adapter asynchronously (runs in background thread)
+  Future<bool> loadLoraAdapterAsync(String adapterPath, double scale) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.loadLoraAdapterAsync(
+      _contextHandle,
+      adapterPath,
+      scale,
+    );
+  }
+
+  /// Frees a LoRA adapter asynchronously (runs in background thread)
+  Future<bool> freeLoraAdapterAsync() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.freeLoraAdapterAsync(
+      _contextHandle,
+    );
+  }
+
+  /// Removes all LoRA adapters asynchronously (runs in background thread)
+  Future<void> removeLoraAdaptersAsync() async {
+    await LlamaMobileFlutterSdkPlatform.instance.removeLoraAdaptersAsync(
+      _contextHandle,
+    );
+  }
+
+  /// Generates a streaming completion asynchronously (runs in background thread)
+  Future<CompletionResult?> generateStreamingCompletionAsync({
+    required String prompt,
+    int maxTokens = 1024,
+    int? nThreads,
+    int seed = -1,
+    double temperature = 0.8,
+    int topK = 40,
+    double topP = 0.95,
+    double minP = 0.05,
+    double typicalP = 1.0,
+    int penaltyLastN = 64,
+    double penaltyRepeat = 1.1,
+    double penaltyFreq = 0.0,
+    double penaltyPresent = 0.0,
+    int mirostat = 0,
+    double mirostatTau = 5.0,
+    double mirostatEta = 0.1,
+    bool ignoreEos = false,
+    String? grammar,
+    List<String>? stopSequences,
+  }) async {
+    final params = CompletionParams(
+      prompt: prompt,
+      maxTokens: maxTokens,
+      nThreads: nThreads,
+      seed: seed,
+      temperature: temperature,
+      topK: topK,
+      topP: topP,
+      minP: minP,
+      typicalP: typicalP,
+      penaltyLastN: penaltyLastN,
+      penaltyRepeat: penaltyRepeat,
+      penaltyFreq: penaltyFreq,
+      penaltyPresent: penaltyPresent,
+      mirostat: mirostat,
+      mirostatTau: mirostatTau,
+      mirostatEta: mirostatEta,
+      ignoreEos: ignoreEos,
+      grammar: grammar,
+      stopSequences: stopSequences ?? [],
+    );
+    return generateStreamingCompletionWithParamsAsync(params);
+  }
+
+  /// Generates a streaming completion with CompletionParams asynchronously
+  Future<CompletionResult?> generateStreamingCompletionWithParamsAsync(
+    CompletionParams params,
+  ) async {
+    final result = await LlamaMobileFlutterSdkPlatform.instance
+        .generateStreamingCompletionAsync(_contextHandle, params.toMap());
+    if (result != null) {
+      return CompletionResult(
+        text: result['text'] as String,
+        tokensGenerated: result['tokensGenerated'] as int,
+        tokensEvaluated: result['tokensEvaluated'] as int,
+        truncated: result['truncated'] as bool,
+        stoppedEos: result['stoppedEos'] as bool,
+        stoppedWord: result['stoppedWord'] as bool,
+        stoppedLimit: result['stoppedLimit'] as bool,
+        stoppingWord: result['stoppingWord'] as String?,
+      );
+    }
+    return null;
+  }
+
+  /// Generates a streaming OpenAI completion asynchronously (runs in background thread)
+  Future<CompletionResult?> generateStreamingOpenAICompletionAsync({
+    required String openAIJSON,
+    String? grammar,
+  }) async {
+    final result = await LlamaMobileFlutterSdkPlatform.instance
+        .generateStreamingOpenAICompletionAsync(
+          _contextHandle,
+          openAIJSON,
+          grammar,
+        );
+    if (result != null) {
+      return CompletionResult(
+        text: result['text'] as String,
+        tokensGenerated: result['tokensGenerated'] as int,
+        tokensEvaluated: result['tokensEvaluated'] as int,
+        truncated: result['truncated'] as bool,
+        stoppedEos: result['stoppedEos'] as bool,
+        stoppedWord: result['stoppedWord'] as bool,
+        stoppedLimit: result['stoppedLimit'] as bool,
+        stoppingWord: result['stoppingWord'] as String?,
+      );
+    }
+    return null;
+  }
+
+  /// Initializes multimodal asynchronously (runs in background thread)
+  Future<bool> initMultimodalAsync(String mmprojPath, bool useGpu) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.initMultimodalAsync(
+      _contextHandle,
+      mmprojPath,
+      useGpu,
+    );
+  }
+
+  /// Releases multimodal asynchronously (runs in background thread)
+  Future<void> releaseMultimodalAsync() async {
+    await LlamaMobileFlutterSdkPlatform.instance.releaseMultimodalAsync(
+      _contextHandle,
+    );
+  }
+
+  /// Initializes vocoder asynchronously (runs in background thread)
+  Future<bool> initVocoderAsync(String vocoderModelPath) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.initVocoderAsync(
+      _contextHandle,
+      vocoderModelPath,
+    );
+  }
+
+  /// Releases vocoder asynchronously (runs in background thread)
+  Future<void> releaseVocoderAsync() async {
+    await LlamaMobileFlutterSdkPlatform.instance.releaseVocoderAsync(
+      _contextHandle,
+    );
+  }
+
+  /// Generates speech asynchronously (runs in background thread)
+  Future<Map<String, dynamic>?> generateSpeechAsync(
+    String text, {
+    Map<String, dynamic>? options,
+  }) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.generateSpeechAsync(
+      _contextHandle,
+      text,
+      options,
+    );
+  }
+
+  /// Generates speech as a stream asynchronously (runs in background thread)
+  Future<Map<String, dynamic>?> generateSpeechStreamAsync(
+    String text, {
+    Map<String, dynamic>? options,
+  }) async {
+    return await LlamaMobileFlutterSdkPlatform.instance
+        .generateSpeechStreamAsync(_contextHandle, text, options);
+  }
+
+  /// Generates speech as a stream for long text asynchronously (runs in background thread)
+  Future<Map<String, dynamic>?> generateSpeechStreamForLongTextAsync(
+    String text, {
+    Map<String, dynamic>? options,
+  }) async {
+    return await LlamaMobileFlutterSdkPlatform.instance
+        .generateSpeechStreamForLongTextAsync(_contextHandle, text, options);
   }
 }
 

@@ -822,17 +822,17 @@ class LlamaMobileFlutterSdkPlugin :
         val speechResult = LlamaMobile.generateSpeechSync(contextHandle, text, options)
 
         if (speechResult != null && speechResult.isSuccess()) {
-            val speech = speechResult.getSuccess()
+            val speech = speechResult.value
             result.success(mapOf(
                 "audioSamples" to speech.getAudioSamples(),
                 "sampleRate" to speech.getSampleRate(),
                 "duration" to speech.getDuration(),
                 "outputFilePath" to (speech.getOutputFilePath() ?: null),
-                "methodUsed" to speech.getMethodUsed().rawValue
+                "methodUsed" to speech.getMethodUsed().ordinal
             ))
         } else {
-            val error = speechResult?.getError()
-            result.error("SPEECH_GENERATION_FAILED", error?.message ?: "Failed to generate speech", null)
+            val error = speechResult?.error
+            result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
         }
     }
 
@@ -848,17 +848,17 @@ class LlamaMobileFlutterSdkPlugin :
             val speechResult = LlamaMobile.generateSpeech(contextHandle, text, options, null)
 
             if (speechResult != null && speechResult.isSuccess()) {
-                val speech = speechResult.getSuccess()
+                val speech = speechResult.value
                 result.success(mapOf(
                     "audioSamples" to speech.getAudioSamples(),
                     "sampleRate" to speech.getSampleRate(),
                     "duration" to speech.getDuration(),
                     "outputFilePath" to (speech.getOutputFilePath() ?: null),
-                    "methodUsed" to speech.getMethodUsed().rawValue
+                    "methodUsed" to speech.getMethodUsed().ordinal
                 ))
             } else {
-                val error = speechResult?.getError()
-                result.error("SPEECH_GENERATION_FAILED", error?.message ?: "Failed to generate speech", null)
+                val error = speechResult?.error
+                result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
             }
         }.start()
     }
@@ -881,16 +881,16 @@ class LlamaMobileFlutterSdkPlugin :
             )
 
             if (speechResult != null && speechResult.isSuccess()) {
-                val metadata = speechResult.getSuccess()
+                val metadata = speechResult.value
                 result.success(mapOf(
                     "sampleRate" to metadata.getSampleRate(),
                     "duration" to metadata.getDuration(),
                     "outputFilePath" to (metadata.getOutputFilePath() ?: null),
-                    "methodUsed" to metadata.getMethodUsed().rawValue
+                    "methodUsed" to metadata.getMethodUsed().ordinal
                 ))
             } else {
-                val error = speechResult?.getError()
-                result.error("SPEECH_STREAM_FAILED", error?.message ?: "Failed to generate speech stream", null)
+                val error = speechResult?.error
+                result.error("SPEECH_STREAM_FAILED", error?.toString() ?: "Failed to generate speech stream", null)
             }
         }.start()
     }
@@ -913,32 +913,32 @@ class LlamaMobileFlutterSdkPlugin :
             )
 
             if (speechResult != null && speechResult.isSuccess()) {
-                val metadata = speechResult.getSuccess()
+                val metadata = speechResult.value
                 result.success(mapOf(
                     "sampleRate" to metadata.getSampleRate(),
                     "duration" to metadata.getDuration(),
                     "outputFilePath" to (metadata.getOutputFilePath() ?: null),
-                    "methodUsed" to metadata.getMethodUsed().rawValue
+                    "methodUsed" to metadata.getMethodUsed().ordinal
                 ))
             } else {
-                val error = speechResult?.getError()
-                result.error("SPEECH_STREAM_FAILED", error?.message ?: "Failed to generate speech stream", null)
+                val error = speechResult?.error
+                result.error("SPEECH_STREAM_FAILED", error?.toString() ?: "Failed to generate speech stream", null)
             }
         }.start()
     }
 
-    private fun parseTTSOptions(optionsMap: Map<String, Any>?): TTSOptions {
+    private fun parseTTSOptions(optionsMap: Map<String, Any>?): LlamaMobile.TTSOptions {
         if (optionsMap == null) {
-            return TTSOptions()
+            return LlamaMobile.TTSOptions.Builder().build()
         }
 
-        return TTSOptions().apply {
-            sampleRate = (optionsMap["sampleRate"] as? Int) ?: 24000
-            voice = optionsMap["voice"] as? String
-            speed = ((optionsMap["speed"] as? Double) ?: 1.0).toFloat()
-            saveToFile = (optionsMap["saveToFile"] as? Boolean) ?: false
-            outputFilePath = optionsMap["outputFilePath"] as? String
-        }
+        val builder = LlamaMobile.TTSOptions.Builder()
+        builder.sampleRate((optionsMap["sampleRate"] as? Int) ?: 24000)
+        builder.voice(optionsMap["voice"] as? String)
+        builder.speed(((optionsMap["speed"] as? Double) ?: 1.0).toFloat())
+        builder.saveToFile((optionsMap["saveToFile"] as? Boolean) ?: false)
+        builder.outputFilePath(optionsMap["outputFilePath"] as? String)
+        return builder.build()
     }
 
     private fun handleSetLogLevel(call: MethodCall, result: Result) {

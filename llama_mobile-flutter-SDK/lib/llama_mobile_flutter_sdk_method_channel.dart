@@ -35,8 +35,27 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<Map<String, dynamic>?> initContextAsync(
+    Map<String, dynamic> params,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'initContextAsync',
+      params,
+    );
+    return result;
+  }
+
+  @override
   Future<bool> freeContext(int contextHandle) async {
     final result = await methodChannel.invokeMethod<bool>('freeContext', {
+      'contextHandle': contextHandle,
+    });
+    return result ?? false;
+  }
+
+  @override
+  Future<bool> freeContextAsync(int contextHandle) async {
+    final result = await methodChannel.invokeMethod<bool>('freeContextAsync', {
       'contextHandle': contextHandle,
     });
     return result ?? false;
@@ -55,6 +74,18 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<Map<String, dynamic>?> generateCompletionAsync(
+    int contextHandle,
+    Map<String, dynamic> params,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'generateCompletionAsync',
+      {'contextHandle': contextHandle, 'params': params},
+    );
+    return result;
+  }
+
+  @override
   Future<Map<String, dynamic>?> generateMultimodalCompletion(
     int contextHandle,
     Map<String, dynamic> params,
@@ -62,6 +93,23 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   ) async {
     final result = await methodChannel.invokeMapMethod<String, dynamic>(
       'generateMultimodalCompletion',
+      {
+        'contextHandle': contextHandle,
+        'params': params,
+        'mediaPaths': mediaPaths,
+      },
+    );
+    return result;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> generateMultimodalCompletionAsync(
+    int contextHandle,
+    Map<String, dynamic> params,
+    List<String> mediaPaths,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'generateMultimodalCompletionAsync',
       {
         'contextHandle': contextHandle,
         'params': params,
@@ -89,6 +137,23 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<Map<String, dynamic>?> generateConversationAsync(
+    int contextHandle,
+    Map<String, dynamic> params,
+    List<Map<String, String?>> chatMessages,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'generateConversationAsync',
+      {
+        'contextHandle': contextHandle,
+        'params': params,
+        'chatMessages': chatMessages,
+      },
+    );
+    return result;
+  }
+
+  @override
   Future<String?> formatChatMessages(
     int contextHandle,
     List<Map<String, String?>> messages,
@@ -104,6 +169,21 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<String?> formatChatMessagesAsync(
+    int contextHandle,
+    List<Map<String, String?>> messages,
+    String? chatTemplate,
+  ) async {
+    final result = await methodChannel
+        .invokeMethod<String>('formatChatMessagesAsync', {
+          'contextHandle': contextHandle,
+          'messages': messages,
+          'chatTemplate': chatTemplate,
+        });
+    return result;
+  }
+
+  @override
   Future<Map<String, dynamic>?> loadTTSModel(
     int contextHandle,
     String modelPath,
@@ -111,6 +191,23 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   ) async {
     final result = await methodChannel.invokeMapMethod<String, dynamic>(
       'loadTTSModel',
+      {
+        'contextHandle': contextHandle,
+        'modelPath': modelPath,
+        'params': params,
+      },
+    );
+    return result;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> loadTTSModelAsync(
+    int contextHandle,
+    String modelPath,
+    Map<String, dynamic> params,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'loadTTSModelAsync',
       {
         'contextHandle': contextHandle,
         'modelPath': modelPath,
@@ -161,6 +258,14 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<bool> freeTTSModelAsync(int contextHandle) async {
+    final result = await methodChannel.invokeMethod<bool>('freeTTSModelAsync', {
+      'contextHandle': contextHandle,
+    });
+    return result ?? false;
+  }
+
+  @override
   Future<bool> saveAudioToWav(
     int contextHandle,
     String filePath,
@@ -191,8 +296,32 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<bool> initMultimodalAsync(
+    int contextHandle,
+    String mmprojPath,
+    bool useGpu,
+  ) async {
+    final result = await methodChannel.invokeMethod<bool>(
+      'initMultimodalAsync',
+      {
+        'contextHandle': contextHandle,
+        'mmprojPath': mmprojPath,
+        'useGpu': useGpu,
+      },
+    );
+    return result ?? false;
+  }
+
+  @override
   Future<void> releaseMultimodal(int contextHandle) async {
     await methodChannel.invokeMethod<void>('releaseMultimodal', {
+      'contextHandle': contextHandle,
+    });
+  }
+
+  @override
+  Future<void> releaseMultimodalAsync(int contextHandle) async {
+    await methodChannel.invokeMethod<void>('releaseMultimodalAsync', {
       'contextHandle': contextHandle,
     });
   }
@@ -207,8 +336,27 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<bool> initVocoderAsync(
+    int contextHandle,
+    String vocoderModelPath,
+  ) async {
+    final result = await methodChannel.invokeMethod<bool>('initVocoderAsync', {
+      'contextHandle': contextHandle,
+      'vocoderModelPath': vocoderModelPath,
+    });
+    return result ?? false;
+  }
+
+  @override
   Future<void> releaseVocoder(int contextHandle) async {
     await methodChannel.invokeMethod<void>('releaseVocoder', {
+      'contextHandle': contextHandle,
+    });
+  }
+
+  @override
+  Future<void> releaseVocoderAsync(int contextHandle) async {
+    await methodChannel.invokeMethod<void>('releaseVocoderAsync', {
       'contextHandle': contextHandle,
     });
   }
@@ -232,6 +380,13 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   @override
   Future<void> removeLoraAdapters(int contextHandle) async {
     await methodChannel.invokeMethod<void>('removeLoraAdapters', {
+      'contextHandle': contextHandle,
+    });
+  }
+
+  @override
+  Future<void> removeLoraAdaptersAsync(int contextHandle) async {
+    await methodChannel.invokeMethod<void>('removeLoraAdaptersAsync', {
       'contextHandle': contextHandle,
     });
   }
@@ -327,6 +482,19 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<Map<String, dynamic>?> generateSpeechAsync(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'generateSpeechAsync',
+      {'contextHandle': contextHandle, 'text': text, 'options': options},
+    );
+    return result;
+  }
+
+  @override
   Future<Map<String, dynamic>?> generateSpeechStream(
     int contextHandle,
     String text,
@@ -340,6 +508,19 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<Map<String, dynamic>?> generateSpeechStreamAsync(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'generateSpeechStreamAsync',
+      {'contextHandle': contextHandle, 'text': text, 'options': options},
+    );
+    return result;
+  }
+
+  @override
   Future<Map<String, dynamic>?> generateSpeechStreamForLongText(
     int contextHandle,
     String text,
@@ -347,6 +528,19 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   ) async {
     final result = await methodChannel.invokeMapMethod<String, dynamic>(
       'generateSpeechStreamForLongText',
+      {'contextHandle': contextHandle, 'text': text, 'options': options},
+    );
+    return result;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> generateSpeechStreamForLongTextAsync(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'generateSpeechStreamForLongTextAsync',
       {'contextHandle': contextHandle, 'text': text, 'options': options},
     );
     return result;
@@ -398,10 +592,36 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<bool> loadLoraAdapterAsync(
+    int contextHandle,
+    String adapterPath,
+    double scale,
+  ) async {
+    final result = await methodChannel.invokeMethod<bool>(
+      'loadLoraAdapterAsync',
+      {
+        'contextHandle': contextHandle,
+        'adapterPath': adapterPath,
+        'scale': scale,
+      },
+    );
+    return result ?? false;
+  }
+
+  @override
   Future<bool> freeLoraAdapter(int contextHandle) async {
     final result = await methodChannel.invokeMethod<bool>('freeLoraAdapter', {
       'contextHandle': contextHandle,
     });
+    return result ?? false;
+  }
+
+  @override
+  Future<bool> freeLoraAdapterAsync(int contextHandle) async {
+    final result = await methodChannel.invokeMethod<bool>(
+      'freeLoraAdapterAsync',
+      {'contextHandle': contextHandle},
+    );
     return result ?? false;
   }
 
@@ -423,6 +643,18 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<String?> loadGrammarAsync(
+    int contextHandle,
+    String grammarPath,
+  ) async {
+    final result = await methodChannel.invokeMethod<String>(
+      'loadGrammarAsync',
+      {'contextHandle': contextHandle, 'grammarPath': grammarPath},
+    );
+    return result;
+  }
+
+  @override
   Future<Map<String, dynamic>?> generateOpenAICompletion(
     int contextHandle,
     String openAIJSON,
@@ -440,11 +672,39 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<Map<String, dynamic>?> generateOpenAICompletionAsync(
+    int contextHandle,
+    String openAIJSON,
+    String? grammar,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'generateOpenAICompletionAsync',
+      {
+        'contextHandle': contextHandle,
+        'openAIJSON': openAIJSON,
+        'grammar': grammar,
+      },
+    );
+    return result;
+  }
+
+  @override
   Future<Map<String, dynamic>?> downloadModel(
     Map<String, dynamic> params,
   ) async {
     final result = await methodChannel.invokeMapMethod<String, dynamic>(
       'downloadModel',
+      params,
+    );
+    return result;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> downloadModelAsync(
+    Map<String, dynamic> params,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'downloadModelAsync',
       params,
     );
     return result;
@@ -480,6 +740,18 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<Map<String, dynamic>?> generateStreamingCompletionAsync(
+    int contextHandle,
+    Map<String, dynamic> params,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'generateStreamingCompletionAsync',
+      {'contextHandle': contextHandle, 'params': params},
+    );
+    return result;
+  }
+
+  @override
   Future<Map<String, dynamic>?> generateStreamingOpenAICompletion(
     int contextHandle,
     String openAIJSON,
@@ -487,6 +759,23 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   ) async {
     final result = await methodChannel.invokeMapMethod<String, dynamic>(
       'generateStreamingOpenAICompletion',
+      {
+        'contextHandle': contextHandle,
+        'openAIJSON': openAIJSON,
+        'grammar': grammar,
+      },
+    );
+    return result;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> generateStreamingOpenAICompletionAsync(
+    int contextHandle,
+    String openAIJSON,
+    String? grammar,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'generateStreamingOpenAICompletionAsync',
       {
         'contextHandle': contextHandle,
         'openAIJSON': openAIJSON,
@@ -565,6 +854,17 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   ) async {
     final result = await methodChannel.invokeMapMethod<String, dynamic>(
       'downloadHfFile',
+      params,
+    );
+    return result;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> downloadHfFileAsync(
+    Map<String, dynamic> params,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'downloadHfFileAsync',
       params,
     );
     return result;

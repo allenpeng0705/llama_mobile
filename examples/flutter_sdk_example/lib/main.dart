@@ -62,6 +62,9 @@ class AppState extends ChangeNotifier {
   String downloadSize = "";
   String? downloadError;
 
+  // Model loading state
+  bool isLoading = false;
+
   // Load grammar content from assets
   Future<String?> loadGrammarContent(String grammarName) async {
     try {
@@ -814,6 +817,8 @@ class AppState extends ChangeNotifier {
   // Load model
   Future<void> loadModel() async {
     try {
+      isLoading = true;
+      notifyListeners();
       print("=== Starting model loading process ===");
       print("Model path: $modelPath");
       print("nCtx: $nCtx");
@@ -909,7 +914,7 @@ class AppState extends ChangeNotifier {
       print("  embdNormalize: 1");
       print("  nBatch: 1024");
       print("  nUBatch: 1024");
-      final context = await llamaMobile!.initContext(
+      final context = await llamaMobile!.initContextAsync(
         modelPath: finalModelPath,
         chatTemplate: "<|im_start|>{{role}}\n{{content}}<|im_end|>\n",
         nCtx: nCtx,
@@ -962,7 +967,7 @@ class AppState extends ChangeNotifier {
 
           if (loraValid) {
             try {
-              final success = await context.loadLoraAdapter(loraPath, 1.0);
+              final success = await context.loadLoraAdapterAsync(loraPath, 1.0);
               print("LoRA adapter loaded successfully: $success");
             } catch (e) {
               print("Error loading LoRA adapter: $e");
@@ -1000,7 +1005,7 @@ class AppState extends ChangeNotifier {
           if (ttsValid) {
             try {
               // Try loading as outETTSv03 first
-              var success = await context.loadTTSModel(
+              var success = await context.loadTTSModelAsync(
                 ttsPath,
                 TTSModelType.outETTSv03,
               );
@@ -1008,7 +1013,7 @@ class AppState extends ChangeNotifier {
 
               // If v03 fails, try v02
               if (!success) {
-                success = await context.loadTTSModel(
+                success = await context.loadTTSModelAsync(
                   ttsPath,
                   TTSModelType.outETTSv02,
                 );
@@ -1053,7 +1058,7 @@ class AppState extends ChangeNotifier {
               print(
                 "Initializing multimodal support with mmproj model: $mmprojPath",
               );
-              final success = await context.initMultimodal(
+              final success = await context.initMultimodalAsync(
                 mmprojPath,
                 nGpuLayers > 0, // Use GPU if layers are specified
               );
@@ -1079,10 +1084,12 @@ class AppState extends ChangeNotifier {
       print("Model loading process completed");
       print("isModelLoaded: $isModelLoaded");
       print("errorMessage: $errorMessage");
+      isLoading = false;
       notifyListeners();
     } catch (e) {
       errorMessage = "Error loading model: ${e.toString()}";
       isModelLoaded = false;
+      isLoading = false;
       print("Error loading model: $e");
       print("Stack trace: ${e.toString()}");
       notifyListeners();
@@ -1092,6 +1099,8 @@ class AppState extends ChangeNotifier {
   // Unload model
   Future<void> unloadModel() async {
     try {
+      isLoading = true;
+      notifyListeners();
       // Clear the context
       llamaContext = null;
 
@@ -1101,9 +1110,11 @@ class AppState extends ChangeNotifier {
       isModelLoaded = false;
       errorMessage = null;
       print("All models unloaded successfully");
+      isLoading = false;
       notifyListeners();
     } catch (e) {
       errorMessage = "Error unloading model: ${e.toString()}";
+      isLoading = false;
       print("Error unloading model: $e");
       notifyListeners();
     }
@@ -2131,7 +2142,7 @@ class _EmbeddingTestViewState extends State<EmbeddingTestView> {
         isProcessing = true;
       });
       // Use the actual embedding method
-      final result = await widget.appState.llamaContext?.generateEmbedding(
+      final result = await widget.appState.llamaContext?.generateEmbeddingAsync(
         _textController.text,
       );
       if (result != null) {
@@ -2802,7 +2813,9 @@ class _SettingsViewState extends State<SettingsView> {
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
-                              onPressed: widget.appState.isModelLoaded
+                              onPressed:
+                                  widget.appState.isModelLoaded ||
+                                      widget.appState.isLoading
                                   ? null
                                   : () async {
                                       await widget.appState.loadModel();
@@ -2813,13 +2826,39 @@ class _SettingsViewState extends State<SettingsView> {
                                   vertical: 12,
                                 ),
                               ),
-                              child: const Text(
-                                "Load Model",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Colors.white,
-                                ),
-                              ),
+                              child: widget.appState.isLoading
+                                  ? Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                  Colors.white,
+                                                ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        const Text(
+                                          "Loading...",
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : const Text(
+                                      "Load Model",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -2828,7 +2867,9 @@ class _SettingsViewState extends State<SettingsView> {
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
-                              onPressed: !widget.appState.isModelLoaded
+                              onPressed:
+                                  !widget.appState.isModelLoaded ||
+                                      widget.appState.isLoading
                                   ? null
                                   : () async {
                                       await widget.appState.unloadModel();
@@ -3220,7 +3261,7 @@ class _LoRATestViewState extends State<LoRATestView> {
 
     try {
       final success =
-          await widget.appState.llamaContext?.loadLoraAdapter(
+          await widget.appState.llamaContext?.loadLoraAdapterAsync(
             widget.appState.loraModelPath,
             scale,
           ) ??
@@ -3532,7 +3573,7 @@ class _MultimodalTestViewState extends State<MultimodalTestView> {
         }
 
         final result = await widget.appState.llamaContext
-            ?.generateMultimodalCompletion(
+            ?.generateMultimodalCompletionAsync(
               prompt: _promptController.text,
               mediaPaths: [imagePath],
               maxTokens: 512,
@@ -3792,7 +3833,7 @@ class _TTSTestViewState extends State<TTSTestView> {
           print("Saving audio to WAV file: $filePath");
 
           final saveSuccess = await widget.appState.llamaContext
-              ?.saveAudioToWav(filePath, audioSamples, sampleRate);
+              ?.saveAudioToWavAsync(filePath, audioSamples, sampleRate);
 
           if (saveSuccess != true) {
             setState(() {
@@ -3864,7 +3905,7 @@ class _TTSTestViewState extends State<TTSTestView> {
           print("Saving audio to WAV file: $filePath");
 
           final saveSuccess = await widget.appState.llamaContext
-              ?.saveAudioToWav(filePath, audioSamples, sampleRate);
+              ?.saveAudioToWavAsync(filePath, audioSamples, sampleRate);
 
           if (saveSuccess != true) {
             setState(() {

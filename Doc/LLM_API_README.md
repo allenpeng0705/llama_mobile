@@ -632,10 +632,40 @@ Future<LlamaContext?> initContext({
 })
 ```
 
+##### Async Initialization
+
+```dart
+Future<LlamaContext?> initContextAsync({
+  required String modelPath,
+  String? chatTemplate,
+  String? systemPrompt,
+  int nCtx = 2048,
+  int nBatch = 512,
+  int nUBatch = 512,
+  int nGpuLayers = 0,
+  int nThreads = 4,
+  bool useMmap = true,
+  bool useMlock = false,
+  bool embedding = false,
+  int poolingType = 0,
+  int embdNormalize = 0,
+  bool flashAttention = false,
+  String? cacheTypeK,
+  String? cacheTypeV,
+  bool enableChatTemplate = true,
+})
+```
+
 ##### Advanced Initialization
 
 ```dart
 Future<LlamaContext?> initContextWithParams(InitParams params)
+```
+
+##### Async Advanced Initialization
+
+```dart
+Future<LlamaContext?> initContextWithParamsAsync(InitParams params)
 ```
 
 #### InitParams Structure
@@ -1717,10 +1747,43 @@ Future<CompletionResult?> generateCompletion({
 })
 ```
 
+##### Async Completion
+
+```dart
+Future<CompletionResult?> generateCompletionAsync({
+  required String prompt,
+  int maxTokens = 1024,
+  int? nThreads,
+  int seed = -1,
+  double temperature = 0.8,
+  int topK = 40,
+  double topP = 0.95,
+  double minP = 0.05,
+  double typicalP = 1.0,
+  int penaltyLastN = 64,
+  double penaltyRepeat = 1.1,
+  double penaltyFreq = 0.0,
+  double penaltyPresent = 0.0,
+  int mirostat = 0,
+  double mirostatTau = 5.0,
+  double mirostatEta = 0.1,
+  bool ignoreEos = false,
+  String? grammar,
+  List<String>? stopSequences,
+  List<String>? mediaPaths,
+})
+```
+
 ##### Completion with Params
 
 ```dart
 Future<CompletionResult?> generateCompletionWithParams(CompletionParams params)
+```
+
+##### Async Completion with Params
+
+```dart
+Future<CompletionResult?> generateCompletionWithParamsAsync(CompletionParams params)
 ```
 
 ##### Streaming Completion
@@ -2178,6 +2241,41 @@ Future<CompletionResult?> generateMultimodalCompletion({
 })
 ```
 
+#### Async Multimodal Completion
+
+```dart
+Future<CompletionResult?> generateMultimodalCompletionAsync({
+  required String prompt,
+  required List<String> mediaPaths,
+  int maxTokens = 1024,
+  int? nThreads,
+  int seed = -1,
+  double temperature = 0.8,
+  int topK = 40,
+  double topP = 0.95,
+  double minP = 0.05,
+  double typicalP = 1.0,
+  int penaltyLastN = 64,
+  double penaltyRepeat = 1.1,
+  double penaltyFreq = 0.0,
+  double penaltyPresent = 0.0,
+  int mirostat = 0,
+  double mirostatTau = 5.0,
+  double mirostatEta = 0.1,
+  bool ignoreEos = false,
+  String? grammar,
+  List<String>? stopSequences,
+})
+```
+
+#### Async Multimodal Completion with Params
+
+```dart
+Future<CompletionResult?> generateMultimodalCompletionWithParamsAsync(
+  CompletionParams params,
+)
+```
+
 #### Usage Examples
 
 ##### Image Analysis
@@ -2466,6 +2564,12 @@ public double cosineSimilarity(float[] vector1, float[] vector2) {
 
 ```dart
 Future<List<double>?> generateEmbedding(String text)
+```
+
+#### Generate Embeddings Async
+
+```dart
+Future<List<double>?> generateEmbeddingAsync(String text)
 ```
 
 #### Get Embedding Dimension

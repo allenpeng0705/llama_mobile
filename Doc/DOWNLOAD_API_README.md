@@ -130,6 +130,42 @@ Future<DownloadResult?> downloadHfFile({
 Future<DownloadResult?> downloadHfFileWithParams(HuggingFaceDownloadParams params)
 ```
 
+#### Async Download Model from URL
+
+```dart
+Future<DownloadResult?> downloadModelAsync({
+  required String url,
+  required String localPath,
+  String? username,
+  String? password,
+  Map<String, String>? headers,
+})
+```
+
+#### Async Download Model with Params
+
+```dart
+Future<DownloadResult?> downloadModelWithParamsAsync(DownloadParams params)
+```
+
+#### Async Download from Hugging Face
+
+```dart
+Future<DownloadResult?> downloadHfFileAsync({
+  required String repoId,
+  required String filename,
+  required String localPath,
+  String? bearerToken,
+  bool? offline,
+})
+```
+
+#### Async Download from Hugging Face with Params
+
+```dart
+Future<DownloadResult?> downloadHfFileWithParamsAsync(HuggingFaceDownloadParams params)
+```
+
 #### Parameters:
 - `url`: URL to download the model from
 - `localPath`: Local path to save the model
