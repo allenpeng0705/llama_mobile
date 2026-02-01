@@ -84,6 +84,10 @@ class LlamaMobileFlutterSdkPlugin :
                 "getAudioGuideTokens" -> handleGetAudioGuideTokens(call, result)
                 "setGuideTokens" -> handleSetGuideTokens(call, result)
                 "decodeAudioTokens" -> handleDecodeAudioTokens(call, result)
+                "generateSpeechSync" -> handleGenerateSpeechSync(call, result)
+                "generateSpeech" -> handleGenerateSpeech(call, result)
+                "generateSpeechStream" -> handleGenerateSpeechStream(call, result)
+                "generateSpeechStreamForLongText" -> handleGenerateSpeechStreamForLongText(call, result)
                 "setLogLevel" -> handleSetLogLevel(call, result)
                 "downloadModel" -> handleDownloadModel(call, result)
                 "downloadHfFile" -> handleDownloadHfFile(call, result)
@@ -805,6 +809,135 @@ class LlamaMobileFlutterSdkPlugin :
             result.success(audioSamples.toList())
         } else {
             result.error("DECODE_AUDIO_TOKENS_FAILED", "Failed to decode audio tokens", null)
+        }
+    }
+
+    private fun handleGenerateSpeechSync(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val text = call.argument<String>("text") ?: throw IllegalArgumentException("text is required")
+        val optionsMap = call.argument<Map<String, Any>>("options")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val options = parseTTSOptions(optionsMap)
+        val speechResult = LlamaMobile.generateSpeechSync(contextHandle, text, options)
+
+        if (speechResult != null && speechResult.isSuccess()) {
+            val speech = speechResult.getSuccess()
+            result.success(mapOf(
+                "audioSamples" to speech.getAudioSamples(),
+                "sampleRate" to speech.getSampleRate(),
+                "duration" to speech.getDuration(),
+                "outputFilePath" to (speech.getOutputFilePath() ?: null),
+                "methodUsed" to speech.getMethodUsed().rawValue
+            ))
+        } else {
+            val error = speechResult?.getError()
+            result.error("SPEECH_GENERATION_FAILED", error?.message ?: "Failed to generate speech", null)
+        }
+    }
+
+    private fun handleGenerateSpeech(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val text = call.argument<String>("text") ?: throw IllegalArgumentException("text is required")
+        val optionsMap = call.argument<Map<String, Any>>("options")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val options = parseTTSOptions(optionsMap)
+
+        Thread {
+            val speechResult = LlamaMobile.generateSpeech(contextHandle, text, options, null)
+
+            if (speechResult != null && speechResult.isSuccess()) {
+                val speech = speechResult.getSuccess()
+                result.success(mapOf(
+                    "audioSamples" to speech.getAudioSamples(),
+                    "sampleRate" to speech.getSampleRate(),
+                    "duration" to speech.getDuration(),
+                    "outputFilePath" to (speech.getOutputFilePath() ?: null),
+                    "methodUsed" to speech.getMethodUsed().rawValue
+                ))
+            } else {
+                val error = speechResult?.getError()
+                result.error("SPEECH_GENERATION_FAILED", error?.message ?: "Failed to generate speech", null)
+            }
+        }.start()
+    }
+
+    private fun handleGenerateSpeechStream(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val text = call.argument<String>("text") ?: throw IllegalArgumentException("text is required")
+        val optionsMap = call.argument<Map<String, Any>>("options")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val options = parseTTSOptions(optionsMap)
+
+        Thread {
+            val speechResult = LlamaMobile.generateSpeechStream(
+                contextHandle,
+                text,
+                options,
+                null,
+                null
+            )
+
+            if (speechResult != null && speechResult.isSuccess()) {
+                val metadata = speechResult.getSuccess()
+                result.success(mapOf(
+                    "sampleRate" to metadata.getSampleRate(),
+                    "duration" to metadata.getDuration(),
+                    "outputFilePath" to (metadata.getOutputFilePath() ?: null),
+                    "methodUsed" to metadata.getMethodUsed().rawValue
+                ))
+            } else {
+                val error = speechResult?.getError()
+                result.error("SPEECH_STREAM_FAILED", error?.message ?: "Failed to generate speech stream", null)
+            }
+        }.start()
+    }
+
+    private fun handleGenerateSpeechStreamForLongText(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val text = call.argument<String>("text") ?: throw IllegalArgumentException("text is required")
+        val optionsMap = call.argument<Map<String, Any>>("options")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val options = parseTTSOptions(optionsMap)
+
+        Thread {
+            val speechResult = LlamaMobile.generateSpeechStreamForLongText(
+                contextHandle,
+                text,
+                options,
+                null,
+                null
+            )
+
+            if (speechResult != null && speechResult.isSuccess()) {
+                val metadata = speechResult.getSuccess()
+                result.success(mapOf(
+                    "sampleRate" to metadata.getSampleRate(),
+                    "duration" to metadata.getDuration(),
+                    "outputFilePath" to (metadata.getOutputFilePath() ?: null),
+                    "methodUsed" to metadata.getMethodUsed().rawValue
+                ))
+            } else {
+                val error = speechResult?.getError()
+                result.error("SPEECH_STREAM_FAILED", error?.message ?: "Failed to generate speech stream", null)
+            }
+        }.start()
+    }
+
+    private fun parseTTSOptions(optionsMap: Map<String, Any>?): TTSOptions {
+        if (optionsMap == null) {
+            return TTSOptions()
+        }
+
+        return TTSOptions().apply {
+            sampleRate = (optionsMap["sampleRate"] as? Int) ?: 24000
+            voice = optionsMap["voice"] as? String
+            speed = ((optionsMap["speed"] as? Double) ?: 1.0).toFloat()
+            saveToFile = (optionsMap["saveToFile"] as? Boolean) ?: false
+            outputFilePath = optionsMap["outputFilePath"] as? String
         }
     }
 

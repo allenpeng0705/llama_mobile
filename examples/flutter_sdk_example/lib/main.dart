@@ -2531,46 +2531,6 @@ class _SettingsViewState extends State<SettingsView> {
                           ),
                           const SizedBox(height: 16),
 
-                          // Grammar Picker
-                          Container(
-                            width: double.infinity,
-                            child: DropdownButtonFormField<String?>(
-                              value: widget.appState.selectedGrammar,
-                              items: [
-                                const DropdownMenuItem<String?>(
-                                  value: null,
-                                  child: Text(
-                                    "Empty",
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                ...widget.appState.availableGrammars.map((
-                                  grammar,
-                                ) {
-                                  return DropdownMenuItem<String?>(
-                                    value: grammar,
-                                    child: Text(
-                                      grammar,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  );
-                                }).toList(),
-                              ],
-                              onChanged: widget.appState.isModelLoaded
-                                  ? null
-                                  : (value) {
-                                      setState(() {
-                                        widget.appState.selectedGrammar = value;
-                                      });
-                                    },
-                              decoration: const InputDecoration(
-                                labelText: "Select Grammar",
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
                           // Chat Mode Toggle
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2667,7 +2627,7 @@ class _SettingsViewState extends State<SettingsView> {
                                         : () {
                                             setState(() {
                                               if (widget.appState.nGpuLayers <
-                                                  16) {
+                                                  100) {
                                                 widget.appState.nGpuLayers++;
                                               }
                                             });
@@ -3468,7 +3428,9 @@ class MultimodalTestView extends StatefulWidget {
 }
 
 class _MultimodalTestViewState extends State<MultimodalTestView> {
-  TextEditingController _promptController = TextEditingController();
+  TextEditingController _promptController = TextEditingController(
+    text: "what's on the image",
+  );
   String multimodalResult = "";
   bool isProcessing = false;
 
@@ -3733,9 +3695,10 @@ class _TTSTestViewState extends State<TTSTestView> {
   String ttsResult = "";
   bool isProcessing = false;
   bool isPlaying = false;
+  bool audioGenerated = false;
   String? audioFilePath;
 
-  void generateAudio() async {
+  Future<void> generateAudioAsync() async {
     if (_ttsController.text.isEmpty ||
         !widget.appState.isModelLoaded ||
         isProcessing)
@@ -3744,108 +3707,130 @@ class _TTSTestViewState extends State<TTSTestView> {
     try {
       setState(() {
         isProcessing = true;
-        ttsResult = "Generating audio...";
+        ttsResult = "Generating audio (Async)...";
+        audioGenerated = false;
       });
 
-      // Use the actual TTS functionality
-      if (widget.appState.llamaContext != null) {
-        // Load TTS model if not already loaded
-        if (widget.appState.vocoderModelPath.isNotEmpty) {
-          print(
-            "Attempting to load TTS model: ${widget.appState.vocoderModelPath}",
-          );
+      final result = await widget.appState.llamaContext?.generateSpeech(
+        _ttsController.text,
+      );
+      print("TTS Audio Generated successfully (Async)");
 
-          // Check if file exists
-          bool fileExists = true;
-          if (!widget.appState.vocoderModelPath.startsWith('assets/')) {
-            fileExists = await File(widget.appState.vocoderModelPath).exists();
-            print("TTS model file exists: $fileExists");
-          }
+      if (result != null) {
+        final audioSamples = result['audioSamples'] as List<int>;
+        final sampleRate = result['sampleRate'] as int;
+        final duration = result['duration'] as double;
+        final outputFilePath = result['outputFilePath'] as String?;
 
-          if (!fileExists) {
-            setState(() {
-              ttsResult = "Error: TTS model file not found";
-            });
-            return;
-          }
+        print("Audio samples count: ${audioSamples.length}");
+        print("Sample rate: $sampleRate");
+        print("Duration: $duration seconds");
 
-          // Try loading with both model types
-          bool loaded =
-              await widget.appState.llamaContext?.loadTTSModel(
-                widget.appState.vocoderModelPath,
-                TTSModelType.outETTSv03,
-              ) ??
-              false;
-
-          if (!loaded) {
-            print("Failed to load as outETTSv03, trying outETTSv02");
-            loaded =
-                await widget.appState.llamaContext?.loadTTSModel(
-                  widget.appState.vocoderModelPath,
-                  TTSModelType.outETTSv02,
-                ) ??
-                false;
-          }
-
-          if (!loaded) {
-            setState(() {
-              ttsResult =
-                  "Error: Failed to load TTS model. Make sure you've selected a valid vocoder model.";
-            });
-            return;
-          }
-
-          print("TTS model loaded successfully");
-        } else {
-          setState(() {
-            ttsResult = "Error: Vocoder model not selected";
-          });
-          return;
-        }
-
-        final result = await widget.appState.llamaContext?.generateAudio(
-          _ttsController.text,
-        );
-        print("TTS Audio Generated successfully");
-        print("TTS starts to save audio file!");
-        if (result != null) {
-          // Save audio to WAV file using the saveAudioToWav method
+        String? filePath = outputFilePath;
+        if (filePath == null) {
           final directory = await getApplicationDocumentsDirectory();
-          final filePath = '${directory.path}/tts_output.wav';
+          filePath = '${directory.path}/tts_output_async.wav';
 
           print("Saving audio to WAV file: $filePath");
-          print("Audio data length: ${result.audioData.length}");
 
-          // Use the saveAudioToWav method to properly format the audio as a WAV file
           final saveSuccess = await widget.appState.llamaContext
-              ?.saveAudioToWav(filePath, result.audioData, 24000);
+              ?.saveAudioToWav(filePath, audioSamples, sampleRate);
 
-          setState(() {
-            if (saveSuccess == true) {
-              ttsResult =
-                  "Audio generated successfully!\n\nText: ${_ttsController.text}\nSaved to: ${filePath.split('/').last}";
-              audioFilePath = filePath;
-            } else {
+          if (saveSuccess != true) {
+            setState(() {
               ttsResult = "Error: Failed to save audio to WAV file";
-            }
-          });
-        } else {
-          setState(() {
-            ttsResult = "Error: No audio generated";
-          });
+              isProcessing = false;
+            });
+            return;
+          }
         }
+
+        setState(() {
+          ttsResult =
+              "Audio generated successfully (Async)!\n\nText: ${_ttsController.text}\nDuration: ${duration.toStringAsFixed(2)}s\nSaved to: ${filePath!.split('/').last}";
+          audioFilePath = filePath;
+          audioGenerated = true;
+          isProcessing = false;
+        });
       } else {
         setState(() {
-          ttsResult = "Error: Model not loaded";
+          ttsResult = "Error: No audio generated";
+          isProcessing = false;
         });
       }
     } catch (e) {
       widget.appState.errorMessage = "Error generating audio: $e";
       setState(() {
         ttsResult = "Error: $e";
+        isProcessing = false;
       });
-    } finally {
+    }
+  }
+
+  Future<void> generateAudioSync() async {
+    if (_ttsController.text.isEmpty ||
+        !widget.appState.isModelLoaded ||
+        isProcessing)
+      return;
+
+    try {
       setState(() {
+        isProcessing = true;
+        ttsResult = "Generating audio (Sync)...";
+        audioGenerated = false;
+      });
+
+      final result = await widget.appState.llamaContext?.generateSpeechSync(
+        _ttsController.text,
+      );
+      print("TTS Audio Generated successfully (Sync)");
+
+      if (result != null) {
+        final audioSamples = result['audioSamples'] as List<int>;
+        final sampleRate = result['sampleRate'] as int;
+        final duration = result['duration'] as double;
+        final outputFilePath = result['outputFilePath'] as String?;
+
+        print("Audio samples count: ${audioSamples.length}");
+        print("Sample rate: $sampleRate");
+        print("Duration: $duration seconds");
+
+        String? filePath = outputFilePath;
+        if (filePath == null) {
+          final directory = await getApplicationDocumentsDirectory();
+          filePath = '${directory.path}/tts_output_sync.wav';
+
+          print("Saving audio to WAV file: $filePath");
+
+          final saveSuccess = await widget.appState.llamaContext
+              ?.saveAudioToWav(filePath, audioSamples, sampleRate);
+
+          if (saveSuccess != true) {
+            setState(() {
+              ttsResult = "Error: Failed to save audio to WAV file";
+              isProcessing = false;
+            });
+            return;
+          }
+        }
+
+        setState(() {
+          ttsResult =
+              "Audio generated successfully (Sync)!\n\nText: ${_ttsController.text}\nDuration: ${duration.toStringAsFixed(2)}s\nSaved to: ${filePath!.split('/').last}";
+          audioFilePath = filePath;
+          audioGenerated = true;
+          isProcessing = false;
+        });
+      } else {
+        setState(() {
+          ttsResult = "Error: No audio generated";
+          isProcessing = false;
+        });
+      }
+    } catch (e) {
+      widget.appState.errorMessage = "Error generating audio: $e";
+      setState(() {
+        ttsResult = "Error: $e";
         isProcessing = false;
       });
     }
@@ -3921,25 +3906,48 @@ class _TTSTestViewState extends State<TTSTestView> {
                 ),
                 const SizedBox(height: 20),
 
-                ElevatedButton(
-                  onPressed:
-                      isProcessing ||
-                          !widget.appState.isModelLoaded ||
-                          _ttsController.text.isEmpty
-                      ? null
-                      : generateAudio,
-                  child: Text(
-                    isProcessing ? "Generating..." : "Generate Audio",
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed:
+                            isProcessing ||
+                                !widget.appState.isModelLoaded ||
+                                _ttsController.text.isEmpty
+                            ? null
+                            : generateAudioAsync,
+                        child: Text(
+                          isProcessing
+                              ? "Generating..."
+                              : "Generate Audio (Async)",
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed:
+                            isProcessing ||
+                                !widget.appState.isModelLoaded ||
+                                _ttsController.text.isEmpty
+                            ? null
+                            : generateAudioSync,
+                        child: Text(
+                          isProcessing
+                              ? "Generating..."
+                              : "Generate Audio (Sync)",
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
 
                 // Play button for audio playback
-                if (audioFilePath != null)
-                  ElevatedButton(
-                    onPressed: isPlaying ? null : playAudio,
-                    child: Text(isPlaying ? "Playing..." : "Play Audio"),
-                  ),
+                ElevatedButton(
+                  onPressed: !audioGenerated || isPlaying ? null : playAudio,
+                  child: Text(isPlaying ? "Playing..." : "Play Audio"),
+                ),
 
                 const SizedBox(height: 20),
 

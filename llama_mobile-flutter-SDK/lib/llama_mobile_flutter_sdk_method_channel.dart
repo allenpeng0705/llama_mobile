@@ -301,6 +301,58 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<Map<String, dynamic>?> generateSpeechSync(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'generateSpeechSync',
+      {'contextHandle': contextHandle, 'text': text, 'options': options},
+    );
+    return result;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> generateSpeech(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'generateSpeech',
+      {'contextHandle': contextHandle, 'text': text, 'options': options},
+    );
+    return result;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> generateSpeechStream(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'generateSpeechStream',
+      {'contextHandle': contextHandle, 'text': text, 'options': options},
+    );
+    return result;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> generateSpeechStreamForLongText(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) async {
+    final result = await methodChannel.invokeMapMethod<String, dynamic>(
+      'generateSpeechStreamForLongText',
+      {'contextHandle': contextHandle, 'text': text, 'options': options},
+    );
+    return result;
+  }
+
+  @override
   Future<List<double>?> generateEmbedding(
     int contextHandle,
     String text,

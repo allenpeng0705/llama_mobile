@@ -377,6 +377,64 @@ class MockLlamaMobileFlutterSdkPlatform
   ) async {
     return true;
   }
+
+  @override
+  Future<Map<String, dynamic>?> generateSpeechSync(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) async {
+    return {
+      'audioSamples': List<int>.filled(100, 0),
+      'sampleRate': 24000,
+      'duration': 1.0,
+      'outputFilePath': null,
+      'methodUsed': 0,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>?> generateSpeech(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) async {
+    return {
+      'audioSamples': List<int>.filled(100, 0),
+      'sampleRate': 24000,
+      'duration': 1.0,
+      'outputFilePath': null,
+      'methodUsed': 0,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>?> generateSpeechStream(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) async {
+    return {
+      'sampleRate': 24000,
+      'duration': 1.0,
+      'outputFilePath': null,
+      'methodUsed': 0,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>?> generateSpeechStreamForLongText(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) async {
+    return {
+      'sampleRate': 24000,
+      'duration': 1.0,
+      'outputFilePath': null,
+      'methodUsed': 0,
+    };
+  }
 }
 
 void main() {
@@ -623,6 +681,92 @@ void main() {
 
       expect(result, isTrue);
     });
+
+    test('generateSpeechSync generates speech synchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContext(
+        modelPath: 'test/chat_model.gguf',
+      );
+
+      Map<String, dynamic>? result = await context?.generateSpeechSync(
+        'Hello, this is a test.',
+      );
+
+      expect(result, isNotNull);
+      expect(result?['audioSamples'], isNotNull);
+      expect(result?['sampleRate'], 24000);
+      expect(result?['duration'], 1.0);
+      expect(result?['methodUsed'], 0);
+    });
+
+    test('generateSpeech generates speech asynchronously', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContext(
+        modelPath: 'test/chat_model.gguf',
+      );
+
+      Map<String, dynamic>? result = await context?.generateSpeech(
+        'Hello, this is a test.',
+      );
+
+      expect(result, isNotNull);
+      expect(result?['audioSamples'], isNotNull);
+      expect(result?['sampleRate'], 24000);
+      expect(result?['duration'], 1.0);
+      expect(result?['methodUsed'], 0);
+    });
+
+    test('generateSpeechStream generates speech stream', () async {
+      LlamaMobile llamaMobile = LlamaMobile();
+      MockLlamaMobileFlutterSdkPlatform fakePlatform =
+          MockLlamaMobileFlutterSdkPlatform();
+      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+      LlamaContext? context = await llamaMobile.initContext(
+        modelPath: 'test/chat_model.gguf',
+      );
+
+      Map<String, dynamic>? result = await context?.generateSpeechStream(
+        'Hello, this is a test.',
+      );
+
+      expect(result, isNotNull);
+      expect(result?['sampleRate'], 24000);
+      expect(result?['duration'], 1.0);
+      expect(result?['methodUsed'], 0);
+    });
+
+    test(
+      'generateSpeechStreamForLongText generates speech stream for long text',
+      () async {
+        LlamaMobile llamaMobile = LlamaMobile();
+        MockLlamaMobileFlutterSdkPlatform fakePlatform =
+            MockLlamaMobileFlutterSdkPlatform();
+        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+
+        LlamaContext? context = await llamaMobile.initContext(
+          modelPath: 'test/chat_model.gguf',
+        );
+
+        Map<String, dynamic>? result = await context
+            ?.generateSpeechStreamForLongText(
+              'This is a very long text that will be processed in chunks.',
+            );
+
+        expect(result, isNotNull);
+        expect(result?['sampleRate'], 24000);
+        expect(result?['duration'], 1.0);
+        expect(result?['methodUsed'], 0);
+      },
+    );
   });
 
   group('Download Methods', () {

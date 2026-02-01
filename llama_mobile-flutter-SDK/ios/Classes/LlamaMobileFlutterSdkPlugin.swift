@@ -113,6 +113,14 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
       handleSetGuideTokens(call, result: result)
     case "decodeAudioTokens":
       handleDecodeAudioTokens(call, result: result)
+    case "generateSpeechSync":
+      handleGenerateSpeechSync(call, result: result)
+    case "generateSpeech":
+      handleGenerateSpeech(call, result: result)
+    case "generateSpeechStream":
+      handleGenerateSpeechStream(call, result: result)
+    case "generateSpeechStreamForLongText":
+      handleGenerateSpeechStreamForLongText(call, result: result)
     case "setLogLevel":
       handleSetLogLevel(call, result: result)
     case "downloadModel":
@@ -1086,6 +1094,154 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
         } else {
             result(FlutterError(code: "DECODE_AUDIO_TOKENS_FAILED", message: "Failed to decode audio tokens", details: nil))
         }
+    }
+
+    private func handleGenerateSpeechSync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let contextHandle = args["contextHandle"] as? Int,
+              let text = args["text"] as? String,
+              let llamaMobile = contexts[contextHandle] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
+
+        let optionsDict = args["options"] as? [String: Any]
+        let options = parseTTSOptions(optionsDict)
+
+        let speechResult = llamaMobile.generateSpeechSync(text: text, options: options)
+
+        switch speechResult {
+        case .success(let result):
+            result([
+                "audioSamples": result.audioSamples,
+                "sampleRate": result.sampleRate,
+                "duration": result.duration,
+                "outputFilePath": result.outputFilePath ?? NSNull(),
+                "methodUsed": result.methodUsed.rawValue
+            ])
+        case .failure(let error):
+            result(FlutterError(code: "SPEECH_GENERATION_FAILED", message: error.message, details: nil))
+        }
+    }
+
+    private func handleGenerateSpeech(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let contextHandle = args["contextHandle"] as? Int,
+              let text = args["text"] as? String,
+              let llamaMobile = contexts[contextHandle] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
+
+        let optionsDict = args["options"] as? [String: Any]
+        let options = parseTTSOptions(optionsDict)
+
+        Task {
+            let speechResult = await llamaMobile.generateSpeech(text: text, options: options)
+
+            switch speechResult {
+            case .success(let result):
+                result([
+                    "audioSamples": result.audioSamples,
+                    "sampleRate": result.sampleRate,
+                    "duration": result.duration,
+                    "outputFilePath": result.outputFilePath ?? NSNull(),
+                    "methodUsed": result.methodUsed.rawValue
+                ])
+            case .failure(let error):
+                result(FlutterError(code: "SPEECH_GENERATION_FAILED", message: error.message, details: nil))
+            }
+        }
+    }
+
+    private func handleGenerateSpeechStream(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let contextHandle = args["contextHandle"] as? Int,
+              let text = args["text"] as? String,
+              let llamaMobile = contexts[contextHandle] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
+
+        let optionsDict = args["options"] as? [String: Any]
+        let options = parseTTSOptions(optionsDict)
+
+        Task {
+            let speechResult = await llamaMobile.generateSpeechStream(
+                text: text,
+                options: options,
+                progressHandler: { progress in
+                    // TODO: Send progress updates via event channel
+                },
+                audioChunkHandler: { audioChunk in
+                    // TODO: Send audio chunks via event channel
+                }
+            )
+
+            switch speechResult {
+            case .success(let metadata):
+                result([
+                    "sampleRate": metadata.sampleRate,
+                    "duration": metadata.duration,
+                    "outputFilePath": metadata.outputFilePath ?? NSNull(),
+                    "methodUsed": metadata.methodUsed.rawValue
+                ])
+            case .failure(let error):
+                result(FlutterError(code: "SPEECH_STREAM_FAILED", message: error.message, details: nil))
+            }
+        }
+    }
+
+    private func handleGenerateSpeechStreamForLongText(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        guard let args = call.arguments as? [String: Any],
+              let contextHandle = args["contextHandle"] as? Int,
+              let text = args["text"] as? String,
+              let llamaMobile = contexts[contextHandle] else {
+            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            return
+        }
+
+        let optionsDict = args["options"] as? [String: Any]
+        let options = parseTTSOptions(optionsDict)
+
+        Task {
+            let speechResult = await llamaMobile.generateSpeechStreamForLongText(
+                text: text,
+                options: options,
+                progressHandler: { progress in
+                    // TODO: Send progress updates via event channel
+                },
+                audioChunkHandler: { audioChunk in
+                    // TODO: Send audio chunks via event channel
+                }
+            )
+
+            switch speechResult {
+            case .success(let metadata):
+                result([
+                    "sampleRate": metadata.sampleRate,
+                    "duration": metadata.duration,
+                    "outputFilePath": metadata.outputFilePath ?? NSNull(),
+                    "methodUsed": metadata.methodUsed.rawValue
+                ])
+            case .failure(let error):
+                result(FlutterError(code: "SPEECH_STREAM_FAILED", message: error.message, details: nil))
+            }
+        }
+    }
+
+    private func parseTTSOptions(_ optionsDict: [String: Any]?) -> TTSOptions {
+        guard let optionsDict = optionsDict else {
+            return TTSOptions()
+        }
+
+        return TTSOptions(
+            sampleRate: optionsDict["sampleRate"] as? Int ?? 24000,
+            voice: optionsDict["voice"] as? String,
+            speed: optionsDict["speed"] as? Double ?? 1.0,
+            saveToFile: optionsDict["saveToFile"] as? Bool ?? false,
+            outputFilePath: optionsDict["outputFilePath"] as? String
+        )
     }
 
     private func handleSetLogLevel(_ call: FlutterMethodCall, result: @escaping FlutterResult) {

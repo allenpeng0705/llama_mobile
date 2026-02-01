@@ -208,6 +208,42 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     throw UnimplementedError('decodeAudioTokens() has not been implemented.');
   }
 
+  Future<Map<String, dynamic>?> generateSpeechSync(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) {
+    throw UnimplementedError('generateSpeechSync() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>?> generateSpeech(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) {
+    throw UnimplementedError('generateSpeech() has not been implemented.');
+  }
+
+  Future<Map<String, dynamic>?> generateSpeechStream(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) {
+    throw UnimplementedError(
+      'generateSpeechStream() has not been implemented.',
+    );
+  }
+
+  Future<Map<String, dynamic>?> generateSpeechStreamForLongText(
+    int contextHandle,
+    String text,
+    Map<String, dynamic>? options,
+  ) {
+    throw UnimplementedError(
+      'generateSpeechStreamForLongText() has not been implemented.',
+    );
+  }
+
   // Utility methods
   Future<String?> getPlatformVersion() {
     throw UnimplementedError('platformVersion() has not been implemented.');

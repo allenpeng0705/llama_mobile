@@ -1505,6 +1505,79 @@ class LlamaContext {
       tokens,
     );
   }
+
+  /// Generates speech synchronously from text.
+  ///
+  /// Parameters:
+  /// - [text]: Text to convert to speech.
+  /// - [options]: Optional TTS options (sampleRate, voice, speed, saveToFile, outputFilePath).
+  ///
+  /// Returns:
+  /// A map containing audio data and metadata, or null if an error occurred.
+  Future<Map<String, dynamic>?> generateSpeechSync(
+    String text, {
+    Map<String, dynamic>? options,
+  }) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.generateSpeechSync(
+      _contextHandle,
+      text,
+      options,
+    );
+  }
+
+  /// Generates speech asynchronously from text.
+  ///
+  /// Parameters:
+  /// - [text]: Text to convert to speech.
+  /// - [options]: Optional TTS options (sampleRate, voice, speed, saveToFile, outputFilePath).
+  ///
+  /// Returns:
+  /// A map containing audio data and metadata, or null if an error occurred.
+  Future<Map<String, dynamic>?> generateSpeech(
+    String text, {
+    Map<String, dynamic>? options,
+  }) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.generateSpeech(
+      _contextHandle,
+      text,
+      options,
+    );
+  }
+
+  /// Generates speech as a stream from text.
+  ///
+  /// Parameters:
+  /// - [text]: Text to convert to speech.
+  /// - [options]: Optional TTS options (sampleRate, voice, speed, saveToFile, outputFilePath).
+  ///
+  /// Returns:
+  /// A map containing stream metadata, or null if an error occurred.
+  Future<Map<String, dynamic>?> generateSpeechStream(
+    String text, {
+    Map<String, dynamic>? options,
+  }) async {
+    return await LlamaMobileFlutterSdkPlatform.instance.generateSpeechStream(
+      _contextHandle,
+      text,
+      options,
+    );
+  }
+
+  /// Generates speech as a stream for long text.
+  ///
+  /// Parameters:
+  /// - [text]: Text to convert to speech.
+  /// - [options]: Optional TTS options (sampleRate, voice, speed, saveToFile, outputFilePath).
+  ///
+  /// Returns:
+  /// A map containing stream metadata, or null if an error occurred.
+  Future<Map<String, dynamic>?> generateSpeechStreamForLongText(
+    String text, {
+    Map<String, dynamic>? options,
+  }) async {
+    return await LlamaMobileFlutterSdkPlatform.instance
+        .generateSpeechStreamForLongText(_contextHandle, text, options);
+  }
 }
 
 /// Represents a chat message
