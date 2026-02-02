@@ -98,8 +98,10 @@ typedef struct {
     const char* model_path;          /**< Path to the model file (required) */
     const char* chat_template;       /**< Chat template to use (optional, NULL for default) */
     const char* system_prompt;       /**< System prompt to use (optional, NULL for default) */
+
     int32_t n_ctx;                   /**< Context window size (default: 512) */
     int32_t n_batch;                 /**< Batch size for inference (default: 512) */
+    int32_t n_ubatch;                /**< Micro batch size for inference (default: 512) */
     int32_t n_gpu_layers;            /**< Number of layers to offload to GPU (default: 0) */
     int32_t n_threads;               /**< Number of CPU threads to use (default: 4) */
     bool use_mmap;                   /**< Use memory-mapped I/O for model loading (default: true) */
@@ -108,14 +110,11 @@ typedef struct {
     int32_t pooling_type;            /**< Pooling type for embeddings (default: 0) */
     int32_t embd_normalize;          /**< Normalize embeddings (default: 0) */
     bool flash_attn;                 /**< Enable flash attention (default: false) */
-    double temperature;              /**< Sampling temperature (default: 0.8) */
-    int32_t top_k;                   /**< Top-K sampling parameter (default: 40) */
-    double top_p;                    /**< Top-P sampling parameter (default: 0.95) */
-    double min_p;                    /**< Min-P sampling parameter (default: 0.05) */
-    double penalty_repeat;           /**< Repeat penalty (default: 1.1) */
     const char* cache_type_k;        /**< Cache type for key (optional, NULL for default) */
     const char* cache_type_v;        /**< Cache type for value (optional, NULL for default) */
-    void (*progress_callback)(float progress);  /**< Model loading progress callback (optional) */
+    void (*progress_callback)(float progress, void* user_data);  /**< Model loading progress callback (optional) */
+    void* progress_callback_user_data;  /**< User data to pass to progress callback (optional) */
+    bool enable_chat_template;        /**< Enable chat template (default: false) */
 } llama_mobile_init_params_t;
 
 /**
@@ -126,7 +125,9 @@ typedef struct {
  */
 typedef struct {
     const char* prompt;               /**< Input prompt text (required) */
-    int32_t max_tokens;               /**< Maximum number of tokens to generate (default: 128) */
+    int32_t n_predict;              /**< Maximum number of tokens to generate (default: 128) */
+    int32_t n_threads;              /**< Number of CPU threads to use (default: 4) */
+    int32_t seed;                   /**< Random seed for generation (default: -1 for random) */
     double temperature;               /**< Sampling temperature (default: 0.8) */
     int32_t top_k;                    /**< Top-K sampling parameter (default: 40) */
     double top_p;                     /**< Top-P sampling parameter (default: 0.95) */
@@ -140,11 +141,23 @@ typedef struct {
     double mirostat_tau;              /**< Mirostat target entropy (default: 5.0) */
     double mirostat_eta;              /**< Mirostat learning rate (default: 0.1) */
     bool ignore_eos;                  /**< Ignore end-of-sequence tokens (default: false) */
+    int32_t n_probs;                 /**< Number of probabilities to return (default: 0) */
     const char** stop_sequences;      /**< Array of stop sequences to terminate generation (optional) */
     int stop_sequence_count;          /**< Number of stop sequences (optional, 0 for none) */
     const char* grammar;              /**< Path to grammar file (optional, NULL for no grammar) */
+    bool (*token_callback)(const char* token, void* user_data);  /**< Streaming callback for generated tokens (optional) */
+    void* token_callback_user_data;  /**< User data to pass to token callback (optional) */
+    
+    // New fields for chat support
+    const llama_mobile_chat_message_c* chat_messages;
+    int32_t chat_message_count;
     bool use_json_response;           /**< Generate response in OpenAI-like JSON format (default: false) */
-    bool (*token_callback)(const char* token);  /**< Streaming callback for generated tokens (optional) */
+    
+    // Advanced parameters for Jinja template engine
+    const char* json_schema;       /**< JSON schema for structured output (optional) */
+    const char* tools;            /**< JSON string defining available tools for function calling (optional) */
+    bool parallel_tool_calls;  /**< Whether to support parallel tool calls (default: false) */
+    const char* tool_choice;       /**< Tool choice strategy (auto, required, none, or specific tool) (optional) */
 } llama_mobile_completion_params_t;
 
 /**
@@ -398,6 +411,7 @@ LLAMA_MOBILE_API void llama_mobile_release_multimodal(llama_mobile_context_t ctx
  * @param user_message User's message to add to the conversation.
  * @param max_tokens Maximum number of tokens to generate in the response.
  * @param token_callback Streaming callback for generated tokens (optional)
+ * @param token_callback_user_data User data to pass to token callback (optional)
  * @param result Output parameter to store the conversation result.
  * @return 0 on success, negative error code on failure.
  */
@@ -405,7 +419,8 @@ LLAMA_MOBILE_API int llama_mobile_generate_response(
     llama_mobile_context_t ctx,
     const char* user_message,
     int32_t max_tokens,
-    bool (*token_callback)(const char* token),
+    bool (*token_callback)(const char* token, void* user_data),
+    void* token_callback_user_data,
     llama_mobile_conversation_result_t* result);
 
 
@@ -557,8 +572,9 @@ LLAMA_MOBILE_API void llama_mobile_release_vocoder(llama_mobile_context_t ctx);
  * @param status Current download status message.
  * @param downloaded_bytes Number of bytes downloaded so far.
  * @param total_bytes Total number of bytes to download.
+ * @param user_data User data pointer passed to the callback.
  */
-typedef void (*llama_mobile_download_progress_callback)(float progress, const char* status, int64_t downloaded_bytes, int64_t total_bytes);
+typedef void (*llama_mobile_download_progress_callback)(float progress, const char* status, int64_t downloaded_bytes, int64_t total_bytes, void* user_data);
 
 /**
  * @brief Result of a model download operation.
@@ -585,6 +601,7 @@ typedef struct {
     const char* bearer_token;                /**< Optional bearer token for authentication */
     bool offline;                            /**< Whether to operate in offline mode */
     llama_mobile_download_progress_callback progress_callback;  /**< Optional progress callback */
+    void* progress_callback_user_data;  /**< User data to pass to progress callback (optional) */
 } llama_mobile_download_params_t;
 
 /**
@@ -604,6 +621,7 @@ LLAMA_MOBILE_API llama_mobile_download_result_t llama_mobile_download_model(cons
  * @param bearer_token Optional bearer token for authentication.
  * @param offline Whether to operate in offline mode.
  * @param progress_callback Optional progress callback function.
+ * @param progress_callback_user_data Optional user data to pass to the progress callback.
  * @return Download result struct containing information about the operation.
  */
 LLAMA_MOBILE_API llama_mobile_download_result_t llama_mobile_download_hf_file(
@@ -612,7 +630,8 @@ LLAMA_MOBILE_API llama_mobile_download_result_t llama_mobile_download_hf_file(
     const char* destination_path,
     const char* bearer_token,
     bool offline,
-    llama_mobile_download_progress_callback progress_callback);
+    llama_mobile_download_progress_callback progress_callback,
+    void* progress_callback_user_data);
 
 /**
  * @brief Free the members of a download result.

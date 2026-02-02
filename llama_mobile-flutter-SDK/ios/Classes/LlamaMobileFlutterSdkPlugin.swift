@@ -541,11 +541,46 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
       return
     }
 
-    DispatchQueue.global(qos: .userInitiated).async {
-      // iOS SDK doesn't currently support this method directly
-      DispatchQueue.main.async {
-        result(FlutterError(code: "NOT_SUPPORTED", message: "Method not supported on iOS", details: nil))
-      }
+    let optionsDict = args["options"] as? [String: Any]
+    let options = parseTTSOptions(optionsDict)
+
+    Task {
+        let speechResult = await llamaMobile.generateSpeech(text: text, options: options)
+
+        switch speechResult {
+        case .success(let speechResult):
+            let methodUsed = speechResult.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
+            result([
+                "audioSamples": speechResult.audioSamples,
+                "sampleRate": speechResult.sampleRate,
+                "duration": speechResult.duration,
+                "outputFilePath": speechResult.outputFilePath ?? NSNull(),
+                "methodUsed": methodUsed
+            ])
+        case .failure(let error):
+            var errorMessage = "Unknown error"
+            switch error {
+            case .noModelLoaded:
+                errorMessage = "No model loaded"
+            case .noVocoderEnabled:
+                errorMessage = "No vocoder enabled"
+            case .invalidText:
+                errorMessage = "Invalid text"
+            case .generationFailed:
+                errorMessage = "Generation failed"
+            case .formattingFailed:
+                errorMessage = "Formatting failed"
+            case .tokenizationFailed:
+                errorMessage = "Tokenization failed"
+            case .audioDecodingFailed:
+                errorMessage = "Audio decoding failed"
+            case .fileSaveFailed:
+                errorMessage = "File save failed"
+            case .unknownError(let message):
+                errorMessage = message
+            }
+            result(FlutterError(code: "SPEECH_GENERATION_FAILED", message: errorMessage, details: nil))
+        }
     }
   }
 
@@ -558,11 +593,54 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
       return
     }
 
-    DispatchQueue.global(qos: .userInitiated).async {
-      // iOS SDK doesn't currently support this method directly
-      DispatchQueue.main.async {
-        result(FlutterError(code: "NOT_SUPPORTED", message: "Method not supported on iOS", details: nil))
-      }
+    let optionsDict = args["options"] as? [String: Any]
+    let options = parseTTSOptions(optionsDict)
+
+    Task {
+        let speechResult = await llamaMobile.generateSpeechStreamForLongText(
+            text: text,
+            options: options,
+            progressHandler: { progress in
+                // TODO: Send progress updates via event channel
+            },
+            audioChunkHandler: { audioChunk in
+                // TODO: Send audio chunks via event channel
+            }
+        )
+
+        switch speechResult {
+        case .success(let metadata):
+            let methodUsed = metadata.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
+            result([
+                "sampleRate": metadata.sampleRate,
+                "duration": metadata.duration,
+                "outputFilePath": metadata.outputFilePath ?? NSNull(),
+                "methodUsed": methodUsed
+            ])
+        case .failure(let error):
+            var errorMessage = "Unknown error"
+            switch error {
+            case .noModelLoaded:
+                errorMessage = "No model loaded"
+            case .noVocoderEnabled:
+                errorMessage = "No vocoder enabled"
+            case .invalidText:
+                errorMessage = "Invalid text"
+            case .generationFailed:
+                errorMessage = "Generation failed"
+            case .formattingFailed:
+                errorMessage = "Formatting failed"
+            case .tokenizationFailed:
+                errorMessage = "Tokenization failed"
+            case .audioDecodingFailed:
+                errorMessage = "Audio decoding failed"
+            case .fileSaveFailed:
+                errorMessage = "File save failed"
+            case .unknownError(let message):
+                errorMessage = message
+            }
+            result(FlutterError(code: "SPEECH_STREAM_FAILED", message: errorMessage, details: nil))
+        }
     }
   }
 
@@ -575,11 +653,54 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
       return
     }
 
-    DispatchQueue.global(qos: .userInitiated).async {
-      // iOS SDK doesn't currently support this method directly
-      DispatchQueue.main.async {
-        result(FlutterError(code: "NOT_SUPPORTED", message: "Method not supported on iOS", details: nil))
-      }
+    let optionsDict = args["options"] as? [String: Any]
+    let options = parseTTSOptions(optionsDict)
+
+    Task {
+        let speechResult = await llamaMobile.generateSpeechStreamForLongText(
+            text: text,
+            options: options,
+            progressHandler: { progress in
+                // TODO: Send progress updates via event channel
+            },
+            audioChunkHandler: { audioChunk in
+                // TODO: Send audio chunks via event channel
+            }
+        )
+
+        switch speechResult {
+        case .success(let metadata):
+            let methodUsed = metadata.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
+            result([
+                "sampleRate": metadata.sampleRate,
+                "duration": metadata.duration,
+                "outputFilePath": metadata.outputFilePath ?? NSNull(),
+                "methodUsed": methodUsed
+            ])
+        case .failure(let error):
+            var errorMessage = "Unknown error"
+            switch error {
+            case .noModelLoaded:
+                errorMessage = "No model loaded"
+            case .noVocoderEnabled:
+                errorMessage = "No vocoder enabled"
+            case .invalidText:
+                errorMessage = "Invalid text"
+            case .generationFailed:
+                errorMessage = "Generation failed"
+            case .formattingFailed:
+                errorMessage = "Formatting failed"
+            case .tokenizationFailed:
+                errorMessage = "Tokenization failed"
+            case .audioDecodingFailed:
+                errorMessage = "Audio decoding failed"
+            case .fileSaveFailed:
+                errorMessage = "File save failed"
+            case .unknownError(let message):
+                errorMessage = message
+            }
+            result(FlutterError(code: "SPEECH_STREAM_FAILED", message: errorMessage, details: nil))
+        }
     }
   }
 

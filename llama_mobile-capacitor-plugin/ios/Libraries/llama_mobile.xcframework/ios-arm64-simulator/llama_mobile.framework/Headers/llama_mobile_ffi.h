@@ -55,14 +55,18 @@ typedef struct llama_mobile_init_params_c {
     bool flash_attn;
     const char* cache_type_k; 
     const char* cache_type_v; 
-    void (*progress_callback)(float progress); 
-
+    void (*progress_callback)(float progress, void* user_data); 
+    void* progress_callback_user_data;
+    bool enable_chat_template;  
 } llama_mobile_init_params_c_t;
 
 // Chat message structure for structured input
 typedef struct llama_mobile_chat_message_c {
     const char* role;
     const char* content;
+    const char* reasoning_content;  // For reasoning/thinking content (optional, NULL if not present)
+    const char* tool_name;         // For tool calls (optional, NULL if not present)
+    const char* tool_call_id;      // For tool call IDs (optional, NULL if not present)
 } llama_mobile_chat_message_c;
 
 typedef struct llama_mobile_completion_params_c {
@@ -87,12 +91,19 @@ typedef struct llama_mobile_completion_params_c {
     const char** stop_sequences; 
     int stop_sequence_count;
     const char* grammar; 
-    bool (*token_callback)(const char* token_json);
+    bool (*token_callback)(const char* token_json, void* user_data);
+    void* token_callback_user_data;
     
     // New fields for chat support
     const llama_mobile_chat_message_c* chat_messages;
     int32_t chat_message_count;
     bool use_json_response;
+    
+    // Advanced parameters for Jinja template engine
+    const char* json_schema;       // JSON schema for structured output
+    const char* tools;            // JSON string defining available tools for function calling
+    bool parallel_tool_calls;  // Whether to support parallel tool calls
+    const char* tool_choice;       // Tool choice strategy (auto, required, none, or specific tool)
 
 } llama_mobile_completion_params_c_t;
 
@@ -231,7 +242,7 @@ typedef struct {
 // **HIGH PRIORITY: Model Download Support**
 
 // Download progress callback type
-typedef void (*llama_mobile_download_progress_callback)(float progress, const char* status, int64_t downloaded_bytes, int64_t total_bytes);
+typedef void (*llama_mobile_download_progress_callback)(float progress, const char* status, int64_t downloaded_bytes, int64_t total_bytes, void* user_data);
 
 // Download result structure
 typedef struct {
@@ -249,6 +260,7 @@ typedef struct {
     const char* bearer_token;
     bool offline;
     llama_mobile_download_progress_callback progress_callback;
+    void* progress_callback_user_data;
 } llama_mobile_download_params_c_t;
 
 // **HIGH PRIORITY: Benchmarking**
@@ -369,13 +381,13 @@ LLAMA_MOBILE_FFI_EXPORT int64_t llama_mobile_get_model_params_c(llama_mobile_con
 // **CONVERSATION MANAGEMENT**
 LLAMA_MOBILE_FFI_EXPORT char* llama_mobile_generate_response_c(llama_mobile_context_handle_t handle, const char* user_message, int32_t max_tokens);
 LLAMA_MOBILE_FFI_EXPORT llama_mobile_conversation_result_c_t llama_mobile_continue_conversation_c(llama_mobile_context_handle_t handle, const char* user_message, int32_t max_tokens);
-LLAMA_MOBILE_FFI_EXPORT llama_mobile_conversation_result_c_t llama_mobile_continue_conversation_with_callback_c(llama_mobile_context_handle_t handle, const char* user_message, int32_t max_tokens, bool (*token_callback)(const char* token));
+LLAMA_MOBILE_FFI_EXPORT llama_mobile_conversation_result_c_t llama_mobile_continue_conversation_with_callback_c(llama_mobile_context_handle_t handle, const char* user_message, int32_t max_tokens, bool (*token_callback)(const char* token, void* user_data), void* token_callback_user_data);
 LLAMA_MOBILE_FFI_EXPORT void llama_mobile_clear_conversation_c(llama_mobile_context_handle_t handle);
 LLAMA_MOBILE_FFI_EXPORT bool llama_mobile_is_conversation_active_c(llama_mobile_context_handle_t handle);
 
 // **HIGH PRIORITY: Model Download Functions**
 LLAMA_MOBILE_FFI_EXPORT llama_mobile_download_result_c_t llama_mobile_download_model_c(const llama_mobile_download_params_c_t* params);
-LLAMA_MOBILE_FFI_EXPORT llama_mobile_download_result_c_t llama_mobile_download_hf_file_c(const char* repo_id, const char* filename, const char* destination_path, const char* bearer_token, bool offline, llama_mobile_download_progress_callback progress_callback);
+LLAMA_MOBILE_FFI_EXPORT llama_mobile_download_result_c_t llama_mobile_download_hf_file_c(const char* repo_id, const char* filename, const char* destination_path, const char* bearer_token, bool offline, llama_mobile_download_progress_callback progress_callback, void* progress_callback_user_data);
 LLAMA_MOBILE_FFI_EXPORT void llama_mobile_free_download_result_c(llama_mobile_download_result_c_t* result);
 
 // Memory management functions

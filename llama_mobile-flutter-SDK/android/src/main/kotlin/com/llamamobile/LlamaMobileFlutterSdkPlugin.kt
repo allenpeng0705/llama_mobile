@@ -1,6 +1,8 @@
 package com.llamamobile
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -258,49 +260,57 @@ class LlamaMobileFlutterSdkPlugin :
         val parallelToolCalls = params["parallelToolCalls"] as? Boolean ?: false
         val toolChoice = params["toolChoice"] as? String
 
-        val completionParams: LlamaMobile.CompletionParams
-
-        val chatMessages = params["chatMessages"] as? List<Map<String, String?>>
-        if (!chatMessages.isNullOrEmpty()) {
-            val messages = chatMessages.map { msg ->
-                LlamaMobile.ChatMessage(
-                    msg["role"] ?: "",
-                    msg["content"] ?: "",
-                    msg["reasoning_content"],
-                    msg["tool_name"],
-                    msg["tool_call_id"]
+        val completionParams = if (params.containsKey("chatMessages")) {
+            val chatMessages = params["chatMessages"] as? List<Map<String, String?>>
+            if (!chatMessages.isNullOrEmpty()) {
+                val messages = chatMessages.map { msg ->
+                    LlamaMobile.ChatMessage(
+                        msg["role"] ?: "",
+                        msg["content"] ?: "",
+                        msg["reasoning_content"],
+                        msg["tool_name"],
+                        msg["tool_call_id"]
+                    )
+                }
+                // For chat messages, use the full constructor with chatMessages parameter
+                LlamaMobile.CompletionParams(
+                    "", // prompt
+                    temperature,
+                    maxTokens,
+                    nThreads,
+                    seed,
+                    topK,
+                    topP.toDouble(),
+                    minP.toDouble(),
+                    typicalP.toDouble(),
+                    penaltyLastN,
+                    penaltyRepeat.toDouble(),
+                    penaltyFreq.toDouble(),
+                    penaltyPresent.toDouble(),
+                    mirostat,
+                    mirostatTau.toDouble(),
+                    mirostatEta.toDouble(),
+                    ignoreEos,
+                    nProbs,
+                    grammar,
+                    stopSequences,
+                    emptyList(), // mediaPaths
+                    null, // tokenCallback
+                    messages, // chatMessages
+                    useJsonResponse,
+                    jsonSchema,
+                    tools,
+                    parallelToolCalls,
+                    toolChoice
                 )
+            } else {
+                val prompt = params["prompt"] as? String ?: ""
+                LlamaMobile.CompletionParams(prompt)
             }
-            completionParams = LlamaMobile.CompletionParams(messages)
         } else {
             val prompt = params["prompt"] as? String ?: ""
-            completionParams = LlamaMobile.CompletionParams(prompt)
+            LlamaMobile.CompletionParams(prompt)
         }
-
-        completionParams.maxTokens = maxTokens
-        completionParams.temperature = temperature
-        completionParams.nThreads = nThreads
-        completionParams.seed = seed
-        completionParams.topK = topK
-        completionParams.topP = topP.toDouble()
-        completionParams.minP = minP.toDouble()
-        completionParams.typicalP = typicalP.toDouble()
-        completionParams.penaltyLastN = penaltyLastN
-        completionParams.penaltyRepeat = penaltyRepeat.toDouble()
-        completionParams.penaltyFreq = penaltyFreq.toDouble()
-        completionParams.penaltyPresent = penaltyPresent.toDouble()
-        completionParams.mirostat = mirostat
-        completionParams.mirostatTau = mirostatTau.toDouble()
-        completionParams.mirostatEta = mirostatEta.toDouble()
-        completionParams.ignoreEos = ignoreEos
-        completionParams.stopSequences = stopSequences
-        completionParams.grammar = grammar
-        completionParams.useJsonResponse = useJsonResponse
-        completionParams.nProbs = nProbs
-        completionParams.jsonSchema = jsonSchema
-        completionParams.tools = tools
-        completionParams.parallelToolCalls = parallelToolCalls
-        completionParams.toolChoice = toolChoice
 
         val completion = LlamaMobile.generateCompletion(contextHandle, completionParams)
 
@@ -351,50 +361,57 @@ class LlamaMobileFlutterSdkPlugin :
         val parallelToolCalls = params["parallelToolCalls"] as? Boolean ?: false
         val toolChoice = params["toolChoice"] as? String
 
-        val completionParams: LlamaMobile.CompletionParams
-
-        val chatMessages = params["chatMessages"] as? List<Map<String, String?>>
-        if (!chatMessages.isNullOrEmpty()) {
-            val messages = chatMessages.map { msg ->
-                LlamaMobile.ChatMessage(
-                    msg["role"] ?: "",
-                    msg["content"] ?: "",
-                    msg["reasoning_content"],
-                    msg["tool_name"],
-                    msg["tool_call_id"]
+        val completionParams = if (params.containsKey("chatMessages")) {
+            val chatMessages = params["chatMessages"] as? List<Map<String, String?>>
+            if (!chatMessages.isNullOrEmpty()) {
+                val messages = chatMessages.map { msg ->
+                    LlamaMobile.ChatMessage(
+                        msg["role"] ?: "",
+                        msg["content"] ?: "",
+                        msg["reasoning_content"],
+                        msg["tool_name"],
+                        msg["tool_call_id"]
+                    )
+                }
+                // For chat messages, use the full constructor with chatMessages parameter
+                LlamaMobile.CompletionParams(
+                    "", // prompt
+                    temperature,
+                    maxTokens,
+                    nThreads,
+                    seed,
+                    topK,
+                    topP.toDouble(),
+                    minP.toDouble(),
+                    typicalP.toDouble(),
+                    penaltyLastN,
+                    penaltyRepeat.toDouble(),
+                    penaltyFreq.toDouble(),
+                    penaltyPresent.toDouble(),
+                    mirostat,
+                    mirostatTau.toDouble(),
+                    mirostatEta.toDouble(),
+                    ignoreEos,
+                    nProbs,
+                    grammar,
+                    stopSequences,
+                    emptyList(), // mediaPaths
+                    null, // tokenCallback
+                    messages, // chatMessages
+                    useJsonResponse,
+                    jsonSchema,
+                    tools,
+                    parallelToolCalls,
+                    toolChoice
                 )
+            } else {
+                val prompt = params["prompt"] as? String ?: ""
+                LlamaMobile.CompletionParams(prompt)
             }
-            completionParams = LlamaMobile.CompletionParams(messages)
         } else {
             val prompt = params["prompt"] as? String ?: ""
-            completionParams = LlamaMobile.CompletionParams(prompt)
+            LlamaMobile.CompletionParams(prompt)
         }
-
-        completionParams.maxTokens = maxTokens
-        completionParams.temperature = temperature
-        completionParams.nThreads = nThreads
-        completionParams.seed = seed
-        completionParams.topK = topK
-        completionParams.topP = topP.toDouble()
-        completionParams.minP = minP.toDouble()
-        completionParams.typicalP = typicalP.toDouble()
-        completionParams.penaltyLastN = penaltyLastN
-        completionParams.penaltyRepeat = penaltyRepeat.toDouble()
-        completionParams.penaltyFreq = penaltyFreq.toDouble()
-        completionParams.penaltyPresent = penaltyPresent.toDouble()
-        completionParams.mirostat = mirostat
-        completionParams.mirostatTau = mirostatTau.toDouble()
-        completionParams.mirostatEta = mirostatEta.toDouble()
-        completionParams.ignoreEos = ignoreEos
-        completionParams.stopSequences = stopSequences
-        completionParams.grammar = grammar
-        completionParams.useJsonResponse = useJsonResponse
-        completionParams.nProbs = nProbs
-        completionParams.jsonSchema = jsonSchema
-        completionParams.tools = tools
-        completionParams.parallelToolCalls = parallelToolCalls
-        completionParams.toolChoice = toolChoice
-        completionParams.mediaPaths = mediaPaths
 
         val completion = LlamaMobile.generateCompletion(contextHandle, completionParams)
 
@@ -413,6 +430,10 @@ class LlamaMobileFlutterSdkPlugin :
             result.error("COMPLETION_FAILED", "Failed to generate multimodal completion", null)
         }
     }
+
+    private fun handleFormatChatMessages(call: MethodCall, result: Result) {
+        val messages = call.argument<List<Map<String, String>>>("messages") ?: throw IllegalArgumentException("messages is required")
+        val chatTemplate = call.argument<String>("chatTemplate") ?: throw IllegalArgumentException("chatTemplate is required")
 
         if (chatTemplate != null) {
             var formattedPrompt = StringBuilder()
@@ -797,8 +818,10 @@ class LlamaMobileFlutterSdkPlugin :
 
         if (speechResult != null && speechResult.isSuccess()) {
             val speech = speechResult.value
+            // Convert short[] to List<Int> for Flutter compatibility
+            val audioSamplesList = speech.getAudioSamples()?.map { it.toInt() } ?: emptyList()
             result.success(mapOf(
-                "audioSamples" to speech.getAudioSamples(),
+                "audioSamples" to audioSamplesList,
                 "sampleRate" to speech.getSampleRate(),
                 "duration" to speech.getDuration(),
                 "outputFilePath" to (speech.getOutputFilePath() ?: null),
@@ -823,8 +846,10 @@ class LlamaMobileFlutterSdkPlugin :
 
             if (speechResult != null && speechResult.isSuccess()) {
                 val speech = speechResult.value
+                // Convert short[] to List<Int> for Flutter compatibility
+                val audioSamplesList = speech.getAudioSamples()?.map { it.toInt() } ?: emptyList()
                 result.success(mapOf(
-                    "audioSamples" to speech.getAudioSamples(),
+                    "audioSamples" to audioSamplesList,
                     "sampleRate" to speech.getSampleRate(),
                     "duration" to speech.getDuration(),
                     "outputFilePath" to (speech.getOutputFilePath() ?: null),
@@ -1065,6 +1090,37 @@ class LlamaMobileFlutterSdkPlugin :
     }
 
     private fun handleGenerateStreamingOpenAICompletion(call: MethodCall, result: Result) {
+        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
+        val openAIJSON = call.argument<String>("openAIJSON") ?: throw IllegalArgumentException("openAIJSON is required")
+        val grammar = call.argument<String>("grammar")
+        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        // Run generation in background thread
+        Thread {
+            try {
+                val completion = LlamaMobile.generateOpenAICompletion(contextHandle, openAIJSON)
+
+                if (completion != null) {
+                    result.success(mapOf(
+                        "text" to completion.getText(),
+                        "tokensGenerated" to completion.getTokensGenerated(),
+                        "tokensEvaluated" to completion.getTokensEvaluated(),
+                        "truncated" to completion.isTruncated(),
+                        "stoppedEos" to completion.isStoppedEos(),
+                        "stoppedWord" to completion.isStoppedWord(),
+                        "stoppedLimit" to false,
+                        "stoppingWord" to ""
+                    ))
+                } else {
+                    result.error("OPENAI_COMPLETION_FAILED", "Failed to generate OpenAI completion", null)
+                }
+            } catch (e: Exception) {
+                result.error("COMPLETION_ERROR", "An error occurred: ${e.message}", null)
+            }
+        }.start()
+    }
+
+    private fun handleGenerateStreamingOpenAICompletionAsync(call: MethodCall, result: Result) {
         val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
         val openAIJSON = call.argument<String>("openAIJSON") ?: throw IllegalArgumentException("openAIJSON is required")
         val grammar = call.argument<String>("grammar")
@@ -1524,8 +1580,6 @@ class LlamaMobileFlutterSdkPlugin :
         }.start()
     }
 
- 
-
     private fun handleGenerateStreamingCompletionAsync(call: MethodCall, result: Result) {
         val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
         val params = call.argument<Map<String, Any>>("params") ?: throw IllegalArgumentException("params is required")
@@ -1533,16 +1587,67 @@ class LlamaMobileFlutterSdkPlugin :
 
         val prompt = params["prompt"] as? String ?: throw IllegalArgumentException("prompt is required")
         val maxTokens = params["maxTokens"] as? Int ?: 128
+        
+        Thread {
+            try {
+                val completionParams = LlamaMobile.CompletionParams(prompt)
+
+                val completion = LlamaMobile.generateCompletion(contextHandle, completionParams)
+
+                if (completion != null) {
+                    result.success(mapOf(
+                        "text" to completion.getText(),
+                        "tokensGenerated" to completion.getTokensGenerated(),
+                        "tokensEvaluated" to completion.getTokensEvaluated(),
+                        "truncated" to completion.isTruncated(),
+                        "stoppedEos" to completion.isStoppedEos(),
+                        "stoppedWord" to completion.isStoppedWord(),
+                        "stoppedLimit" to false,
+                        "stoppingWord" to ""
+                    ))
+                } else {
+                    result.error("COMPLETION_FAILED", "Failed to generate streaming completion", null)
+                }
+            } catch (e: Exception) {
+                result.error("COMPLETION_ERROR", e.message, e.stackTraceToString())
+            }
+        }.start()
+    }
+
     private fun handleFormatChatMessagesAsync(call: MethodCall, result: Result) {
-        val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
         val messages = call.argument<List<Map<String, String>>>("messages") ?: throw IllegalArgumentException("messages is required")
-        val chatTemplate = call.argument<String>("chatTemplate")
-        val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+        val chatTemplate = call.argument<String>("chatTemplate") ?: throw IllegalArgumentException("chatTemplate is required")
 
         Thread {
             try {
-                val formatted = LlamaMobile.formatChatMessages(contextHandle, messages, chatTemplate)
-                result.success(formatted)
+                if (chatTemplate != null) {
+                    var formattedPrompt = StringBuilder()
+                    
+                    for (message in messages) {
+                        val role = message["role"] ?: continue
+                        val content = message["content"] ?: continue
+                        
+                        var messageTemplate = chatTemplate
+                        messageTemplate = messageTemplate.replace("{{role}}", role)
+                        messageTemplate = messageTemplate.replace("{{content}}", content)
+                        formattedPrompt.append(messageTemplate)
+                    }
+                    
+                    var assistantTurnTemplate = chatTemplate
+                    assistantTurnTemplate = assistantTurnTemplate.replace("{{role}}", "assistant")
+                    
+                    val contentPlaceholderIndex = assistantTurnTemplate.indexOf("{{content}}")
+                    if (contentPlaceholderIndex >= 0) {
+                        assistantTurnTemplate = assistantTurnTemplate.substring(0, contentPlaceholderIndex)
+                    }
+                    
+                    assistantTurnTemplate = assistantTurnTemplate.trim()
+                    formattedPrompt.append(assistantTurnTemplate).append("\n")
+                    
+                    result.success(formattedPrompt.toString())
+                } else {
+                    result.error("TEMPLATE_MISSING", "No chat template provided", null)
+                }
             } catch (e: Exception) {
                 result.error("FORMAT_ERROR", e.message, e.stackTraceToString())
             }
@@ -1557,7 +1662,7 @@ class LlamaMobileFlutterSdkPlugin :
 
         Thread {
             try {
-                val embedding = LlamaMobile.generateEmbedding(contextHandle, text)
+                val embedding = LlamaMobile.generateEmbeddings(contextHandle, text)
                 result.success(embedding?.toList())
             } catch (e: Exception) {
                 result.error("EMBEDDING_ERROR", e.message, e.stackTraceToString())
@@ -1573,7 +1678,8 @@ class LlamaMobileFlutterSdkPlugin :
 
         Thread {
             try {
-                val success = LlamaMobile.loadLoraAdapter(contextHandle, adapterPath, scale.toFloat())
+                val adapter = LlamaMobile.LoraAdapter(adapterPath, scale.toFloat())
+                val success = LlamaMobile.applyLoraAdapters(contextHandle, arrayOf(adapter))
                 result.success(success)
             } catch (e: Exception) {
                 result.error("LORA_ERROR", e.message, e.stackTraceToString())
@@ -1587,8 +1693,8 @@ class LlamaMobileFlutterSdkPlugin :
 
         Thread {
             try {
-                val success = LlamaMobile.freeLoraAdapter(contextHandle)
-                result.success(success)
+                LlamaMobile.removeLoraAdapters(contextHandle)
+                result.success(true)
             } catch (e: Exception) {
                 result.error("LORA_ERROR", e.message, e.stackTraceToString())
             }
@@ -1608,13 +1714,24 @@ class LlamaMobileFlutterSdkPlugin :
         Thread {
             try {
                 val ttsOptions = LlamaMobile.TTSOptions.Builder()
-                    .setSampleRate(sampleRate)
-                    .setVoice(voice)
-                    .setSpeed(speed.toFloat())
+                    .sampleRate(sampleRate)
+                    .voice(voice)
+                    .speed(speed.toFloat())
                     .build()
 
-                val success = LlamaMobile.loadTTSModel(contextHandle, modelPath, ttsOptions)
-                result.success(mapOf("success" to success))
+                val success = LlamaMobile.initVocoder(contextHandle, modelPath)
+                if (success) {
+                    val ttsType = LlamaMobile.getTTSType(contextHandle)
+                    result.success(mapOf(
+                        "success" to true,
+                        "modelType" to ttsType.ordinal
+                    ))
+                } else {
+                    result.success(mapOf(
+                        "success" to false,
+                        "modelType" to -1
+                    ))
+                }
             } catch (e: Exception) {
                 result.error("TTS_ERROR", e.message, e.stackTraceToString())
             }
@@ -1627,8 +1744,8 @@ class LlamaMobileFlutterSdkPlugin :
 
         Thread {
             try {
-                val success = LlamaMobile.freeTTSModel(contextHandle)
-                result.success(success)
+                LlamaMobile.releaseVocoder(contextHandle)
+                result.success(true)
             } catch (e: Exception) {
                 result.error("TTS_ERROR", e.message, e.stackTraceToString())
             }
@@ -1711,19 +1828,30 @@ class LlamaMobileFlutterSdkPlugin :
     private fun handleGenerateSpeechAsync(call: MethodCall, result: Result) {
         val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
         val text = call.argument<String>("text") ?: throw IllegalArgumentException("text is required")
-        val options = call.argument<Map<String, Any>>("options")
+        val optionsMap = call.argument<Map<String, Any>>("options")
         val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val options = parseTTSOptions(optionsMap)
 
         Thread {
             try {
-                val speechResult = LlamaMobile.generateSpeech(contextHandle, text, options)
-                result.success(mapOf(
-                    "audioData" to speechResult?.getAudioData(),
-                    "sampleRate" to speechResult?.getSampleRate(),
-                    "duration" to speechResult?.getDuration(),
-                    "outputFilePath" to speechResult?.getOutputFilePath(),
-                    "methodUsed" to speechResult?.getMethodUsed()?.ordinal
-                ))
+                val speechResult = LlamaMobile.generateSpeech(contextHandle, text, options, null)
+
+                if (speechResult != null && speechResult.isSuccess()) {
+                    val speech = speechResult.value
+                    // Convert short[] to List<Int> for Flutter compatibility
+                    val audioSamplesList = speech.getAudioSamples()?.map { it.toInt() } ?: emptyList()
+                    result.success(mapOf(
+                        "audioSamples" to audioSamplesList,
+                        "sampleRate" to speech.getSampleRate(),
+                        "duration" to speech.getDuration(),
+                        "outputFilePath" to (speech.getOutputFilePath() ?: null),
+                        "methodUsed" to speech.getMethodUsed().ordinal
+                    ))
+                } else {
+                    val error = speechResult?.error
+                    result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
+                }
             } catch (e: Exception) {
                 result.error("SPEECH_ERROR", e.message, e.stackTraceToString())
             }
@@ -1733,16 +1861,27 @@ class LlamaMobileFlutterSdkPlugin :
     private fun handleGenerateSpeechStreamAsync(call: MethodCall, result: Result) {
         val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
         val text = call.argument<String>("text") ?: throw IllegalArgumentException("text is required")
-        val options = call.argument<Map<String, Any>>("options")
+        val optionsMap = call.argument<Map<String, Any>>("options")
         val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val options = parseTTSOptions(optionsMap)
 
         Thread {
             try {
-                val speechResult = LlamaMobile.generateSpeechStream(contextHandle, text, options)
-                result.success(mapOf(
-                    "text" to text,
-                    "success" to (speechResult != null)
-                ))
+                val speechResult = LlamaMobile.generateSpeechStream(contextHandle, text, options, null, null)
+
+                if (speechResult != null && speechResult.isSuccess()) {
+                    val metadata = speechResult.value
+                    result.success(mapOf(
+                        "sampleRate" to metadata.getSampleRate(),
+                        "duration" to metadata.getDuration(),
+                        "outputFilePath" to (metadata.getOutputFilePath() ?: null),
+                        "methodUsed" to metadata.getMethodUsed().ordinal
+                    ))
+                } else {
+                    val error = speechResult?.error
+                    result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
+                }
             } catch (e: Exception) {
                 result.error("SPEECH_ERROR", e.message, e.stackTraceToString())
             }
@@ -1752,16 +1891,27 @@ class LlamaMobileFlutterSdkPlugin :
     private fun handleGenerateSpeechStreamForLongTextAsync(call: MethodCall, result: Result) {
         val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
         val text = call.argument<String>("text") ?: throw IllegalArgumentException("text is required")
-        val options = call.argument<Map<String, Any>>("options")
+        val optionsMap = call.argument<Map<String, Any>>("options")
         val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
+
+        val options = parseTTSOptions(optionsMap)
 
         Thread {
             try {
-                val speechResult = LlamaMobile.generateSpeechStreamForLongText(contextHandle, text, options)
-                result.success(mapOf(
-                    "text" to text,
-                    "success" to (speechResult != null)
-                ))
+                val speechResult = LlamaMobile.generateSpeechStreamForLongText(contextHandle, text, options, null, null)
+
+                if (speechResult != null && speechResult.isSuccess()) {
+                    val metadata = speechResult.value
+                    result.success(mapOf(
+                        "sampleRate" to metadata.getSampleRate(),
+                        "duration" to metadata.getDuration(),
+                        "outputFilePath" to (metadata.getOutputFilePath() ?: null),
+                        "methodUsed" to metadata.getMethodUsed().ordinal
+                    ))
+                } else {
+                    val error = speechResult?.error
+                    result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
+                }
             } catch (e: Exception) {
                 result.error("SPEECH_ERROR", e.message, e.stackTraceToString())
             }
@@ -1771,16 +1921,10 @@ class LlamaMobileFlutterSdkPlugin :
     private fun handleDownloadModelAsync(call: MethodCall, result: Result) {
         val url = call.argument<String>("url") ?: throw IllegalArgumentException("url is required")
         val localPath = call.argument<String>("localPath") ?: throw IllegalArgumentException("localPath is required")
-        val username = call.argument<String>("username")
-        val password = call.argument<String>("password")
-        val headers = call.argument<Map<String, String>>()
 
         Thread {
             try {
                 val downloadParamsBuilder = LlamaMobile.DownloadParams.Builder(url, "", localPath)
-                username?.let { downloadParamsBuilder.setUsername(it) }
-                password?.let { downloadParamsBuilder.setPassword(it) }
-                headers?.forEach { (key, value) -> downloadParamsBuilder.setHeader(key, value) }
                 val downloadParams = downloadParamsBuilder.build()
 
                 val resultObj = LlamaMobile.downloadModel(downloadParams) { progress, status, downloadedBytes, totalBytes ->

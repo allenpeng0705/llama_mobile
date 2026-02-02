@@ -27,6 +27,8 @@ struct common_hf_file_res {
     std::string mmprojFile;
 };
 
+typedef void (*common_download_progress_callback)(float progress, const char* status, int64_t downloaded_bytes, int64_t total_bytes, void* user_data);
+
 /**
  * Allow getting the HF file from the HF repo with tag (like ollama), for example:
  * - bartowski/Llama-3.2-3B-Instruct-GGUF:q4
@@ -43,11 +45,12 @@ common_hf_file_res common_get_hf_file(
     const std::string & bearer_token,
     bool offline);
 
-// returns true if download succeeded
 bool common_download_model(
     const common_params_model & model,
     const std::string & bearer_token,
-    bool offline);
+    bool offline,
+    common_download_progress_callback progress_callback = nullptr,
+    void* progress_callback_user_data = nullptr);
 
 // returns list of cached models
 std::vector<common_cached_model_info> common_list_cached_models();
