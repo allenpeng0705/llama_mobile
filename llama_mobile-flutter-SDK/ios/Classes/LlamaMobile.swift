@@ -934,9 +934,12 @@ public class LlamaMobile: NSObject {
         
         // Set prompt to empty string when chat messages are present, otherwise use the prompt
         let promptToUse = params.chatMessages.isEmpty ? params.prompt : ""
-        cParams.prompt = promptToUse.withCString { $0 }
+        // Allocate persistent C string for prompt to prevent memory issues
+        let promptCString = allocateCString(from: promptToUse)
+        cParams.prompt = UnsafePointer(promptCString)
+        stopStringsToFree.append(promptCString)
         cParams.n_predict = params.maxTokens
-        cParams.n_threads = params.nThreads ?? 0
+        cParams.n_threads = params.nThreads ?? 4
         cParams.seed = params.seed
         cParams.temperature = params.temperature
         cParams.top_k = params.topK
@@ -1061,8 +1064,10 @@ public class LlamaMobile: NSObject {
         let status: Int32
         
         if !params.mediaPaths.isEmpty {
+            log("[DEBUG] Media paths not empty, calling multimodal completion", level: .debug)
             // Convert media paths to C array using helper function
             let (mediaPathsC, mediaStringsToFree) = allocateCStringArray(from: params.mediaPaths)
+            log("[DEBUG] Allocated media paths C array with \(params.mediaPaths.count) paths", level: .debug)
             defer {
                 // Free all allocated C strings for media paths
                 for cString in mediaStringsToFree {
@@ -1072,8 +1077,10 @@ public class LlamaMobile: NSObject {
                 mediaPathsC.deallocate()
             }
             
+            log("[DEBUG] Calling llama_mobile_multimodal_completion_c", level: .debug)
             status = llama_mobile_multimodal_completion_c(context, &cParams, mediaPathsC, Int32(params.mediaPaths.count), &cResult)
         } else {
+            log("[DEBUG] No media paths, calling regular completion", level: .debug)
             status = llama_mobile_completion_c(context, &cParams, &cResult)
         }
         
@@ -1180,8 +1187,14 @@ public class LlamaMobile: NSObject {
     ///   - mediaPaths: Array of paths to media files (images/audio)
     /// - Returns: Completion result, or nil if an error occurred 
     public func generateMultimodalCompletion(with params: CompletionParams, mediaPaths: [String]) -> CompletionResult? {
+        log("[DEBUG] generateMultimodalCompletion called with \(mediaPaths.count) media paths", level: .debug)
+        for (index, path) in mediaPaths.enumerated() {
+            log("[DEBUG] Media path \(index): \(path)", level: .debug)
+            log("[DEBUG] Media path \(index) exists: \(FileManager.default.fileExists(atPath: path))", level: .debug)
+        }
         var paramsWithMedia = params
         paramsWithMedia.mediaPaths = mediaPaths
+        log("[DEBUG] Calling generateCompletion with params", level: .debug)
         return generateCompletion(with: paramsWithMedia)
     }
     

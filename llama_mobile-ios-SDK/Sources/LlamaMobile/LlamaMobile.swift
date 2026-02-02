@@ -147,6 +147,9 @@ public class LlamaMobile: NSObject {
     /// Opaque handle to the llama_mobile context
     private var context: llama_mobile_context_handle_t?
     
+    /// Number of CPU threads to use (stored from initialization)
+    private var initializationNThreads: Int32 = 4
+    
     /// Configure Metal paths before model initialization
     private func configureMetalPaths() {
         let frameworkBundle = Bundle(for: type(of: self))
@@ -838,6 +841,9 @@ public class LlamaMobile: NSObject {
         // Set enable_chat_template at the end (matches C struct order)
         cParams.enable_chat_template = params.enableChatTemplate
         
+        // Store the nThreads value for later use
+        self.initializationNThreads = params.nThreads
+        
         // Initialize the context
         context = llama_mobile_init_context_c(&cParams)
         
@@ -934,9 +940,11 @@ public class LlamaMobile: NSObject {
         
         // Set prompt to empty string when chat messages are present, otherwise use the prompt
         let promptToUse = params.chatMessages.isEmpty ? params.prompt : ""
-        cParams.prompt = promptToUse.withCString { $0 }
+        let promptCString = allocateCString(from: promptToUse)
+        cParams.prompt = UnsafePointer(promptCString)
+        stopStringsToFree.append(promptCString)
         cParams.n_predict = params.maxTokens
-        cParams.n_threads = params.nThreads ?? 0
+        cParams.n_threads = params.nThreads ?? self.initializationNThreads
         cParams.seed = params.seed
         cParams.temperature = params.temperature
         cParams.top_k = params.topK

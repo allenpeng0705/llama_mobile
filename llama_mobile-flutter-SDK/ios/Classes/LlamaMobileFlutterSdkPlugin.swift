@@ -39,8 +39,10 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
     case "generateCompletionAsync":
       handleGenerateCompletionAsync(call, result: result)
     case "generateMultimodalCompletion":
+      print("[DEBUG] Flutter Plugin: Matched generateMultimodalCompletion")
       handleGenerateMultimodalCompletion(call, result: result)
     case "generateMultimodalCompletionAsync":
+      print("[DEBUG] Flutter Plugin: Matched generateMultimodalCompletionAsync")
       handleGenerateMultimodalCompletionAsync(call, result: result)
     case "generateStreamingCompletion":
       handleGenerateStreamingCompletion(call, result: result)
@@ -176,6 +178,7 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
     case "getPlatformVersion":
       result("iOS " + UIDevice.current.systemVersion)
     default:
+      print("[DEBUG] Flutter Plugin: Method not implemented: \(call.method)")
       result(FlutterMethodNotImplemented)
     }
   }
@@ -388,7 +391,9 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
   }
 
   private func handleGenerateMultimodalCompletionAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    print("[DEBUG] Flutter Plugin: handleGenerateMultimodalCompletionAsync called")
     DispatchQueue.global(qos: .userInitiated).async {
+      print("[DEBUG] Flutter Plugin: About to call handleGenerateMultimodalCompletion")
       self.handleGenerateMultimodalCompletion(call, result: result)
     }
   }
@@ -454,15 +459,18 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
   private func handleInitMultimodalAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
           let contextHandle = args["contextHandle"] as? Int,
+          let mmprojPath = args["mmprojPath"] as? String,
           let llamaMobile = self.contexts[contextHandle] else {
       result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
       return
     }
 
+    let useGpu = args["useGpu"] as? Bool ?? true
+
     DispatchQueue.global(qos: .userInitiated).async {
-      // iOS SDK doesn't currently support explicit multimodal initialization
+      let success = llamaMobile.initMultimodal(mmprojPath: mmprojPath, useGpu: useGpu)
       DispatchQueue.main.async {
-        result(true)
+        result(success)
       }
     }
   }
@@ -476,8 +484,8 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
     }
 
     DispatchQueue.global(qos: .userInitiated).async {
+      llamaMobile.releaseMultimodal()
       DispatchQueue.main.async {
-        llamaMobile.releaseMultimodal()
         result(true)
       }
     }
@@ -807,7 +815,9 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
           let contextHandle = args["contextHandle"] as? Int,
           let params = args["params"] as? [String: Any],
           let llamaMobile = contexts[contextHandle] else {
-        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        DispatchQueue.main.async {
+          result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+        }
         return
     }
 
@@ -832,9 +842,13 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
             "stoppedLimit": completionResult.stoppedLimit,
             "stoppingWord": completionResult.stoppingWord
         ]
-        result(resultDict)
+        DispatchQueue.main.async {
+          result(resultDict)
+        }
     } else {
-        result(FlutterError(code: "COMPLETION_FAILED", message: "Failed to generate completion", details: nil))
+        DispatchQueue.main.async {
+          result(FlutterError(code: "COMPLETION_FAILED", message: "Failed to generate completion", details: nil))
+        }
     }
   }
 
@@ -1071,7 +1085,9 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
           let contextHandle = args["contextHandle"] as? Int,
           let paramsDict = args["params"] as? [String: Any],
           let llamaMobile = contexts[contextHandle] else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      DispatchQueue.main.async {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      }
       return
     }
 
@@ -1087,26 +1103,68 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
         "stoppedLimit": completionResult.stoppedLimit,
         "stoppingWord": completionResult.stoppingWord
       ]
-      result(resultDict)
+      DispatchQueue.main.async {
+        result(resultDict)
+      }
     } else {
-      result(FlutterError(code: "COMPLETION_FAILED", message: "Failed to generate completion", details: nil))
+      DispatchQueue.main.async {
+        result(FlutterError(code: "COMPLETION_FAILED", message: "Failed to generate completion", details: nil))
+      }
     }
   }
 
   private func handleGenerateMultimodalCompletion(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    print("[DEBUG] Flutter Plugin: handleGenerateMultimodalCompletion called")
+    
+    // Log all arguments for debugging
+    if let args = call.arguments as? [String: Any] {
+      
+      if let mediaPaths = args["mediaPaths"] as? [String] {
+        print("[DEBUG] Flutter Plugin: Media paths count: \(mediaPaths.count)")
+        for (index, path) in mediaPaths.enumerated() {
+          print("[DEBUG] Flutter Plugin: Media path \(index): \(path)")
+          print("[DEBUG] Flutter Plugin: Path exists: \(FileManager.default.fileExists(atPath: path))")
+        }
+      }
+    } else {
+      print("[DEBUG] Flutter Plugin: No arguments received")
+    }
+    
     guard let args = call.arguments as? [String: Any],
           let contextHandle = args["contextHandle"] as? Int,
           let paramsDict = args["params"] as? [String: Any],
           let mediaPaths = args["mediaPaths"] as? [String],
           let llamaMobile = contexts[contextHandle] else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      print("[DEBUG] Flutter Plugin: Missing required parameters")
+      DispatchQueue.main.async {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      }
       return
     }
 
+    print("[DEBUG] Flutter Plugin: Creating completion params from dict")
     var completionParams = createCompletionParams(from: paramsDict)
+    print("[DEBUG] Flutter Plugin: Completion params media paths count before update: \(completionParams.mediaPaths.count)")
     completionParams.mediaPaths = mediaPaths
+    print("[DEBUG] Flutter Plugin: Completion params media paths count after update: \(completionParams.mediaPaths.count)")
 
+    print("[DEBUG] Flutter Plugin: Checking if multimodal is enabled")
+    let isMultimodalEnabled = llamaMobile.isMultimodalEnabled()
+    print("[DEBUG] Flutter Plugin: isMultimodalEnabled: \(isMultimodalEnabled)")
+
+    if !isMultimodalEnabled {
+      print("[DEBUG] Flutter Plugin: Multimodal is not enabled but media paths are provided")
+      DispatchQueue.main.async {
+        result(FlutterError(code: "MULTIMODAL_NOT_ENABLED", message: "Multimodal support is not enabled. Please call initMultimodal with a valid mmproj model path before using multimodal completion.", details: nil))
+      }
+      return
+    }
+
+    print("[DEBUG] Flutter Plugin: Calling llamaMobile.generateCompletion (using multimodal internally)")
+    // Call generateCompletion directly instead of generateMultimodalCompletion
+    // because generateCompletion already handles multimodal inputs based on mediaPaths
     if let completionResult = llamaMobile.generateCompletion(with: completionParams) {
+      print("[DEBUG] Flutter Plugin: Multimodal completion succeeded")
       let resultDict: [String: Any] = [
         "text": completionResult.text,
         "tokensGenerated": completionResult.tokensGenerated,
@@ -1117,38 +1175,45 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
         "stoppedLimit": completionResult.stoppedLimit,
         "stoppingWord": completionResult.stoppingWord
       ]
-      result(resultDict)
+      print("[DEBUG] Flutter Plugin: Returning result: \(resultDict)")
+      DispatchQueue.main.async {
+        result(resultDict)
+      }
     } else {
-      result(FlutterError(code: "COMPLETION_FAILED", message: "Failed to generate multimodal completion", details: nil))
+      print("[DEBUG] Flutter Plugin: Multimodal completion failed")
+      DispatchQueue.main.async {
+        result(FlutterError(code: "COMPLETION_FAILED", message: "Failed to generate multimodal completion", details: nil))
+      }
     }
   }
 
   // MARK: - Helper Methods
   private func createCompletionParams(from dict: [String: Any]) -> LlamaMobile.CompletionParams {
-    let maxTokens = dict["maxTokens"] as? Int32 ?? 128
-    let nThreads = dict["nThreads"] as? Int32
-    let seed = dict["seed"] as? Int32 ?? -1
+    let maxTokens = (dict["maxTokens"] as? Int).map { Int32($0) } ?? 128
+    let nThreads = (dict["nThreads"] as? Int).map { Int32($0) }
+    let seed = (dict["seed"] as? Int).map { Int32($0) } ?? -1
     let temperature = dict["temperature"] as? Double ?? 0.8
-    let topK = dict["topK"] as? Int32 ?? 40
+    let topK = (dict["topK"] as? Int).map { Int32($0) } ?? 40
     let topP = dict["topP"] as? Double ?? 0.95
     let minP = dict["minP"] as? Double ?? 0.05
     let typicalP = dict["typicalP"] as? Double ?? 1.0
-    let penaltyLastN = dict["penaltyLastN"] as? Int32 ?? 64
+    let penaltyLastN = (dict["penaltyLastN"] as? Int).map { Int32($0) } ?? 64
     let penaltyRepeat = dict["penaltyRepeat"] as? Double ?? 1.1
     let penaltyFreq = dict["penaltyFreq"] as? Double ?? 0.0
     let penaltyPresent = dict["penaltyPresent"] as? Double ?? 0.0
-    let mirostat = dict["mirostat"] as? Int32 ?? 0
+    let mirostat = (dict["mirostat"] as? Int).map { Int32($0) } ?? 0
     let mirostatTau = dict["mirostatTau"] as? Double ?? 5.0
     let mirostatEta = dict["mirostatEta"] as? Double ?? 0.1
     let ignoreEos = dict["ignoreEos"] as? Bool ?? false
     let stopSequences = dict["stopSequences"] as? [String] ?? []
     let grammar = dict["grammar"] as? String
     let useJsonResponse = dict["useJsonResponse"] as? Bool ?? false
-    let nProbs = dict["nProbs"] as? Int32 ?? 0
+    let nProbs = (dict["nProbs"] as? Int).map { Int32($0) } ?? 0
     let jsonSchema = dict["jsonSchema"] as? String
     let tools = dict["tools"] as? String
     let parallelToolCalls = dict["parallelToolCalls"] as? Bool ?? false
     let toolChoice = dict["toolChoice"] as? String
+    let mediaPaths = dict["mediaPaths"] as? [String] ?? []
 
     var completionParams: LlamaMobile.CompletionParams
 
@@ -1168,10 +1233,10 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
           ))
         }
       }
-      completionParams = LlamaMobile.CompletionParams(chatMessages: messages)
+      completionParams = LlamaMobile.CompletionParams(prompt: "", maxTokens: maxTokens, nThreads: nThreads, seed: seed, temperature: temperature, topK: topK, topP: topP, minP: minP, typicalP: typicalP, penaltyLastN: penaltyLastN, penaltyRepeat: penaltyRepeat, penaltyFreq: penaltyFreq, penaltyPresent: penaltyPresent, mirostat: mirostat, mirostatTau: mirostatTau, mirostatEta: mirostatEta, ignoreEos: ignoreEos, stopSequences: stopSequences, grammar: grammar, mediaPaths: mediaPaths, chatMessages: messages, useJsonResponse: useJsonResponse, nProbs: nProbs, jsonSchema: jsonSchema, tools: tools, parallelToolCalls: parallelToolCalls, toolChoice: toolChoice)
     } else {
       let prompt = dict["prompt"] as? String ?? ""
-      completionParams = LlamaMobile.CompletionParams(prompt: prompt)
+      completionParams = LlamaMobile.CompletionParams(prompt: prompt, maxTokens: maxTokens, nThreads: nThreads, seed: seed, temperature: temperature, topK: topK, topP: topP, minP: minP, typicalP: typicalP, penaltyLastN: penaltyLastN, penaltyRepeat: penaltyRepeat, penaltyFreq: penaltyFreq, penaltyPresent: penaltyPresent, mirostat: mirostat, mirostatTau: mirostatTau, mirostatEta: mirostatEta, ignoreEos: ignoreEos, stopSequences: stopSequences, grammar: grammar, mediaPaths: mediaPaths, chatMessages: [], useJsonResponse: useJsonResponse, nProbs: nProbs, jsonSchema: jsonSchema, tools: tools, parallelToolCalls: parallelToolCalls, toolChoice: toolChoice)
     }
 
     completionParams.maxTokens = maxTokens
@@ -1192,6 +1257,7 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
     completionParams.ignoreEos = ignoreEos
     completionParams.stopSequences = stopSequences
     completionParams.grammar = grammar
+    completionParams.mediaPaths = mediaPaths
     completionParams.useJsonResponse = useJsonResponse
     completionParams.nProbs = nProbs
     completionParams.jsonSchema = jsonSchema
@@ -1208,7 +1274,9 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
               let contextHandle = args["contextHandle"] as? Int,
               let chatMessages = args["messages"] as? [[String: String]],
               let llamaMobile = contexts[contextHandle] else {
-            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            DispatchQueue.main.async {
+                result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            }
             return
         }
 
@@ -1241,9 +1309,13 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
             assistantTurnTemplate = assistantTurnTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
             formattedPrompt += assistantTurnTemplate + "\n"
             
-            result(formattedPrompt)
+            DispatchQueue.main.async {
+                result(formattedPrompt)
+            }
         } else {
-            result(FlutterError(code: "TEMPLATE_MISSING", message: "No chat template provided", details: nil))
+            DispatchQueue.main.async {
+                result(FlutterError(code: "TEMPLATE_MISSING", message: "No chat template provided", details: nil))
+            }
         }
 }
 
@@ -1253,12 +1325,16 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
           let contextHandle = args["contextHandle"] as? Int,
           let grammarPath = args["grammarPath"] as? String,
           let llamaMobile = contexts[contextHandle] else {
-      result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      DispatchQueue.main.async {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+      }
       return
     }
 
     let grammar = llamaMobile.loadGrammar(from: grammarPath)
-    result(grammar)
+    DispatchQueue.main.async {
+      result(grammar)
+    }
   }
 
   // MARK: - Embedding Methods
@@ -1267,15 +1343,21 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
               let contextHandle = args["contextHandle"] as? Int,
               let text = args["text"] as? String,
               let llamaMobile = contexts[contextHandle] else {
-            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            DispatchQueue.main.async {
+                result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            }
             return
         }
 
         if let embedding = llamaMobile.generateEmbeddings(for: text) {
             let doubleEmbedding = embedding.map { Double($0) }
-            result(doubleEmbedding)
+            DispatchQueue.main.async {
+                result(doubleEmbedding)
+            }
         } else {
-            result(FlutterError(code: "EMBEDDING_FAILED", message: "Failed to generate embedding", details: nil))
+            DispatchQueue.main.async {
+                result(FlutterError(code: "EMBEDDING_FAILED", message: "Failed to generate embedding", details: nil))
+            }
         }
     }
 
@@ -1291,15 +1373,21 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
               let contextHandle = args["contextHandle"] as? Int,
               let text = args["text"] as? String,
               let llamaMobile = contexts[contextHandle] else {
-            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            DispatchQueue.main.async {
+                result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            }
             return
         }
 
         if let tokens = llamaMobile.tokenize(text: text) {
             let intTokens = tokens.map { Int($0) }
-            result(intTokens)
+            DispatchQueue.main.async {
+                result(intTokens)
+            }
         } else {
-            result(FlutterError(code: "TOKENIZE_FAILED", message: "Failed to tokenize text", details: nil))
+            DispatchQueue.main.async {
+                result(FlutterError(code: "TOKENIZE_FAILED", message: "Failed to tokenize text", details: nil))
+            }
         }
     }
 
@@ -1308,15 +1396,21 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
               let contextHandle = args["contextHandle"] as? Int,
               let tokens = args["tokens"] as? [Int],
               let llamaMobile = contexts[contextHandle] else {
-            result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            DispatchQueue.main.async {
+                result(FlutterError(code: "INVALID_ARGS", message: "Missing required parameters", details: nil))
+            }
             return
         }
 
         let int32Tokens = tokens.map { Int32($0) }
         if let text = llamaMobile.detokenize(tokens: int32Tokens) {
-            result(text)
+            DispatchQueue.main.async {
+                result(text)
+            }
         } else {
-            result(FlutterError(code: "DETOKENIZE_FAILED", message: "Failed to detokenize tokens", details: nil))
+            DispatchQueue.main.async {
+                result(FlutterError(code: "DETOKENIZE_FAILED", message: "Failed to detokenize tokens", details: nil))
+            }
         }
     }
 

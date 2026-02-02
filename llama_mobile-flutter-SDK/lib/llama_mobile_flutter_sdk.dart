@@ -160,7 +160,7 @@ class InitParams {
 class CompletionParams {
   final String prompt;
   final int maxTokens;
-  final int? nThreads;
+  final int nThreads;
   final int seed;
   final double temperature;
   final int topK;
@@ -189,7 +189,7 @@ class CompletionParams {
   CompletionParams({
     required this.prompt,
     this.maxTokens = 1024,
-    this.nThreads,
+    this.nThreads = 4,
     this.seed = -1,
     this.temperature = 0.8,
     this.topK = 40,
@@ -219,7 +219,7 @@ class CompletionParams {
   CompletionParams.forChat({
     required List<ChatMessage> chatMessages,
     this.maxTokens = 1024,
-    this.nThreads,
+    this.nThreads = 4,
     this.seed = -1,
     this.temperature = 0.7,
     this.topK = 40,
@@ -279,7 +279,7 @@ class CompletionParams {
   }
 
   factory CompletionParams.fromPrompt(String prompt) {
-    return CompletionParams(prompt: prompt);
+    return CompletionParams(prompt: prompt, nThreads: 4);
   }
 
   factory CompletionParams.fromChatMessages(List<ChatMessage> chatMessages) {
@@ -291,6 +291,7 @@ class CompletionParams {
       topP: 0.95,
       topK: 40,
       penaltyRepeat: 1.2,
+      nThreads: 4,
     );
   }
 
@@ -304,6 +305,7 @@ class CompletionParams {
       temperature: 1.0,
       topP: 0.98,
       topK: 100,
+      nThreads: 4,
     );
   }
 
@@ -313,6 +315,7 @@ class CompletionParams {
       temperature: 0.1,
       topP: 0.9,
       topK: 20,
+      nThreads: 4,
     );
   }
 
@@ -327,6 +330,7 @@ class CompletionParams {
       topP: 0.95,
       topK: 40,
       penaltyRepeat: 1.2,
+      nThreads: 4,
     );
   }
 
@@ -339,6 +343,7 @@ class CompletionParams {
       prompt: multimodalPrompt,
       maxTokens: maxTokens,
       mediaPaths: mediaPaths,
+      nThreads: 4,
     );
   }
 }
@@ -899,7 +904,7 @@ class LlamaContext {
   Future<CompletionResult?> generateStreamingCompletion({
     required String prompt,
     int maxTokens = 1024,
-    int? nThreads,
+    int nThreads = 4,
     int seed = -1,
     double temperature = 0.8,
     int topK = 40,
@@ -1098,7 +1103,7 @@ class LlamaContext {
   Future<CompletionResult?> generateCompletion({
     required String prompt,
     int maxTokens = 1024,
-    int? nThreads,
+    int nThreads = 4,
     int seed = -1,
     double temperature = 0.8,
     int topK = 40,
@@ -1149,8 +1154,22 @@ class LlamaContext {
   Future<CompletionResult?> generateCompletionWithParams(
     CompletionParams params,
   ) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateCompletion(_contextHandle, params.toMap());
+    Map<String, dynamic>? result;
+    if (params.mediaPaths.isNotEmpty) {
+      // Use multimodal completion for media
+      result = await LlamaMobileFlutterSdkPlatform.instance
+          .generateMultimodalCompletion(
+            _contextHandle,
+            params.toMap(),
+            params.mediaPaths,
+          );
+    } else {
+      // Use regular completion
+      result = await LlamaMobileFlutterSdkPlatform.instance.generateCompletion(
+        _contextHandle,
+        params.toMap(),
+      );
+    }
     if (result != null) {
       return CompletionResult.fromMap(result);
     }
@@ -1162,7 +1181,7 @@ class LlamaContext {
     required String prompt,
     required List<String> mediaPaths,
     int maxTokens = 1024,
-    int? nThreads,
+    int nThreads = 4,
     int seed = -1,
     double temperature = 0.8,
     int topK = 40,
@@ -1691,7 +1710,7 @@ class LlamaContext {
   Future<CompletionResult?> generateCompletionAsync({
     required String prompt,
     int maxTokens = 1024,
-    int? nThreads,
+    int nThreads = 4,
     int seed = -1,
     double temperature = 0.8,
     int topK = 40,
@@ -1741,9 +1760,16 @@ class LlamaContext {
   Future<CompletionResult?> generateCompletionWithParamsAsync(
     CompletionParams params,
   ) async {
+    print("[DEBUG] Dart SDK: generateCompletionWithParamsAsync called");
+    print("[DEBUG] Dart SDK: mediaPaths count: ${params.mediaPaths.length}");
+    print("[DEBUG] Dart SDK: mediaPaths: ${params.mediaPaths}");
+    print("[DEBUG] Dart SDK: prompt: ${params.prompt}");
+    print("[DEBUG] Dart SDK: maxTokens: ${params.maxTokens}");
+
     Map<String, dynamic>? result;
     if (params.mediaPaths.isNotEmpty) {
       // Use multimodal completion for media
+      print("[DEBUG] Dart SDK: Calling generateMultimodalCompletionAsync");
       result = await LlamaMobileFlutterSdkPlatform.instance
           .generateMultimodalCompletionAsync(
             _contextHandle,
@@ -1752,9 +1778,15 @@ class LlamaContext {
           );
     } else {
       // Use regular completion
+      print("[DEBUG] Dart SDK: Calling generateCompletionAsync");
       result = await LlamaMobileFlutterSdkPlatform.instance
           .generateCompletionAsync(_contextHandle, params.toMap());
     }
+
+    print(
+      "[DEBUG] Dart SDK: Result received: ${result != null ? 'Success' : 'Null'}",
+    );
+
     if (result != null) {
       return CompletionResult(
         text: result['text'] as String,
@@ -1775,7 +1807,7 @@ class LlamaContext {
     required String prompt,
     required List<String> mediaPaths,
     int maxTokens = 1024,
-    int? nThreads,
+    int nThreads = 4,
     int seed = -1,
     double temperature = 0.8,
     int topK = 40,
@@ -1904,7 +1936,7 @@ class LlamaContext {
   Future<CompletionResult?> generateStreamingCompletionAsync({
     required String prompt,
     int maxTokens = 1024,
-    int? nThreads,
+    int nThreads = 4,
     int seed = -1,
     double temperature = 0.8,
     int topK = 40,

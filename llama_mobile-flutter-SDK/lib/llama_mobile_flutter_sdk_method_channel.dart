@@ -91,6 +91,12 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
     Map<String, dynamic> params,
     List<String> mediaPaths,
   ) async {
+    print("[DEBUG] Method Channel: generateMultimodalCompletion called");
+    print("[DEBUG] Method Channel: contextHandle: $contextHandle");
+    print("[DEBUG] Method Channel: params: $params");
+    print("[DEBUG] Method Channel: mediaPaths: $mediaPaths");
+    print("[DEBUG] Method Channel: mediaPaths length: ${mediaPaths.length}");
+
     final result = await methodChannel.invokeMapMethod<String, dynamic>(
       'generateMultimodalCompletion',
       {
@@ -99,6 +105,8 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
         'mediaPaths': mediaPaths,
       },
     );
+
+    print("[DEBUG] Method Channel: Result: $result");
     return result;
   }
 
@@ -108,6 +116,12 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
     Map<String, dynamic> params,
     List<String> mediaPaths,
   ) async {
+    print("[DEBUG] Method Channel: generateMultimodalCompletionAsync called");
+    print("[DEBUG] Method Channel: contextHandle: $contextHandle");
+    print("[DEBUG] Method Channel: params: $params");
+    print("[DEBUG] Method Channel: mediaPaths: $mediaPaths");
+    print("[DEBUG] Method Channel: mediaPaths length: ${mediaPaths.length}");
+
     final result = await methodChannel.invokeMapMethod<String, dynamic>(
       'generateMultimodalCompletionAsync',
       {
@@ -116,6 +130,8 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
         'mediaPaths': mediaPaths,
       },
     );
+
+    print("[DEBUG] Method Channel: Result: $result");
     return result;
   }
 

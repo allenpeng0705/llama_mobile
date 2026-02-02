@@ -236,7 +236,7 @@ class LlamaMobileFlutterSdkPlugin :
         val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
 
         val maxTokens = params["maxTokens"] as? Int ?: 128
-        val nThreads = params["nThreads"] as? Int
+        val nThreads = params["nThreads"] as? Int ?: 4
         val seed = params["seed"] as? Int ?: -1
         val temperature = (params["temperature"] as? Double ?: 0.8).toFloat()
         val topK = params["topK"] as? Int ?: 40
@@ -337,7 +337,7 @@ class LlamaMobileFlutterSdkPlugin :
         val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
 
         val maxTokens = params["maxTokens"] as? Int ?: 128
-        val nThreads = params["nThreads"] as? Int
+        val nThreads = params["nThreads"] as? Int ?: 4
         val seed = params["seed"] as? Int ?: -1
         val temperature = (params["temperature"] as? Double ?: 0.8).toFloat()
         val topK = params["topK"] as? Int ?: 40
@@ -814,22 +814,27 @@ class LlamaMobileFlutterSdkPlugin :
         val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
 
         val options = parseTTSOptions(optionsMap)
-        val speechResult = LlamaMobile.generateSpeechSync(contextHandle, text, options)
 
-        if (speechResult != null && speechResult.isSuccess()) {
-            val speech = speechResult.value
-            // Convert short[] to List<Int> for Flutter compatibility
-            val audioSamplesList = speech.getAudioSamples()?.map { it.toInt() } ?: emptyList()
-            result.success(mapOf(
-                "audioSamples" to audioSamplesList,
-                "sampleRate" to speech.getSampleRate(),
-                "duration" to speech.getDuration(),
-                "outputFilePath" to (speech.getOutputFilePath() ?: null),
-                "methodUsed" to speech.getMethodUsed().ordinal
-            ))
-        } else {
-            val error = speechResult?.error
-            result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
+        try {
+            val speechResult = LlamaMobile.generateSpeechSync(contextHandle, text, options)
+
+            if (speechResult != null && speechResult.isSuccess()) {
+                val speech = speechResult.value
+                // Convert short[] to List<Int> for Flutter compatibility
+                val audioSamplesList = speech.getAudioSamples()?.map { it.toInt() } ?: emptyList()
+                result.success(mapOf(
+                    "audioSamples" to audioSamplesList,
+                    "sampleRate" to speech.getSampleRate(),
+                    "duration" to speech.getDuration(),
+                    "outputFilePath" to (speech.getOutputFilePath() ?: null),
+                    "methodUsed" to speech.getMethodUsed().ordinal
+                ))
+            } else {
+                val error = speechResult?.error
+                result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
+            }
+        } catch (e: Exception) {
+            result.error("SPEECH_ERROR", e.message, e.stackTraceToString())
         }
     }
 
@@ -848,16 +853,20 @@ class LlamaMobileFlutterSdkPlugin :
                 val speech = speechResult.value
                 // Convert short[] to List<Int> for Flutter compatibility
                 val audioSamplesList = speech.getAudioSamples()?.map { it.toInt() } ?: emptyList()
-                result.success(mapOf(
-                    "audioSamples" to audioSamplesList,
-                    "sampleRate" to speech.getSampleRate(),
-                    "duration" to speech.getDuration(),
-                    "outputFilePath" to (speech.getOutputFilePath() ?: null),
-                    "methodUsed" to speech.getMethodUsed().ordinal
-                ))
+                Handler(Looper.getMainLooper()).post {
+                    result.success(mapOf(
+                        "audioSamples" to audioSamplesList,
+                        "sampleRate" to speech.getSampleRate(),
+                        "duration" to speech.getDuration(),
+                        "outputFilePath" to (speech.getOutputFilePath() ?: null),
+                        "methodUsed" to speech.getMethodUsed().ordinal
+                    ))
+                }
             } else {
                 val error = speechResult?.error
-                result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
+                Handler(Looper.getMainLooper()).post {
+                    result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
+                }
             }
         }.start()
     }
@@ -881,15 +890,19 @@ class LlamaMobileFlutterSdkPlugin :
 
             if (speechResult != null && speechResult.isSuccess()) {
                 val metadata = speechResult.value
-                result.success(mapOf(
-                    "sampleRate" to metadata.getSampleRate(),
-                    "duration" to metadata.getDuration(),
-                    "outputFilePath" to (metadata.getOutputFilePath() ?: null),
-                    "methodUsed" to metadata.getMethodUsed().ordinal
-                ))
+                Handler(Looper.getMainLooper()).post {
+                    result.success(mapOf(
+                        "sampleRate" to metadata.getSampleRate(),
+                        "duration" to metadata.getDuration(),
+                        "outputFilePath" to (metadata.getOutputFilePath() ?: null),
+                        "methodUsed" to metadata.getMethodUsed().ordinal
+                    ))
+                }
             } else {
                 val error = speechResult?.error
-                result.error("SPEECH_STREAM_FAILED", error?.toString() ?: "Failed to generate speech stream", null)
+                Handler(Looper.getMainLooper()).post {
+                    result.error("SPEECH_STREAM_FAILED", error?.toString() ?: "Failed to generate speech stream", null)
+                }
             }
         }.start()
     }
@@ -913,15 +926,19 @@ class LlamaMobileFlutterSdkPlugin :
 
             if (speechResult != null && speechResult.isSuccess()) {
                 val metadata = speechResult.value
-                result.success(mapOf(
-                    "sampleRate" to metadata.getSampleRate(),
-                    "duration" to metadata.getDuration(),
-                    "outputFilePath" to (metadata.getOutputFilePath() ?: null),
-                    "methodUsed" to metadata.getMethodUsed().ordinal
-                ))
+                Handler(Looper.getMainLooper()).post {
+                    result.success(mapOf(
+                        "sampleRate" to metadata.getSampleRate(),
+                        "duration" to metadata.getDuration(),
+                        "outputFilePath" to (metadata.getOutputFilePath() ?: null),
+                        "methodUsed" to metadata.getMethodUsed().ordinal
+                    ))
+                }
             } else {
                 val error = speechResult?.error
-                result.error("SPEECH_STREAM_FAILED", error?.toString() ?: "Failed to generate speech stream", null)
+                Handler(Looper.getMainLooper()).post {
+                    result.error("SPEECH_STREAM_FAILED", error?.toString() ?: "Failed to generate speech stream", null)
+                }
             }
         }.start()
     }
@@ -977,9 +994,13 @@ class LlamaMobileFlutterSdkPlugin :
                 }
 
                 val success = LlamaMobile.saveAudioToWav(contextHandle, filePath, floatAudioData, sampleRate)
-                result.success(success)
+                Handler(Looper.getMainLooper()).post {
+                    result.success(success)
+                }
             } catch (e: Exception) {
-                result.error("SAVE_AUDIO_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("SAVE_AUDIO_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1014,7 +1035,7 @@ class LlamaMobileFlutterSdkPlugin :
 
         val prompt = params["prompt"] as? String ?: throw IllegalArgumentException("prompt is required")
         val maxTokens = params["maxTokens"] as? Int ?: 128
-        val nThreads = params["nThreads"] as? Int
+        val nThreads = params["nThreads"] as? Int ?: 4
         val seed = params["seed"] as? Int ?: -1
         val temperature = (params["temperature"] as? Double ?: 0.8).toFloat()
         val topK = params["topK"] as? Int ?: 40
@@ -1070,21 +1091,27 @@ class LlamaMobileFlutterSdkPlugin :
                 val completion = LlamaMobile.generateCompletion(contextHandle, completionParams)
 
                 if (completion != null) {
-                    result.success(mapOf(
-                        "text" to completion.getText(),
-                        "tokensGenerated" to completion.getTokensGenerated(),
-                        "tokensEvaluated" to completion.getTokensEvaluated(),
-                        "truncated" to completion.isTruncated(),
-                        "stoppedEos" to completion.isStoppedEos(),
-                        "stoppedWord" to completion.isStoppedWord(),
-                        "stoppedLimit" to false,
-                        "stoppingWord" to ""
-                    ))
+                    Handler(Looper.getMainLooper()).post {
+                        result.success(mapOf(
+                            "text" to completion.getText(),
+                            "tokensGenerated" to completion.getTokensGenerated(),
+                            "tokensEvaluated" to completion.getTokensEvaluated(),
+                            "truncated" to completion.isTruncated(),
+                            "stoppedEos" to completion.isStoppedEos(),
+                            "stoppedWord" to completion.isStoppedWord(),
+                            "stoppedLimit" to false,
+                            "stoppingWord" to ""
+                        ))
+                    }
                 } else {
-                    result.error("COMPLETION_FAILED", "Failed to generate completion", null)
+                    Handler(Looper.getMainLooper()).post {
+                        result.error("COMPLETION_FAILED", "Failed to generate completion", null)
+                    }
                 }
             } catch (e: Exception) {
-                result.error("COMPLETION_ERROR", "An error occurred: ${e.message}", null)
+                Handler(Looper.getMainLooper()).post {
+                    result.error("COMPLETION_ERROR", "An error occurred: ${e.message}", null)
+                }
             }
         }.start()
     }
@@ -1101,21 +1128,27 @@ class LlamaMobileFlutterSdkPlugin :
                 val completion = LlamaMobile.generateOpenAICompletion(contextHandle, openAIJSON)
 
                 if (completion != null) {
-                    result.success(mapOf(
-                        "text" to completion.getText(),
-                        "tokensGenerated" to completion.getTokensGenerated(),
-                        "tokensEvaluated" to completion.getTokensEvaluated(),
-                        "truncated" to completion.isTruncated(),
-                        "stoppedEos" to completion.isStoppedEos(),
-                        "stoppedWord" to completion.isStoppedWord(),
-                        "stoppedLimit" to false,
-                        "stoppingWord" to ""
-                    ))
+                    Handler(Looper.getMainLooper()).post {
+                        result.success(mapOf(
+                            "text" to completion.getText(),
+                            "tokensGenerated" to completion.getTokensGenerated(),
+                            "tokensEvaluated" to completion.getTokensEvaluated(),
+                            "truncated" to completion.isTruncated(),
+                            "stoppedEos" to completion.isStoppedEos(),
+                            "stoppedWord" to completion.isStoppedWord(),
+                            "stoppedLimit" to false,
+                            "stoppingWord" to ""
+                        ))
+                    }
                 } else {
-                    result.error("OPENAI_COMPLETION_FAILED", "Failed to generate OpenAI completion", null)
+                    Handler(Looper.getMainLooper()).post {
+                        result.error("OPENAI_COMPLETION_FAILED", "Failed to generate OpenAI completion", null)
+                    }
                 }
             } catch (e: Exception) {
-                result.error("COMPLETION_ERROR", "An error occurred: ${e.message}", null)
+                Handler(Looper.getMainLooper()).post {
+                    result.error("COMPLETION_ERROR", "An error occurred: ${e.message}", null)
+                }
             }
         }.start()
     }
@@ -1132,21 +1165,27 @@ class LlamaMobileFlutterSdkPlugin :
                 val completion = LlamaMobile.generateOpenAICompletion(contextHandle, openAIJSON)
 
                 if (completion != null) {
-                    result.success(mapOf(
-                        "text" to completion.getText(),
-                        "tokensGenerated" to completion.getTokensGenerated(),
-                        "tokensEvaluated" to completion.getTokensEvaluated(),
-                        "truncated" to completion.isTruncated(),
-                        "stoppedEos" to completion.isStoppedEos(),
-                        "stoppedWord" to completion.isStoppedWord(),
-                        "stoppedLimit" to false,
-                        "stoppingWord" to ""
-                    ))
+                    Handler(Looper.getMainLooper()).post {
+                        result.success(mapOf(
+                            "text" to completion.getText(),
+                            "tokensGenerated" to completion.getTokensGenerated(),
+                            "tokensEvaluated" to completion.getTokensEvaluated(),
+                            "truncated" to completion.isTruncated(),
+                            "stoppedEos" to completion.isStoppedEos(),
+                            "stoppedWord" to completion.isStoppedWord(),
+                            "stoppedLimit" to false,
+                            "stoppingWord" to ""
+                        ))
+                    }
                 } else {
-                    result.error("OPENAI_COMPLETION_FAILED", "Failed to generate OpenAI completion", null)
+                    Handler(Looper.getMainLooper()).post {
+                        result.error("OPENAI_COMPLETION_FAILED", "Failed to generate OpenAI completion", null)
+                    }
                 }
             } catch (e: Exception) {
-                result.error("COMPLETION_ERROR", "An error occurred: ${e.message}", null)
+                Handler(Looper.getMainLooper()).post {
+                    result.error("COMPLETION_ERROR", "An error occurred: ${e.message}", null)
+                }
             }
         }.start()
     }
@@ -1389,9 +1428,8 @@ class LlamaMobileFlutterSdkPlugin :
         val params = call.argument<Map<String, Any>>("params") ?: throw IllegalArgumentException("params is required")
         val contextHandle = contexts[handle] ?: throw IllegalArgumentException("Invalid context handle")
 
-        val prompt = params["prompt"] as? String ?: throw IllegalArgumentException("prompt is required")
         val maxTokens = params["maxTokens"] as? Int ?: 128
-        val nThreads = params["nThreads"] as? Int
+        val nThreads = params["nThreads"] as? Int ?: 4
         val seed = params["seed"] as? Int ?: -1
         val temperature = (params["temperature"] as? Double ?: 0.8).toFloat()
         val topK = params["topK"] as? Int ?: 40
@@ -1409,15 +1447,29 @@ class LlamaMobileFlutterSdkPlugin :
         val stopSequences = params["stopSequences"] as? List<String> ?: emptyList()
         val grammar = params["grammar"] as? String
         val useJsonResponse = params["useJsonResponse"] as? Boolean ?: false
-        val chatTemplate = params["chatTemplate"] as? String
-        val chatMessages = params["chatMessages"] as? List<Map<String, String>> ?: emptyList()
+        val nProbs = params["nProbs"] as? Int ?: 0
+        val jsonSchema = params["jsonSchema"] as? String
+        val tools = params["tools"] as? String
+        val parallelToolCalls = params["parallelToolCalls"] as? Boolean ?: false
+        val toolChoice = params["toolChoice"] as? String
+        val prompt = params["prompt"] as? String ?: ""
+        val chatMessages = params["chatMessages"] as? List<Map<String, String?>> ?: emptyList()
 
         Thread {
             try {
                 if (chatMessages.isNotEmpty()) {
                     // Handle chat messages using generateConversation
+                    val messages = chatMessages.map { msg ->
+                        LlamaMobile.ChatMessage(
+                            msg["role"] ?: "",
+                            msg["content"] ?: "",
+                            msg["reasoning_content"],
+                            msg["tool_name"],
+                            msg["tool_call_id"]
+                        )
+                    }
                     val completionParams = LlamaMobile.CompletionParams(
-                        "",
+                        "", // prompt
                         temperature,
                         maxTokens,
                         nThreads,
@@ -1434,28 +1486,36 @@ class LlamaMobileFlutterSdkPlugin :
                         mirostatTau.toDouble(),
                         mirostatEta.toDouble(),
                         ignoreEos,
-                        0, // nProbs
+                        nProbs,
                         grammar,
                         stopSequences,
                         emptyList(), // mediaPaths
-                        null // tokenCallback
+                        null, // tokenCallback
+                        messages, // chatMessages
+                        useJsonResponse,
+                        jsonSchema,
+                        tools,
+                        parallelToolCalls,
+                        toolChoice
                     )
 
                     val completion = LlamaMobile.generateCompletion(contextHandle, completionParams)
 
-                    if (completion != null) {
-                        result.success(mapOf(
-                            "text" to completion.getText(),
-                            "tokensGenerated" to completion.getTokensGenerated(),
-                            "tokensEvaluated" to completion.getTokensEvaluated(),
-                            "truncated" to completion.isTruncated(),
-                            "stoppedEos" to completion.isStoppedEos(),
-                            "stoppedWord" to completion.isStoppedWord(),
-                            "stoppedLimit" to false,
-                            "stoppingWord" to ""
-                        ))
-                    } else {
-                        result.error("COMPLETION_FAILED", "Failed to generate completion", null)
+                    Handler(Looper.getMainLooper()).post {
+                        if (completion != null) {
+                            result.success(mapOf(
+                                "text" to completion.getText(),
+                                "tokensGenerated" to completion.getTokensGenerated(),
+                                "tokensEvaluated" to completion.getTokensEvaluated(),
+                                "truncated" to completion.isTruncated(),
+                                "stoppedEos" to completion.isStoppedEos(),
+                                "stoppedWord" to completion.isStoppedWord(),
+                                "stoppedLimit" to false,
+                                "stoppingWord" to ""
+                            ))
+                        } else {
+                            result.error("COMPLETION_FAILED", "Failed to generate completion", null)
+                        }
                     }
                 } else {
                     // Regular completion without chat messages
@@ -1477,32 +1537,42 @@ class LlamaMobileFlutterSdkPlugin :
                         mirostatTau.toDouble(),
                         mirostatEta.toDouble(),
                         ignoreEos,
-                        0, // nProbs
+                        nProbs,
                         grammar,
                         stopSequences,
                         emptyList(), // mediaPaths
-                        null // tokenCallback
+                        null, // tokenCallback
+                        null, // chatMessages
+                        useJsonResponse,
+                        jsonSchema,
+                        tools,
+                        parallelToolCalls,
+                        toolChoice
                     )
 
                     val completion = LlamaMobile.generateCompletion(contextHandle, completionParams)
 
-                    if (completion != null) {
-                        result.success(mapOf(
-                            "text" to completion.getText(),
-                            "tokensGenerated" to completion.getTokensGenerated(),
-                            "tokensEvaluated" to completion.getTokensEvaluated(),
-                            "truncated" to completion.isTruncated(),
-                            "stoppedEos" to completion.isStoppedEos(),
-                            "stoppedWord" to completion.isStoppedWord(),
-                            "stoppedLimit" to false,
-                            "stoppingWord" to ""
-                        ))
-                    } else {
-                        result.error("COMPLETION_FAILED", "Failed to generate completion", null)
+                    Handler(Looper.getMainLooper()).post {
+                        if (completion != null) {
+                            result.success(mapOf(
+                                "text" to completion.getText(),
+                                "tokensGenerated" to completion.getTokensGenerated(),
+                                "tokensEvaluated" to completion.getTokensEvaluated(),
+                                "truncated" to completion.isTruncated(),
+                                "stoppedEos" to completion.isStoppedEos(),
+                                "stoppedWord" to completion.isStoppedWord(),
+                                "stoppedLimit" to false,
+                                "stoppingWord" to ""
+                            ))
+                        } else {
+                            result.error("COMPLETION_FAILED", "Failed to generate completion", null)
+                        }
                     }
                 }
             } catch (e: Exception) {
-                result.error("COMPLETION_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("COMPLETION_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1560,22 +1630,26 @@ class LlamaMobileFlutterSdkPlugin :
 
                 val completion = LlamaMobile.generateCompletion(contextHandle, completionParams)
 
-                if (completion != null) {
-                    result.success(mapOf(
-                        "text" to completion.getText(),
-                        "tokensGenerated" to completion.getTokensGenerated(),
-                        "tokensEvaluated" to completion.getTokensEvaluated(),
-                        "truncated" to completion.isTruncated(),
-                        "stoppedEos" to completion.isStoppedEos(),
-                        "stoppedWord" to completion.isStoppedWord(),
-                        "stoppedLimit" to false,
-                        "stoppingWord" to ""
-                    ))
-                } else {
-                    result.error("COMPLETION_FAILED", "Failed to generate multimodal completion", null)
+                Handler(Looper.getMainLooper()).post {
+                    if (completion != null) {
+                        result.success(mapOf(
+                            "text" to completion.getText(),
+                            "tokensGenerated" to completion.getTokensGenerated(),
+                            "tokensEvaluated" to completion.getTokensEvaluated(),
+                            "truncated" to completion.isTruncated(),
+                            "stoppedEos" to completion.isStoppedEos(),
+                            "stoppedWord" to completion.isStoppedWord(),
+                            "stoppedLimit" to false,
+                            "stoppingWord" to ""
+                        ))
+                    } else {
+                        result.error("COMPLETION_FAILED", "Failed to generate multimodal completion", null)
+                    }
                 }
             } catch (e: Exception) {
-                result.error("COMPLETION_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("COMPLETION_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1594,22 +1668,26 @@ class LlamaMobileFlutterSdkPlugin :
 
                 val completion = LlamaMobile.generateCompletion(contextHandle, completionParams)
 
-                if (completion != null) {
-                    result.success(mapOf(
-                        "text" to completion.getText(),
-                        "tokensGenerated" to completion.getTokensGenerated(),
-                        "tokensEvaluated" to completion.getTokensEvaluated(),
-                        "truncated" to completion.isTruncated(),
-                        "stoppedEos" to completion.isStoppedEos(),
-                        "stoppedWord" to completion.isStoppedWord(),
-                        "stoppedLimit" to false,
-                        "stoppingWord" to ""
-                    ))
-                } else {
-                    result.error("COMPLETION_FAILED", "Failed to generate streaming completion", null)
+                Handler(Looper.getMainLooper()).post {
+                    if (completion != null) {
+                        result.success(mapOf(
+                            "text" to completion.getText(),
+                            "tokensGenerated" to completion.getTokensGenerated(),
+                            "tokensEvaluated" to completion.getTokensEvaluated(),
+                            "truncated" to completion.isTruncated(),
+                            "stoppedEos" to completion.isStoppedEos(),
+                            "stoppedWord" to completion.isStoppedWord(),
+                            "stoppedLimit" to false,
+                            "stoppingWord" to ""
+                        ))
+                    } else {
+                        result.error("COMPLETION_FAILED", "Failed to generate streaming completion", null)
+                    }
                 }
             } catch (e: Exception) {
-                result.error("COMPLETION_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("COMPLETION_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1644,12 +1722,18 @@ class LlamaMobileFlutterSdkPlugin :
                     assistantTurnTemplate = assistantTurnTemplate.trim()
                     formattedPrompt.append(assistantTurnTemplate).append("\n")
                     
-                    result.success(formattedPrompt.toString())
+                    Handler(Looper.getMainLooper()).post {
+                        result.success(formattedPrompt.toString())
+                    }
                 } else {
-                    result.error("TEMPLATE_MISSING", "No chat template provided", null)
+                    Handler(Looper.getMainLooper()).post {
+                        result.error("TEMPLATE_MISSING", "No chat template provided", null)
+                    }
                 }
             } catch (e: Exception) {
-                result.error("FORMAT_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("FORMAT_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1663,9 +1747,13 @@ class LlamaMobileFlutterSdkPlugin :
         Thread {
             try {
                 val embedding = LlamaMobile.generateEmbeddings(contextHandle, text)
-                result.success(embedding?.toList())
+                Handler(Looper.getMainLooper()).post {
+                    result.success(embedding?.toList())
+                }
             } catch (e: Exception) {
-                result.error("EMBEDDING_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("EMBEDDING_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1680,9 +1768,13 @@ class LlamaMobileFlutterSdkPlugin :
             try {
                 val adapter = LlamaMobile.LoraAdapter(adapterPath, scale.toFloat())
                 val success = LlamaMobile.applyLoraAdapters(contextHandle, arrayOf(adapter))
-                result.success(success)
+                Handler(Looper.getMainLooper()).post {
+                    result.success(success)
+                }
             } catch (e: Exception) {
-                result.error("LORA_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("LORA_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1694,9 +1786,13 @@ class LlamaMobileFlutterSdkPlugin :
         Thread {
             try {
                 LlamaMobile.removeLoraAdapters(contextHandle)
-                result.success(true)
+                Handler(Looper.getMainLooper()).post {
+                    result.success(true)
+                }
             } catch (e: Exception) {
-                result.error("LORA_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("LORA_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1722,18 +1818,24 @@ class LlamaMobileFlutterSdkPlugin :
                 val success = LlamaMobile.initVocoder(contextHandle, modelPath)
                 if (success) {
                     val ttsType = LlamaMobile.getTTSType(contextHandle)
-                    result.success(mapOf(
-                        "success" to true,
-                        "modelType" to ttsType.ordinal
-                    ))
+                    Handler(Looper.getMainLooper()).post {
+                        result.success(mapOf(
+                            "success" to true,
+                            "modelType" to ttsType.ordinal
+                        ))
+                    }
                 } else {
-                    result.success(mapOf(
-                        "success" to false,
-                        "modelType" to -1
-                    ))
+                    Handler(Looper.getMainLooper()).post {
+                        result.success(mapOf(
+                            "success" to false,
+                            "modelType" to -1
+                        ))
+                    }
                 }
             } catch (e: Exception) {
-                result.error("TTS_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("TTS_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1745,9 +1847,13 @@ class LlamaMobileFlutterSdkPlugin :
         Thread {
             try {
                 LlamaMobile.releaseVocoder(contextHandle)
-                result.success(true)
+                Handler(Looper.getMainLooper()).post {
+                    result.success(true)
+                }
             } catch (e: Exception) {
-                result.error("TTS_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("TTS_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1761,9 +1867,13 @@ class LlamaMobileFlutterSdkPlugin :
         Thread {
             try {
                 val success = LlamaMobile.initMultimodal(contextHandle, mmprojPath, useGpu)
-                result.success(success)
+                Handler(Looper.getMainLooper()).post {
+                    result.success(success)
+                }
             } catch (e: Exception) {
-                result.error("MULTIMODAL_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("MULTIMODAL_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1775,9 +1885,13 @@ class LlamaMobileFlutterSdkPlugin :
         Thread {
             try {
                 LlamaMobile.releaseMultimodal(contextHandle)
-                result.success(null)
+                Handler(Looper.getMainLooper()).post {
+                    result.success(null)
+                }
             } catch (e: Exception) {
-                result.error("MULTIMODAL_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("MULTIMODAL_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1790,9 +1904,13 @@ class LlamaMobileFlutterSdkPlugin :
         Thread {
             try {
                 val success = LlamaMobile.initVocoder(contextHandle, vocoderModelPath)
-                result.success(success)
+                Handler(Looper.getMainLooper()).post {
+                    result.success(success)
+                }
             } catch (e: Exception) {
-                result.error("VOCODER_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("VOCODER_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1804,9 +1922,13 @@ class LlamaMobileFlutterSdkPlugin :
         Thread {
             try {
                 LlamaMobile.releaseVocoder(contextHandle)
-                result.success(null)
+                Handler(Looper.getMainLooper()).post {
+                    result.success(null)
+                }
             } catch (e: Exception) {
-                result.error("VOCODER_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("VOCODER_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1818,9 +1940,13 @@ class LlamaMobileFlutterSdkPlugin :
         Thread {
             try {
                 LlamaMobile.removeLoraAdapters(contextHandle)
-                result.success(null)
+                Handler(Looper.getMainLooper()).post {
+                    result.success(null)
+                }
             } catch (e: Exception) {
-                result.error("LORA_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("LORA_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1841,19 +1967,25 @@ class LlamaMobileFlutterSdkPlugin :
                     val speech = speechResult.value
                     // Convert short[] to List<Int> for Flutter compatibility
                     val audioSamplesList = speech.getAudioSamples()?.map { it.toInt() } ?: emptyList()
-                    result.success(mapOf(
-                        "audioSamples" to audioSamplesList,
-                        "sampleRate" to speech.getSampleRate(),
-                        "duration" to speech.getDuration(),
-                        "outputFilePath" to (speech.getOutputFilePath() ?: null),
-                        "methodUsed" to speech.getMethodUsed().ordinal
-                    ))
+                    Handler(Looper.getMainLooper()).post {
+                        result.success(mapOf(
+                            "audioSamples" to audioSamplesList,
+                            "sampleRate" to speech.getSampleRate(),
+                            "duration" to speech.getDuration(),
+                            "outputFilePath" to (speech.getOutputFilePath() ?: null),
+                            "methodUsed" to speech.getMethodUsed().ordinal
+                        ))
+                    }
                 } else {
                     val error = speechResult?.error
-                    result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
+                    Handler(Looper.getMainLooper()).post {
+                        result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
+                    }
                 }
             } catch (e: Exception) {
-                result.error("SPEECH_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("SPEECH_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1872,18 +2004,24 @@ class LlamaMobileFlutterSdkPlugin :
 
                 if (speechResult != null && speechResult.isSuccess()) {
                     val metadata = speechResult.value
-                    result.success(mapOf(
-                        "sampleRate" to metadata.getSampleRate(),
-                        "duration" to metadata.getDuration(),
-                        "outputFilePath" to (metadata.getOutputFilePath() ?: null),
-                        "methodUsed" to metadata.getMethodUsed().ordinal
-                    ))
+                    Handler(Looper.getMainLooper()).post {
+                        result.success(mapOf(
+                            "sampleRate" to metadata.getSampleRate(),
+                            "duration" to metadata.getDuration(),
+                            "outputFilePath" to (metadata.getOutputFilePath() ?: null),
+                            "methodUsed" to metadata.getMethodUsed().ordinal
+                        ))
+                    }
                 } else {
                     val error = speechResult?.error
-                    result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
+                    Handler(Looper.getMainLooper()).post {
+                        result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
+                    }
                 }
             } catch (e: Exception) {
-                result.error("SPEECH_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("SPEECH_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1902,18 +2040,24 @@ class LlamaMobileFlutterSdkPlugin :
 
                 if (speechResult != null && speechResult.isSuccess()) {
                     val metadata = speechResult.value
-                    result.success(mapOf(
-                        "sampleRate" to metadata.getSampleRate(),
-                        "duration" to metadata.getDuration(),
-                        "outputFilePath" to (metadata.getOutputFilePath() ?: null),
-                        "methodUsed" to metadata.getMethodUsed().ordinal
-                    ))
+                    Handler(Looper.getMainLooper()).post {
+                        result.success(mapOf(
+                            "sampleRate" to metadata.getSampleRate(),
+                            "duration" to metadata.getDuration(),
+                            "outputFilePath" to (metadata.getOutputFilePath() ?: null),
+                            "methodUsed" to metadata.getMethodUsed().ordinal
+                        ))
+                    }
                 } else {
                     val error = speechResult?.error
-                    result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
+                    Handler(Looper.getMainLooper()).post {
+                        result.error("SPEECH_GENERATION_FAILED", error?.toString() ?: "Failed to generate speech", null)
+                    }
                 }
             } catch (e: Exception) {
-                result.error("SPEECH_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("SPEECH_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }
@@ -1931,13 +2075,17 @@ class LlamaMobileFlutterSdkPlugin :
                     progressEventSink?.success(progress)
                 }
 
-                result.success(mapOf(
-                    "success" to (resultObj?.isSuccess() ?: false),
-                    "localPath" to (resultObj?.getLocalPath() ?: ""),
-                    "errorMessage" to (resultObj?.getErrorMessage() ?: "")
-                ))
+                Handler(Looper.getMainLooper()).post {
+                    result.success(mapOf(
+                        "success" to (resultObj?.isSuccess() ?: false),
+                        "localPath" to (resultObj?.getLocalPath() ?: ""),
+                        "errorMessage" to (resultObj?.getErrorMessage() ?: "")
+                    ))
+                }
             } catch (e: Exception) {
-                result.error("DOWNLOAD_ERROR", "An error occurred: ${e.message}", null)
+                Handler(Looper.getMainLooper()).post {
+                    result.error("DOWNLOAD_ERROR", "An error occurred: ${e.message}", null)
+                }
             }
         }.start()
     }
@@ -1955,13 +2103,17 @@ class LlamaMobileFlutterSdkPlugin :
                     progressEventSink?.success(progress)
                 }
 
-                result.success(mapOf(
-                    "success" to (resultObj?.isSuccess() ?: false),
-                    "localPath" to (resultObj?.getLocalPath() ?: ""),
-                    "errorMessage" to (resultObj?.getErrorMessage() ?: "")
-                ))
+                Handler(Looper.getMainLooper()).post {
+                    result.success(mapOf(
+                        "success" to (resultObj?.isSuccess() ?: false),
+                        "localPath" to (resultObj?.getLocalPath() ?: ""),
+                        "errorMessage" to (resultObj?.getErrorMessage() ?: "")
+                    ))
+                }
             } catch (e: Exception) {
-                result.error("DOWNLOAD_ERROR", "An error occurred: ${e.message}", null)
+                Handler(Looper.getMainLooper()).post {
+                    result.error("DOWNLOAD_ERROR", "An error occurred: ${e.message}", null)
+                }
             }
         }.start()
     }
@@ -1976,21 +2128,27 @@ class LlamaMobileFlutterSdkPlugin :
                 val completion = LlamaMobile.generateOpenAICompletion(contextHandle, openAIJSON)
 
                 if (completion != null) {
-                    result.success(mapOf(
-                        "text" to completion.getText(),
-                        "tokensGenerated" to completion.getTokensGenerated(),
-                        "tokensEvaluated" to completion.getTokensEvaluated(),
-                        "truncated" to completion.isTruncated(),
-                        "stoppedEos" to completion.isStoppedEos(),
-                        "stoppedWord" to completion.isStoppedWord(),
-                        "stoppedLimit" to false,
-                        "stoppingWord" to ""
-                    ))
+                    Handler(Looper.getMainLooper()).post {
+                        result.success(mapOf(
+                            "text" to completion.getText(),
+                            "tokensGenerated" to completion.getTokensGenerated(),
+                            "tokensEvaluated" to completion.getTokensEvaluated(),
+                            "truncated" to completion.isTruncated(),
+                            "stoppedEos" to completion.isStoppedEos(),
+                            "stoppedWord" to completion.isStoppedWord(),
+                            "stoppedLimit" to false,
+                            "stoppingWord" to ""
+                        ))
+                    }
                 } else {
-                    result.error("COMPLETION_FAILED", "Failed to generate OpenAI completion", null)
+                    Handler(Looper.getMainLooper()).post {
+                        result.error("COMPLETION_FAILED", "Failed to generate OpenAI completion", null)
+                    }
                 }
             } catch (e: Exception) {
-                result.error("COMPLETION_ERROR", e.message, e.stackTraceToString())
+                Handler(Looper.getMainLooper()).post {
+                    result.error("COMPLETION_ERROR", e.message, e.stackTraceToString())
+                }
             }
         }.start()
     }

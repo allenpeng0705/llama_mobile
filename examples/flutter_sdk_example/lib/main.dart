@@ -89,14 +89,14 @@ class AppState extends ChangeNotifier {
     if (Platform.isAndroid) {
       print("Using Android-specific model loading logic");
 
-      // 1. First priority: Scan external files directory for actual user-added models
-      // This matches the Android SDK example's approach
+      // 1. First priority: Scan app-specific external files directory
+      // This is where the user put their files: /storage/emulated/0/Android/data/com.example.flutter_sdk_example/files/models
       try {
         final externalDir = await getExternalStorageDirectory();
         if (externalDir != null) {
-          print("External storage directory: ${externalDir.path}");
+          print("App-specific external storage directory: ${externalDir.path}");
 
-          // Check direct models directory in external files dir (for compatibility with tests)
+          // Check direct models directory in external files dir
           final directExternalModelsDir = Directory(
             '${externalDir.path}/models',
           );
@@ -130,54 +130,18 @@ class AppState extends ChangeNotifier {
                 print("Added model: $fileName from ${entity.path}");
               }
             }
-          }
-
-          // Check legacy LlamaMobile/models directory (original SDK example path)
-          final legacyExternalModelsDir = Directory(
-            '${externalDir.path}/LlamaMobile/models',
-          );
-          print(
-            "Legacy external models directory: ${legacyExternalModelsDir.path}",
-          );
-          bool legacyModelsDirExists = await legacyExternalModelsDir.exists();
-          print(
-            "Legacy external models directory exists: $legacyModelsDirExists",
-          );
-
-          if (legacyModelsDirExists) {
-            final modelFiles = await legacyExternalModelsDir
-                .list()
-                .where(
-                  (file) =>
-                      file is File &&
-                      (file.path.endsWith('.gguf') ||
-                          file.path.endsWith('.bin') ||
-                          file.path.endsWith('.safetensors') ||
-                          file.path.endsWith('.mmproj')),
-                )
-                .toList();
-            print(
-              "Found ${modelFiles.length} model files in legacy external directory",
-            );
-            for (var entity in modelFiles) {
-              if (entity is File) {
-                String fileName = entity.path.split('/').last;
-                models.add({"name": fileName, "path": entity.path});
-                print("Added model: $fileName from ${entity.path}");
-              }
-            }
           } else {
-            // Create legacy directory if it doesn't exist
-            await legacyExternalModelsDir.create(recursive: true);
+            // Create models directory if it doesn't exist
+            await directExternalModelsDir.create(recursive: true);
             print(
-              "Created legacy external models directory: ${legacyExternalModelsDir.path}",
+              "Created direct external models directory: ${directExternalModelsDir.path}",
             );
             print("Please add your model files to this directory:");
-            print("${legacyExternalModelsDir.path}");
+            print("${directExternalModelsDir.path}");
           }
         }
       } catch (e) {
-        print("Error scanning external storage directories: $e");
+        print("Error scanning app-specific external storage directories: $e");
       }
 
       // 2. Second priority: Scan documents directory for models
@@ -221,7 +185,7 @@ class AppState extends ChangeNotifier {
         print("Error scanning documents directory: $e");
       }
 
-      // 3. Remove duplicates by file name (keep the first occurrence)
+      // Remove duplicates by file name (keep the first occurrence)
       final seenFileNames = <String>{};
       final uniqueModels = models.where((model) {
         final fileName = model["name"]!;
@@ -255,13 +219,11 @@ class AppState extends ChangeNotifier {
           for (var entity in modelFiles) {
             if (entity is File) {
               String fileName = entity.path.split('/').last;
-              // Use full file name including extension
               models.add({"name": fileName, "path": entity.path});
               print("Added model: $fileName from ${entity.path}");
             }
           }
         } else {
-          // Create models directory if it doesn't exist
           await modelsDir.create(recursive: true);
           print("Created models directory: ${modelsDir.path}");
           print("Please add your model files to this directory:");
@@ -292,7 +254,6 @@ class AppState extends ChangeNotifier {
         print("Found ${modelAssets.length} model files in assets/models");
         for (String assetPath in modelAssets) {
           String fileName = assetPath.split('/').last;
-          // Use full file name including extension
           models.add({"name": fileName, "path": assetPath});
           print("Added model: $fileName from $assetPath");
         }
@@ -308,7 +269,6 @@ class AppState extends ChangeNotifier {
         print("Adding common model files as fallback");
         for (String modelName in commonModelFiles) {
           String assetPath = "assets/models/$modelName";
-          // Use full file name including extension
           models.add({"name": modelName, "path": assetPath});
           print("Added model: $modelName from $assetPath");
         }
@@ -327,7 +287,6 @@ class AppState extends ChangeNotifier {
       availableModels = models;
     } else {
       print("Using default model loading logic for other platforms");
-      // For other platforms, use the iOS logic
       try {
         final directory = await getApplicationDocumentsDirectory();
         print("App documents directory: ${directory.path}");
@@ -451,6 +410,40 @@ class AppState extends ChangeNotifier {
         }
       } catch (e) {
         print("Error scanning for mmproj models: $e");
+      }
+    } else if (Platform.isIOS) {
+      // iOS-specific: scan documents directory for mmproj models
+      try {
+        final directory = await getApplicationDocumentsDirectory();
+        print("iOS documents directory: ${directory.path}");
+        final modelsDir = Directory('${directory.path}/models');
+        print("iOS mmproj models directory: ${modelsDir.path}");
+        bool modelsDirExists = await modelsDir.exists();
+        print("iOS mmproj models directory exists: $modelsDirExists");
+        if (modelsDirExists) {
+          final mmprojFiles = await modelsDir
+              .list()
+              .where(
+                (file) =>
+                    file is File &&
+                    (file.path.endsWith('.mmproj') ||
+                        file.path.endsWith('.gguf') ||
+                        file.path.endsWith('.bin')),
+              )
+              .toList();
+          print(
+            "Found ${mmprojFiles.length} mmproj files in iOS documents directory",
+          );
+          for (var entity in mmprojFiles) {
+            if (entity is File) {
+              String fileName = entity.path.split('/').last;
+              mmprojModels.add({"name": fileName, "path": entity.path});
+              print("Added iOS mmproj model: $fileName from ${entity.path}");
+            }
+          }
+        }
+      } catch (e) {
+        print("Error scanning for iOS mmproj models: $e");
       }
     }
 
@@ -1171,8 +1164,16 @@ class AppState extends ChangeNotifier {
       final byteData = await rootBundle.load(assetPath);
       print("Asset loaded successfully, size: ${byteData.lengthInBytes} bytes");
 
-      // Write to temporary file
-      await tempFile.writeAsBytes(byteData.buffer.asUint8List());
+      // Validate byte data length
+      if (byteData.lengthInBytes <= 0) {
+        print("Error: Asset has zero or negative length");
+        return null;
+      }
+
+      // Write to temporary file using proper byte data conversion
+      await tempFile.writeAsBytes(
+        byteData.buffer.asUint8List(0, byteData.lengthInBytes),
+      );
       print("Asset copied to temp file successfully");
 
       return tempPath;
@@ -3649,9 +3650,17 @@ class _MultimodalTestViewState extends State<MultimodalTestView> {
           temperature: 0.7,
         );
 
+        print("[DEBUG] Example App: Calling generateCompletionWithParams");
+        print("[DEBUG] Example App: imagePath: $imagePath");
+        print("[DEBUG] Example App: prompt: ${_promptController.text}");
+        print("[DEBUG] Example App: mediaPaths: ${params.mediaPaths}");
+
         final result = await widget.appState.llamaContext
             ?.generateCompletionWithParamsAsync(params);
 
+        print(
+          "[DEBUG] Example App: Result: ${result != null ? 'Success' : 'Null'}",
+        );
         if (result != null) {
           setState(() {
             multimodalResult =
@@ -4206,8 +4215,11 @@ class _MyAppState extends State<MyApp> {
     appState = AppState();
     // Load available models asynchronously
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // First copy all models to temp directory
-      await appState.copyAllModelsToTemp();
+      // Only copy models to temp directory for iOS
+      // For Android, we'll access the app-specific folder directly
+      if (Platform.isIOS) {
+        await appState.copyAllModelsToTemp();
+      }
       // Then load available models
       await appState.loadAvailableModels();
     });
