@@ -1822,6 +1822,15 @@ public class LlamaMobile: NSObject {
         }
     }
     
+    /// Release the native context and free all resources
+    /// After calling this method, the LlamaMobile instance cannot be used anymore
+    public func releaseContext() {
+        if let context = context {
+            llama_mobile_free_context_c(context)
+            self.context = nil
+        }
+    }
+    
     /// Generate audio samples from text using TTS
     /// - Parameters:
     ///   - text: Text to convert to speech

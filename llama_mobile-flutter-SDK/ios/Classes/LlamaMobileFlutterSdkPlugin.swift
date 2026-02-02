@@ -359,24 +359,27 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
 
   private func handleFreeContext(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
-          let contextHandle = args["contextHandle"] as? Int else {
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = contexts[contextHandle] else {
       result(FlutterError(code: "INVALID_ARGS", message: "Missing contextHandle", details: nil))
       return
     }
 
+    llamaMobile.releaseContext()
     contexts.removeValue(forKey: contextHandle)
     result(true)
   }
 
   private func handleFreeContextAsync(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard let args = call.arguments as? [String: Any],
-          let contextHandle = args["contextHandle"] as? Int else {
+          let contextHandle = args["contextHandle"] as? Int,
+          let llamaMobile = contexts[contextHandle] else {
       result(FlutterError(code: "INVALID_ARGS", message: "Missing contextHandle", details: nil))
       return
     }
 
-    // Run asynchronously
     DispatchQueue.global(qos: .userInitiated).async {
+      llamaMobile.releaseContext()
       self.contexts.removeValue(forKey: contextHandle)
       DispatchQueue.main.async {
         result(true)

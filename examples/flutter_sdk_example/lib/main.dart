@@ -1117,6 +1117,25 @@ class AppState extends ChangeNotifier {
     try {
       isLoading = true;
       notifyListeners();
+
+      print("[INFO] Unloading model and releasing resources...");
+
+      // Release multimodal resources if initialized
+      if (mmprojModelPath != null && mmprojModelPath!.isNotEmpty) {
+        print("[INFO] Releasing multimodal resources...");
+        await llamaContext?.releaseMultimodal();
+      }
+
+      // Release vocoder resources if initialized
+      if (vocoderModelPath.isNotEmpty) {
+        print("[INFO] Releasing vocoder resources...");
+        await llamaContext?.releaseVocoder();
+      }
+
+      // Release main context
+      print("[INFO] Releasing main context...");
+      await llamaContext?.free();
+
       // Clear the context
       llamaContext = null;
 
@@ -1125,7 +1144,7 @@ class AppState extends ChangeNotifier {
 
       isModelLoaded = false;
       errorMessage = null;
-      print("All models unloaded successfully");
+      print("[INFO] All resources released successfully");
       isLoading = false;
       notifyListeners();
     } catch (e) {

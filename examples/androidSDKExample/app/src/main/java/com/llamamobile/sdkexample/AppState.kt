@@ -617,10 +617,27 @@ class AppState {
 
     fun unloadModel() {
         if (contextHandle != 0L) {
+            Log.i(TAG, "Unloading model and releasing resources...")
+            
+            // Release multimodal resources if initialized
+            if (mmprojModelPath.isNotEmpty()) {
+                Log.i(TAG, "Releasing multimodal resources...")
+                LlamaMobile.releaseMultimodal(contextHandle)
+            }
+            
+            // Release vocoder resources if initialized
+            if (vocoderModelPath.isNotEmpty()) {
+                Log.i(TAG, "Releasing vocoder resources...")
+                LlamaMobile.releaseVocoder(contextHandle)
+            }
+            
+            // Release main context
+            Log.i(TAG, "Releasing main context...")
             LlamaMobile.releaseContext(contextHandle)
             contextHandle = 0
         }
         isModelLoaded = false
         errorMessage = null
+        Log.i(TAG, "All resources released successfully")
     }
 }

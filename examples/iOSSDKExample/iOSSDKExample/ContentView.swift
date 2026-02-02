@@ -1040,9 +1040,36 @@ struct SettingsView: View {
     }
     
     func unloadModel() {
+        guard let llamaMobile = appState.llamaMobile else {
+            DispatchQueue.main.async {
+                self.appState.isModelLoaded = false
+            }
+            return
+        }
+        
+        print("[INFO] Unloading model and releasing resources...")
+        
+        // Release multimodal resources if initialized
+        if !appState.mmprojModelPath.isEmpty {
+            print("[INFO] Releasing multimodal resources...")
+            llamaMobile.releaseMultimodal()
+        }
+        
+        // Release vocoder resources if initialized
+        if !appState.vocoderModelPath.isEmpty {
+            print("[INFO] Releasing vocoder resources...")
+            llamaMobile.releaseVocoder()
+        }
+        
+        // Release main context
+        print("[INFO] Releasing main context...")
+        llamaMobile.releaseContext()
+        
         // Reset model loaded state
         DispatchQueue.main.async {
             self.appState.isModelLoaded = false
+            self.appState.llamaMobile = nil
+            print("[INFO] All resources released successfully")
         }
     }
     
