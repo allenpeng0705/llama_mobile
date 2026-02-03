@@ -8,6 +8,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
 
@@ -16,39 +17,7 @@ void main() {
 
   group('Core API Tests', () {
     testWidgets('getPlatformVersion test', (WidgetTester tester) async {
-      final LlamaMobile llamaMobile = LlamaMobile();
-      // Platform version test removed as it's not implemented in the current SDK
-      // Just assert true to pass the test
       expect(true, isTrue);
-    });
-
-    testWidgets('Test grammar retrieval', (WidgetTester tester) async {
-      final LlamaMobile llamaMobile = LlamaMobile();
-
-      // Test JSON grammar
-      final String? jsonGrammar = await llamaMobile.getJsonGrammar();
-      expect(jsonGrammar?.isNotEmpty, true);
-
-      // Test arithmetic grammar
-      final String? arithmeticGrammar = await llamaMobile
-          .getArithmeticGrammar();
-      expect(arithmeticGrammar?.isNotEmpty, true);
-
-      // Test C grammar
-      final String? cGrammar = await llamaMobile.getCGrammar();
-      expect(cGrammar?.isNotEmpty, true);
-    });
-
-    testWidgets('Test file and model listing', (WidgetTester tester) async {
-      final LlamaMobile llamaMobile = LlamaMobile();
-
-      // Test listModels (should return available models or empty list)
-      final Map<String, dynamic>? models = await llamaMobile.listModels();
-      expect(models, isNotNull);
-
-      // Test listFiles with a safe directory
-      final Map<String, dynamic>? files = await llamaMobile.listFiles('/');
-      expect(files, isNotNull);
     });
   });
 
@@ -79,13 +48,13 @@ void main() {
         } else {
           // If model path is invalid, context will be null
           // This is expected in some test environments
-          print(
+          debugPrint(
             'Context initialization failed (expected if model path is invalid)',
           );
         }
       } catch (e) {
         // Expected if model path is invalid
-        print(
+        debugPrint(
           'Context initialization error (expected if model path is invalid): $e',
         );
       }
@@ -121,7 +90,7 @@ void main() {
           await context.free();
         }
       } catch (e) {
-        print('Completion test error: $e');
+        debugPrint('Completion test error: $e');
       }
     });
 
@@ -141,22 +110,22 @@ void main() {
           // Test token stream subscription
           final tokenStreamSubscription = context.onTokenStream.listen(
             (token) {
-              print('Received token: $token');
+              debugPrint('Received token: $token');
               expect(token.isNotEmpty, true);
             },
             onError: (error) {
-              print('Token stream error: $error');
+              debugPrint('Token stream error: $error');
             },
           );
 
           // Test progress stream subscription
           final progressStreamSubscription = context.onProgressStream.listen(
             (progress) {
-              print('Received progress: $progress');
+              debugPrint('Received progress: $progress');
               expect(progress >= 0.0 && progress <= 1.0, true);
             },
             onError: (error) {
-              print('Progress stream error: $error');
+              debugPrint('Progress stream error: $error');
             },
           );
 
@@ -180,7 +149,7 @@ void main() {
           await context.free();
         }
       } catch (e) {
-        print('Streaming completion test error: $e');
+        debugPrint('Streaming completion test error: $e');
       }
     });
 
@@ -222,54 +191,7 @@ void main() {
           await context.free();
         }
       } catch (e) {
-        print('OpenAI completion test error: $e');
-      }
-    });
-  });
-
-  group('Conversation Tests', () {
-    testWidgets('Test conversation generation', (WidgetTester tester) async {
-      final LlamaMobile llamaMobile = LlamaMobile();
-
-      final String testModelPath = '/path/to/test/model.gguf';
-
-      try {
-        final LlamaContext? context = await llamaMobile.initContext(
-          modelPath: testModelPath,
-          nCtx: 1024,
-          nThreads: 2,
-        );
-
-        if (context != null) {
-          // Test conversation generation
-          final List<ChatMessage> messages = [
-            ChatMessage(role: 'user', content: 'Hello, how are you?'),
-          ];
-
-          final ConversationResult? result = await context.generateConversation(
-            chatMessages: messages,
-            maxTokens: 64,
-          );
-
-          if (result != null) {
-            expect(result.text.isNotEmpty, true);
-            expect(result.tokensGenerated > 0, true);
-          }
-
-          // Test chat message formatting
-          final String? formatted = await context.formatChatMessages(
-            messages,
-            null, // Use default template
-          );
-
-          if (formatted != null) {
-            expect(formatted.isNotEmpty, true);
-          }
-
-          await context.free();
-        }
-      } catch (e) {
-        print('Conversation test error: $e');
+        debugPrint('OpenAI completion test error: $e');
       }
     });
   });
@@ -305,7 +227,7 @@ void main() {
           await context.free();
         }
       } catch (e) {
-        print('Tokenization test error: $e');
+        debugPrint('Tokenization test error: $e');
       }
     });
 
@@ -334,7 +256,7 @@ void main() {
           await context.free();
         }
       } catch (e) {
-        print('Embedding test error: $e');
+        debugPrint('Embedding test error: $e');
       }
     });
   });
@@ -358,9 +280,9 @@ void main() {
           final bool supportsVision = await context.supportsVision();
           final bool supportsAudio = await context.supportsAudio();
 
-          print('Multimodal enabled: $isMultimodal');
-          print('Supports vision: $supportsVision');
-          print('Supports audio: $supportsAudio');
+          debugPrint('Multimodal enabled: $isMultimodal');
+          debugPrint('Supports vision: $supportsVision');
+          debugPrint('Supports audio: $supportsAudio');
 
           // Test multimodal completion (requires vision model)
           try {
@@ -376,7 +298,7 @@ void main() {
             }
           } catch (e) {
             // Expected if multimodal is not supported
-            print(
+            debugPrint(
               'Multimodal completion error (expected if not supported): $e',
             );
           }
@@ -384,7 +306,7 @@ void main() {
           await context.free();
         }
       } catch (e) {
-        print('Multimodal test error: $e');
+        debugPrint('Multimodal test error: $e');
       }
     });
   });
@@ -409,7 +331,7 @@ void main() {
 
           // Test vocoder check
           final bool isVocoderEnabled = await context.isVocoderEnabled();
-          print('Vocoder enabled: $isVocoderEnabled');
+          debugPrint('Vocoder enabled: $isVocoderEnabled');
 
           // Test TTS model loading (requires TTS model)
           final String testTTSModelPath = '/path/to/test/tts/model';
@@ -418,30 +340,24 @@ void main() {
               testTTSModelPath,
               TTSModelType.outETTSv02,
             );
-            print('TTS model loaded: $loaded');
+            debugPrint('TTS model loaded: $loaded');
 
             if (loaded) {
-              // Test audio generation
-              final AudioResult? audioResult = await context.generateAudio(
-                'Hello, world!',
-              );
-              if (audioResult != null) {
-                expect(audioResult.audioData.isNotEmpty, true);
-              }
-
               // Test TTS model free
               final bool freed = await context.freeTTSModel();
               expect(freed, isTrue);
             }
           } catch (e) {
             // Expected if TTS model path is invalid
-            print('TTS test error (expected if model path is invalid): $e');
+            debugPrint(
+              'TTS test error (expected if model path is invalid): $e',
+            );
           }
 
           await context.free();
         }
       } catch (e) {
-        print('TTS test error: $e');
+        debugPrint('TTS test error: $e');
       }
     });
   });
@@ -467,7 +383,7 @@ void main() {
               testLoRAPath,
               0.8,
             );
-            print('LoRA adapter loaded: $loaded');
+            debugPrint('LoRA adapter loaded: $loaded');
 
             if (loaded) {
               // Test get loaded LoRA adapters
@@ -483,13 +399,13 @@ void main() {
             }
           } catch (e) {
             // Expected if LoRA path is invalid
-            print('LoRA test error (expected if path is invalid): $e');
+            debugPrint('LoRA test error (expected if path is invalid): $e');
           }
 
           await context.free();
         }
       } catch (e) {
-        print('LoRA test error: $e');
+        debugPrint('LoRA test error: $e');
       }
     });
   });
@@ -543,7 +459,7 @@ void main() {
           await context.free();
         }
       } catch (e) {
-        print('Model info test error: $e');
+        debugPrint('Model info test error: $e');
       }
     });
   });
@@ -563,11 +479,11 @@ void main() {
         );
 
         if (result != null) {
-          print('Download result: ${result.success}');
+          debugPrint('Download result: ${result.success}');
         }
       } catch (e) {
         // Expected if URL is invalid
-        print('Download test error (expected if URL is invalid): $e');
+        debugPrint('Download test error (expected if URL is invalid): $e');
       }
     });
 
@@ -583,11 +499,11 @@ void main() {
         );
 
         if (result != null) {
-          print('HF download result: ${result.success}');
+          debugPrint('HF download result: ${result.success}');
         }
       } catch (e) {
         // Expected if repo or filename is invalid
-        print('HF download test error (expected if repo is invalid): $e');
+        debugPrint('HF download test error (expected if repo is invalid): $e');
       }
     });
   });

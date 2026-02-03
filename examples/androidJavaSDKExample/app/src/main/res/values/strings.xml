@@ -1,8 +1,0 @@
-<resources>
-    <string name="app_name">AndroidSDKExample</string>
-    <string name="no_models_available">No models available</string>
-    <string name="empty_option">Empty</string>
-    <string-array name="no_models">
-        <item>No models found</item>
-    </string-array>
-</resources>

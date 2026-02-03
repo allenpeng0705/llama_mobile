@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
-
 void main() {
   runApp(const MyApp());
 }

@@ -83,7 +83,6 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     );
   }
 
-  
   Future<String?> formatChatMessages(
     int contextHandle,
     List<Map<String, String?>> messages,
@@ -117,10 +116,6 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     Map<String, dynamic> params,
   ) {
     throw UnimplementedError('loadTTSModelAsync() has not been implemented.');
-  }
-
-  Future<Map<String, dynamic>?> generateAudio(int contextHandle, String text) {
-    throw UnimplementedError('generateAudio() has not been implemented.');
   }
 
   Future<bool> freeTTSModel(int contextHandle) {
@@ -277,49 +272,6 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
   }
 
   // TTS methods
-  Future<List<double>?> generateAudioFromText(
-    int contextHandle,
-    String text,
-    String speakerJson,
-  ) {
-    throw UnimplementedError(
-      'generateAudioFromText() has not been implemented.',
-    );
-  }
-
-  Future<String?> getFormattedAudioCompletion(
-    int contextHandle,
-    String speakerJson,
-    String textToSpeak,
-  ) {
-    throw UnimplementedError(
-      'getFormattedAudioCompletion() has not been implemented.',
-    );
-  }
-
-  Future<List<int>?> getAudioGuideTokens(
-    int contextHandle,
-    String textToSpeak,
-  ) {
-    throw UnimplementedError('getAudioGuideTokens() has not been implemented.');
-  }
-
-  Future<void> setGuideTokens(int contextHandle, List<int> tokens) {
-    throw UnimplementedError('setGuideTokens() has not been implemented.');
-  }
-
-  Future<List<double>?> decodeAudioTokens(int contextHandle, List<int> tokens) {
-    throw UnimplementedError('decodeAudioTokens() has not been implemented.');
-  }
-
-  Future<Map<String, dynamic>?> generateSpeechSync(
-    int contextHandle,
-    String text,
-    Map<String, dynamic>? options,
-  ) {
-    throw UnimplementedError('generateSpeechSync() has not been implemented.');
-  }
-
   Future<Map<String, dynamic>?> generateSpeech(
     int contextHandle,
     String text,
@@ -334,26 +286,6 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     Map<String, dynamic>? options,
   ) {
     throw UnimplementedError('generateSpeechAsync() has not been implemented.');
-  }
-
-  Future<Map<String, dynamic>?> generateSpeechStream(
-    int contextHandle,
-    String text,
-    Map<String, dynamic>? options,
-  ) {
-    throw UnimplementedError(
-      'generateSpeechStream() has not been implemented.',
-    );
-  }
-
-  Future<Map<String, dynamic>?> generateSpeechStreamAsync(
-    int contextHandle,
-    String text,
-    Map<String, dynamic>? options,
-  ) {
-    throw UnimplementedError(
-      'generateSpeechStreamAsync() has not been implemented.',
-    );
   }
 
   Future<Map<String, dynamic>?> generateSpeechStreamForLongText(
@@ -400,35 +332,6 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
   ) {
     throw UnimplementedError(
       'generateStreamingCompletion() has not been implemented.',
-    );
-  }
-
-  Future<Map<String, dynamic>?> generateStreamingCompletionAsync(
-    int contextHandle,
-    Map<String, dynamic> params,
-  ) {
-    throw UnimplementedError(
-      'generateStreamingCompletionAsync() has not been implemented.',
-    );
-  }
-
-  Future<Map<String, dynamic>?> generateStreamingOpenAICompletion(
-    int contextHandle,
-    String openAIJSON,
-    String? grammar,
-  ) {
-    throw UnimplementedError(
-      'generateStreamingOpenAICompletion() has not been implemented.',
-    );
-  }
-
-  Future<Map<String, dynamic>?> generateStreamingOpenAICompletionAsync(
-    int contextHandle,
-    String openAIJSON,
-    String? grammar,
-  ) {
-    throw UnimplementedError(
-      'generateStreamingOpenAICompletionAsync() has not been implemented.',
     );
   }
 

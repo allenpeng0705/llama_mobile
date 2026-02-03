@@ -1,4 +1,5 @@
 import 'llama_mobile_flutter_sdk_platform_interface.dart';
+import 'package:flutter/foundation.dart';
 
 /// Log levels for the SDK
 enum LogLevel {
@@ -217,7 +218,7 @@ class CompletionParams {
   });
 
   CompletionParams.forChat({
-    required List<ChatMessage> chatMessages,
+    required this.chatMessages,
     this.maxTokens = 1024,
     this.nThreads = 4,
     this.seed = -1,
@@ -243,8 +244,7 @@ class CompletionParams {
     this.parallelToolCalls = false,
     this.toolChoice,
     this.mediaPaths = const [],
-  }) : prompt = '',
-       chatMessages = chatMessages;
+  }) : prompt = '';
 
   Map<String, dynamic> toMap() {
     return {
@@ -878,28 +878,6 @@ class LlamaContext {
     return null;
   }
 
-  /// Generates a streaming completion using OpenAI-compatible JSON format
-  Future<CompletionResult?> generateStreamingOpenAICompletion({
-    required String openAIJSON,
-    String? grammar,
-  }) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateStreamingOpenAICompletion(_contextHandle, openAIJSON, grammar);
-    if (result != null) {
-      return CompletionResult(
-        text: result['text'] as String,
-        tokensGenerated: result['tokensGenerated'] as int,
-        tokensEvaluated: result['tokensEvaluated'] as int,
-        truncated: result['truncated'] as bool,
-        stoppedEos: result['stoppedEos'] as bool,
-        stoppedWord: result['stoppedWord'] as bool,
-        stoppedLimit: result['stoppedLimit'] as bool,
-        stoppingWord: result['stoppingWord'] as String?,
-      );
-    }
-    return null;
-  }
-
   /// Generates a streaming completion from the given prompt.
   Future<CompletionResult?> generateStreamingCompletion({
     required String prompt,
@@ -1407,47 +1385,6 @@ class LlamaContext {
   /// - [pitch]: Speech pitch (0.5 = lower pitch, 2.0 = higher pitch).
   /// - [volume]: Speech volume (0.0 = silent, 2.0 = double volume).
   /// - [sampleRate]: Output audio sample rate (default: 24000 Hz).
-  ///
-  /// Returns:
-  /// An [AudioResult] object containing the generated audio data and format information.
-  Future<AudioResult?> _generateAudio(String text) async {
-    print(
-      "[DEBUG] Dart LlamaContext: _generateAudio called - text: $text, contextHandle: $_contextHandle",
-    );
-
-    try {
-      final result = await LlamaMobileFlutterSdkPlatform.instance.generateAudio(
-        _contextHandle,
-        text,
-      );
-
-      print(
-        "[DEBUG] Dart LlamaContext: _generateAudio result received: $result",
-      );
-
-      if (result != null) {
-        print("[DEBUG] Dart LlamaContext: TTS Audio Generated successfully");
-        // Convert List<Object?> to List<int>
-        final dynamic audioDataDynamic = result['audioData'];
-        List<int> audioData = [];
-        if (audioDataDynamic is List) {
-          audioData = audioDataDynamic
-              .map((e) => e is int ? e : (e is double ? e.toInt() : 0))
-              .toList();
-          print(
-            "[DEBUG] Dart LlamaContext: Audio data converted successfully, length: ${audioData.length}",
-          );
-        }
-        return AudioResult(audioData: audioData);
-      }
-      print("[DEBUG] Dart LlamaContext: TTS Audio Generated NULL");
-      return null;
-    } catch (e) {
-      print("[DEBUG] Dart LlamaContext: Error in _generateAudio: $e");
-      rethrow;
-    }
-  }
-
   /// Frees the TTS model
   Future<bool> freeTTSModel() async {
     return await LlamaMobileFlutterSdkPlatform.instance.freeTTSModel(
@@ -1562,96 +1499,12 @@ class LlamaContext {
   /// Generates audio from text using the loaded TTS model.
   ///
   /// Parameters:
-  /// - [text]: Text to convert to speech.
-  /// - [speakerJson]: JSON string with speaker configuration (optional, defaults to default speaker).
-  ///
-  /// Returns:
-  /// A list of floating-point audio samples, or null if an error occurred.
-  Future<List<double>?> _generateAudioFromText(
-    String text, {
-    String speakerJson = '{"speaker": "default"}',
-  }) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.generateAudioFromText(
-      _contextHandle,
-      text,
-      speakerJson,
-    );
-  }
-
-  /// Gets the formatted audio completion for TTS.
-  ///
-  /// Parameters:
-  /// - [speakerJson]: JSON string with speaker configuration.
-  /// - [textToSpeak]: Text to convert to speech.
-  ///
-  /// Returns:
-  /// The formatted audio completion string, or null if an error occurred.
-  Future<String?> _getFormattedAudioCompletion(
-    String speakerJson,
-    String textToSpeak,
-  ) async {
-    return await LlamaMobileFlutterSdkPlatform.instance
-        .getFormattedAudioCompletion(_contextHandle, speakerJson, textToSpeak);
-  }
-
-  /// Gets audio guide tokens for TTS.
-  ///
-  /// Parameters:
-  /// - [textToSpeak]: Text to convert to speech.
-  ///
-  /// Returns:
-  /// A list of guide tokens, or null if an error occurred.
-  Future<List<int>?> _getAudioGuideTokens(String textToSpeak) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.getAudioGuideTokens(
-      _contextHandle,
-      textToSpeak,
-    );
-  }
-
-  /// Sets guide tokens for audio generation.
-  ///
-  /// Parameters:
-  /// - [tokens]: Guide tokens to set for audio generation.
-  Future<void> _setGuideTokens(List<int> tokens) async {
-    await LlamaMobileFlutterSdkPlatform.instance.setGuideTokens(
-      _contextHandle,
-      tokens,
-    );
-  }
-
-  /// Decodes audio tokens into raw audio data.
-  ///
-  /// Parameters:
-  /// - [tokens]: Audio tokens to decode.
-  ///
-  /// Returns:
-  /// A list of floating-point audio samples, or null if an error occurred.
-  Future<List<double>?> _decodeAudioTokens(List<int> tokens) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.decodeAudioTokens(
-      _contextHandle,
-      tokens,
-    );
-  }
-
   /// Generates speech synchronously from text.
   ///
   /// Parameters:
   /// - [text]: Text to convert to speech.
   /// - [options]: Optional TTS options (sampleRate, voice, speed, saveToFile, outputFilePath).
   ///
-  /// Returns:
-  /// A map containing audio data and metadata, or null if an error occurred.
-  Future<Map<String, dynamic>?> generateSpeechSync(
-    String text, {
-    Map<String, dynamic>? options,
-  }) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.generateSpeechSync(
-      _contextHandle,
-      text,
-      options,
-    );
-  }
-
   /// Generates speech asynchronously from text.
   ///
   /// Parameters:
@@ -1677,19 +1530,6 @@ class LlamaContext {
   /// - [text]: Text to convert to speech.
   /// - [options]: Optional TTS options (sampleRate, voice, speed, saveToFile, outputFilePath).
   ///
-  /// Returns:
-  /// A map containing stream metadata, or null if an error occurred.
-  Future<Map<String, dynamic>?> generateSpeechStream(
-    String text, {
-    Map<String, dynamic>? options,
-  }) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.generateSpeechStream(
-      _contextHandle,
-      text,
-      options,
-    );
-  }
-
   /// Generates speech as a stream for long text.
   ///
   /// Parameters:
@@ -1760,16 +1600,18 @@ class LlamaContext {
   Future<CompletionResult?> generateCompletionWithParamsAsync(
     CompletionParams params,
   ) async {
-    print("[DEBUG] Dart SDK: generateCompletionWithParamsAsync called");
-    print("[DEBUG] Dart SDK: mediaPaths count: ${params.mediaPaths.length}");
-    print("[DEBUG] Dart SDK: mediaPaths: ${params.mediaPaths}");
-    print("[DEBUG] Dart SDK: prompt: ${params.prompt}");
-    print("[DEBUG] Dart SDK: maxTokens: ${params.maxTokens}");
+    debugPrint("[DEBUG] Dart SDK: generateCompletionWithParamsAsync called");
+    debugPrint(
+      "[DEBUG] Dart SDK: mediaPaths count: ${params.mediaPaths.length}",
+    );
+    debugPrint("[DEBUG] Dart SDK: mediaPaths: ${params.mediaPaths}");
+    debugPrint("[DEBUG] Dart SDK: prompt: ${params.prompt}");
+    debugPrint("[DEBUG] Dart SDK: maxTokens: ${params.maxTokens}");
 
     Map<String, dynamic>? result;
     if (params.mediaPaths.isNotEmpty) {
       // Use multimodal completion for media
-      print("[DEBUG] Dart SDK: Calling generateMultimodalCompletionAsync");
+      debugPrint("[DEBUG] Dart SDK: Calling generateMultimodalCompletionAsync");
       result = await LlamaMobileFlutterSdkPlatform.instance
           .generateMultimodalCompletionAsync(
             _contextHandle,
@@ -1778,12 +1620,12 @@ class LlamaContext {
           );
     } else {
       // Use regular completion
-      print("[DEBUG] Dart SDK: Calling generateCompletionAsync");
+      debugPrint("[DEBUG] Dart SDK: Calling generateCompletionAsync");
       result = await LlamaMobileFlutterSdkPlatform.instance
           .generateCompletionAsync(_contextHandle, params.toMap());
     }
 
-    print(
+    debugPrint(
       "[DEBUG] Dart SDK: Result received: ${result != null ? 'Success' : 'Null'}",
     );
 
@@ -1858,7 +1700,7 @@ class LlamaContext {
         .generateMultimodalCompletionAsync(
           _contextHandle,
           params.toMap(),
-          params.mediaPaths ?? [],
+          params.mediaPaths,
         );
     if (result != null) {
       return CompletionResult(
@@ -1932,99 +1774,6 @@ class LlamaContext {
     );
   }
 
-  /// Generates a streaming completion asynchronously (runs in background thread)
-  Future<CompletionResult?> generateStreamingCompletionAsync({
-    required String prompt,
-    int maxTokens = 1024,
-    int nThreads = 4,
-    int seed = -1,
-    double temperature = 0.8,
-    int topK = 40,
-    double topP = 0.95,
-    double minP = 0.05,
-    double typicalP = 1.0,
-    int penaltyLastN = 64,
-    double penaltyRepeat = 1.1,
-    double penaltyFreq = 0.0,
-    double penaltyPresent = 0.0,
-    int mirostat = 0,
-    double mirostatTau = 5.0,
-    double mirostatEta = 0.1,
-    bool ignoreEos = false,
-    String? grammar,
-    List<String>? stopSequences,
-  }) async {
-    final params = CompletionParams(
-      prompt: prompt,
-      maxTokens: maxTokens,
-      nThreads: nThreads,
-      seed: seed,
-      temperature: temperature,
-      topK: topK,
-      topP: topP,
-      minP: minP,
-      typicalP: typicalP,
-      penaltyLastN: penaltyLastN,
-      penaltyRepeat: penaltyRepeat,
-      penaltyFreq: penaltyFreq,
-      penaltyPresent: penaltyPresent,
-      mirostat: mirostat,
-      mirostatTau: mirostatTau,
-      mirostatEta: mirostatEta,
-      ignoreEos: ignoreEos,
-      grammar: grammar,
-      stopSequences: stopSequences ?? [],
-    );
-    return generateStreamingCompletionWithParamsAsync(params);
-  }
-
-  /// Generates a streaming completion with CompletionParams asynchronously
-  Future<CompletionResult?> generateStreamingCompletionWithParamsAsync(
-    CompletionParams params,
-  ) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateStreamingCompletionAsync(_contextHandle, params.toMap());
-    if (result != null) {
-      return CompletionResult(
-        text: result['text'] as String,
-        tokensGenerated: result['tokensGenerated'] as int,
-        tokensEvaluated: result['tokensEvaluated'] as int,
-        truncated: result['truncated'] as bool,
-        stoppedEos: result['stoppedEos'] as bool,
-        stoppedWord: result['stoppedWord'] as bool,
-        stoppedLimit: result['stoppedLimit'] as bool,
-        stoppingWord: result['stoppingWord'] as String?,
-      );
-    }
-    return null;
-  }
-
-  /// Generates a streaming OpenAI completion asynchronously (runs in background thread)
-  Future<CompletionResult?> generateStreamingOpenAICompletionAsync({
-    required String openAIJSON,
-    String? grammar,
-  }) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateStreamingOpenAICompletionAsync(
-          _contextHandle,
-          openAIJSON,
-          grammar,
-        );
-    if (result != null) {
-      return CompletionResult(
-        text: result['text'] as String,
-        tokensGenerated: result['tokensGenerated'] as int,
-        tokensEvaluated: result['tokensEvaluated'] as int,
-        truncated: result['truncated'] as bool,
-        stoppedEos: result['stoppedEos'] as bool,
-        stoppedWord: result['stoppedWord'] as bool,
-        stoppedLimit: result['stoppedLimit'] as bool,
-        stoppingWord: result['stoppingWord'] as String?,
-      );
-    }
-    return null;
-  }
-
   /// Initializes multimodal asynchronously (runs in background thread)
   Future<bool> initMultimodalAsync(String mmprojPath, bool useGpu) async {
     return await LlamaMobileFlutterSdkPlatform.instance.initMultimodalAsync(
@@ -2066,15 +1815,6 @@ class LlamaContext {
       text,
       options,
     );
-  }
-
-  /// Generates speech as a stream asynchronously (runs in background thread)
-  Future<Map<String, dynamic>?> generateSpeechStreamAsync(
-    String text, {
-    Map<String, dynamic>? options,
-  }) async {
-    return await LlamaMobileFlutterSdkPlatform.instance
-        .generateSpeechStreamAsync(_contextHandle, text, options);
   }
 
   /// Generates speech as a stream for long text asynchronously (runs in background thread)
