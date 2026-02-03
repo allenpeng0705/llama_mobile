@@ -17,6 +17,9 @@ class AppState extends ChangeNotifier {
   List<Map<String, String>> availableModels = [];
   String? errorMessage;
 
+  // Progress event channel subscription
+  StreamSubscription? _progressSubscription;
+
   // Additional model paths for multimodal and TTS
   String mmprojModelPath = "";
   List<Map<String, String>> availableMmprojModels = [];
@@ -1294,7 +1297,7 @@ class AppState extends ChangeNotifier {
   Future<void> downloadFromHuggingFace() async {
     const repoID = "microsoft/Phi-3-mini-4k-instruct-gguf";
     const filename = "Phi-3-mini-4k-instruct-q4.gguf";
-    const bearerToken = "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";
+    const bearerToken = "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";
 
     final modelsDir = await getModelsDirectory();
     await startDownload(
@@ -1311,7 +1314,7 @@ class AppState extends ChangeNotifier {
     const url =
         "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf";
     const filename = "Phi-3-mini-4k-instruct-q4.gguf";
-    const bearerToken = "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";
+    const bearerToken = "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";
 
     final modelsDir = await getModelsDirectory();
     await startDownload(
@@ -1343,18 +1346,50 @@ class AppState extends ChangeNotifier {
     print("Starting download: $repoID to $localPath");
 
     try {
-      final params = DownloadParams(
-        url: repoID,
-        localPath: localPath,
-        username: isHuggingFace ? null : null,
-        password: bearerToken,
-        headers: isHuggingFace
-            ? {'Authorization': 'Bearer $bearerToken'}
-            : null,
+      final progressChannel = const EventChannel(
+        'llama_mobile_flutter_sdk/progress',
       );
+      _progressSubscription = progressChannel
+          .receiveBroadcastStream('progress')
+          .listen(
+            (event) {
+              if (event is Map && event['progress'] != null) {
+                downloadProgress = (event['progress'] as num).toDouble();
+                downloadStatus =
+                    "Downloading... ${(downloadProgress * 100).toInt()}%";
+                notifyListeners();
+              }
+            },
+            onError: (error) {
+              print("Progress stream error: $error");
+            },
+          );
 
-      final result = await LlamaMobile().downloadModelWithParamsAsync(params);
+      late DownloadResult? result;
+      if (isHuggingFace) {
+        final params = HuggingFaceDownloadParams(
+          repoId: repoID,
+          filename: filename,
+          localPath: localPath,
+          bearerToken: bearerToken,
+          offline: false,
+        );
 
+        result = await LlamaMobile().downloadHfFileWithParamsAsync(params);
+      } else {
+        final params = DownloadParams(
+          url: repoID,
+          localPath: localPath,
+          username: null,
+          password: bearerToken,
+          headers: null,
+        );
+
+        result = await LlamaMobile().downloadModelWithParamsAsync(params);
+      }
+
+      await _progressSubscription?.cancel();
+      _progressSubscription = null;
       isDownloading = false;
 
       if (result != null && result.success) {

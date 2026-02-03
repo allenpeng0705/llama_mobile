@@ -734,26 +734,21 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
           username: username,
           password: password,
           headers: headers,
-          progressCallback: nil
+          progressCallback: { progress in
+              DispatchQueue.main.async {
+                  self.progressEventSink?(["progress": progress])
+              }
+          }
       )
 
-      let downloader = LlamaMobile(modelPath: "")
-      let downloadResult = downloader?.download(with: downloadParams)
+      let downloadResult = LlamaMobile.download(with: downloadParams)
 
       DispatchQueue.main.async {
-        if let downloadResult = downloadResult {
-          result([
-            "success": downloadResult.success,
-            "localPath": downloadResult.localPath,
-            "errorMessage": downloadResult.errorMessage
-          ])
-        } else {
-          result([
-            "success": false,
-            "localPath": "",
-            "errorMessage": "Failed to create downloader"
-          ])
-        }
+        result([
+          "success": downloadResult.success,
+          "localPath": downloadResult.localPath,
+          "errorMessage": downloadResult.errorMessage
+        ])
       }
     }
   }
@@ -1002,18 +997,14 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
         destinationPath: localPath,
         bearerToken: bearerToken,
         offline: offline,
-        progressCallback: nil
+        progressCallback: { progress in
+            DispatchQueue.main.async {
+                self.progressEventSink?(["progress": progress])
+            }
+        }
     )
 
-    let downloader = LlamaMobile(modelPath: "")
-    guard let downloadResult = downloader?.downloadHuggingFaceFile(with: hfParams) else {
-        result([
-            "success": false,
-            "localPath": "",
-            "errorMessage": "Failed to create downloader"
-        ])
-        return
-    }
+    let downloadResult = LlamaMobile.downloadHuggingFaceFile(with: hfParams)
     result([
         "success": downloadResult.success,
         "localPath": downloadResult.localPath,
@@ -2050,18 +2041,14 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
         username: username,
         password: password,
         headers: headers,
-        progressCallback: nil
+        progressCallback: { progress in
+            DispatchQueue.main.async {
+                self.progressEventSink?(["progress": progress])
+            }
+        }
     )
 
-    let downloader = LlamaMobile(modelPath: "")
-    guard let downloadResult = downloader?.download(with: downloadParams) else {
-        result([
-            "success": false,
-            "localPath": "",
-            "errorMessage": "Failed to create downloader"
-        ])
-        return
-    }
+    let downloadResult = LlamaMobile.download(with: downloadParams)
     result([
         "success": downloadResult.success,
         "localPath": downloadResult.localPath,

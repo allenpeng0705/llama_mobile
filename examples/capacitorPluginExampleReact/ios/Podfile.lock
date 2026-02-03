@@ -2,7 +2,7 @@ PODS:
   - Capacitor (8.0.1):
     - CapacitorCordova
   - CapacitorCordova (8.0.1)
-  - LlamaMobileCapacitorPlugin (0.0.1):
+  - LlamaMobileCapacitorPlugin (1.0.0):
     - Capacitor
 
 DEPENDENCIES:
@@ -21,7 +21,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   Capacitor: 2d8b1a05870ddb600b0e1e32b83fcf0890c244e1
   CapacitorCordova: 0d65b9bb74e995dcecb9463f34f1af2aba6f955c
-  LlamaMobileCapacitorPlugin: 06c23bae25b89dc449d52199acbb827891c5c1ad
+  LlamaMobileCapacitorPlugin: 3af6189a23680746ad19d9e0b9ed6b0256dd882e
 
 PODFILE CHECKSUM: 93e08dfaff91969e4a2bf4b847f0479cfffabb15
 

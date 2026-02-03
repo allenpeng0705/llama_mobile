@@ -75,6 +75,10 @@ private var completionCallbackContext: ((String) -> Void)? = nil
 private var chunkCallbackContext: ((String) -> Void)? = nil
 private var embeddingCallbackContext: (([Float]) -> Void)? = nil
 
+// Global properties to retain progress observers
+private var progressObserver: NSKeyValueObservation?
+private var hfProgressObserver: NSKeyValueObservation?
+
 // C-compatible callback functions
 private func cProgressCallback(progress: Float, user_data: UnsafeMutableRawPointer?) -> Void {
     callbackQueue.sync {
@@ -146,6 +150,9 @@ public class LlamaMobile: NSObject {
     
     /// Opaque handle to the llama_mobile context
     private var context: llama_mobile_context_handle_t?
+    
+    /// Number of CPU threads to use (stored from initialization)
+    private var initializationNThreads: Int32 = 4
     
     /// Configure Metal paths before model initialization
     private func configureMetalPaths() {
@@ -838,6 +845,9 @@ public class LlamaMobile: NSObject {
         // Set enable_chat_template at the end (matches C struct order)
         cParams.enable_chat_template = params.enableChatTemplate
         
+        // Store the nThreads value for later use
+        self.initializationNThreads = params.nThreads
+        
         // Initialize the context
         context = llama_mobile_init_context_c(&cParams)
         
@@ -934,12 +944,11 @@ public class LlamaMobile: NSObject {
         
         // Set prompt to empty string when chat messages are present, otherwise use the prompt
         let promptToUse = params.chatMessages.isEmpty ? params.prompt : ""
-        // Allocate persistent C string for prompt to prevent memory issues
         let promptCString = allocateCString(from: promptToUse)
         cParams.prompt = UnsafePointer(promptCString)
         stopStringsToFree.append(promptCString)
         cParams.n_predict = params.maxTokens
-        cParams.n_threads = params.nThreads ?? 4
+        cParams.n_threads = params.nThreads ?? self.initializationNThreads
         cParams.seed = params.seed
         cParams.temperature = params.temperature
         cParams.top_k = params.topK
@@ -1064,10 +1073,8 @@ public class LlamaMobile: NSObject {
         let status: Int32
         
         if !params.mediaPaths.isEmpty {
-            log("[DEBUG] Media paths not empty, calling multimodal completion", level: .debug)
             // Convert media paths to C array using helper function
             let (mediaPathsC, mediaStringsToFree) = allocateCStringArray(from: params.mediaPaths)
-            log("[DEBUG] Allocated media paths C array with \(params.mediaPaths.count) paths", level: .debug)
             defer {
                 // Free all allocated C strings for media paths
                 for cString in mediaStringsToFree {
@@ -1077,10 +1084,8 @@ public class LlamaMobile: NSObject {
                 mediaPathsC.deallocate()
             }
             
-            log("[DEBUG] Calling llama_mobile_multimodal_completion_c", level: .debug)
             status = llama_mobile_multimodal_completion_c(context, &cParams, mediaPathsC, Int32(params.mediaPaths.count), &cResult)
         } else {
-            log("[DEBUG] No media paths, calling regular completion", level: .debug)
             status = llama_mobile_completion_c(context, &cParams, &cResult)
         }
         
@@ -1187,14 +1192,8 @@ public class LlamaMobile: NSObject {
     ///   - mediaPaths: Array of paths to media files (images/audio)
     /// - Returns: Completion result, or nil if an error occurred 
     public func generateMultimodalCompletion(with params: CompletionParams, mediaPaths: [String]) -> CompletionResult? {
-        log("[DEBUG] generateMultimodalCompletion called with \(mediaPaths.count) media paths", level: .debug)
-        for (index, path) in mediaPaths.enumerated() {
-            log("[DEBUG] Media path \(index): \(path)", level: .debug)
-            log("[DEBUG] Media path \(index) exists: \(FileManager.default.fileExists(atPath: path))", level: .debug)
-        }
         var paramsWithMedia = params
         paramsWithMedia.mediaPaths = mediaPaths
-        log("[DEBUG] Calling generateCompletion with params", level: .debug)
         return generateCompletion(with: paramsWithMedia)
     }
     
@@ -1210,7 +1209,7 @@ public class LlamaMobile: NSObject {
     /// Download a Hugging Face model file to a specified local path
     /// - Parameter params: Download parameters
     /// - Returns: Download result containing success status and local path
-    public func download(with params: DownloadParams) -> DownloadResult {
+    public class func download(with params: DownloadParams) -> DownloadResult {
         var result: DownloadResult?
         let semaphore = DispatchSemaphore(value: 0)
         
@@ -1392,9 +1391,17 @@ public class LlamaMobile: NSObject {
         
         // Add progress observation with better tracking
         if let progressCallback = params.progressCallback {
-            task.progress.addObserver(self, forKeyPath: "fractionCompleted", options: [.new], context: nil)
-            // Store callback for KVO
-            hfDownloadProgressCallbackContext = progressCallback
+            // Use a closure-based approach for progress tracking
+            progressObserver = task.progress.observe(\.fractionCompleted) {progress, _ in
+                let fraction = Float(progress.fractionCompleted)
+                if fraction > lastProgress {
+                    lastProgress = fraction
+                    log("Download progress: \(Int(fraction * 100))%", level: .debug)
+                    DispatchQueue.main.async {
+                        progressCallback(fraction)
+                    }
+                }
+            }
             log("Progress callback registered", level: .debug)
         }
         
@@ -1423,7 +1430,7 @@ public class LlamaMobile: NSObject {
     /// Download a file from Hugging Face repository
     /// - Parameter params: Hugging Face download parameters
     /// - Returns: Download result containing success status and local path
-    public func downloadHuggingFaceFile(with params: HuggingFaceDownloadParams) -> DownloadResult {
+    public class func downloadHuggingFaceFile(with params: HuggingFaceDownloadParams) -> DownloadResult {
         var result: DownloadResult?
         let semaphore = DispatchSemaphore(value: 0)
         
@@ -1471,6 +1478,7 @@ public class LlamaMobile: NSObject {
         }
         
         // Create download task with progress tracking
+        var lastProgress: Float = 0.0
         let task = URLSession.shared.downloadTask(with: request) { tempURL, response, error in
             defer {
                 semaphore.signal()
@@ -1548,9 +1556,17 @@ public class LlamaMobile: NSObject {
         
         // Add progress observation with better tracking
         if let progressCallback = params.progressCallback {
-            task.progress.addObserver(self, forKeyPath: "fractionCompleted", options: [.new], context: nil)
-            // Store callback for KVO
-            downloadProgressCallbackContext = progressCallback
+            // Use a closure-based approach for progress tracking
+            hfProgressObserver = task.progress.observe(\.fractionCompleted) {progress, _ in
+                let fraction = Float(progress.fractionCompleted)
+                if fraction > lastProgress {
+                    lastProgress = fraction
+                    log("Download progress: \(Int(fraction * 100))%", level: .debug)
+                    DispatchQueue.main.async {
+                        progressCallback(fraction)
+                    }
+                }
+            }
             log("Progress callback registered", level: .debug)
         }
         

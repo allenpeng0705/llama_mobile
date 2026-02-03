@@ -170,7 +170,7 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
                 temperature: temperature
             )
             
-            let result = llamaMobile.generateCompletion(with: completionParams, mediaPaths: processedMediaPaths)
+            let result = llamaMobile.generateCompletion(with: completionParams)
             
             DispatchQueue.main.async {
                 if let result = result {
@@ -231,13 +231,15 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
     }
     
     @objc func loadGrammar(_ call: CAPPluginCall) {
-        guard let filePath = call.getString("filePath") else {
-            call.reject("filePath is required")
+        guard let filePath = call.getString("filePath"),
+              let contextHandle = call.getInt("contextHandle"),
+              let llamaMobile = contexts[contextHandle] else {
+            call.reject("filePath and contextHandle are required")
             return
         }
         
         DispatchQueue.global(qos: .userInitiated).async {
-            let grammar = LlamaMobile.loadGrammar(from: filePath)
+            let grammar = llamaMobile.loadGrammar(from: filePath)
             
             DispatchQueue.main.async {
                 if let grammar = grammar {
@@ -341,7 +343,7 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         let speakerJson = call.getString("speakerJson") ?? "{\"speaker\": \"default\"}"
         
         var options = LlamaMobile.TTSOptions()
-        options.sampleRate = Int32(sampleRate)
+        options.sampleRate = sampleRate
         
         DispatchQueue.global(qos: .userInitiated).async {
             Task {
@@ -362,7 +364,7 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
                             "audio": speechResult.audioSamples,
                             "sampleRate": speechResult.sampleRate,
                             "duration": speechResult.duration,
-                            "methodUsed": speechResult.methodUsed.rawValue
+                            "methodUsed": speechResult.methodUsed
                         ])
                     case .failure(let error):
                         call.reject("Failed to generate speech: \(error.localizedDescription)")
@@ -384,7 +386,7 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         let method = call.getString("method") ?? "best"
         
         var options = LlamaMobile.TTSOptions()
-        options.sampleRate = Int32(sampleRate)
+        options.sampleRate = sampleRate
         
         
         DispatchQueue.global(qos: .userInitiated).async {
@@ -400,7 +402,7 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
                         "audio": speechResult.audioSamples,
                         "sampleRate": speechResult.sampleRate,
                         "duration": speechResult.duration,
-                        "methodUsed": speechResult.methodUsed.rawValue
+                        "methodUsed": speechResult.methodUsed
                     ])
                 case .failure(let error):
                     call.reject("Failed to generate speech sync: \(error.localizedDescription)")
@@ -421,8 +423,7 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         let method = call.getString("method") ?? "best"
         
         var options = LlamaMobile.TTSOptions()
-        options.sampleRate = Int32(sampleRate)
-        
+        options.sampleRate = sampleRate
         
         DispatchQueue.global(qos: .userInitiated).async {
             Task {
@@ -445,7 +446,7 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
                         call.resolve([
                             "sampleRate": speechResult.sampleRate,
                             "duration": speechResult.duration,
-                            "methodUsed": speechResult.methodUsed.rawValue
+                            "methodUsed": speechResult.methodUsed
                         ])
                     case .failure(let error):
                         call.reject("Failed to generate speech stream: \(error.localizedDescription)")
@@ -467,7 +468,7 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         let method = call.getString("method") ?? "best"
         
         var options = LlamaMobile.TTSOptions()
-        options.sampleRate = Int32(sampleRate)
+        options.sampleRate = sampleRate
         
         
         DispatchQueue.global(qos: .userInitiated).async {
@@ -493,7 +494,7 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
                         call.resolve([
                             "sampleRate": metadata.sampleRate,
                             "duration": metadata.duration,
-                            "methodUsed": metadata.methodUsed.rawValue
+                            "methodUsed": metadata.methodUsed
                         ])
                     case .failure(let error):
                         call.reject("Failed to generate speech stream: \(error.localizedDescription)")
@@ -842,7 +843,16 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         }
         
         DispatchQueue.global(qos: .userInitiated).async {
-            let params = LlamaMobile.DownloadParams(url: url, localPath: localPath)
+            let params = LlamaMobile.DownloadParams(
+                url: url,
+                localPath: localPath,
+                progressCallback: { progress in
+                    DispatchQueue.main.async {
+                        self.notifyListeners("downloadProgress", data: ["progress": progress])
+                    }
+                }
+            )
+            
             let result = LlamaMobile.download(with: params)
             
             DispatchQueue.main.async {
@@ -872,8 +882,14 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
                 filename: filename,
                 destinationPath: localPath,
                 bearerToken: bearerToken,
-                offline: offline
+                offline: offline,
+                progressCallback: { progress in
+                    DispatchQueue.main.async {
+                        self.notifyListeners("downloadProgress", data: ["progress": progress])
+                    }
+                }
             )
+            
             let result = LlamaMobile.downloadHuggingFaceFile(with: params)
             
             DispatchQueue.main.async {

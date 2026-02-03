@@ -1077,7 +1077,7 @@ struct SettingsView: View {
         // Set up download parameters
         let repoID = "microsoft/Phi-3-mini-4k-instruct-gguf"
         let filename = "Phi-3-mini-4k-instruct-q4.gguf"
-        let bearerToken = "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"
+        let bearerToken = "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"
         
         // Get models directory
         guard let modelsDir = getModelsDirectory() else {
@@ -1093,7 +1093,7 @@ struct SettingsView: View {
         // Set up download parameters
         let url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf"
         let filename = "Phi-3-mini-4k-instruct-q4.gguf"
-        let bearerToken = "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"
+        let bearerToken = "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"
         
         // Get models directory
         guard let modelsDir = getModelsDirectory() else {
@@ -1156,20 +1156,19 @@ struct SettingsView: View {
                 progressCallback: progressCallback
             )
             
-            // Create a temporary LlamaMobile instance to call the download method
-            //let tempLlamaMobile = LlamaMobile(modelPath: "")
-            let result = appState.llamaMobile?.download(with: params)
+            // Use the new class method instead of instance method
+            let result = LlamaMobile.download(with: params)
             
             // Update UI on main thread
             DispatchQueue.main.async {
                 self.isDownloading = false
                 
-                if result?.success != nil {
+                if result.success {
                     // Download successful, update available models
                     self.updateAvailableModels()
                 } else {
                     // Download failed
-                    self.downloadError = result?.errorMessage ?? "Unknown error"
+                    self.downloadError = result.errorMessage ?? "Unknown error"
                 }
             }
         }

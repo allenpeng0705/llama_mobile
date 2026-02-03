@@ -480,7 +480,7 @@ class SettingsFragment : Fragment() {
         val modelsDir = getModelsDirectory(activity)
         
         // HF token from test_download.cpp
-        val bearerToken = "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"
+        val bearerToken = "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"
         // Repo ID and filename from test_download.cpp
         val repoId = "microsoft/Phi-3-mini-4k-instruct-gguf"
         val filename = "Phi-3-mini-4k-instruct-q4.gguf"
@@ -535,7 +535,7 @@ class SettingsFragment : Fragment() {
         val filename = "Phi-3-mini-4k-instruct-q4.gguf"
         val localPath = "$modelsDir/$filename"
         // HF token for authentication
-        val bearerToken = "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"
+        val bearerToken = "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"
         
         showDownloadProgressDialog {dialog ->
             Thread {

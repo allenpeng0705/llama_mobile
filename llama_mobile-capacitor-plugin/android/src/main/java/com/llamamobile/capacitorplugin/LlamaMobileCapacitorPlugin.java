@@ -1296,7 +1296,11 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             try {
                 LlamaMobile.DownloadParams.Builder paramsBuilder = new LlamaMobile.DownloadParams.Builder(url, "", localPath);
                 LlamaMobile.DownloadParams params = paramsBuilder.build();
-                LlamaMobile.DownloadResult result = LlamaMobile.downloadModel(params, null);
+                LlamaMobile.DownloadResult result = LlamaMobile.downloadModel(params, (progress, status, downloadedBytes, totalBytes) -> {
+                    JSObject progressData = new JSObject();
+                    progressData.put("progress", progress);
+                    notifyListeners("downloadProgress", progressData);
+                });
 
                 JSObject ret = new JSObject();
                 ret.put("success", result.isSuccess());
@@ -1325,7 +1329,11 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         executor.execute(() -> {
             try {
                 LlamaMobile.DownloadResult result = LlamaMobile.downloadHfFile(
-                    repoId, filename, localPath, bearerToken, offline, null
+                    repoId, filename, localPath, bearerToken, offline, (progress, status, downloadedBytes, totalBytes) -> {
+                        JSObject progressData = new JSObject();
+                        progressData.put("progress", progress);
+                        notifyListeners("downloadProgress", progressData);
+                    }
                 );
 
                 JSObject ret = new JSObject();

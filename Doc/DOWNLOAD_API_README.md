@@ -11,16 +11,19 @@ The Llama Mobile SDK provides a robust Download API that simplifies the process 
    - [Android Kotlin](#android-kotlin-download)
    - [Android Java](#android-java-download)
    - [Flutter](#flutter-download)
+   - [Capacitor](#capacitor-download)
 2. [Supporting Types](#supporting-types)
    - [iOS](#ios-download-types)
    - [Android Kotlin](#android-kotlin-download-types)
    - [Android Java](#android-java-download-types)
    - [Flutter](#flutter-download-types)
+   - [Capacitor](#capacitor-download-types)
 3. [Usage Examples](#usage-examples)
    - [iOS](#ios-download-examples)
    - [Android Kotlin](#android-kotlin-download-examples)
    - [Android Java](#android-java-download-examples)
    - [Flutter](#flutter-download-examples)
+   - [Capacitor](#capacitor-download-examples)
 4. [Implementation Details](#implementation-details)
 5. [Best Practices](#best-practices)
    - [1. Use Background Threads](#use-background-threads)
@@ -28,21 +31,25 @@ The Llama Mobile SDK provides a robust Download API that simplifies the process 
      - [Android Kotlin](#android-kotlin-background-threads)
      - [Android Java](#android-java-background-threads)
      - [Flutter](#flutter-background-threads)
+     - [Capacitor](#capacitor-background-threads)
    - [2. Error Handling](#error-handling)
      - [iOS](#ios-error-handling)
      - [Android Kotlin](#android-kotlin-error-handling)
      - [Android Java](#android-java-error-handling)
      - [Flutter](#flutter-error-handling)
+     - [Capacitor](#capacitor-error-handling)
    - [3. Storage Management](#storage-management)
      - [iOS](#ios-storage-management)
      - [Android Kotlin](#android-kotlin-storage-management)
      - [Android Java](#android-java-storage-management)
      - [Flutter](#flutter-storage-management)
+     - [Capacitor](#capacitor-storage-management)
    - [4. Caching](#caching)
      - [iOS](#ios-caching)
      - [Android Kotlin](#android-kotlin-caching)
      - [Android Java](#android-java-caching)
      - [Flutter](#flutter-caching)
+     - [Capacitor](#capacitor-caching)
 6. [Error Handling](#error-handling-section)
 7. [Security Considerations](#security-considerations)
 8. [Conclusion](#conclusion)
@@ -54,7 +61,7 @@ The Llama Mobile SDK provides a robust Download API that simplifies the process 
 #### Download Method
 
 ```swift
-public func download(with params: DownloadParams) -> DownloadResult
+public class func download(with params: DownloadParams) -> DownloadResult
 ```
 
 #### Parameters:
@@ -481,7 +488,7 @@ func downloadModel() {
     )
     
     // Perform download
-    let result = llamaMobile.download(with: params)
+    let result = LlamaMobile.download(with: params)
     
     // Handle result
     if result.success {
@@ -507,7 +514,7 @@ func downloadModelWithProgress() {
     )
     
     // Perform download
-    let result = llamaMobile.download(with: params)
+    let result = LlamaMobile.download(with: params)
     
     // Handle result
     if result.success {
@@ -534,7 +541,7 @@ func downloadPrivateModel() {
     )
     
     // Perform download
-    let result = llamaMobile.download(with: params)
+    let result = LlamaMobile.download(with: params)
     
     // Handle result
     if result.success {
@@ -559,7 +566,7 @@ func downloadVocoderModel() {
     )
     
     // Perform download
-    let result = llamaMobile.download(with: params)
+    let result = LlamaMobile.download(with: params)
     
     // Handle result
     if result.success {
@@ -788,6 +795,7 @@ public void downloadVocoderModel() {
 
 ```dart
 import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
+import 'package:flutter/services.dart';
 
 final llamaMobile = LlamaMobile();
 
@@ -823,7 +831,47 @@ if (downloadResult?.success == true) {
 }
 ```
 
-#### 3. Download with Authentication
+#### 3. Download with Progress Tracking
+
+```dart
+import 'package:flutter/services.dart';
+
+// Listen to progress events
+final progressChannel = const EventChannel('llama_mobile_flutter_sdk/progress');
+final progressSubscription = progressChannel.receiveBroadcastStream().listen(
+  (event) {
+    if (event is Map && event['progress'] != null) {
+      final progress = (event['progress'] as num).toDouble();
+      print('Download progress: ${(progress * 100).toInt()}%');
+      // Update UI with progress
+      setState(() {
+        _downloadProgress = progress;
+      });
+    }
+  },
+  onError: (error) {
+    print('Progress stream error: $error');
+  },
+);
+
+// Start download
+final downloadResult = await llamaMobile.downloadHfFile(
+  repoId: 'meta-llama/Llama-3.2-1B-Instruct',
+  filename: 'Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+  localPath: '/tmp/Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+);
+
+// Remove listener when done
+await progressSubscription.cancel();
+
+if (downloadResult?.success == true) {
+  print('Model downloaded successfully to: ${downloadResult?.localPath}');
+} else {
+  print('Error downloading model: ${downloadResult?.errorMessage ?? "Unknown error"}');
+}
+```
+
+#### 4. Download with Authentication
 
 ```dart
 final downloadResult = await llamaMobile.downloadHfFile(
@@ -897,6 +945,112 @@ if (downloadResult?.success == true) {
 }
 ```
 
+### Capacitor {#capacitor-download-examples}
+
+#### 1. Basic Download from Hugging Face
+
+```typescript
+import { LlamaMobileCapacitorPlugin } from 'llama-mobile-capacitor-plugin';
+
+const result = await LlamaMobileCapacitorPlugin.downloadHfFile({
+  repoId: 'meta-llama/Llama-3.2-1B-Instruct',
+  filename: 'Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+  localPath: '/tmp/Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+});
+
+if (result.success) {
+  console.log('Model downloaded successfully to:', result.localPath);
+  // Now you can load the model
+  const context = await LlamaMobileCapacitorPlugin.initContext({
+    modelPath: result.localPath,
+  });
+} else {
+  console.error('Error downloading model:', result.errorMessage);
+}
+```
+
+#### 2. Download with Progress Tracking
+
+```typescript
+import { LlamaMobileCapacitorPlugin } from 'llama-mobile-capacitor-plugin';
+
+// Listen to progress events
+const progressListener = await LlamaMobileCapacitorPlugin.addListener(
+  'downloadProgress',
+  (data) => {
+    const progress = data.progress;
+    console.log('Download progress:', (progress * 100).toFixed(0) + '%');
+    // Update UI with progress
+    setDownloadProgress(progress);
+  }
+);
+
+// Start download
+const result = await LlamaMobileCapacitorPlugin.downloadHfFile({
+  repoId: 'meta-llama/Llama-3.2-1B-Instruct',
+  filename: 'Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+  localPath: '/tmp/Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+});
+
+// Remove listener when done
+await progressListener.remove();
+
+if (result.success) {
+  console.log('Model downloaded successfully to:', result.localPath);
+} else {
+  console.error('Error downloading model:', result.errorMessage);
+}
+```
+
+#### 3. Download with Authentication
+
+```typescript
+const result = await LlamaMobileCapacitorPlugin.downloadHfFile({
+  repoId: 'username/private-model',
+  filename: 'private-model.gguf',
+  localPath: '/tmp/private-model.gguf',
+  bearerToken: 'your-huggingface-token', // Use your Hugging Face API token here
+});
+
+if (result.success) {
+  console.log('Model downloaded successfully to:', result.localPath);
+} else {
+  console.error('Error downloading model:', result.errorMessage);
+}
+```
+
+#### 4. Download from URL
+
+```typescript
+const result = await LlamaMobileCapacitorPlugin.downloadModel({
+  url: 'https://example.com/model.gguf',
+  localPath: '/tmp/model.gguf',
+});
+
+if (result.success) {
+  console.log('Model downloaded successfully to:', result.localPath);
+} else {
+  console.error('Error downloading model:', result.errorMessage);
+}
+```
+
+#### 5. Offline Mode (Use Cached Version)
+
+```typescript
+const result = await LlamaMobileCapacitorPlugin.downloadHfFile({
+  repoId: 'meta-llama/Llama-3.2-1B-Instruct',
+  filename: 'Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+  localPath: '/tmp/Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+  offline: true, // Use cached version if available
+});
+
+if (result.success) {
+  console.log('Model loaded from cache:', result.localPath);
+} else {
+  console.error('Error:', result.errorMessage);
+}
+```
+
 ## Implementation Details
 
 ### How It Works
@@ -915,7 +1069,7 @@ if (downloadResult?.success == true) {
 The iOS SDK uses **URLSession** for native networking:
 
 - **Built-in SSL/TLS**: No external dependencies required
-- **Native Progress Tracking**: Uses KVO (Key-Value Observing) for progress updates
+- **Native Progress Tracking**: Uses closure-based progress tracking with `task.progress.observe(\.fractionCompleted)`
 - **Error Handling**: Comprehensive error messages for network issues
 - **Automatic Retry**: Built-in retry logic for transient failures
 
@@ -924,9 +1078,27 @@ The iOS SDK uses **URLSession** for native networking:
 The Android SDK uses **HttpURLConnection** for native networking:
 
 - **Built-in SSL/TLS**: No external dependencies required (no OpenSSL needed)
-- **Native Progress Tracking**: Real-time progress updates during download
+- **Native Progress Tracking**: Real-time progress updates during download via `DownloadProgressCallback`
 - **Error Handling**: Comprehensive error messages for network issues
 - **Thread Safety**: Designed to work with Android's threading model
+
+#### Flutter Plugin Implementation
+
+The Flutter plugin provides progress tracking through **EventChannel**:
+
+- **Progress Events**: Progress updates are sent from native code to Dart via `llama_mobile_flutter_sdk/progress` event channel
+- **Cross-Platform**: Works on both iOS and Android with consistent API
+- **Async/Await**: Uses async/await pattern for non-blocking downloads
+- **Stream Subscription**: Subscribe to progress stream using `EventChannel.receiveBroadcastStream()`
+
+#### Capacitor Plugin Implementation
+
+The Capacitor plugin provides progress tracking through **Event Listeners**:
+
+- **Progress Events**: Progress updates are sent from native code to JavaScript via `downloadProgress` event
+- **Cross-Platform**: Works on both iOS and Android with consistent API
+- **Promise-Based**: Uses promises for async operations
+- **Event Listener API**: Register listeners using `LlamaMobile.addListener()`
 
 ### Key Features
 
@@ -959,7 +1131,7 @@ func downloadModelInBackground() {
             }
         )
         
-        let result = llamaMobile.download(with: params)
+        let result = LlamaMobile.download(with: params)
         
         DispatchQueue.main.async {
             if result.success {
@@ -1207,7 +1379,7 @@ func downloadModelWithCache() {
         localPath: cachePath.path
     )
     
-    let result = llamaMobile.download(with: params)
+    let result = LlamaMobile.download(with: params)
     return result
 }
 ```

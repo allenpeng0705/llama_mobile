@@ -435,6 +435,12 @@ fi
 # Build the Capacitor plugin
 script_progress "Building Capacitor plugin..."
 cd "$CAPACITOR_PLUGIN_DIR"
+# Install dependencies first
+if npm install; then
+    log_message "[SUCCESS] Dependencies installed successfully"
+else
+    log_message "[WARN] Dependency installation failed, but continuing"
+fi
 if npm run build; then
     log_message "[SUCCESS] Capacitor plugin built successfully"
 else
@@ -482,6 +488,12 @@ log_message "[INFO] Skipping iOS tests - they require emulator and environment s
 if [ -d "$CAPACITOR_PLUGIN_DIR/example-app" ]; then
     script_progress "Building example app..."
     cd "$CAPACITOR_PLUGIN_DIR/example-app"
+    # Install dependencies first
+    if npm install; then
+        log_message "[SUCCESS] Example app dependencies installed successfully"
+    else
+        log_message "[WARN] Example app dependency installation failed, but continuing"
+    fi
     if npm run build; then
         log_message "[SUCCESS] Example app built successfully"
     else
@@ -496,6 +508,12 @@ if [ "$IOS_SUCCESS" = true ] || [ "$ANDROID_SUCCESS" = true ]; then
     # Create output directory
     OUTPUT_DIR="$ROOT_DIR/output"
     mkdir -p "$OUTPUT_DIR"
+    
+    # Clean build artifacts before copying
+    log_message "[INFO] Cleaning build artifacts before copying..."
+    cd "$CAPACITOR_PLUGIN_DIR"
+    # Remove build directories that might cause permission issues
+    rm -rf .build node_modules
     
     # Copy built Capacitor plugin to output directory
     log_message "[INFO] Copying built Capacitor plugin to output directory..."

@@ -75,6 +75,10 @@ private var completionCallbackContext: ((String) -> Void)? = nil
 private var chunkCallbackContext: ((String) -> Void)? = nil
 private var embeddingCallbackContext: (([Float]) -> Void)? = nil
 
+// Global properties to retain progress observers
+private var progressObserver: NSKeyValueObservation?
+private var hfProgressObserver: NSKeyValueObservation?
+
 // C-compatible callback functions
 private func cProgressCallback(progress: Float, user_data: UnsafeMutableRawPointer?) -> Void {
     callbackQueue.sync {
@@ -1205,7 +1209,7 @@ public class LlamaMobile: NSObject {
     /// Download a Hugging Face model file to a specified local path
     /// - Parameter params: Download parameters
     /// - Returns: Download result containing success status and local path
-    public func download(with params: DownloadParams) -> DownloadResult {
+    public class func download(with params: DownloadParams) -> DownloadResult {
         var result: DownloadResult?
         let semaphore = DispatchSemaphore(value: 0)
         
@@ -1387,9 +1391,17 @@ public class LlamaMobile: NSObject {
         
         // Add progress observation with better tracking
         if let progressCallback = params.progressCallback {
-            task.progress.addObserver(self, forKeyPath: "fractionCompleted", options: [.new], context: nil)
-            // Store callback for KVO
-            hfDownloadProgressCallbackContext = progressCallback
+            // Use a closure-based approach for progress tracking
+            progressObserver = task.progress.observe(\.fractionCompleted) {progress, _ in
+                let fraction = Float(progress.fractionCompleted)
+                if fraction > lastProgress {
+                    lastProgress = fraction
+                    log("Download progress: \(Int(fraction * 100))%", level: .debug)
+                    DispatchQueue.main.async {
+                        progressCallback(fraction)
+                    }
+                }
+            }
             log("Progress callback registered", level: .debug)
         }
         
@@ -1418,7 +1430,7 @@ public class LlamaMobile: NSObject {
     /// Download a file from Hugging Face repository
     /// - Parameter params: Hugging Face download parameters
     /// - Returns: Download result containing success status and local path
-    public func downloadHuggingFaceFile(with params: HuggingFaceDownloadParams) -> DownloadResult {
+    public class func downloadHuggingFaceFile(with params: HuggingFaceDownloadParams) -> DownloadResult {
         var result: DownloadResult?
         let semaphore = DispatchSemaphore(value: 0)
         
@@ -1466,6 +1478,7 @@ public class LlamaMobile: NSObject {
         }
         
         // Create download task with progress tracking
+        var lastProgress: Float = 0.0
         let task = URLSession.shared.downloadTask(with: request) { tempURL, response, error in
             defer {
                 semaphore.signal()
@@ -1543,9 +1556,17 @@ public class LlamaMobile: NSObject {
         
         // Add progress observation with better tracking
         if let progressCallback = params.progressCallback {
-            task.progress.addObserver(self, forKeyPath: "fractionCompleted", options: [.new], context: nil)
-            // Store callback for KVO
-            downloadProgressCallbackContext = progressCallback
+            // Use a closure-based approach for progress tracking
+            hfProgressObserver = task.progress.observe(\.fractionCompleted) {progress, _ in
+                let fraction = Float(progress.fractionCompleted)
+                if fraction > lastProgress {
+                    lastProgress = fraction
+                    log("Download progress: \(Int(fraction * 100))%", level: .debug)
+                    DispatchQueue.main.async {
+                        progressCallback(fraction)
+                    }
+                }
+            }
             log("Progress callback registered", level: .debug)
         }
         

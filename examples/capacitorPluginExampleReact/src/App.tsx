@@ -54,6 +54,17 @@ function App() {
   const [loraPath, setLoraPath] = useState<string>('');
   const [loraScale, setLoraScale] = useState<number>(0.8);
   
+  // Download state
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [downloadProgress, setDownloadProgress] = useState<number>(0);
+  const [downloadStatus, setDownloadStatus] = useState<string>('');
+  const [downloadError, setDownloadError] = useState<string>('');
+  
+  // Download form state
+  const [hfRepoId, setHfRepoId] = useState<string>('meta-llama/Llama-3.2-1B-Instruct');
+  const [hfFilename, setHfFilename] = useState<string>('Llama-3.2-1B-Instruct.Q4_K_M.gguf');
+  const [hfBearerToken, setHfBearerToken] = useState<string>('');
+  
   // TTS audio state
   const [audioSamples, setAudioSamples] = useState<number[]>([]);
   const [audioFilePath, setAudioFilePath] = useState<string>('');
@@ -90,7 +101,8 @@ function App() {
     { id: 'settings', name: 'Settings' },
     { id: 'embeddings', name: 'Embeddings' },
     { id: 'tts', name: 'TTS' },
-    { id: 'lora', name: 'LoRA' }
+    { id: 'lora', name: 'LoRA' },
+    { id: 'download', name: 'Download' }
   ];
   
   // Initialize model
@@ -99,8 +111,15 @@ function App() {
       console.log('Initializing model with modelPath:', modelPath);
       console.log('Initializing model with mmprojModelPath:', mmprojModelPath);
       
+      // Resolve model paths using Filesystem API
+      const resolvedModelPath = await resolveModelPath(modelPath);
+      const resolvedMmprojModelPath = mmprojModelPath ? await resolveModelPath(mmprojModelPath) : '';
+      
+      console.log('Resolved model path:', resolvedModelPath);
+      console.log('Resolved mmproj model path:', resolvedMmprojModelPath);
+      
       const result = await LlamaMobileCapacitorPlugin.initContext({
-        modelPath: modelPath,
+        modelPath: resolvedModelPath,
         nCtx: nCtx,
         nGpuLayers: 99,//nGpuLayers,
         nThreads: nThreads,
@@ -125,13 +144,13 @@ function App() {
       }
       
       // Automatically initialize multimodal if MMProj model is selected
-      if (mmprojModelPath) {
+      if (resolvedMmprojModelPath) {
         try {
-          console.log('Initializing multimodal with mmprojPath:', mmprojModelPath);
+          console.log('Initializing multimodal with mmprojPath:', resolvedMmprojModelPath);
           console.log('Current modelPath during multimodal init:', modelPath);
           const multimodalResult = await LlamaMobileCapacitorPlugin.initMultimodal({
             contextHandle: result.contextHandle,
-            mmprojPath: mmprojModelPath,
+            mmprojPath: resolvedMmprojModelPath,
             useGpu: nGpuLayers > 0
           });
           
@@ -155,9 +174,12 @@ function App() {
       if (vocoderModelPath) {
         try {
           console.log('Initializing vocoder with vocoderPath:', vocoderModelPath);
+          const resolvedVocoderModelPath = await resolveModelPath(vocoderModelPath);
+          console.log('Resolved vocoder model path:', resolvedVocoderModelPath);
+          
           const vocoderResult = await LlamaMobileCapacitorPlugin.initVocoder({
             contextHandle: result.contextHandle,
-            vocoderModelPath: vocoderModelPath
+            vocoderModelPath: resolvedVocoderModelPath
           });
           
           console.log('Vocoder init result:', vocoderResult);
@@ -236,6 +258,32 @@ function App() {
       console.error('Error unloading model:', error);
       console.error('Error details:', JSON.stringify(error));
       alert('Error unloading model: ' + (error as Error).message);
+    }
+  };
+  
+  // Resolve model path for different platforms
+  const resolveModelPath = async (modelPath: string): Promise<string> => {
+    try {
+      // Check if we're on a native platform
+      if (typeof window !== 'undefined' && window.Capacitor) {
+        console.log('Resolving model path for native platform:', modelPath);
+        
+        // For native platforms, use the Filesystem API to get the URI
+        // Model files are stored in the public/models directory, which gets bundled into the app
+        // On native platforms, the public directory is bundled into the app's assets
+        // We'll use Directory.Data for writable storage, but for bundled files, we need a different approach
+        // For now, return the path as-is, assuming the plugin handles asset paths correctly
+        console.log('Returning model path for native platform:', modelPath);
+        return modelPath;
+      } else {
+        // For web platform, return the relative path
+        console.log('Resolving model path for web platform:', modelPath);
+        return `models/${modelPath}`;
+      }
+    } catch (error) {
+      console.error('Error resolving model path:', error);
+      // Fallback to the original path if resolution fails
+      return modelPath;
     }
   };
   
@@ -533,10 +581,14 @@ function App() {
     }
     
     try {
+      // Resolve LoRA model path
+      const resolvedLoraPath = await resolveModelPath(loraPath);
+      console.log('Resolved LoRA model path:', resolvedLoraPath);
+      
       const result = await LlamaMobileCapacitorPlugin.applyLoraAdapters({
         contextHandle: contextHandle,
         adapters: [{
-          path: loraPath,
+          path: resolvedLoraPath,
           scale: loraScale
         }]
       });
@@ -683,71 +735,21 @@ function App() {
         platform = 'Web';
       }
       
-      // Use native model scanning for mobile platforms
-      if (platform !== 'Web') {
-        console.log('Using native model scanning for', platform);
-        try {
-          const result = await LlamaMobileCapacitorPlugin.listModels({});
-          console.log('listModels result:', result);
-          
-          if (result.modelFiles && result.modelFiles.length > 0) {
-            console.log('Found', result.modelFiles.length, 'model files from native scan');
-            mainModels = result.modelFiles.map((fileName: string) => ({
-              name: fileName,
-              path: fileName
-            }));
-          } else {
-            console.log('No model files found from native scan, using defaults');
-            // Use default models as fallback
-            const defaultModels: ModelInfo[] = [
-              { name: 'SmolVLM-256M-Instruct-Q8_0.gguf', path: 'SmolVLM-256M-Instruct-Q8_0.gguf' },
-              { name: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf', path: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf' },
-              { name: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf', path: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf' },
-              { name: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf', path: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf' },
-              { name: 'Qwen3-4B-Q4_K_M.gguf', path: 'Qwen3-4B-Q4_K_M.gguf' },
-              { name: 'Qwen3-4B-Q5_K_M.gguf', path: 'Qwen3-4B-Q5_K_M.gguf' },
-              { name: 'OuteTTS-0.2-500M-Q6_K.gguf', path: 'OuteTTS-0.2-500M-Q6_K.gguf' },
-              { name: 'SmolLM-360M-Instruct.Q6_K.gguf', path: 'SmolLM-360M-Instruct.Q6_K.gguf' },
-              { name: 'WavTokenizer-Large-75-F16.gguf', path: 'WavTokenizer-Large-75-F16.gguf' },
-              { name: 'Qwen3-Embedding-0.6B-Q8_0.gguf', path: 'Qwen3-Embedding-0.6B-Q8_0.gguf' }
-            ];
-            mainModels = defaultModels;
-          }
-        } catch (error) {
-          console.error('Error calling listModels:', error);
-          console.log('Falling back to default models');
-          // Fallback to default models
-          const defaultModels: ModelInfo[] = [
-            { name: 'SmolVLM-256M-Instruct-Q8_0.gguf', path: 'SmolVLM-256M-Instruct-Q8_0.gguf' },
-            { name: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf', path: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf' },
-            { name: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf', path: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf' },
-            { name: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf', path: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf' },
-            { name: 'Qwen3-4B-Q4_K_M.gguf', path: 'Qwen3-4B-Q4_K_M.gguf' },
-            { name: 'Qwen3-4B-Q5_K_M.gguf', path: 'Qwen3-4B-Q5_K_M.gguf' },
-            { name: 'OuteTTS-0.2-500M-Q6_K.gguf', path: 'OuteTTS-0.2-500M-Q6_K.gguf' },
-            { name: 'SmolLM-360M-Instruct.Q6_K.gguf', path: 'SmolLM-360M-Instruct.Q6_K.gguf' },
-            { name: 'WavTokenizer-Large-75-F16.gguf', path: 'WavTokenizer-Large-75-F16.gguf' },
-            { name: 'Qwen3-Embedding-0.6B-Q8_0.gguf', path: 'Qwen3-Embedding-0.6B-Q8_0.gguf' }
-          ];
-          mainModels = defaultModels;
-        }
-      } else {
-        // For web platform, use default models
-        console.log('Using default models for web platform');
-        const defaultModels: ModelInfo[] = [
-          { name: 'SmolVLM-256M-Instruct-Q8_0.gguf', path: 'SmolVLM-256M-Instruct-Q8_0.gguf' },
-          { name: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf', path: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf' },
-          { name: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf', path: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf' },
-          { name: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf', path: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf' },
-          { name: 'Qwen3-4B-Q4_K_M.gguf', path: 'Qwen3-4B-Q4_K_M.gguf' },
-          { name: 'Qwen3-4B-Q5_K_M.gguf', path: 'Qwen3-4B-Q5_K_M.gguf' },
-          { name: 'OuteTTS-0.2-500M-Q6_K.gguf', path: 'OuteTTS-0.2-500M-Q6_K.gguf' },
-          { name: 'SmolLM-360M-Instruct.Q6_K.gguf', path: 'SmolLM-360M-Instruct.Q6_K.gguf' },
-          { name: 'WavTokenizer-Large-75-F16.gguf', path: 'WavTokenizer-Large-75-F16.gguf' },
-          { name: 'Qwen3-Embedding-0.6B-Q8_0.gguf', path: 'Qwen3-Embedding-0.6B-Q8_0.gguf' }
-        ];
-        mainModels = defaultModels;
-      }
+      // Use default models for all platforms since listModels is not available
+      console.log('Using default models for all platforms');
+      const defaultModels: ModelInfo[] = [
+        { name: 'SmolVLM-256M-Instruct-Q8_0.gguf', path: 'SmolVLM-256M-Instruct-Q8_0.gguf' },
+        { name: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf', path: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf' },
+        { name: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf', path: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf' },
+        { name: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf', path: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf' },
+        { name: 'Qwen3-4B-Q4_K_M.gguf', path: 'Qwen3-4B-Q4_K_M.gguf' },
+        { name: 'Qwen3-4B-Q5_K_M.gguf', path: 'Qwen3-4B-Q5_K_M.gguf' },
+        { name: 'OuteTTS-0.2-500M-Q6_K.gguf', path: 'OuteTTS-0.2-500M-Q6_K.gguf' },
+        { name: 'SmolLM-360M-Instruct.Q6_K.gguf', path: 'SmolLM-360M-Instruct.Q6_K.gguf' },
+        { name: 'WavTokenizer-Large-75-F16.gguf', path: 'WavTokenizer-Large-75-F16.gguf' },
+        { name: 'Qwen3-Embedding-0.6B-Q8_0.gguf', path: 'Qwen3-Embedding-0.6B-Q8_0.gguf' }
+      ];
+      mainModels = defaultModels;
       
       console.log(`${platform} models configured:`);
       console.log('All models:', mainModels);
@@ -823,6 +825,61 @@ function App() {
     console.log('availableMmprojModels changed:', availableMmprojModels);
   }, [availableMmprojModels]);
   
+  // Download model from Hugging Face
+  const downloadModel = async () => {
+    try {
+      setIsDownloading(true);
+      setDownloadProgress(0);
+      setDownloadStatus('Starting download...');
+      setDownloadError('');
+
+      // Add progress listener
+      const progressListener = await LlamaMobileCapacitorPlugin.addListener(
+        'progress',
+        (data: { progress: number }) => {
+          const progress = data.progress;
+          setDownloadProgress(progress);
+          setDownloadStatus(`Downloading... ${(progress * 100).toFixed(0)}%`);
+        }
+      );
+
+      // Generate local path
+      const localPath = `${hfFilename}`;
+
+      // Start download
+      const result = await LlamaMobileCapacitorPlugin.downloadHfFile({
+        repoId: hfRepoId,
+        filename: hfFilename,
+        destinationPath: localPath,
+        bearerToken: hfBearerToken,
+        offline: false
+      });
+
+      // Remove progress listener
+      await progressListener.remove();
+
+      if (result.success) {
+        setDownloadStatus('Download completed!');
+        setDownloadProgress(1);
+        alert(`Model downloaded successfully to: ${result.localPath}`);
+        
+        // Rescan for models to include the newly downloaded one
+        await scanForModels();
+      } else {
+        setDownloadError(result.errorMessage || 'Unknown error');
+        setDownloadStatus('Download failed');
+        alert(`Download failed: ${result.errorMessage || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error downloading model:', error);
+      setDownloadError(`Error: ${(error as Error).message}`);
+      setDownloadStatus('Download failed');
+      alert(`Error downloading model: ${(error as Error).message}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   // Cleanup model context when component unmounts
   useEffect(() => {
     return () => {
@@ -1243,6 +1300,94 @@ function App() {
                 >
                   Remove LoRA Adapter
                 </button>
+              </div>
+            </div>
+          )}
+          
+          {/* Download Tab */}
+          {activeTab === 'download' && (
+            <div className="tab-panel">
+              <div className="settings-container">
+                <div className="setting-section">
+                  <h3>Download Model from Hugging Face</h3>
+                  
+                  {/* Hugging Face Repo ID */}
+                  <div className="setting-item">
+                    <label>Repository ID:</label>
+                    <input 
+                      type="text"
+                      value={hfRepoId}
+                      onChange={(e) => setHfRepoId(e.target.value)}
+                      disabled={isDownloading}
+                      placeholder="e.g., meta-llama/Llama-3.2-1B-Instruct"
+                    />
+                  </div>
+                  
+                  {/* Hugging Face Filename */}
+                  <div className="setting-item">
+                    <label>Filename:</label>
+                    <input 
+                      type="text"
+                      value={hfFilename}
+                      onChange={(e) => setHfFilename(e.target.value)}
+                      disabled={isDownloading}
+                      placeholder="e.g., Llama-3.2-1B-Instruct.Q4_K_M.gguf"
+                    />
+                  </div>
+                  
+                  {/* Hugging Face Bearer Token (optional) */}
+                  <div className="setting-item">
+                    <label>Bearer Token (optional):</label>
+                    <input 
+                      type="text"
+                      value={hfBearerToken}
+                      onChange={(e) => setHfBearerToken(e.target.value)}
+                      disabled={isDownloading}
+                      placeholder="Your Hugging Face API token"
+                    />
+                  </div>
+                  
+                  {/* Download Status */}
+                  {downloadStatus && (
+                    <div className="setting-item">
+                      <label>Status:</label>
+                      <div className="status-message">{downloadStatus}</div>
+                    </div>
+                  )}
+                  
+                  {/* Download Progress */}
+                  {isDownloading && (
+                    <div className="setting-item">
+                      <label>Progress:</label>
+                      <div className="progress-bar-container">
+                        <div 
+                          className="progress-bar"
+                          style={{ width: `${downloadProgress * 100}%` }}
+                        ></div>
+                      </div>
+                      <div className="progress-text">
+                        {(downloadProgress * 100).toFixed(0)}%
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Download Error */}
+                  {downloadError && (
+                    <div className="setting-item">
+                      <label>Error:</label>
+                      <div className="error-message">{downloadError}</div>
+                    </div>
+                  )}
+                  
+                  {/* Download Button */}
+                  <button 
+                    onClick={downloadModel}
+                    className="primary-button"
+                    disabled={isDownloading || !hfRepoId || !hfFilename}
+                  >
+                    {isDownloading ? 'Downloading...' : 'Download Model'}
+                  </button>
+                </div>
               </div>
             </div>
           )}
