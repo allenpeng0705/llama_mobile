@@ -759,8 +759,13 @@ class LlamaMobileFlutterSdkPlugin :
                     tokenEventSink?.success(token)
                 }
                 true
-            }，// tokenCallback
-            messages
+            }, // tokenCallback
+            messages,
+            useJsonResponse,
+            null, // jsonSchema
+            null, // tools
+            false, // parallelToolCalls
+            null // toolChoice
         )
 
         // Run generation in background thread
@@ -1033,14 +1038,19 @@ class LlamaMobileFlutterSdkPlugin :
                         tokenEventSink?.success(audioChunk)
                     }
                 },
-                { metadata ->
+                { speechResult ->
                     Handler(Looper.getMainLooper()).post {
-                        result.success(mapOf(
-                            "sampleRate" to metadata.getSampleRate(),
-                            "duration" to metadata.getDuration(),
-                            "outputFilePath" to (metadata.getOutputFilePath() ?: null),
-                            "methodUsed" to metadata.getMethodUsed().ordinal
-                        ))
+                        if (speechResult.isSuccess()) {
+                            val metadata = speechResult.getValue()
+                            result.success(mapOf(
+                                "sampleRate" to metadata.getSampleRate(),
+                                "duration" to metadata.getDuration(),
+                                "outputFilePath" to (metadata.getOutputFilePath() ?: null),
+                                "methodUsed" to metadata.getMethodUsed().ordinal
+                            ))
+                        } else {
+                            result.error("TTS_ERROR", speechResult.getError().message, null)
+                        }
                     }
                 }
             )

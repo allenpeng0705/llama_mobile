@@ -112,7 +112,6 @@ llama_mobile-capacitor-plugin/ios/Libraries/llama_mobile.xcframework/ios-arm64/l
 /lib/llama_cpp/cpp-httplib/.github
 /lib/llama_cpp/cpp-httplib/example
 /lib/llama_cpp/cpp-httplib/test
-/llama_mobile-android/include
 /llama_mobile-ios-SDK/llama_mobile.xcframework
 /llama_mobile-ios/llama_mobile.xcframework
 /llama_mobile-ios/llama_mobile.xcframework

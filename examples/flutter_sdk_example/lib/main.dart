@@ -1725,7 +1725,7 @@ class _ChatViewState extends State<ChatView> {
 
           // Generate completion with streaming (async version)
           final result = await widget.appState.llamaContext
-              ?.generateStreamingCompletionWithParamsAsync(params);
+              ?.generateStreamingCompletionWithParams(params);
 
           // Cancel token subscription
           await tokenSubscription?.cancel();
@@ -4014,7 +4014,7 @@ class _TTSTestViewState extends State<TTSTestView> {
         audioGenerated = false;
       });
 
-      final result = await widget.appState.llamaContext?.generateSpeechSync(
+      final result = await widget.appState.llamaContext?.generateSpeech(
         _ttsController.text,
       );
       print("TTS Audio Generated successfully (Sync)");
