@@ -32,7 +32,7 @@ build_tests() {
     cd "$BUILD_DIR"
     
     # Build all test executables
-    make test_api test_advanced_chat test_chat_template test_streaming test_download direct_test chat_example
+    make test_api test_advanced_chat test_chat_template test_streaming test_download direct_test chat_example test_conversation
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ Test executables built successfully${NC}"
@@ -104,7 +104,8 @@ select_program() {
     echo -e "  5. test_download (Download test)"
     echo -e "  6. direct_test (Direct API test)"
     echo -e "  7. chat_example (Interactive chat)"
-    echo -e "  8. Run all tests"
+    echo -e "  8. test_conversation (Conversation API test)"
+    echo -e "  9. Run all tests"
     echo
     
     read -p "Enter selection: " PROGRAM_SELECTION
@@ -139,6 +140,10 @@ select_program() {
             echo -e "${GREEN}✓ Selected: chat_example${NC}"
             ;;
         8)
+            PROGRAM="test_conversation"
+            echo -e "${GREEN}✓ Selected: test_conversation${NC}"
+            ;;
+        9)
             PROGRAM="all"
             echo -e "${GREEN}✓ Selected: Run all tests${NC}"
             ;;
@@ -181,6 +186,9 @@ run_program() {
             
             echo -e "\n${BLUE}7. Running chat_example...${NC}"
             ./"chat_example" "$SELECTED_MODEL"
+            
+            echo -e "\n${BLUE}8. Running test_conversation...${NC}"
+            ./"test_conversation" "$SELECTED_MODEL"
         else
             echo -e "${YELLOW}⚠ Skipping model-dependent tests (no model selected)${NC}"
             echo -e "${YELLOW}  To run all tests including model-dependent ones, select a model first${NC}"

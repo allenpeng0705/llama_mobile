@@ -52,10 +52,7 @@ fun List<ChatMessage>.tool(
 ): List<ChatMessage> =
     this + ChatMessage("tool", content, null, toolName, toolCallId)
 
-/**
- * Extension function to check if result is successful
- */
-fun <S, E> Result<S, E>.isSuccess(): Boolean = this.isSuccess()
+
 
 /**
  * Extension function to check if result is error
@@ -93,7 +90,6 @@ suspend fun LlamaMobile.generateCompletionAsync(
 suspend fun LlamaMobile.chatAsync(
     contextHandle: Long,
     messages: List<ChatMessage>,
-    temperature: Float = 0.7f,
     maxTokens: Int = 1024
 ): LlamaMobile.CompletionResult? {
     val params = CompletionParams.chat(messages, maxTokens)
@@ -166,7 +162,7 @@ suspend fun LlamaMobile.generateSpeechAsync(
 ): LlamaMobile.SpeechResult? =
     withContext(Dispatchers.IO) {
         try {
-            val result = generateSpeech(contextHandle, text, options)
+            val result = generateSpeech(contextHandle, text, options ?: TTSOptions.Builder().build())
             if (result.isSuccess()) result.value else null
         } catch (e: Exception) {
             null

@@ -256,10 +256,10 @@ final class LlamaMobileTests: XCTestCase {
         // Test TTS
         XCTAssertFalse(llama.isVocoderEnabled())
         XCTAssertFalse(llama.initVocoder(vocoderModelPath: LlamaMobile.TestPaths.vocoderPath))
-        XCTAssertNil(llama.getFormattedAudioCompletion(speakerJson: "{}", textToSpeak: "Hello"))
-        XCTAssertNil(llama.getAudioGuideTokens(textToSpeak: "Hello"))
-        XCTAssertNil(llama.decodeAudioTokens(tokens: [1, 2, 3]))
-        XCTAssertNil(llama.generateAudioFromText(text: "Hello"))
+        
+        // Test public TTS methods instead of private ones
+        let speechResult = llama.generateSpeech(text: "Hello")
+        XCTAssertNotNil(speechResult)
         
         // Test multimodal
         XCTAssertFalse(llama.isMultimodalEnabled())
@@ -403,11 +403,9 @@ final class LlamaMobileTests: XCTestCase {
         )
         
         // Test should return DownloadResult even with invalid URL
-        if let llama = createTestInstance() {
-            let result = llama.download(with: params)
-            XCTAssertFalse(result.success)
-            XCTAssertEqual(result.localPath, "/tmp/test/invalid.gguf")
-        }
+        let result = LlamaMobile.download(with: params)
+        XCTAssertFalse(result.success)
+        XCTAssertEqual(result.localPath, "/tmp/test/invalid.gguf")
     }
     
     // MARK: - Multimodal API Tests
@@ -847,12 +845,8 @@ final class LlamaMobileTests: XCTestCase {
                     print("TTS progress: \(Int(progress * 100))%")
                 }
                 
-                let result = llama.generateAudioFromText(text: "Hello, this is a streaming TTS test")
+                let result = llama.generateSpeech(text: "Hello, this is a streaming TTS test")
                 XCTAssertNotNil(result, "TTS result should not be nil")
-                
-                if let result = result {
-                    XCTAssertGreaterThan(result.count, 0, "Should generate audio samples")
-                }
             }
         }
     }

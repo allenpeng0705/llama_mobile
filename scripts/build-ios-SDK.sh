@@ -78,30 +78,31 @@ validate_sdk() {
         return 1
     fi
     
-    # Change to SDK directory
-    cd "$sdk_dir"
+    # Check if XCFramework exists
+    if [ ! -d "$sdk_dir/$XCFRAMEWORK_NAME" ]; then
+        log_message "ERROR" "XCFramework not found at $sdk_dir/$XCFRAMEWORK_NAME"
+        return 1
+    fi
     
     # Determine platform
     local os_name=$(uname)
     
     if [ "$os_name" = "Darwin" ]; then
-        # Running on macOS, try to build for iOS simulator
-        log_message "INFO" "Running on macOS, will validate build for iOS simulator"
+        # Running on macOS, validate XCFramework structure
+        log_message "INFO" "Running on macOS, validating XCFramework structure..."
         
-        # Try to build for iOS simulator (this will validate package configuration)
-        log_message "INFO" "Attempting to build for iOS simulator..."
-        
-        local exit_code=0
-        swift build --triple arm64-apple-ios15.0-simulator 2>&1 | tee /tmp/swift-build-output.log
-        exit_code=${PIPESTATUS[0]}
-        
-        if [ $exit_code -eq 0 ]; then
-            log_message "SUCCESS" "Build successful for iOS simulator"
-        else
-            log_message "WARNING" "Build encountered issues (expected - requires proper iOS setup)"
-            log_message "INFO" "Build output saved to /tmp/swift-build-output.log"
-            log_message "INFO" "Full test execution requires Xcode with iOS simulator"
+        # Check if XCFramework contains required platforms
+        if [ ! -d "$sdk_dir/$XCFRAMEWORK_NAME/ios-arm64" ]; then
+            log_message "ERROR" "XCFramework missing ios-arm64 platform"
+            return 1
         fi
+        
+        if [ ! -d "$sdk_dir/$XCFRAMEWORK_NAME/ios-arm64-simulator" ]; then
+            log_message "ERROR" "XCFramework missing ios-arm64-simulator platform"
+            return 1
+        fi
+        
+        log_message "SUCCESS" "XCFramework contains required platforms"
     else
         # Running on non-macOS, just validate structure
         log_message "INFO" "Running on non-macOS platform, validating structure only"

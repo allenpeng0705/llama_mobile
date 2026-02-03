@@ -218,243 +218,56 @@ class TTSTestFragment : Fragment() {
         Log.d("TTSTestFragment", "- Text: $text")
         Log.d("TTSTestFragment", "- Context handle: ${currentAppState.contextHandle}")
         
-        // Check TTS model type
-        val ttsType = LlamaMobile.getTTSType(currentAppState.contextHandle)
-        val isKnownTTSModel = ttsType != LlamaMobile.TTSModelType.UNKNOWN
-        
-        Log.d("TTSTestFragment", "- TTS Type: $ttsType")
-        Log.d("TTSTestFragment", "- Is known TTS model: $isKnownTTSModel")
-        
+        // Use the public generateSpeech API
         activity?.runOnUiThread {
-            binding.ttsStatusTextView.text = "TTS Model Info: Type - $ttsType, Known - $isKnownTTSModel"
+            binding.ttsStatusTextView.text = "Generating speech using public API..."
         }
         
-        // Try built-in TTS method first if we have a proper TTS model
-        if (isKnownTTSModel) {
-            Log.d("TTSTestFragment", "- Using built-in generateAudioFromText method")
-            activity?.runOnUiThread {
-                binding.ttsStatusTextView.text = "Step 1: Using built-in generateAudioFromText method..."
-            }
+        // Create TTS options
+        val options = LlamaMobile.TTSOptions.Builder()
+            .setSampleRate(24000)
+            .setSaveToFile(false)
+            .build()
+        
+        // Generate speech using the public API
+        val result = LlamaMobile.generateSpeech(currentAppState.contextHandle, text, options)
+        
+        Log.d("TTSTestFragment", "- Speech generation result: ${if (result.isSuccess) "Success" else "Failure"}")
+        
+        if (result.isSuccess) {
+            val speechResult = result.value
+            Log.d("TTSTestFragment", "- Speech result: $speechResult")
             
-            // Try the built-in TTS method
-            val samples = LlamaMobile.generateAudioFromText(
-                currentAppState.contextHandle,
-                text,
-                "{\"speaker\": \"default\"}"
-            )
-            
-            Log.d("TTSTestFragment", "- Built-in TTS result: ${if (samples != null) "not null" else "null"}")
-            
-            if (samples != null) {
-                Log.d("TTSTestFragment", "- Built-in TTS successful, handling success")
-                handleSuccess(samples, "built-in TTS", currentAppState)
-                return
-            }
-            Log.d("TTSTestFragment", "- Built-in TTS failed or returned empty samples")
-        }
-        
-        // If built-in method fails, implement custom workflow
-        Log.d("TTSTestFragment", "- Using custom TTS workflow")
-        activity?.runOnUiThread {
-            binding.ttsStatusTextView.text = "Using custom TTS workflow: formatting + completion..."
-        }
-        
-        // Format text for TTS
-        Log.d("TTSTestFragment", "- Step 2: Formatting text for TTS")
-        activity?.runOnUiThread {
-            binding.ttsStatusTextView.text = "Step 2: Formatting text for TTS..."
-        }
-        
-        val formattedPrompt = LlamaMobile.getFormattedAudioCompletion(
-            currentAppState.contextHandle,
-            "{\"speaker\": \"default\"}",
-            text
-        )
-        
-        Log.d("TTSTestFragment", "- Formatted prompt: ${formattedPrompt?.take(50) ?: "null"}${if (formattedPrompt?.length ?: 0 > 50) "..." else ""}")
-        
-        if (formattedPrompt == null) {
-            Log.e("TTSTestFragment", "- Failed at Step 2: Cannot format text for TTS")
-            activity?.runOnUiThread {
-                isProcessing = false
-                updateProcessingUI()
-                binding.ttsStatusTextView.text = "❌ Failed at Step 2: Cannot format text for TTS. Check if your model supports TTS formatting."
-            }
-            return
-        }
-        
-        // Debug: Check what's in the formatted prompt
-        Log.d("TTSTestFragment", "Formatted Prompt: $formattedPrompt")
-        Log.d("TTSTestFragment", "Formatted Prompt Length: ${formattedPrompt.length}")
-        
-        // If formatted prompt contains audio template markers, we should only tokenize the completion result
-        val useOnlyCompletion = formattedPrompt.contains("<|audio_start|") || formattedPrompt.contains("<|text_start|")
-        Log.d("TTSTestFragment", "- useOnlyCompletion: $useOnlyCompletion")
-        
-        // Get guide tokens
-        Log.d("TTSTestFragment", "- Step 3: Getting audio guide tokens")
-        val guideTokens = LlamaMobile.getAudioGuideTokens(
-            currentAppState.contextHandle,
-            formattedPrompt
-        )
-        
-        Log.d("TTSTestFragment", "- Guide tokens: ${guideTokens?.size ?: 0} tokens")
-        
-        if (guideTokens != null && guideTokens.isNotEmpty()) {
-            Log.d("TTSTestFragment", "- Setting guide tokens")
-            LlamaMobile.setGuideTokens(currentAppState.contextHandle, guideTokens)
-        } else {
-            Log.d("TTSTestFragment", "- Failed to get guide tokens, proceeding without")
-        }
-        
-        // Generate audio content using text completion
-        Log.d("TTSTestFragment", "- Step 4: Generating audio content using text completion")
-        activity?.runOnUiThread {
-            binding.ttsStatusTextView.text = "Step 3: Generating audio content using text completion..."
-        }
-        
-        // Create completion parameters
-        val completionParams = LlamaMobile.CompletionParams(
-            formattedPrompt,                // prompt
-            0.0f,                           // temperature
-            200,                            // maxTokens
-            4,                              // nThreads
-            -1,                             // seed
-            40,                             // topK
-            0.9,                            // topP
-            0.05,                           // minP
-            1.0,                            // typicalP
-            64,                             // penaltyLastN
-            1.1,                            // penaltyRepeat
-            0.0,                            // penaltyFreq
-            0.0,                            // penaltyPresent
-            0,                              // mirostat
-            5.0,                            // mirostatTau
-            0.1,                            // mirostatEta
-            true,                           // ignoreEos
-            0,                              // nProbs
-            currentAppState.selectedGrammar, // grammar
-            emptyList(),                    // stopSequences
-            emptyList(),                    // mediaPaths
-            null                            // tokenCallback
-        )
-        
-        Log.d("TTSTestFragment", "- Completion params: prompt length=${formattedPrompt.length}, maxTokens=200")
-        val completionResult = LlamaMobile.generateCompletion(currentAppState.contextHandle, completionParams)
-        
-        val completionText = completionResult?.text ?: ""
-        Log.d("TTSTestFragment", "- Completion result: ${completionText.take(50)}${if (completionText.length > 50) "..." else ""}")
-        
-        if (completionText.isEmpty()) {
-            Log.e("TTSTestFragment", "- Failed at Step 4: Cannot generate audio content via text completion")
-            activity?.runOnUiThread {
-                isProcessing = false
-                updateProcessingUI()
-                binding.ttsStatusTextView.text = "❌ Failed at Step 3: Cannot generate audio content via text completion."
-            }
-            return
-        }
-        
-        // Debug: Print actual text content
-        Log.d("TTSTestFragment", "Completion Result Content: \"$completionText\"")
-        
-        // Combine prompt and completion for full audio tokens - or just use completion if prompt contains template markers
-        val contentToTokenize = if (useOnlyCompletion) {
-            // If prompt contains template markers, only use the completion result (prevents audio from template)
-            completionText
-        } else {
-            // Otherwise combine both
-            formattedPrompt + completionText
-        }
-        
-        Log.d("TTSTestFragment", "Final Content to Tokenize: \"$contentToTokenize\"")
-        
-        // Try to generate audio from the combined content
-        Log.d("TTSTestFragment", "- Step 5: Generating audio from content")
-        activity?.runOnUiThread {
-            binding.ttsStatusTextView.text = "Step 4: Generating audio from content..."
-        }
-        
-        // Use the iOS approach: tokenize, filter, then decode
-        Log.d("TTSTestFragment", "- Step 5.1: Tokenizing content")
-        val tokens = LlamaMobile.tokenize(currentAppState.contextHandle, contentToTokenize)
-        
-        if (tokens == null) {
-            Log.e("TTSTestFragment", "- Failed to tokenize content")
-            activity?.runOnUiThread {
-                isProcessing = false
-                updateProcessingUI()
-                binding.ttsStatusTextView.text = "❌ Failed at Step 4.1: Cannot tokenize audio content."
-            }
-            return
-        }
-        
-        Log.d("TTSTestFragment", "- Generated ${tokens.size} tokens")
-        
-        // Debug step 5.2: Filter audio tokens (following iOS example)
-        Log.d("TTSTestFragment", "- Step 5.2: Filtering audio tokens")
-        activity?.runOnUiThread {
-            binding.ttsStatusTextView.text = "Step 4.2: Filtering audio tokens..."
-        }
-        
-        // Filter tokens to only include audio tokens (151672-155772) and look for end token
-        val audioTokens = mutableListOf<Int>()
-        val audioEndToken = 151668 // <|audio_end|>
-        
-        var nonAudioTokens = 0
-        
-        for (token in tokens) {
-            // Check if token is in audio range
-            if (token >= 151672 && token <= 155772) {
-                audioTokens.add(token)
+            if (speechResult != null) {
+                val audioSamples = speechResult.audioSamples
+                Log.d("TTSTestFragment", "- Audio samples: ${audioSamples?.size ?: 0}")
+                
+                if (audioSamples != null && audioSamples.isNotEmpty()) {
+                    handleSuccess(audioSamples, "public API", currentAppState)
+                } else {
+                    activity?.runOnUiThread {
+                        isProcessing = false
+                        updateProcessingUI()
+                        binding.ttsStatusTextView.text = "❌ Failed: No audio samples generated"
+                    }
+                }
             } else {
-                nonAudioTokens++
+                activity?.runOnUiThread {
+                    isProcessing = false
+                    updateProcessingUI()
+                    binding.ttsStatusTextView.text = "❌ Failed: No speech result"
+                }
             }
-            
-            // Check for end token
-            if (token == audioEndToken) {
-                Log.d("TTSTestFragment", "- Found audio end token")
-                break
-            }
-        }
-        
-        Log.d("TTSTestFragment", "- Filtered to ${audioTokens.size} audio tokens (skipped non-audio: $nonAudioTokens)")
-        
-        if (audioTokens.isEmpty()) {
-            Log.e("TTSTestFragment", "- No audio tokens found")
+        } else {
+            val error = result.error
+            Log.e("TTSTestFragment", "- Speech generation failed: $error")
             activity?.runOnUiThread {
                 isProcessing = false
                 updateProcessingUI()
-                binding.ttsStatusTextView.text = "❌ No audio tokens found in generated content."
+                binding.ttsStatusTextView.text = "❌ Failed: ${error?.message ?: "Unknown error"}"
             }
-            return
         }
-        
-        // Debug step 5.3: Decode audio tokens
-        Log.d("TTSTestFragment", "- Step 5.3: Decoding audio tokens")
-        activity?.runOnUiThread {
-            binding.ttsStatusTextView.text = "Step 4.3: Decoding audio tokens..."
-        }
-        
-        // Convert to IntArray and decode
-        val audioTokensArray = audioTokens.toIntArray()
-        val audioSamples = LlamaMobile.decodeAudioTokens(currentAppState.contextHandle, audioTokensArray)
-        
-        Log.d("TTSTestFragment", "- Audio samples after decoding: ${audioSamples?.size ?: 0} samples")
-        
-        if (audioSamples == null || audioSamples.isEmpty()) {
-            Log.e("TTSTestFragment", "- Failed to decode audio tokens")
-            activity?.runOnUiThread {
-                isProcessing = false
-                updateProcessingUI()
-                binding.ttsStatusTextView.text = "❌ Failed at Step 4.3: Cannot decode audio tokens."
-            }
-            return
-        }
-        
-        handleSuccess(audioSamples, "custom workflow with token filtering", currentAppState)
     }
-
     private fun handleSuccess(audioSamples: FloatArray, method: String, currentAppState: AppState) {
         // Save audio to WAV file
         val tempDir = context?.filesDir

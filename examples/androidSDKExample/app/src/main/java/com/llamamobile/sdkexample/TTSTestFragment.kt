@@ -23,7 +23,7 @@ class TTSTestFragment : Fragment() {
     private var appState: AppState? = null
     private var isProcessing = false
     private var isPlaying = false
-    private var audioSamples: FloatArray? = null
+    private var audioSamples: ShortArray? = null
     private var audioTrack: AudioTrack? = null
     private val sampleRate = 24000 // Default sample rate for TTS models
 
@@ -295,19 +295,41 @@ class TTSTestFragment : Fragment() {
         Log.d("TTSTestFragment", "- Text: $text")
         Log.d("TTSTestFragment", "- Context handle: ${currentAppState.contextHandle}")
         
-        // Use the built-in TTS method
-        val samples = LlamaMobile.generateAudioFromText(
-            currentAppState.contextHandle,
-            text
-        )
+        // Create TTS options
+        val options = LlamaMobile.TTSOptions.Builder()
+            .sampleRate(24000)
+            .saveToFile(currentAppState.saveToFile)
+            .build()
         
-        if (samples != null && samples.isNotEmpty()) {
-            handleSuccess(samples, "sync API", currentAppState)
+        // Generate speech using the public API
+        val result = LlamaMobile.generateSpeech(currentAppState.contextHandle, text, options)
+        
+        if (result.isSuccess) {
+            val speechResult = result.value
+            if (speechResult != null) {
+                val audioSamples = speechResult.audioSamples
+                if (audioSamples != null && audioSamples.isNotEmpty()) {
+                    handleSuccess(audioSamples, "sync API", currentAppState)
+                } else {
+                    activity?.runOnUiThread {
+                        isProcessing = false
+                        updateProcessingUI()
+                        binding.ttsStatusTextView.text = "Error generating speech: No audio samples returned"
+                    }
+                }
+            } else {
+                activity?.runOnUiThread {
+                    isProcessing = false
+                    updateProcessingUI()
+                    binding.ttsStatusTextView.text = "Error generating speech: No speech result"
+                }
+            }
         } else {
+            val error = result.error
             activity?.runOnUiThread {
                 isProcessing = false
                 updateProcessingUI()
-                binding.ttsStatusTextView.text = "Error generating speech: No audio samples returned"
+                binding.ttsStatusTextView.text = "Error generating speech: ${error?.message ?: "Unknown error"}"
             }
         }
     }
@@ -317,21 +339,44 @@ class TTSTestFragment : Fragment() {
         Log.d("TTSTestFragment", "- Text: $text")
         Log.d("TTSTestFragment", "- Context handle: ${currentAppState.contextHandle}")
         
-        // Use the built-in TTS method in a background thread
+        // Use the public generateSpeech API in a background thread
         Thread {
             try {
-                val samples = LlamaMobile.generateAudioFromText(
-                    currentAppState.contextHandle,
-                    text
-                )
+                // Create TTS options
+                val options = LlamaMobile.TTSOptions.Builder()
+                    .sampleRate(24000)
+                    .saveToFile(currentAppState.saveToFile)
+                    .build()
                 
-                if (samples != null && samples.isNotEmpty()) {
-                    handleSuccess(samples, "async API", currentAppState)
+                // Generate speech using the public API
+                val result = LlamaMobile.generateSpeech(currentAppState.contextHandle, text, options)
+                
+                if (result.isSuccess) {
+                    val speechResult = result.value
+                    if (speechResult != null) {
+                        val audioSamples = speechResult.audioSamples
+                        if (audioSamples != null && audioSamples.isNotEmpty()) {
+                            handleSuccess(audioSamples, "async API", currentAppState)
+                        } else {
+                            activity?.runOnUiThread {
+                                isProcessing = false
+                                updateProcessingUI()
+                                binding.ttsStatusTextView.text = "Error generating speech: No audio samples returned"
+                            }
+                        }
+                    } else {
+                        activity?.runOnUiThread {
+                            isProcessing = false
+                            updateProcessingUI()
+                            binding.ttsStatusTextView.text = "Error generating speech: No speech result"
+                        }
+                    }
                 } else {
+                    val error = result.error
                     activity?.runOnUiThread {
                         isProcessing = false
                         updateProcessingUI()
-                        binding.ttsStatusTextView.text = "Error generating speech: No audio samples returned"
+                        binding.ttsStatusTextView.text = "Error generating speech: ${error?.message ?: "Unknown error"}"
                     }
                 }
             } catch (e: Exception) {
@@ -344,7 +389,7 @@ class TTSTestFragment : Fragment() {
         }.start()
     }
 
-    private fun handleSuccess(audioSamples: FloatArray, method: String, currentAppState: AppState) {
+    private fun handleSuccess(audioSamples: ShortArray, method: String, currentAppState: AppState) {
         // Save audio to WAV file if Save to File is enabled
         val saveToFile = currentAppState.saveToFile
         var saveSuccess = false
@@ -355,10 +400,12 @@ class TTSTestFragment : Fragment() {
             val tempFileName = "tts_output_latest.wav"
             tempFilePath = File(tempDir, tempFileName).absolutePath
             
+            // Convert ShortArray to FloatArray for saveAudioToWav
+            val floatSamples = audioSamples.map { it.toFloat() }.toFloatArray()
             saveSuccess = LlamaMobile.saveAudioToWav(
                 currentAppState.contextHandle,
                 tempFilePath,
-                audioSamples,
+                floatSamples,
                 sampleRate
             )
         }
@@ -399,19 +446,19 @@ class TTSTestFragment : Fragment() {
         // Play audio in a background thread
         Thread {
             try {
-                // Set up AudioTrack
+                // Set up AudioTrack for 16-bit PCM (ShortArray)
                 val audioAttributes = AudioAttributes.Builder()
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .setUsage(AudioAttributes.USAGE_MEDIA)
                     .build()
                 
                 val audioFormat = AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                     .setSampleRate(sampleRate)
                     .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                     .build()
                 
-                val bufferSize = AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
+                val bufferSize = AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 
                 val audioTrack = AudioTrack.Builder()
                     .setAudioAttributes(audioAttributes)
@@ -423,14 +470,14 @@ class TTSTestFragment : Fragment() {
                 this.audioTrack = audioTrack
                 audioTrack.play()
                 
-                // Write audio data directly as floats (no byte conversion needed for PCM_FLOAT)
+                // Write audio data as 16-bit PCM (shorts)
                 var offset = 0
                 
                 while (offset < samples.size && isPlaying) {
-                    val samplesToWrite = Math.min(bufferSize / 4, samples.size - offset) // 4 bytes per float
+                    val samplesToWrite = Math.min(bufferSize / 2, samples.size - offset) // 2 bytes per short
                     
-                    // Use AudioTrack's float write method for PCM_FLOAT encoding
-                    val framesWritten = audioTrack.write(samples, offset, samplesToWrite, AudioTrack.WRITE_BLOCKING)
+                    // Use AudioTrack's short write method for PCM_16BIT encoding
+                    val framesWritten = audioTrack.write(samples, offset, samplesToWrite)
                     
                     if (framesWritten > 0) {
                         offset += framesWritten

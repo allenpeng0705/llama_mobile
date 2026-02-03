@@ -115,6 +115,21 @@ target_compile_definitions(test_advanced_chat PRIVATE
     LLAMA_MOBILE_VERBOSE=0
 )
 
+# Add conversation test executable
+add_executable(test_conversation test_conversation.cpp)
+
+# Link against the core library
+target_link_libraries(test_conversation PRIVATE llama_mobile_core_lib)
+
+# Set C++ standard
+target_compile_features(test_conversation PRIVATE cxx_std_17)
+
+# Add definitions from main CMakeLists.txt
+target_compile_definitions(test_conversation PRIVATE
+    LM_GGML_USE_CPU
+    LLAMA_MOBILE_VERBOSE=0
+)
+
 if(APPLE)
     find_library(FOUNDATION_LIBRARY Foundation)
     find_library(ACCELERATE_FRAMEWORK Accelerate)

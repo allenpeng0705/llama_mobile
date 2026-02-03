@@ -487,7 +487,7 @@ function App() {
   // Generate audio
   const generateAudio = async () => {
     if (!isModelInitialized || !isVocoderInitialized) {
-      alert('Please initialize both model and vocoder first');
+      console.warn('Cannot generate audio: model or vocoder not initialized');
       return;
     }
     
@@ -515,21 +515,18 @@ function App() {
       if (saveResult.success) {
         setAudioFilePath(fileName);
         console.log('Audio saved successfully to:', fileName);
-        alert(`Audio generated and saved successfully! ${result.audio.length} samples generated.`);
       } else {
         console.error('Failed to save audio automatically');
-        alert(`Audio generated (${result.audio.length} samples) but failed to save automatically.`);
       }
     } catch (error) {
       console.error('Error generating audio:', error);
-      alert('Error generating audio: ' + (error as Error).message);
     }
   };
   
   // Play audio from samples using native audio playback
   const playAudio = async () => {
     if (audioSamples.length === 0) {
-      alert('No audio samples to play. Please generate audio first.');
+      console.warn('No audio samples to play. Please generate audio first.');
       return;
     }
     
@@ -553,19 +550,17 @@ function App() {
       } else {
         console.error('Failed to play audio');
         setIsPlaying(false);
-        alert('Failed to play audio.');
       }
     } catch (error) {
       console.error('Error playing audio:', error);
       setIsPlaying(false);
-      alert('Error playing audio: ' + (error as Error).message);
     }
   };
   
   // Apply LoRA adapter
   const applyLora = async () => {
     if (!isModelInitialized) {
-      alert('Please initialize the model first');
+      console.warn('Cannot apply LoRA: model not initialized');
       return;
     }
     
@@ -584,21 +579,18 @@ function App() {
       
       if (result.success) {
         console.log('LoRA adapter applied successfully');
-        alert('LoRA adapter applied successfully!');
       } else {
         console.error('Failed to apply LoRA adapter');
-        alert('Failed to apply LoRA adapter');
       }
     } catch (error) {
       console.error('Error applying LoRA adapter:', error);
-      alert('Error applying LoRA adapter: ' + (error as Error).message);
     }
   };
-  
+
   // Remove LoRA adapter
   const removeLora = async () => {
     if (!isModelInitialized) {
-      alert('Please initialize the model first');
+      console.warn('Cannot remove LoRA: model not initialized');
       return;
     }
     
@@ -608,10 +600,8 @@ function App() {
       });
       
       console.log('LoRA adapter removed successfully');
-      alert('LoRA adapter removed successfully!');
     } catch (error) {
       console.error('Error removing LoRA adapter:', error);
-      alert('Error removing LoRA adapter: ' + (error as Error).message);
     }
   };
   
@@ -653,22 +643,22 @@ function App() {
   // Generate multimodal completion
   const generateMultimodalCompletion = async () => {
     if (!isModelInitialized) {
-      alert('Please initialize the model first');
+      console.warn('Cannot generate multimodal completion: model not initialized');
       return;
     }
     
     if (!isMultimodalEnabled) {
-      alert('Please initialize multimodal first');
+      console.warn('Cannot generate multimodal completion: multimodal not initialized');
       return;
     }
     
     if (!selectedImagePath) {
-      alert('Please select an image first');
+      console.warn('Cannot generate multimodal completion: no image selected');
       return;
     }
     
     if (!multimodalText.trim()) {
-      alert('Please enter a text prompt');
+      console.warn('Cannot generate multimodal completion: no text prompt');
       return;
     }
     

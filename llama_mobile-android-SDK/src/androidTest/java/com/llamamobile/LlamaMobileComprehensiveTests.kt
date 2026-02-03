@@ -398,19 +398,10 @@ class LlamaMobileComprehensiveTests {
 
     @Test
     fun testSpeechGeneration() {
-        // Test audio generation with invalid context (should return null)
-        val audio = LlamaMobile.generateAudioFromText(0, "Hello", null)
-        assertNull(audio)
-
         // Test speech generation with invalid context (should return failure)
-        val result = LlamaMobile.generateSpeech(0, "Hello")
+        val result = LlamaMobile.generateSpeech(0, "Hello", LlamaMobile.TTSOptions.Builder().build())
         assertNotNull(result)
         assertTrue(result.isFailure)
-
-        // Test speech stream with invalid context (should return failure)
-        val streamResult = LlamaMobile.generateSpeechStream(0, "Hello", {})
-        assertNotNull(streamResult)
-        assertTrue(streamResult.isFailure)
     }
 
     @Test

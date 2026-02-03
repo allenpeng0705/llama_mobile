@@ -1497,7 +1497,7 @@ struct TTSTestView: View {
         }
         
         // Generate speech using async API
-        let result = await llamaMobile.generateSpeech(
+        let result = await llamaMobile.generateSpeechAsync(
             text: text,
             options: options,
             progressHandler: { value in
@@ -1555,7 +1555,7 @@ struct TTSTestView: View {
         }
         
         // Generate speech using sync API
-        let result = llamaMobile.generateSpeechSync(text: text, options: options)
+        let result = llamaMobile.generateSpeech(text: text, options: options)
         
         // Handle result
         switch result {

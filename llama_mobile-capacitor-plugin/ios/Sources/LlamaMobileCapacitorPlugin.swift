@@ -76,6 +76,10 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
     private var contexts: [Int: LlamaMobile] = [:]
     private var nextContextHandle: Int = 1
     
+    // Audio playback properties
+    private var audioEngine: AVAudioEngine?
+    private var playerNode: AVAudioPlayerNode?
+    
     private func getNextContextHandle() -> Int {
         let handle = nextContextHandle
         nextContextHandle += 1
@@ -655,29 +659,49 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
                 floatBuffer?[i] = sample
             }
             
-            // Create audio engine
-            let audioEngine = AVAudioEngine()
-            
-            // Create audio player node
-            let playerNode = AVAudioPlayerNode()
-            audioEngine.attach(playerNode)
-            
-            // Connect nodes
-            audioEngine.connect(playerNode, to: audioEngine.mainMixerNode, format: audioFormat)
-            
-            // Start audio engine
-            try audioEngine.start()
-            
-            // Play audio
-            playerNode.scheduleBuffer(audioBuffer) {
-                // Playback completed
+            // Stop any existing audio playback
+            if let existingPlayerNode = playerNode {
+                existingPlayerNode.stop()
             }
             
-            playerNode.play()
+            if let existingAudioEngine = audioEngine {
+                existingAudioEngine.stop()
+                existingAudioEngine.reset()
+            }
+            
+            // Create new audio engine and player node
+            let newAudioEngine = AVAudioEngine()
+            let newPlayerNode = AVAudioPlayerNode()
+            
+            // Store references
+            self.audioEngine = newAudioEngine
+            self.playerNode = newPlayerNode
+            
+            // Attach and connect nodes
+            newAudioEngine.attach(newPlayerNode)
+            newAudioEngine.connect(newPlayerNode, to: newAudioEngine.mainMixerNode, format: audioFormat)
+            
+            // Start audio engine
+            try newAudioEngine.start()
+            
+            // Play audio
+            newPlayerNode.scheduleBuffer(audioBuffer) {
+                // Playback completed
+                DispatchQueue.main.async {
+                    // Release references after playback
+                    self.playerNode = nil
+                    self.audioEngine = nil
+                }
+            }
+            
+            newPlayerNode.play()
             
             return true
         } catch {
             print("Error playing audio: \(error.localizedDescription)")
+            // Clean up references on error
+            self.playerNode = nil
+            self.audioEngine = nil
             return false
         }
     }
