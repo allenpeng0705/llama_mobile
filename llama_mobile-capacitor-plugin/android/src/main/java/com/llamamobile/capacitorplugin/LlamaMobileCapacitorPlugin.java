@@ -678,13 +678,21 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                     return;
                 }
 
+                // Handle relative file paths by using app's files directory
+                String finalFilePath = filePath;
+                if (!filePath.startsWith("/")) {
+                    // Use app's internal files directory for relative paths
+                    java.io.File filesDir = getContext().getFilesDir();
+                    finalFilePath = filesDir.getAbsolutePath() + "/" + filePath;
+                }
+
                 float[] audioData = new float[(int) audioDataArray.length()];
                 for (int i = 0; i < audioDataArray.length(); i++) {
                     audioData[i] = (float) audioDataArray.getDouble(i);
                 }
 
                 boolean success = LlamaMobile.saveAudioToWav(
-                    nativeContextHandle, filePath, audioData, sampleRate
+                    nativeContextHandle, finalFilePath, audioData, sampleRate
                 );
 
                 JSObject ret = new JSObject();
@@ -707,9 +715,59 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         }
 
         executor.execute(() -> {
-            JSObject ret = new JSObject();
-            ret.put("success", false);
-            call.resolve(ret);
+            try {
+                // Convert JSArray to float array
+                float[] audioData = new float[(int) audioDataArray.length()];
+                for (int i = 0; i < audioDataArray.length(); i++) {
+                    audioData[i] = (float) audioDataArray.getDouble(i);
+                }
+
+                // Convert float samples to 16-bit PCM
+                short[] pcmData = new short[audioData.length];
+                for (int i = 0; i < audioData.length; i++) {
+                    // Clamp values to [-1, 1] and convert to 16-bit PCM
+                    float sample = Math.max(-1.0f, Math.min(1.0f, audioData[i]));
+                    pcmData[i] = (short) (sample * Short.MAX_VALUE);
+                }
+
+                // Create AudioTrack
+                int channelConfig = android.media.AudioFormat.CHANNEL_OUT_MONO;
+                int audioFormat = android.media.AudioFormat.ENCODING_PCM_16BIT;
+                int bufferSize = android.media.AudioTrack.getMinBufferSize(
+                    sampleRate, channelConfig, audioFormat
+                );
+
+                android.media.AudioTrack audioTrack = new android.media.AudioTrack(
+                    android.media.AudioManager.STREAM_MUSIC,
+                    sampleRate,
+                    channelConfig,
+                    audioFormat,
+                    bufferSize,
+                    android.media.AudioTrack.MODE_STATIC
+                );
+
+                // Write audio data
+                audioTrack.write(pcmData, 0, pcmData.length);
+
+                // Play audio
+                audioTrack.play();
+
+                // Wait for playback to complete
+                try {
+                    Thread.sleep((long) (pcmData.length * 1000.0 / sampleRate) + 100);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+
+                // Release resources
+                audioTrack.release();
+
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject("Failed to play audio: " + e.getMessage());
+            }
         });
     }
 

@@ -64,6 +64,10 @@ export interface LlamaMobileCapacitorPlugin {
   getModelChatTemplate(options: { contextHandle: number }): Promise<{ chatTemplate: string }>;
   formatChatMessages(options: { contextHandle: number; messagesJson: string; chatTemplate?: string }): Promise<{ formattedPrompt: string }>;
   
+  // File System
+  listFiles(options: { directory: string }): Promise<{ files: string[] }>;
+  listModels(): Promise<{ models: Array<{ name: string; path: string }> }>;
+  
   // Listeners
   addListener(eventName: 'token', listenerFunc: (data: { token: string }) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'progress', listenerFunc: (data: { progress: number }) => void): Promise<PluginListenerHandle>;

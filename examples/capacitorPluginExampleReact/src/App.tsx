@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { LlamaMobileCapacitorPlugin } from '../../../llama_mobile-capacitor-plugin/src/index';
 import './App.css';
+import Chat from './components/Chat';
+import Embed from './components/Embed';
+import Image from './components/Image';
+import TTS from './components/TTS';
+import More from './components/More';
+import { Message, ModelInfo } from './types';
 
 // Extend Window interface to include Capacitor
 declare global {
@@ -11,23 +17,8 @@ declare global {
   }
 }
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-interface Tab {
-  id: string;
-  name: string;
-}
 
 function App() {
-  // Model type
-  interface ModelInfo {
-    name: string;
-    path: string;
-  }
-
   // State
   const [activeTab, setActiveTab] = useState<string>('chat');
   const [modelPath, setModelPath] = useState<string>(() => {
@@ -41,6 +32,8 @@ function App() {
   const [nThreads, setNThreads] = useState<number>(4);
   const [inputMessage, setInputMessage] = useState<string>('');
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [generatedText, setGeneratedText] = useState<string>('');
   const [embeddingText, setEmbeddingText] = useState<string>('Hello, world!');
   const [embeddings, setEmbeddings] = useState<number[]>([]);
   const [ttsText, setTtsText] = useState<string>('Good Morning, how are you?');
@@ -69,16 +62,20 @@ function App() {
   const [audioSamples, setAudioSamples] = useState<number[]>([]);
   const [audioFilePath, setAudioFilePath] = useState<string>('');
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [isGeneratingAudio, setIsGeneratingAudio] = useState<boolean>(false);
   
   // Image-multimodal state
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImagePath, setSelectedImagePath] = useState<string | null>(null);
   const [multimodalText, setMultimodalText] = useState<string>('');
   const [multimodalResult, setMultimodalResult] = useState<string>('');
-  const [isMultimodalGenerating, setIsMultimodalGenerating] = useState<boolean>(false);
   const [isMultimodalEnabled, setIsMultimodalEnabled] = useState<boolean>(false);
   const [enableEmbedding, setEnableEmbedding] = useState<boolean>(false);
+  
+  // New switch states
+  const [customTemplate, setCustomTemplate] = useState<boolean>(false);
+  const [chatMode, setChatMode] = useState<boolean>(true);
+  const [streaming, setStreaming] = useState<boolean>(false);
+  const [jsonResponse, setJsonResponse] = useState<boolean>(true);
   
   // Model selection state
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
@@ -94,17 +91,7 @@ function App() {
   const [isVocoderInitialized, setIsVocoderInitialized] = useState<boolean>(false);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   
-  // Tabs configuration
-  const tabs: Tab[] = [
-    { id: 'chat', name: 'Chat' },
-    { id: 'image', name: 'Image' },
-    { id: 'settings', name: 'Settings' },
-    { id: 'embeddings', name: 'Embeddings' },
-    { id: 'tts', name: 'TTS' },
-    { id: 'lora', name: 'LoRA' },
-    { id: 'download', name: 'Download' }
-  ];
-  
+
   // Initialize model
   const initializeModel = async () => {
     try {
@@ -310,6 +297,8 @@ function App() {
     
     // Update the state
     setMessages(updatedMessages);
+    setIsGenerating(true);
+    setGeneratedText('');
     
     // Scroll to bottom
     setTimeout(scrollToBottom, 100);
@@ -438,6 +427,9 @@ function App() {
       
       // Scroll to bottom
       setTimeout(scrollToBottom, 100);
+    } finally {
+      setIsGenerating(false);
+      setGeneratedText('');
     }
   };
   
@@ -499,7 +491,6 @@ function App() {
       return;
     }
     
-    setIsGeneratingAudio(true);
     setAudioSamples([]);
     setAudioFilePath('');
     
@@ -532,8 +523,6 @@ function App() {
     } catch (error) {
       console.error('Error generating audio:', error);
       alert('Error generating audio: ' + (error as Error).message);
-    } finally {
-      setIsGeneratingAudio(false);
     }
   };
   
@@ -683,7 +672,6 @@ function App() {
       return;
     }
     
-    setIsMultimodalGenerating(true);
     setMultimodalResult('');
     
     try {
@@ -703,8 +691,6 @@ function App() {
     } catch (error) {
       console.error('Error generating multimodal completion:', error);
       setMultimodalResult('Error: ' + (error as Error).message);
-    } finally {
-      setIsMultimodalGenerating(false);
     }
   };
   
@@ -735,21 +721,52 @@ function App() {
         platform = 'Web';
       }
       
-      // Use default models for all platforms since listModels is not available
-      console.log('Using default models for all platforms');
-      const defaultModels: ModelInfo[] = [
-        { name: 'SmolVLM-256M-Instruct-Q8_0.gguf', path: 'SmolVLM-256M-Instruct-Q8_0.gguf' },
-        { name: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf', path: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf' },
-        { name: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf', path: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf' },
-        { name: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf', path: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf' },
-        { name: 'Qwen3-4B-Q4_K_M.gguf', path: 'Qwen3-4B-Q4_K_M.gguf' },
-        { name: 'Qwen3-4B-Q5_K_M.gguf', path: 'Qwen3-4B-Q5_K_M.gguf' },
-        { name: 'OuteTTS-0.2-500M-Q6_K.gguf', path: 'OuteTTS-0.2-500M-Q6_K.gguf' },
-        { name: 'SmolLM-360M-Instruct.Q6_K.gguf', path: 'SmolLM-360M-Instruct.Q6_K.gguf' },
-        { name: 'WavTokenizer-Large-75-F16.gguf', path: 'WavTokenizer-Large-75-F16.gguf' },
-        { name: 'Qwen3-Embedding-0.6B-Q8_0.gguf', path: 'Qwen3-Embedding-0.6B-Q8_0.gguf' }
-      ];
-      mainModels = defaultModels;
+      // Try to use listModels method from the plugin if available
+      try {
+        console.log('Attempting to use LlamaMobileCapacitorPlugin.listModels()');
+        const result = await LlamaMobileCapacitorPlugin.listModels();
+        console.log('listModels result:', result);
+        
+        if (result.models && result.models.length > 0) {
+          console.log('Found models via listModels:', result.models.length);
+          mainModels = result.models.map((model: any) => ({
+            name: model.name || model.path.split('/').pop(),
+            path: model.path
+          }));
+        } else {
+          console.log('listModels returned no models, using default models');
+          // Fallback to default models
+          const defaultModels: ModelInfo[] = [
+            { name: 'SmolVLM-256M-Instruct-Q8_0.gguf', path: 'SmolVLM-256M-Instruct-Q8_0.gguf' },
+            { name: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf', path: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf' },
+            { name: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf', path: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf' },
+            { name: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf', path: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf' },
+            { name: 'Qwen3-4B-Q4_K_M.gguf', path: 'Qwen3-4B-Q4_K_M.gguf' },
+            { name: 'Qwen3-4B-Q5_K_M.gguf', path: 'Qwen3-4B-Q5_K_M.gguf' },
+            { name: 'OuteTTS-0.2-500M-Q6_K.gguf', path: 'OuteTTS-0.2-500M-Q6_K.gguf' },
+            { name: 'SmolLM-360M-Instruct.Q6_K.gguf', path: 'SmolLM-360M-Instruct.Q6_K.gguf' },
+            { name: 'WavTokenizer-Large-75-F16.gguf', path: 'WavTokenizer-Large-75-F16.gguf' },
+            { name: 'Qwen3-Embedding-0.6B-Q8_0.gguf', path: 'Qwen3-Embedding-0.6B-Q8_0.gguf' }
+          ];
+          mainModels = defaultModels;
+        }
+      } catch (error) {
+        console.log('listModels method not available, using default models:', error);
+        // Fallback to default models
+        const defaultModels: ModelInfo[] = [
+          { name: 'SmolVLM-256M-Instruct-Q8_0.gguf', path: 'SmolVLM-256M-Instruct-Q8_0.gguf' },
+          { name: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf', path: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf' },
+          { name: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf', path: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf' },
+          { name: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf', path: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf' },
+          { name: 'Qwen3-4B-Q4_K_M.gguf', path: 'Qwen3-4B-Q4_K_M.gguf' },
+          { name: 'Qwen3-4B-Q5_K_M.gguf', path: 'Qwen3-4B-Q5_K_M.gguf' },
+          { name: 'OuteTTS-0.2-500M-Q6_K.gguf', path: 'OuteTTS-0.2-500M-Q6_K.gguf' },
+          { name: 'SmolLM-360M-Instruct.Q6_K.gguf', path: 'SmolLM-360M-Instruct.Q6_K.gguf' },
+          { name: 'WavTokenizer-Large-75-F16.gguf', path: 'WavTokenizer-Large-75-F16.gguf' },
+          { name: 'Qwen3-Embedding-0.6B-Q8_0.gguf', path: 'Qwen3-Embedding-0.6B-Q8_0.gguf' }
+        ];
+        mainModels = defaultModels;
+      }
       
       console.log(`${platform} models configured:`);
       console.log('All models:', mainModels);
@@ -761,23 +778,35 @@ function App() {
       console.log('Setting availableModels:', [emptyOption, ...mainModels]);
       setAvailableModels([emptyOption, ...mainModels]);
       
-      // Set MMProj models
-      console.log('Setting availableMmprojModels:', [emptyOption, ...mainModels]);
-      setAvailableMmprojModels([emptyOption, ...mainModels]);
+      // Set MMProj models (filter for mmproj models)
+      const mmprojModels = mainModels.filter(model => 
+        model.name.toLowerCase().includes('mmproj')
+      );
+      console.log('Setting availableMmprojModels:', [emptyOption, ...mmprojModels]);
+      setAvailableMmprojModels([emptyOption, ...mmprojModels]);
       
-      // Set vocoder models
-      console.log('Setting availableVocoderModels:', [emptyOption, ...mainModels]);
-      setAvailableVocoderModels([emptyOption, ...mainModels]);
+      // Set vocoder models (filter for vocoder/tts models)
+      const vocoderModels = mainModels.filter(model => 
+        model.name.toLowerCase().includes('vocoder') ||
+        model.name.toLowerCase().includes('tts') ||
+        model.name.toLowerCase().includes('outetts') ||
+        model.name.toLowerCase().includes('wavtokenizer')
+      );
+      console.log('Setting availableVocoderModels:', [emptyOption, ...vocoderModels]);
+      setAvailableVocoderModels([emptyOption, ...vocoderModels]);
       
-      // Set LoRA models
-      console.log('Setting availableLoraModels:', [emptyOption, ...mainModels]);
-      setAvailableLoraModels([emptyOption, ...mainModels]);
+      // Set LoRA models (filter for lora models)
+      const loraModels = mainModels.filter(model => 
+        model.name.toLowerCase().includes('lora')
+      );
+      console.log('Setting availableLoraModels:', [emptyOption, ...loraModels]);
+      setAvailableLoraModels([emptyOption, ...loraModels]);
       
       console.log('Models scanned successfully:');
       console.log('Main models found:', mainModels.length);
-      console.log('MMProj models found:', mainModels.length);
-      console.log('Vocoder models found:', mainModels.length);
-      console.log('LoRA models found:', mainModels.length);
+      console.log('MMProj models found:', mmprojModels.length);
+      console.log('Vocoder models found:', vocoderModels.length);
+      console.log('LoRA models found:', loraModels.length);
     } catch (error) {
       console.error('Error scanning for models:', error);
       
@@ -883,12 +912,12 @@ function App() {
   // Cleanup model context when component unmounts
   useEffect(() => {
     return () => {
-      if (contextHandle !== -1) {
+      if (contextHandle !== -1 && contextHandle !== 0) {
         LlamaMobileCapacitorPlugin.releaseContext({
           contextHandle: contextHandle
         }).then(() => {
           console.log('Model context released');
-        }).catch((error) => {
+        }).catch((error: any) => {
           console.error('Error releasing context:', error);
         });
       }
@@ -905,504 +934,169 @@ function App() {
           {/* Chat Tab */}
           {activeTab === 'chat' && (
             <div className="tab-panel">
-              <div className="chat-container">
-                <div className="chat-messages" ref={chatMessagesRef}>
-                  {messages.map((message, index) => (
-                    <div 
-                      key={index}
-                      className={`message ${message.role}`}
-                    >
-                      <div className="message-content">{message.content}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="chat-input">
-                  <input 
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    type="text"
-                    placeholder="Type your message..."
-                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                  />
-                  <button onClick={sendMessage}>Send</button>
-                </div>
-              </div>
+              <Chat
+                messages={messages}
+                inputMessage={inputMessage}
+                setInputMessage={setInputMessage}
+                sendMessage={sendMessage}
+                isModelInitialized={isModelInitialized}
+                isGenerating={isGenerating}
+                generatedText={generatedText}
+                streaming={streaming}
+                setStreaming={setStreaming}
+                jsonResponse={jsonResponse}
+                setJsonResponse={setJsonResponse}
+              />
+            </div>
+          )}
+          
+          {/* Embed Tab */}
+          {activeTab === 'embed' && (
+            <div className="tab-panel">
+              <Embed
+                embeddingText={embeddingText}
+                setEmbeddingText={setEmbeddingText}
+                generateEmbeddings={generateEmbeddings}
+                embeddings={embeddings}
+                isModelInitialized={isModelInitialized}
+              />
             </div>
           )}
           
           {/* Image Tab */}
           {activeTab === 'image' && (
             <div className="tab-panel">
-              <div className="settings-container">
-                <div className="setting-section">
-                  <h3>Image Input</h3>
-                  <div className="setting-item">
-                    <button 
-                      onClick={selectImage}
-                      className="primary-button"
-                      disabled={!isModelInitialized}
-                    >
-                      {selectedImage ? 'Change Image' : 'Select Image'}
-                    </button>
-                  </div>
-                  {selectedImage && (
-                    <div className="setting-item">
-                      <img 
-                        src={selectedImage} 
-                        alt="Selected" 
-                        style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px' }}
-                      />
-                    </div>
-                  )}
-                </div>
-                
-                <div className="setting-section">
-                  <h3>Text Input</h3>
-                  <div className="setting-item">
-                    <textarea 
-                      value={multimodalText}
-                      onChange={(e) => setMultimodalText(e.target.value)}
-                      placeholder="Enter text prompt..."
-                      rows={5}
-                      disabled={!isModelInitialized || !isMultimodalEnabled || isMultimodalGenerating}
-                    ></textarea>
-                  </div>
-                  <button 
-                    onClick={generateMultimodalCompletion}
-                    className="primary-button"
-                    disabled={
-                      !isModelInitialized || 
-                      !isMultimodalEnabled || 
-                      !selectedImagePath || 
-                      !multimodalText.trim() || 
-                      isMultimodalGenerating
-                    }
-                  >
-                    {isMultimodalGenerating ? 'Generating...' : 'Generate Completion'}
-                  </button>
-                </div>
-                
-                {multimodalResult && (
-                  <div className="setting-section">
-                    <h3>Completion Result</h3>
-                    <div className="embeddings-result">
-                      <pre>{multimodalResult}</pre>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          
-          {/* Settings Tab */}
-          {activeTab === 'settings' && (
-            <div className="tab-panel">
-              <div className="settings-container">
-                <div className="setting-section">
-                  <h3>Model Configuration</h3>
-                  
-                  {/* Main Model Picker */}
-                  <div className="setting-item">
-                    <label>Select Main Model:</label>
-                    <div className="picker-container">
-                      <select 
-                        value={modelPath}
-                        onChange={(e) => {
-                          console.log('Main model selected:', e.target.value);
-                          setModelPath(e.target.value);
-                        }}
-                        disabled={isModelInitialized}
-                        className="model-picker"
-                      >
-                        {availableModels.map((model) => (
-                          <option key={model.path} value={model.path}>
-                            {model.name}
-                          </option>
-                        ))}
-                        {availableModels.length === 0 && (
-                          <option value="">No models found</option>
-                        )}
-                      </select>
-                    </div>
-                  </div>
-                  
-                  {/* MMProj Model Picker */}
-                  <div className="setting-item">
-                    <label>Select MMProj Model:</label>
-                    <div className="picker-container">
-                      <select 
-                        value={mmprojModelPath}
-                        onChange={(e) => {
-                          console.log('MMProj model selected:', e.target.value);
-                          console.log('Current modelPath before change:', modelPath);
-                          setMmprojModelPath(e.target.value);
-                          console.log('Current modelPath after change:', modelPath);
-                        }}
-                        disabled={isModelInitialized}
-                        className="model-picker"
-                      >
-                        {availableMmprojModels.map((model) => (
-                          <option key={model.path} value={model.path}>
-                            {model.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  
-                  {/* Vocoder Model Picker */}
-                  <div className="setting-item">
-                    <label>Select Vocoder Model:</label>
-                    <div className="picker-container">
-                      <select 
-                        value={vocoderModelPath}
-                        onChange={(e) => setVocoderModelPath(e.target.value)}
-                        disabled={isModelInitialized}
-                        className="model-picker"
-                      >
-                        {availableVocoderModels.map((model) => (
-                          <option key={model.path} value={model.path}>
-                            {model.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  
-                  {/* LoRA Model Picker */}
-                  <div className="setting-item">
-                    <label>Select LoRA Model:</label>
-                    <div className="picker-container">
-                      <select 
-                        value={loraPath}
-                        onChange={(e) => setLoraPath(e.target.value)}
-                        disabled={isModelInitialized}
-                        className="model-picker"
-                      >
-                        {availableLoraModels.map((model) => (
-                          <option key={model.path} value={model.path}>
-                            {model.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  
-                  {/* Grammar Picker */}
-                  <div className="setting-item">
-                    <label>Select Grammar:</label>
-                    <div className="picker-container">
-                      <select 
-                        value={selectedGrammar || ''}
-                        onChange={(e) => setSelectedGrammar(e.target.value || null)}
-                        disabled={isModelInitialized}
-                        className="model-picker"
-                      >
-                        <option value="">Empty</option>
-                        {availableGrammars.map((grammar, index) => (
-                          <option key={index} value={grammar}>
-                            {grammar}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  
-                  {/* Embedding Toggle */}
-                  <div className="setting-item">
-                    <label>
-                      <input 
-                        type="checkbox"
-                        checked={enableEmbedding}
-                        onChange={(e) => setEnableEmbedding(e.target.checked)}
-                        disabled={isModelInitialized}
-                      />
-                      Enable Embedding
-                    </label>
-                  </div>
-                  
-                  {/* GPU Layers */}
-                  <div className="setting-item">
-                    <label>GPU Layers: {nGpuLayers}</label>
-                    <input 
-                      value={nGpuLayers}
-                      onChange={(e) => setNGpuLayers(parseInt(e.target.value))}
-                      type="range"
-                      min={0}
-                      max={16}
-                      step={1}
-                      disabled={isModelInitialized}
-                    />
-                  </div>
-                  
-                  {/* Threads */}
-                  <div className="setting-item">
-                    <label>Threads: {nThreads}</label>
-                    <input 
-                      value={nThreads}
-                      onChange={(e) => setNThreads(parseInt(e.target.value))}
-                      type="range"
-                      min={1}
-                      max={8}
-                      step={1}
-                      disabled={isModelInitialized}
-                    />
-                  </div>
-                  
-                  {/* Context Size */}
-                  <div className="setting-item">
-                    <label>Context Size: {nCtx}</label>
-                    <input 
-                      value={nCtx}
-                      onChange={(e) => setNCtx(parseInt(e.target.value))}
-                      type="range"
-                      min={512}
-                      max={4096}
-                      step={512}
-                      disabled={isModelInitialized}
-                    />
-                  </div>
-                </div>
-                
-                <div className="setting-section">
-                  <h3>Model Actions</h3>
-                  <button 
-                    onClick={initializeModel} 
-                    className="primary-button"
-                    disabled={isModelInitialized || !modelPath}
-                  >
-                    {isModelInitialized ? 'Reinitialize Model' : 'Initialize Model'}
-                  </button>
-                  {isModelInitialized && (
-                    <button 
-                      onClick={unloadModel} 
-                      className="danger-button"
-                    >
-                      Unload Model
-                    </button>
-                  )}
-                </div>
-                
-                {isModelInitialized && (
-                  <div className="setting-section">
-                    <h3>Model Status</h3>
-                    <div className="status-message success">
-                      Model loaded successfully!
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          
-          {/* Embeddings Tab */}
-          {activeTab === 'embeddings' && (
-            <div className="tab-panel">
-              <div className="embeddings-container">
-                <textarea 
-                  value={embeddingText}
-                  onChange={(e) => setEmbeddingText(e.target.value)}
-                  placeholder="Enter text to generate embeddings..."
-                  rows={5}
-                ></textarea>
-                <button 
-                  onClick={generateEmbeddings} 
-                  className="primary-button"
-                >
-                  Generate Embeddings
-                </button>
-                {embeddings.length > 0 && (
-                  <div className="embeddings-result">
-                    <h3>Embeddings (first 10 dimensions):</h3>
-                    <pre>{embeddings.slice(0, 10).map(e => e.toFixed(6)).join(', ')}</pre>
-                    <p>Total dimensions: {embeddings.length}</p>
-                  </div>
-                )}
-              </div>
+              <Image
+                selectedImage={selectedImage}
+                selectedImagePath={selectedImagePath}
+                multimodalText={multimodalText}
+                multimodalResult={multimodalResult}
+                setMultimodalText={setMultimodalText}
+                selectImage={selectImage}
+                generateMultimodalCompletion={generateMultimodalCompletion}
+                isModelInitialized={isModelInitialized}
+                isMultimodalEnabled={isMultimodalEnabled}
+              />
             </div>
           )}
           
           {/* TTS Tab */}
           {activeTab === 'tts' && (
             <div className="tab-panel">
-              <div className="tts-container">
-                <textarea 
-                  value={ttsText}
-                  onChange={(e) => setTtsText(e.target.value)}
-                  placeholder="Enter text to convert to speech..."
-                  rows={5}
-                ></textarea>
-                <button 
-                  onClick={generateAudio} 
-                  className="primary-button"
-                  disabled={!isVocoderInitialized || isGeneratingAudio}
-                >
-                  {isGeneratingAudio ? 'Generating...' : 'Generate Audio'}
-                </button>
-                {audioSamples.length > 0 && (
-                  <div className="tts-actions">
-                    <button 
-                      onClick={playAudio} 
-                      className="primary-button"
-                      disabled={isPlaying}
-                    >
-                      {isPlaying ? 'Playing...' : 'Play Audio'}
-                    </button>
-                  </div>
-                )}
-                {audioSamples.length > 0 && (
-                  <div className="status-message success">
-                    Audio generated and saved to: {audioFilePath}
-                  </div>
-                )}
-                {isVocoderInitialized && (
-                  <div className="status-message success">
-                    Vocoder initialized successfully
-                  </div>
-                )}
-              </div>
+              <TTS
+                ttsText={ttsText}
+                setTtsText={setTtsText}
+                generateAudio={generateAudio}
+                playAudio={playAudio}
+                audioSamples={audioSamples}
+                audioFilePath={audioFilePath}
+                isPlaying={isPlaying}
+                isModelInitialized={isModelInitialized}
+                isVocoderInitialized={isVocoderInitialized}
+              />
             </div>
           )}
           
-          {/* LoRA Tab */}
-          {activeTab === 'lora' && (
+          {/* More Tab */}
+          {activeTab === 'more' && (
             <div className="tab-panel">
-              <div className="lora-container">
-                <div className="setting-item">
-                  <label>LoRA Adapter Path:</label>
-                  <input 
-                    value={loraPath}
-                    onChange={(e) => setLoraPath(e.target.value)}
-                    type="text"
-                    placeholder="Path to LoRA adapter"
-                  />
-                </div>
-                <div className="setting-item">
-                  <label>LoRA Scale:</label>
-                  <input 
-                    value={loraScale}
-                    onChange={(e) => setLoraScale(parseFloat(e.target.value))}
-                    type="number"
-                    min={0.1}
-                    max={2.0}
-                    step={0.1}
-                  />
-                </div>
-                <button 
-                  onClick={applyLora} 
-                  className="primary-button"
-                >
-                  Apply LoRA Adapter
-                </button>
-                <button 
-                  onClick={removeLora} 
-                  className="secondary-button"
-                >
-                  Remove LoRA Adapter
-                </button>
-              </div>
-            </div>
-          )}
-          
-          {/* Download Tab */}
-          {activeTab === 'download' && (
-            <div className="tab-panel">
-              <div className="settings-container">
-                <div className="setting-section">
-                  <h3>Download Model from Hugging Face</h3>
-                  
-                  {/* Hugging Face Repo ID */}
-                  <div className="setting-item">
-                    <label>Repository ID:</label>
-                    <input 
-                      type="text"
-                      value={hfRepoId}
-                      onChange={(e) => setHfRepoId(e.target.value)}
-                      disabled={isDownloading}
-                      placeholder="e.g., meta-llama/Llama-3.2-1B-Instruct"
-                    />
-                  </div>
-                  
-                  {/* Hugging Face Filename */}
-                  <div className="setting-item">
-                    <label>Filename:</label>
-                    <input 
-                      type="text"
-                      value={hfFilename}
-                      onChange={(e) => setHfFilename(e.target.value)}
-                      disabled={isDownloading}
-                      placeholder="e.g., Llama-3.2-1B-Instruct.Q4_K_M.gguf"
-                    />
-                  </div>
-                  
-                  {/* Hugging Face Bearer Token (optional) */}
-                  <div className="setting-item">
-                    <label>Bearer Token (optional):</label>
-                    <input 
-                      type="text"
-                      value={hfBearerToken}
-                      onChange={(e) => setHfBearerToken(e.target.value)}
-                      disabled={isDownloading}
-                      placeholder="Your Hugging Face API token"
-                    />
-                  </div>
-                  
-                  {/* Download Status */}
-                  {downloadStatus && (
-                    <div className="setting-item">
-                      <label>Status:</label>
-                      <div className="status-message">{downloadStatus}</div>
-                    </div>
-                  )}
-                  
-                  {/* Download Progress */}
-                  {isDownloading && (
-                    <div className="setting-item">
-                      <label>Progress:</label>
-                      <div className="progress-bar-container">
-                        <div 
-                          className="progress-bar"
-                          style={{ width: `${downloadProgress * 100}%` }}
-                        ></div>
-                      </div>
-                      <div className="progress-text">
-                        {(downloadProgress * 100).toFixed(0)}%
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Download Error */}
-                  {downloadError && (
-                    <div className="setting-item">
-                      <label>Error:</label>
-                      <div className="error-message">{downloadError}</div>
-                    </div>
-                  )}
-                  
-                  {/* Download Button */}
-                  <button 
-                    onClick={downloadModel}
-                    className="primary-button"
-                    disabled={isDownloading || !hfRepoId || !hfFilename}
-                  >
-                    {isDownloading ? 'Downloading...' : 'Download Model'}
-                  </button>
-                </div>
-              </div>
+              <More
+                // Model configuration
+                modelPath={modelPath}
+                setModelPath={setModelPath}
+                mmprojModelPath={mmprojModelPath}
+                setMmprojModelPath={setMmprojModelPath}
+                vocoderModelPath={vocoderModelPath}
+                setVocoderModelPath={setVocoderModelPath}
+                loraPath={loraPath}
+                setLoraPath={setLoraPath}
+                selectedGrammar={selectedGrammar}
+                setSelectedGrammar={setSelectedGrammar}
+                enableEmbedding={enableEmbedding}
+                setEnableEmbedding={setEnableEmbedding}
+                nGpuLayers={nGpuLayers}
+                setNGpuLayers={setNGpuLayers}
+                nThreads={nThreads}
+                setNThreads={setNThreads}
+                nCtx={nCtx}
+                setNCtx={setNCtx}
+                loraScale={loraScale}
+                setLoraScale={setLoraScale}
+                
+                // New switches
+                customTemplate={customTemplate}
+                setCustomTemplate={setCustomTemplate}
+                chatMode={chatMode}
+                setChatMode={setChatMode}
+                
+                // Download settings
+                hfRepoId={hfRepoId}
+                setHfRepoId={setHfRepoId}
+                hfFilename={hfFilename}
+                setHfFilename={setHfFilename}
+                hfBearerToken={hfBearerToken}
+                setHfBearerToken={setHfBearerToken}
+                
+                // Status
+                availableModels={availableModels}
+                availableMmprojModels={availableMmprojModels}
+                availableVocoderModels={availableVocoderModels}
+                availableLoraModels={availableLoraModels}
+                availableGrammars={availableGrammars}
+                isModelInitialized={isModelInitialized}
+                isDownloading={isDownloading}
+                downloadProgress={downloadProgress}
+                downloadStatus={downloadStatus}
+                downloadError={downloadError}
+                
+                // Actions
+                initializeModel={initializeModel}
+                unloadModel={unloadModel}
+                applyLora={applyLora}
+                removeLora={removeLora}
+                downloadModel={downloadModel}
+              />
             </div>
           )}
         </div>
         
+        {/* Bottom Navigation */}
         <div className="tabs">
-          {tabs.map(tab => (
-            <button 
-              key={tab.id}
-              className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.name}
-            </button>
-          ))}
+          <button 
+            className={`tab-button ${activeTab === 'chat' ? 'active' : ''}`}
+            onClick={() => setActiveTab('chat')}
+          >
+            <span className="tab-icon">💬</span>
+            <span>Chat</span>
+          </button>
+          <button 
+            className={`tab-button ${activeTab === 'embed' ? 'active' : ''}`}
+            onClick={() => setActiveTab('embed')}
+          >
+            <span className="tab-icon">📝</span>
+            <span>Embed</span>
+          </button>
+          <button 
+            className={`tab-button ${activeTab === 'image' ? 'active' : ''}`}
+            onClick={() => setActiveTab('image')}
+          >
+            <span className="tab-icon">📷</span>
+            <span>Image</span>
+          </button>
+          <button 
+            className={`tab-button ${activeTab === 'tts' ? 'active' : ''}`}
+            onClick={() => setActiveTab('tts')}
+          >
+            <span className="tab-icon">🔊</span>
+            <span>TTS</span>
+          </button>
+          <button 
+            className={`tab-button ${activeTab === 'more' ? 'active' : ''}`}
+            onClick={() => setActiveTab('more')}
+          >
+            <span className="tab-icon">⚙️</span>
+            <span>More</span>
+          </button>
         </div>
       </main>
     </div>

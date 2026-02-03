@@ -15,13 +15,18 @@ body {
 #root {
   width: 100vw;
   height: 100vh;
+  /* Safe area padding to prevent status bar and home indicator from being covered */
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .app-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   background-color: #f5f5f5;
+  position: relative;
 }
 
 .app-header {
@@ -29,11 +34,8 @@ body {
   color: white;
   padding: 1rem;
   text-align: center;
-}
-
-.app-header h1 {
-  font-size: 1.5rem;
-  margin: 0;
+  /* Ensure header doesn't overlap with status bar */
+  padding-top: calc(1rem + env(safe-area-inset-top, 0px));
 }
 
 .app-content {
@@ -41,40 +43,96 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding: 1rem;
 }
 
 .tab-content {
   flex: 1;
   overflow: auto;
   padding: 1rem;
+  /* Add padding bottom to ensure content doesn't get cut off by tab bar */
+  padding-bottom: calc(1rem + 80px + env(safe-area-inset-bottom, 0px));
 }
 
+/* Bottom Navigation - Native Mobile Style */
 .tabs {
   display: flex;
   background-color: white;
-  border-top: 1px solid #ddd;
-  overflow-x: auto;
+  border-top: 1px solid #e0e0e0;
+  overflow: hidden;
+  /* Position the tab bar at the bottom */
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  /* Add safe area padding to bottom */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* Adjust height to include safe area */
+  height: calc(80px + env(safe-area-inset-bottom, 0px));
 }
 
+
+
 .tab-button {
-  padding: 1rem;
+  padding: 1rem 0.5rem;
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.75rem;
   white-space: nowrap;
   border-top: 2px solid transparent;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(80px + env(safe-area-inset-bottom, 0px));
+  gap: 0.5rem;
 }
 
 .tab-button:hover {
-  background-color: #f0f0f0;
+  background-color: #f9f9f9;
 }
 
 .tab-button.active {
   border-top-color: #007aff;
   color: #007aff;
-  font-weight: bold;
+  font-weight: 600;
+  background-color: #f8f9ff;
+}
+
+.tab-icon {
+  font-size: 1.5rem;
+  margin-bottom: 0.25rem;
+  line-height: 1;
+}
+
+/* Mobile-specific styles */
+@media (max-width: 768px) {
+  .app-content {
+    padding: 0.75rem;
+  }
+  
+  .tab-content {
+    padding: 0.75rem;
+  }
+  
+  .tabs {
+    height: 70px;
+  }
+  
+  .tab-button {
+    min-height: 70px;
+    padding: 0.75rem 0.5rem;
+  }
+  
+  .tab-icon {
+    font-size: 1.375rem;
+  }
+  
+  .tab-button span {
+    font-size: 0.7rem;
+  }
 }
 
 .tab-panel {
@@ -90,6 +148,9 @@ body {
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   overflow: hidden;
+  /* Add padding to bottom to prevent input from being covered by tab bar */
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box;
 }
 
 .chat-messages {
@@ -125,6 +186,8 @@ body {
   padding: 1rem;
   border-top: 1px solid #ddd;
   background-color: white;
+  /* Add margin to ensure input is not covered by tab bar */
+  margin-bottom: 1rem;
 }
 
 .chat-input input {
@@ -141,6 +204,37 @@ body {
   color: white;
   border: none;
   border-radius: 20px;
+  cursor: pointer;
+}
+
+/* Chat Settings Styles */
+.chat-settings {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #e0e0e0;
+  background-color: #f9f9f9;
+}
+
+.chat-switch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chat-switch label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.chat-switch input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
   cursor: pointer;
 }
 
@@ -226,41 +320,73 @@ body {
 /* Picker Styles */
 .picker-container {
   position: relative;
+  width: 100%;
 }
 
 .model-picker {
   width: 100%;
-  padding: 0.75rem;
+  padding: 1rem;
   border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 1rem;
-  background-color: #f9f9f9;
+  border-radius: 12px;
+  font-size: 1.125rem;
+  line-height: 1.5;
+  background-color: white;
   color: #333;
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
-  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
+  background-image: url('data:image/svg+xml;charset=UTF-8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="%23666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>');
   background-repeat: no-repeat;
-  background-position: right 12px center;
-  background-size: 16px;
+  background-position: right 16px center;
+  background-size: 20px;
+  min-height: 56px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .model-picker:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  background-color: #f9f9f9;
 }
 
 .model-picker:focus {
   outline: none;
   border-color: #007aff;
-  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+  background-color: white;
 }
 
+/* Style for the dropdown options */
 .model-picker option {
-  padding: 0.75rem;
+  padding: 1.25rem 1rem;
   background-color: white;
   color: #333;
+  font-size: 1.125rem;
+  line-height: 1.5;
+  white-space: normal;
+  word-wrap: break-word;
+  max-width: 100%;
+}
+
+/* Mobile-specific styles for better dropdown behavior */
+@media (max-width: 768px) {
+  .model-picker {
+    font-size: 1.25rem;
+    padding: 1.125rem 1rem;
+    min-height: 60px;
+  }
+  
+  .model-picker option {
+    font-size: 1.25rem;
+    padding: 1.5rem 1.25rem;
+  }
+  
+  .picker-container {
+    margin-bottom: 0.5rem;
+  }
 }
 
 
