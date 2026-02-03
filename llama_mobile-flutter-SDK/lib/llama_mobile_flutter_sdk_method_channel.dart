@@ -91,11 +91,11 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
     Map<String, dynamic> params,
     List<String> mediaPaths,
   ) async {
-    debugPrint("[DEBUG] Method Channel: generateMultimodalCompletion called");
-    debugPrint("[DEBUG] Method Channel: contextHandle: $contextHandle");
-    debugPrint("[DEBUG] Method Channel: params: $params");
-    debugPrint("[DEBUG] Method Channel: mediaPaths: $mediaPaths");
-    debugPrint("[DEBUG] Method Channel: mediaPaths length: ${mediaPaths.length}");
+    print("[DEBUG] Method Channel: generateMultimodalCompletion called");
+    print("[DEBUG] Method Channel: contextHandle: $contextHandle");
+    print("[DEBUG] Method Channel: params: $params");
+    print("[DEBUG] Method Channel: mediaPaths: $mediaPaths");
+    print("[DEBUG] Method Channel: mediaPaths length: ${mediaPaths.length}");
 
     final result = await methodChannel.invokeMapMethod<String, dynamic>(
       'generateMultimodalCompletion',
@@ -106,7 +106,7 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
       },
     );
 
-    debugPrint("[DEBUG] Method Channel: Result: $result");
+    print("[DEBUG] Method Channel: Result: $result");
     return result;
   }
 
@@ -116,11 +116,11 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
     Map<String, dynamic> params,
     List<String> mediaPaths,
   ) async {
-    debugPrint("[DEBUG] Method Channel: generateMultimodalCompletionAsync called");
-    debugPrint("[DEBUG] Method Channel: contextHandle: $contextHandle");
-    debugPrint("[DEBUG] Method Channel: params: $params");
-    debugPrint("[DEBUG] Method Channel: mediaPaths: $mediaPaths");
-    debugPrint("[DEBUG] Method Channel: mediaPaths length: ${mediaPaths.length}");
+    print("[DEBUG] Method Channel: generateMultimodalCompletionAsync called");
+    print("[DEBUG] Method Channel: contextHandle: $contextHandle");
+    print("[DEBUG] Method Channel: params: $params");
+    print("[DEBUG] Method Channel: mediaPaths: $mediaPaths");
+    print("[DEBUG] Method Channel: mediaPaths length: ${mediaPaths.length}");
 
     final result = await methodChannel.invokeMapMethod<String, dynamic>(
       'generateMultimodalCompletionAsync',
@@ -131,7 +131,7 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
       },
     );
 
-    debugPrint("[DEBUG] Method Channel: Result: $result");
+    print("[DEBUG] Method Channel: Result: $result");
     return result;
   }
 
@@ -416,23 +416,23 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
     String text,
     Map<String, dynamic> params,
   ) async {
-    debugPrint(
+    print(
       "[DEBUG] Dart: generateEmbedding called - contextHandle: $contextHandle, text: $text, params: $params",
     );
 
     try {
-      debugPrint("[DEBUG] Dart: Invoking method channel for generateEmbedding");
+      print("[DEBUG] Dart: Invoking method channel for generateEmbedding");
       final result = await methodChannel.invokeListMethod<double>(
         'generateEmbedding',
         {'contextHandle': contextHandle, 'text': text, 'params': params},
       );
 
-      debugPrint(
+      print(
         "[DEBUG] Dart: generateEmbedding result received: ${result != null ? 'Success, length: ${result.length}' : 'Null'}",
       );
       return result;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in generateEmbedding: $e");
+      print("[DEBUG] Dart: Error in generateEmbedding: $e");
       rethrow;
     }
   }
@@ -443,23 +443,23 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
     String text,
     Map<String, dynamic> params,
   ) async {
-    debugPrint(
+    print(
       "[DEBUG] Dart: generateEmbeddingAsync called - contextHandle: $contextHandle, text: $text, params: $params",
     );
 
     try {
-      debugPrint("[DEBUG] Dart: Invoking method channel for generateEmbeddingAsync");
+      print("[DEBUG] Dart: Invoking method channel for generateEmbeddingAsync");
       final result = await methodChannel.invokeListMethod<double>(
         'generateEmbeddingAsync',
         {'contextHandle': contextHandle, 'text': text, 'params': params},
       );
 
-      debugPrint(
+      print(
         "[DEBUG] Dart: generateEmbeddingAsync result received: ${result != null ? 'Success, length: ${result.length}' : 'Null'}",
       );
       return result;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in generateEmbeddingAsync: $e");
+      print("[DEBUG] Dart: Error in generateEmbeddingAsync: $e");
       rethrow;
     }
   }
@@ -625,7 +625,7 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
     int contextHandle,
     Map<String, dynamic> params,
   ) async {
-    debugPrint(
+    print(
       "[DEBUG] Dart: generateStreamingCompletion called - contextHandle: $contextHandle, params: $params",
     );
     try {
@@ -633,27 +633,27 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
         'generateStreamingCompletion',
         {'contextHandle': contextHandle, 'params': params},
       );
-      debugPrint("[DEBUG] Dart: generateStreamingCompletion result: $result");
+      print("[DEBUG] Dart: generateStreamingCompletion result: $result");
       return result;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in generateStreamingCompletion: $e");
+      print("[DEBUG] Dart: Error in generateStreamingCompletion: $e");
       rethrow;
     }
   }
 
   @override
   Future<bool> stopCompletion(int contextHandle) async {
-    debugPrint(
+    print(
       "[DEBUG] Dart: stopCompletion called - contextHandle: $contextHandle",
     );
     try {
       final result = await methodChannel.invokeMethod<bool>('stopCompletion', {
         'contextHandle': contextHandle,
       });
-      debugPrint("[DEBUG] Dart: stopCompletion result: $result");
+      print("[DEBUG] Dart: stopCompletion result: $result");
       return result ?? false;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in stopCompletion: $e");
+      print("[DEBUG] Dart: Error in stopCompletion: $e");
       rethrow;
     }
   }
@@ -662,7 +662,7 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   Future<List<Map<String, dynamic>>?> getLoadedLoraAdapters(
     int contextHandle,
   ) async {
-    debugPrint(
+    print(
       "[DEBUG] Dart: getLoadedLoraAdapters called - contextHandle: $contextHandle",
     );
     try {
@@ -670,19 +670,19 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
         'getLoadedLoraAdapters',
         {'contextHandle': contextHandle},
       );
-      debugPrint(
+      print(
         "[DEBUG] Dart: getLoadedLoraAdapters result length: ${result?.length}",
       );
       return result;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in getLoadedLoraAdapters: $e");
+      print("[DEBUG] Dart: Error in getLoadedLoraAdapters: $e");
       rethrow;
     }
   }
 
   @override
   Future<int?> getContextWindowSize(int contextHandle) async {
-    debugPrint(
+    print(
       "[DEBUG] Dart: getContextWindowSize called - contextHandle: $contextHandle",
     );
     try {
@@ -690,17 +690,17 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
         'getContextWindowSize',
         {'contextHandle': contextHandle},
       );
-      debugPrint("[DEBUG] Dart: getContextWindowSize result: $result");
+      print("[DEBUG] Dart: getContextWindowSize result: $result");
       return result;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in getContextWindowSize: $e");
+      print("[DEBUG] Dart: Error in getContextWindowSize: $e");
       rethrow;
     }
   }
 
   @override
   Future<int?> getEmbeddingDimension(int contextHandle) async {
-    debugPrint(
+    print(
       "[DEBUG] Dart: getEmbeddingDimension called - contextHandle: $contextHandle",
     );
     try {
@@ -708,17 +708,17 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
         'getEmbeddingDimension',
         {'contextHandle': contextHandle},
       );
-      debugPrint("[DEBUG] Dart: getEmbeddingDimension result: $result");
+      print("[DEBUG] Dart: getEmbeddingDimension result: $result");
       return result;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in getEmbeddingDimension: $e");
+      print("[DEBUG] Dart: Error in getEmbeddingDimension: $e");
       rethrow;
     }
   }
 
   @override
   Future<String?> getModelDescription(int contextHandle) async {
-    debugPrint(
+    print(
       "[DEBUG] Dart: getModelDescription called - contextHandle: $contextHandle",
     );
     try {
@@ -726,32 +726,32 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
         'getModelDescription',
         {'contextHandle': contextHandle},
       );
-      debugPrint("[DEBUG] Dart: getModelDescription result: $result");
+      print("[DEBUG] Dart: getModelDescription result: $result");
       return result;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in getModelDescription: $e");
+      print("[DEBUG] Dart: Error in getModelDescription: $e");
       rethrow;
     }
   }
 
   @override
   Future<int?> getModelSize(int contextHandle) async {
-    debugPrint("[DEBUG] Dart: getModelSize called - contextHandle: $contextHandle");
+    print("[DEBUG] Dart: getModelSize called - contextHandle: $contextHandle");
     try {
       final result = await methodChannel.invokeMethod<int>('getModelSize', {
         'contextHandle': contextHandle,
       });
-      debugPrint("[DEBUG] Dart: getModelSize result: $result");
+      print("[DEBUG] Dart: getModelSize result: $result");
       return result;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in getModelSize: $e");
+      print("[DEBUG] Dart: Error in getModelSize: $e");
       rethrow;
     }
   }
 
   @override
   Future<int?> getModelParametersCount(int contextHandle) async {
-    debugPrint(
+    print(
       "[DEBUG] Dart: getModelParametersCount called - contextHandle: $contextHandle",
     );
     try {
@@ -759,10 +759,10 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
         'getModelParametersCount',
         {'contextHandle': contextHandle},
       );
-      debugPrint("[DEBUG] Dart: getModelParametersCount result: $result");
+      print("[DEBUG] Dart: getModelParametersCount result: $result");
       return result;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in getModelParametersCount: $e");
+      print("[DEBUG] Dart: Error in getModelParametersCount: $e");
       rethrow;
     }
   }
@@ -771,16 +771,16 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   Future<Map<String, dynamic>?> downloadHfFile(
     Map<String, dynamic> params,
   ) async {
-    debugPrint("[DEBUG] Dart: downloadHfFile called - params: $params");
+    print("[DEBUG] Dart: downloadHfFile called - params: $params");
     try {
       final result = await methodChannel.invokeMapMethod<String, dynamic>(
         'downloadHfFile',
         params,
       );
-      debugPrint("[DEBUG] Dart: downloadHfFile result: $result");
+      print("[DEBUG] Dart: downloadHfFile result: $result");
       return result;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in downloadHfFile: $e");
+      print("[DEBUG] Dart: Error in downloadHfFile: $e");
       rethrow;
     }
   }
@@ -789,23 +789,23 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   Future<Map<String, dynamic>?> downloadHfFileAsync(
     Map<String, dynamic> params,
   ) async {
-    debugPrint("[DEBUG] Dart: downloadHfFileAsync called - params: $params");
+    print("[DEBUG] Dart: downloadHfFileAsync called - params: $params");
     try {
       final result = await methodChannel.invokeMapMethod<String, dynamic>(
         'downloadHfFileAsync',
         params,
       );
-      debugPrint("[DEBUG] Dart: downloadHfFileAsync result: $result");
+      print("[DEBUG] Dart: downloadHfFileAsync result: $result");
       return result;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in downloadHfFileAsync: $e");
+      print("[DEBUG] Dart: Error in downloadHfFileAsync: $e");
       rethrow;
     }
   }
 
   @override
   Future<bool> isMultimodalEnabled(int contextHandle) async {
-    debugPrint(
+    print(
       "[DEBUG] Dart: isMultimodalEnabled called - contextHandle: $contextHandle",
     );
     try {
@@ -813,49 +813,49 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
         'isMultimodalEnabled',
         {'contextHandle': contextHandle},
       );
-      debugPrint("[DEBUG] Dart: isMultimodalEnabled result: $result");
+      print("[DEBUG] Dart: isMultimodalEnabled result: $result");
       return result ?? false;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in isMultimodalEnabled: $e");
+      print("[DEBUG] Dart: Error in isMultimodalEnabled: $e");
       rethrow;
     }
   }
 
   @override
   Future<bool> supportsVision(int contextHandle) async {
-    debugPrint(
+    print(
       "[DEBUG] Dart: supportsVision called - contextHandle: $contextHandle",
     );
     try {
       final result = await methodChannel.invokeMethod<bool>('supportsVision', {
         'contextHandle': contextHandle,
       });
-      debugPrint("[DEBUG] Dart: supportsVision result: $result");
+      print("[DEBUG] Dart: supportsVision result: $result");
       return result ?? false;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in supportsVision: $e");
+      print("[DEBUG] Dart: Error in supportsVision: $e");
       rethrow;
     }
   }
 
   @override
   Future<bool> supportsAudio(int contextHandle) async {
-    debugPrint("[DEBUG] Dart: supportsAudio called - contextHandle: $contextHandle");
+    print("[DEBUG] Dart: supportsAudio called - contextHandle: $contextHandle");
     try {
       final result = await methodChannel.invokeMethod<bool>('supportsAudio', {
         'contextHandle': contextHandle,
       });
-      debugPrint("[DEBUG] Dart: supportsAudio result: $result");
+      print("[DEBUG] Dart: supportsAudio result: $result");
       return result ?? false;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in supportsAudio: $e");
+      print("[DEBUG] Dart: Error in supportsAudio: $e");
       rethrow;
     }
   }
 
   @override
   Future<bool> isVocoderEnabled(int contextHandle) async {
-    debugPrint(
+    print(
       "[DEBUG] Dart: isVocoderEnabled called - contextHandle: $contextHandle",
     );
     try {
@@ -863,25 +863,25 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
         'isVocoderEnabled',
         {'contextHandle': contextHandle},
       );
-      debugPrint("[DEBUG] Dart: isVocoderEnabled result: $result");
+      print("[DEBUG] Dart: isVocoderEnabled result: $result");
       return result ?? false;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in isVocoderEnabled: $e");
+      print("[DEBUG] Dart: Error in isVocoderEnabled: $e");
       rethrow;
     }
   }
 
   @override
   Future<int?> getTTSType(int contextHandle) async {
-    debugPrint("[DEBUG] Dart: getTTSType called - contextHandle: $contextHandle");
+    print("[DEBUG] Dart: getTTSType called - contextHandle: $contextHandle");
     try {
       final result = await methodChannel.invokeMethod<int>('getTTSType', {
         'contextHandle': contextHandle,
       });
-      debugPrint("[DEBUG] Dart: getTTSType result: $result");
+      print("[DEBUG] Dart: getTTSType result: $result");
       return result;
     } catch (e) {
-      debugPrint("[DEBUG] Dart: Error in getTTSType: $e");
+      print("[DEBUG] Dart: Error in getTTSType: $e");
       rethrow;
     }
   }
