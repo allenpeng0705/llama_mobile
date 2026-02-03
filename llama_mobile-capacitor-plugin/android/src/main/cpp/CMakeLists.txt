@@ -1,22 +1,23 @@
-# CMakeLists.txt for llama_mobile JNI implementation for Java SDK
-
 cmake_minimum_required(VERSION 3.18.1)
 
 project("llama_mobile_jni")
 
-# Add the include directories for the llama_mobile headers
+# Set C++ standard library to static to avoid libc++_shared.so dependency
+set(ANDROID_STL c++_static)
+
+# Add include directories for llama_mobile headers
 include_directories(
     ../../../../../llama_mobile-android/include
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-# Define the path to the pre-built llama_mobile library
+# Define path to pre-built llama_mobile library
 set(LLAMA_MOBILE_LIB_PATH "${CMAKE_SOURCE_DIR}/../../../libs")
 
-# Add the pre-built llama_mobile library
-add_library(llama_mobile SHARED IMPORTED)
+# Add pre-built llama_mobile library
+add_library(llama_mobile STATIC IMPORTED)
 set_target_properties(llama_mobile PROPERTIES
-    IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libllama_mobile.so
+    IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libllama_mobile.a
 )
 
 # Add the JNI implementation library

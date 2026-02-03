@@ -11,32 +11,12 @@ import org.json.JSONArray;
  *
  * This class provides a Java wrapper around the llama_mobile C library,
  * allowing Android applications to interact with llama models.
+ *
+ * This is the core Java implementation that both Java and Kotlin developers can use.
+ * Kotlin developers can also use the Kotlin extensions in LlamaMobileKt.kt for
+ * a more idiomatic Kotlin API with DSL support and coroutines.
  */
 public class LlamaMobile {
-    /**
-     * Chat template to use for structured input
-     */
-    public static String chatTemplate = null;
-    
-    /**
-     * Sets the chat template to use for structured input
-     * 
-     * @param template Chat template string with {{role}} and {{content}} placeholders
-     */
-    public static void setChatTemplate(String template) {
-        chatTemplate = template;
-    }
-    
-    /**
-     * Formats chat messages using the specified template
-     * 
-     * @param contextHandle Context handle obtained from initContext
-     * @param messagesJson JSON string containing chat messages
-     * @param chatTemplate Chat template to use (optional)
-     * @return Formatted prompt string, or null if an error occurred
-     */
-    public static native String formatChatMessages(long contextHandle, String messagesJson, String chatTemplate);
-
     /**
      * Error types for LlamaMobile operations
      */
@@ -70,7 +50,175 @@ public class LlamaMobile {
             }
         }
     }
+    
+    /**
+     * Method used for TTS generation
+     */
+    public enum TTSMethod {
+        BUILT_IN,
+        CUSTOM_WORKFLOW
+    }
+    
+    /**
+     * TTS configuration options
+     */
+    public static class TTSOptions {
+        private final int sampleRate;
+        private final String voice;
+        private final float speed;
+        private final boolean saveToFile;
+        private final String outputFilePath;
 
+        public TTSOptions() {
+            this(24000, null, 1.0f, false, null);
+        }
+
+        public TTSOptions(int sampleRate, String voice, float speed, boolean saveToFile, String outputFilePath) {
+            this.sampleRate = sampleRate;
+            this.voice = voice;
+            this.speed = speed;
+            this.saveToFile = saveToFile;
+            this.outputFilePath = outputFilePath;
+        }
+
+        public int getSampleRate() { return sampleRate; }
+        public String getVoice() { return voice; }
+        public float getSpeed() { return speed; }
+        public boolean isSaveToFile() { return saveToFile; }
+        public String getOutputFilePath() { return outputFilePath; }
+
+        public static class Builder {
+            private int sampleRate = 24000;
+            private String voice = null;
+            private float speed = 1.0f;
+            private boolean saveToFile = false;
+            private String outputFilePath = null;
+
+            public Builder() {}
+
+            public Builder sampleRate(int sampleRate) {
+                this.sampleRate = sampleRate;
+                return this;
+            }
+
+            public Builder voice(String voice) {
+                this.voice = voice;
+                return this;
+            }
+
+            public Builder speed(float speed) {
+                this.speed = speed;
+                return this;
+            }
+
+            public Builder saveToFile(boolean saveToFile) {
+                this.saveToFile = saveToFile;
+                return this;
+            }
+
+            public Builder outputFilePath(String outputFilePath) {
+                this.outputFilePath = outputFilePath;
+                return this;
+            }
+
+            public TTSOptions build() {
+                return new TTSOptions(sampleRate, voice, speed, saveToFile, outputFilePath);
+            }
+        }
+    }
+    
+    /**
+     * Result of successful speech generation
+     */
+    public static class SpeechResult {
+        private final short[] audioSamples;
+        private final int sampleRate;
+        private final double duration;
+        private final String outputFilePath;
+        private final TTSMethod methodUsed;
+
+        public SpeechResult(short[] audioSamples, int sampleRate, double duration, String outputFilePath, TTSMethod methodUsed) {
+            this.audioSamples = audioSamples;
+            this.sampleRate = sampleRate;
+            this.duration = duration;
+            this.outputFilePath = outputFilePath;
+            this.methodUsed = methodUsed;
+        }
+
+        public short[] getAudioSamples() { return audioSamples; }
+        public int getSampleRate() { return sampleRate; }
+        public double getDuration() { return duration; }
+        public String getOutputFilePath() { return outputFilePath; }
+        public TTSMethod getMethodUsed() { return methodUsed; }
+    }
+    
+    /**
+     * Metadata for speech generation (used in streaming)
+     */
+    public static class SpeechMetadata {
+        private final int sampleRate;
+        private final double duration;
+        private final TTSMethod methodUsed;
+        private final String outputFilePath;
+
+        public SpeechMetadata(int sampleRate, double duration, TTSMethod methodUsed, String outputFilePath) {
+            this.sampleRate = sampleRate;
+            this.duration = duration;
+            this.methodUsed = methodUsed;
+            this.outputFilePath = outputFilePath;
+        }
+
+        public int getSampleRate() { return sampleRate; }
+        public double getDuration() { return duration; }
+        public TTSMethod getMethodUsed() { return methodUsed; }
+        public String getOutputFilePath() { return outputFilePath; }
+    }
+    
+    /**
+     * Error types for TTS operations
+     */
+    public static class TTSError extends Exception {
+        private TTSError(String message) {
+            super(message);
+        }
+
+        public static TTSError noModelLoaded() {
+            return new TTSError("No model loaded");
+        }
+
+        public static TTSError noVocoderEnabled() {
+            return new TTSError("No vocoder enabled");
+        }
+
+        public static TTSError invalidText() {
+            return new TTSError("Invalid text");
+        }
+
+        public static TTSError generationFailed() {
+            return new TTSError("Generation failed");
+        }
+
+        public static TTSError formattingFailed() {
+            return new TTSError("Formatting failed");
+        }
+
+        public static TTSError tokenizationFailed() {
+            return new TTSError("Tokenization failed");
+        }
+
+        public static TTSError audioDecodingFailed() {
+            return new TTSError("Audio decoding failed");
+        }
+
+        public static TTSError fileSaveFailed() {
+            return new TTSError("File save failed");
+        }
+
+        public static TTSError unknownError(String message) {
+            return new TTSError(message);
+        }
+    }
+    
     /**
      * Cache type enum
      */
@@ -80,29 +228,25 @@ public class LlamaMobile {
     }
 
     /**
-     * Grammar name enum
-     */
-    public enum GrammarName {
-        ARITHMETIC,
-        C,
-        CHESS,
-        ENGLISH,
-        JAPANESE,
-        JSON,
-        JSON_ARR,
-        LIST
-    }
-
-    /**
      * Chat message structure for structured input
      */
     public static class ChatMessage {
         private final String role;
         private final String content;
+        private final String reasoningContent;
+        private final String toolName;
+        private final String toolCallId;
 
         public ChatMessage(String role, String content) {
+            this(role, content, null, null, null);
+        }
+
+        public ChatMessage(String role, String content, String reasoningContent, String toolName, String toolCallId) {
             this.role = role;
             this.content = content;
+            this.reasoningContent = reasoningContent;
+            this.toolName = toolName;
+            this.toolCallId = toolCallId;
         }
 
         public String getRole() {
@@ -111,6 +255,18 @@ public class LlamaMobile {
 
         public String getContent() {
             return content;
+        }
+
+        public String getReasoningContent() {
+            return reasoningContent;
+        }
+
+        public String getToolName() {
+            return toolName;
+        }
+
+        public String getToolCallId() {
+            return toolCallId;
         }
     }
 
@@ -122,10 +278,63 @@ public class LlamaMobile {
     }
 
     /**
-     * Progress callback interface for download operations
+     * Progress callback interface for operations (initialization, TTS)
      */
     public interface ProgressCallback {
         void onProgress(float progress);
+    }
+
+    /**
+     * Download progress callback interface
+     */
+    public interface DownloadProgressCallback {
+        void onProgress(float progress, String status, long downloadedBytes, long totalBytes);
+    }
+
+    /**
+     * Audio chunk callback interface for streaming TTS
+     */
+    public interface AudioChunkCallback {
+        void onAudioChunk(short[] audioChunk);
+    }
+
+    /**
+     * Result class for operations
+     */
+    public static class Result<S, E> {
+        private final S value;
+        private final E error;
+        private final boolean isSuccess;
+
+        private Result(S value, E error, boolean isSuccess) {
+            this.value = value;
+            this.error = error;
+            this.isSuccess = isSuccess;
+        }
+
+        public static <S, E> Result<S, E> success(S value) {
+            return new Result<>(value, null, true);
+        }
+
+        public static <S, E> Result<S, E> failure(E error) {
+            return new Result<>(null, error, false);
+        }
+
+        public boolean isSuccess() {
+            return isSuccess;
+        }
+
+        public boolean isFailure() {
+            return !isSuccess;
+        }
+
+        public S getValue() {
+            return value;
+        }
+
+        public E getError() {
+            return error;
+        }
     }
 
     /**
@@ -163,33 +372,65 @@ public class LlamaMobile {
     }
 
     /**
-     * Parameters for downloading models or files
+     * Parameters for downloading models or files from Hugging Face
      */
     public static class DownloadParams {
-        private final String url;
-        private final String localPath;
-        private final String password;
-        private final Map<String, String> headers;
+        private final String repoId;
+        private final String filename;
+        private final String destinationPath;
+        private final String bearerToken;
+        private final boolean offline;
+        private final DownloadProgressCallback progressCallback;
 
-        public DownloadParams(String url, String localPath) {
-            this(url, localPath, null, null);
+        private DownloadParams(Builder builder) {
+            this.repoId = builder.repoId;
+            this.filename = builder.filename;
+            this.destinationPath = builder.destinationPath;
+            this.bearerToken = builder.bearerToken;
+            this.offline = builder.offline;
+            this.progressCallback = builder.progressCallback;
         }
 
-        public DownloadParams(String url, String localPath, String password) {
-            this(url, localPath, password, null);
-        }
+        public String getRepoId() { return repoId; }
+        public String getFilename() { return filename; }
+        public String getDestinationPath() { return destinationPath; }
+        public String getBearerToken() { return bearerToken; }
+        public boolean isOffline() { return offline; }
+        public DownloadProgressCallback getProgressCallback() { return progressCallback; }
 
-        public DownloadParams(String url, String localPath, String password, Map<String, String> headers) {
-            this.url = url;
-            this.localPath = localPath;
-            this.password = password;
-            this.headers = headers;
-        }
+        public static class Builder {
+            private final String repoId;
+            private final String filename;
+            private final String destinationPath;
+            private String bearerToken;
+            private boolean offline;
+            private DownloadProgressCallback progressCallback;
 
-        public String getUrl() { return url; }
-        public String getLocalPath() { return localPath; }
-        public String getPassword() { return password; }
-        public Map<String, String> getHeaders() { return headers; }
+            public Builder(String repoId, String filename, String destinationPath) {
+                this.repoId = repoId;
+                this.filename = filename;
+                this.destinationPath = destinationPath;
+            }
+
+            public Builder bearerToken(String bearerToken) {
+                this.bearerToken = bearerToken;
+                return this;
+            }
+
+            public Builder offline(boolean offline) {
+                this.offline = offline;
+                return this;
+            }
+
+            public Builder progressCallback(DownloadProgressCallback progressCallback) {
+                this.progressCallback = progressCallback;
+                return this;
+            }
+
+            public DownloadParams build() {
+                return new DownloadParams(this);
+            }
+        }
     }
 
     /**
@@ -220,7 +461,7 @@ public class LlamaMobile {
         private final String chatTemplate;
         private final String systemPrompt;
         private final int nBatch;
-        private final int nUbatch;
+        private final int nUBatch;
         private final int nGpuLayers;
         private final int nThreads;
         private final boolean useMmap;
@@ -228,30 +469,31 @@ public class LlamaMobile {
         private final boolean embedding;
         private final int poolingType;
         private final int embdNormalize;
-        private final boolean flashAttn;
+        private final boolean flashAttention;
         private final String cacheTypeK;
         private final String cacheTypeV;
-        private final CacheType cacheType;
+        private final boolean enableChatTemplate;
+        private final ProgressCallback progressCallback;
 
         public InitParams(String modelPath) {
-            this(modelPath, 512, null, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, CacheType.MEMORY);
+            this(modelPath, 2048, null, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, true, null);
         }
 
         public InitParams(String modelPath, int nCtx) {
-            this(modelPath, nCtx, null, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, CacheType.MEMORY);
+            this(modelPath, nCtx, null, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, true, null);
         }
 
         public InitParams(String modelPath, int nCtx, String chatTemplate) {
-            this(modelPath, nCtx, chatTemplate, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, CacheType.MEMORY);
+            this(modelPath, nCtx, chatTemplate, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, true, null);
         }
 
-        public InitParams(String modelPath, int nCtx, String chatTemplate, String systemPrompt, int nBatch, int nUbatch, int nGpuLayers, int nThreads, boolean useMmap, boolean useMlock, boolean embedding, int poolingType, int embdNormalize, boolean flashAttn, String cacheTypeK, String cacheTypeV, CacheType cacheType) {
+        public InitParams(String modelPath, int nCtx, String chatTemplate, String systemPrompt, int nBatch, int nUBatch, int nGpuLayers, int nThreads, boolean useMmap, boolean useMlock, boolean embedding, int poolingType, int embdNormalize, boolean flashAttention, String cacheTypeK, String cacheTypeV, boolean enableChatTemplate, ProgressCallback progressCallback) {
             this.modelPath = modelPath;
             this.nCtx = nCtx;
             this.chatTemplate = chatTemplate;
             this.systemPrompt = systemPrompt;
             this.nBatch = nBatch;
-            this.nUbatch = nUbatch;
+            this.nUBatch = nUBatch;
             this.nGpuLayers = nGpuLayers;
             this.nThreads = nThreads;
             this.useMmap = useMmap;
@@ -259,10 +501,11 @@ public class LlamaMobile {
             this.embedding = embedding;
             this.poolingType = poolingType;
             this.embdNormalize = embdNormalize;
-            this.flashAttn = flashAttn;
+            this.flashAttention = flashAttention;
             this.cacheTypeK = cacheTypeK;
             this.cacheTypeV = cacheTypeV;
-            this.cacheType = cacheType;
+            this.enableChatTemplate = enableChatTemplate;
+            this.progressCallback = progressCallback;
         }
 
         public String getModelPath() { return modelPath; }
@@ -270,7 +513,7 @@ public class LlamaMobile {
         public String getChatTemplate() { return chatTemplate; }
         public String getSystemPrompt() { return systemPrompt; }
         public int getNBatch() { return nBatch; }
-        public int getNUbatch() { return nUbatch; }
+        public int getNUBatch() { return nUBatch; }
         public int getNGpuLayers() { return nGpuLayers; }
         public int getNThreads() { return nThreads; }
         public boolean isUseMmap() { return useMmap; }
@@ -278,10 +521,25 @@ public class LlamaMobile {
         public boolean isEmbedding() { return embedding; }
         public int getPoolingType() { return poolingType; }
         public int getEmbdNormalize() { return embdNormalize; }
-        public boolean isFlashAttn() { return flashAttn; }
+        public boolean isFlashAttention() { return flashAttention; }
         public String getCacheTypeK() { return cacheTypeK; }
         public String getCacheTypeV() { return cacheTypeV; }
-        public CacheType getCacheType() { return cacheType; }
+        public boolean isEnableChatTemplate() { return enableChatTemplate; }
+        public ProgressCallback getProgressCallback() { return progressCallback; }
+
+        /**
+         * Convenience factory for GPU-accelerated inference
+         */
+        public static InitParams gpu(String modelPath, int nGpuLayers, int nCtx) {
+            return new InitParams(modelPath, nCtx, null, null, 512, 512, nGpuLayers, 4, true, false, false, 0, 0, false, null, null, true, null);
+        }
+
+        /**
+         * Convenience factory for embedding generation
+         */
+        public static InitParams embedding(String modelPath, int poolingType) {
+            return new InitParams(modelPath, 2048, null, null, 512, 512, 0, 4, true, false, true, poolingType, 0, false, null, null, true, null);
+        }
     }
 
     /**
@@ -312,29 +570,32 @@ public class LlamaMobile {
         private final TokenCallback tokenCallback;
         private final List<ChatMessage> chatMessages;
         private final boolean useJsonResponse;
-        private final String chatTemplate;
+        private final String jsonSchema;
+        private final String tools;
+        private final boolean parallelToolCalls;
+        private final String toolChoice;
 
         public CompletionParams(String prompt) {
-            this(prompt, 0.8f, 100, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, false, null);
+            this(prompt, 0.8f, 1024, null, -1, 40, 0.95, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, true, null, null, false, null);
         }
 
         public CompletionParams(String prompt, float temperature) {
-            this(prompt, temperature, 100, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, false, null);
+            this(prompt, temperature, 1024, null, -1, 40, 0.95, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, true, null, null, false, null);
         }
 
         public CompletionParams(String prompt, float temperature, int maxTokens) {
-            this(prompt, temperature, maxTokens, 4, -1, 40, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, false, null);
+            this(prompt, temperature, maxTokens, null, -1, 40, 0.95, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, null, null, null, null, true, null, null, false, null);
         }
 
-        public CompletionParams(String prompt, float temperature, int maxTokens, int nThreads, int seed, int topK, double topP, double minP, double typicalP, int penaltyLastN, double penaltyRepeat, double penaltyFreq, double penaltyPresent, int mirostat, double mirostatTau, double mirostatEta, boolean ignoreEos, int nProbs, String grammar, List<String> stopSequences, List<String> mediaPaths, TokenCallback tokenCallback) {
-            this(prompt, temperature, maxTokens, nThreads, seed, topK, topP, minP, typicalP, penaltyLastN, penaltyRepeat, penaltyFreq, penaltyPresent, mirostat, mirostatTau, mirostatEta, ignoreEos, nProbs, grammar, stopSequences, mediaPaths, tokenCallback, null, false, null);
+        public CompletionParams(String prompt, float temperature, int maxTokens, Integer nThreads, int seed, int topK, double topP, double minP, double typicalP, int penaltyLastN, double penaltyRepeat, double penaltyFreq, double penaltyPresent, int mirostat, double mirostatTau, double mirostatEta, boolean ignoreEos, int nProbs, String grammar, List<String> stopSequences, List<String> mediaPaths, TokenCallback tokenCallback) {
+            this(prompt, temperature, maxTokens, nThreads, seed, topK, topP, minP, typicalP, penaltyLastN, penaltyRepeat, penaltyFreq, penaltyPresent, mirostat, mirostatTau, mirostatEta, ignoreEos, nProbs, grammar, stopSequences, mediaPaths, tokenCallback, null, true, null, null, false, null);
         }
 
-        public CompletionParams(String prompt, float temperature, int maxTokens, int nThreads, int seed, int topK, double topP, double minP, double typicalP, int penaltyLastN, double penaltyRepeat, double penaltyFreq, double penaltyPresent, int mirostat, double mirostatTau, double mirostatEta, boolean ignoreEos, int nProbs, String grammar, List<String> stopSequences, List<String> mediaPaths, TokenCallback tokenCallback, List<ChatMessage> chatMessages, boolean useJsonResponse, String chatTemplate) {
+        public CompletionParams(String prompt, float temperature, int maxTokens, Integer nThreads, int seed, int topK, double topP, double minP, double typicalP, int penaltyLastN, double penaltyRepeat, double penaltyFreq, double penaltyPresent, int mirostat, double mirostatTau, double mirostatEta, boolean ignoreEos, int nProbs, String grammar, List<String> stopSequences, List<String> mediaPaths, TokenCallback tokenCallback, List<ChatMessage> chatMessages, boolean useJsonResponse, String jsonSchema, String tools, boolean parallelToolCalls, String toolChoice) {
             this.prompt = prompt;
             this.temperature = temperature;
             this.maxTokens = maxTokens;
-            this.nThreads = nThreads;
+            this.nThreads = nThreads != null ? nThreads : 4;
             this.seed = seed;
             this.topK = topK;
             this.topP = topP;
@@ -355,13 +616,16 @@ public class LlamaMobile {
             this.tokenCallback = tokenCallback;
             this.chatMessages = chatMessages != null ? chatMessages : new ArrayList<>();
             this.useJsonResponse = useJsonResponse;
-            this.chatTemplate = chatTemplate;
+            this.jsonSchema = jsonSchema;
+            this.tools = tools;
+            this.parallelToolCalls = parallelToolCalls;
+            this.toolChoice = toolChoice;
         }
 
         public String getPrompt() { return prompt; }
         public float getTemperature() { return temperature; }
         public int getMaxTokens() { return maxTokens; }
-        public int getNThreads() { return nThreads; }
+        public Integer getNThreads() { return nThreads; }
         public int getSeed() { return seed; }
         public int getTopK() { return topK; }
         public double getTopP() { return topP; }
@@ -382,7 +646,10 @@ public class LlamaMobile {
         public TokenCallback getTokenCallback() { return tokenCallback; }
         public List<ChatMessage> getChatMessages() { return chatMessages; }
         public boolean isUseJsonResponse() { return useJsonResponse; }
-        public String getChatTemplate() { return chatTemplate; }
+        public String getJsonSchema() { return jsonSchema; }
+        public String getTools() { return tools; }
+        public boolean isParallelToolCalls() { return parallelToolCalls; }
+        public String getToolChoice() { return toolChoice; }
 
         /**
          * Creates CompletionParams from OpenAI format JSON
@@ -390,7 +657,49 @@ public class LlamaMobile {
          * {"messages": [{"role": "system", "content": "You are a helpful assistant"}, {"role": "user", "content": "Hello"}]}
          */
         public static CompletionParams fromOpenAIJSON(String openAIJSON) throws Exception {
-            return new CompletionParams("", 0.7f, 256, 4, -1, 40, 0.95, 0.05, 1.0, 64, 1.0, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, new ArrayList<>(), parseMediaPaths(openAIJSON), null, parseChatMessages(openAIJSON), true, null);
+            return new CompletionParams("", 0.7f, 256, null, -1, 40, 0.95, 0.05, 1.0, 64, 1.0, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, new ArrayList<>(), parseMediaPaths(openAIJSON), null, parseChatMessages(openAIJSON), true, null, null, false, null);
+        }
+
+        /**
+         * Convenience factory for creative writing
+         */
+        public static CompletionParams creative(String prompt, int maxTokens) {
+            return new CompletionParams(prompt, 1.0f, maxTokens, null, -1, 100, 0.98, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, new ArrayList<>(), new ArrayList<>(), null);
+        }
+
+        /**
+         * Convenience factory for factual/accurate outputs
+         */
+        public static CompletionParams factual(String prompt) {
+            return new CompletionParams(prompt, 0.1f, 1024, null, -1, 20, 0.9, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, new ArrayList<>(), new ArrayList<>(), null);
+        }
+
+        /**
+         * Convenience factory for chat conversations using structured messages
+         */
+        public static CompletionParams chat(List<ChatMessage> messages, int maxTokens) {
+            return new CompletionParams("", 0.7f, maxTokens, null, -1, 40, 0.95, 0.05, 1.0, 64, 1.2, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, new ArrayList<>(), new ArrayList<>(), null, messages, true, null, null, false, null);
+        }
+
+        /**
+         * Convenience factory for chat-like responses using raw prompt
+         */
+        public static CompletionParams chat(String prompt, int maxTokens) {
+            return new CompletionParams(prompt, 0.7f, maxTokens, null, -1, 40, 0.95, 0.05, 1.0, 64, 1.2, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, new ArrayList<>(), new ArrayList<>(), null);
+        }
+
+        /**
+         * Convenience factory for multimodal inputs
+         */
+        public static CompletionParams multimodal(String prompt, List<String> mediaPaths, int maxTokens) {
+            return new CompletionParams(prompt, 0.8f, maxTokens, null, -1, 40, 0.95, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, new ArrayList<>(), mediaPaths, null);
+        }
+
+        /**
+         * Convenience factory for JSON output
+         */
+        public static CompletionParams jsonOutput(String prompt, int maxTokens) {
+            return new CompletionParams(prompt, 0.8f, maxTokens, null, -1, 40, 0.95, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, new ArrayList<>(), new ArrayList<>(), null);
         }
 
         /**
@@ -405,7 +714,13 @@ public class LlamaMobile {
                     JSONObject message = messages.getJSONObject(i);
                     String role = message.getString("role");
                     String content = message.getString("content");
-                    chatMessages.add(new ChatMessage(role, content));
+                    String reasoningContent = message.optString("reasoning_content", null);
+                    if (reasoningContent != null && reasoningContent.isEmpty()) reasoningContent = null;
+                    String toolName = message.optString("tool_name", null);
+                    if (toolName != null && toolName.isEmpty()) toolName = null;
+                    String toolCallId = message.optString("tool_call_id", null);
+                    if (toolCallId != null && toolCallId.isEmpty()) toolCallId = null;
+                    chatMessages.add(new ChatMessage(role, content, reasoningContent, toolName, toolCallId));
                 }
             }
             return chatMessages;
@@ -443,54 +758,35 @@ public class LlamaMobile {
     }
     
     /**
-     * Convenience method to get JSON grammar content
-     * 
-     * @param context Application context to access assets
-     * @return JSON grammar content as string
+     * Reads grammar content from a file
+     *
+     * @param filePath Path to the grammar file
+     * @return Grammar content as string, or null if file not found or error occurred
      */
-    public static String getJsonGrammar(android.content.Context context) {
-        return grammarContent(context, GrammarName.JSON);
-    }
-    
-    /**
-     * Convenience method to get arithmetic grammar content
-     * 
-     * @param context Application context to access assets
-     * @return Arithmetic grammar content as string
-     */
-    public static String getArithmeticGrammar(android.content.Context context) {
-        return grammarContent(context, GrammarName.ARITHMETIC);
-    }
-    
-    /**
-     * Convenience method to get C grammar content
-     * 
-     * @param context Application context to access assets
-     * @return C grammar content as string
-     */
-    public static String getCGrammar(android.content.Context context) {
-        return grammarContent(context, GrammarName.C);
-    }
-
-    /**
-     * LoRA adapter configuration
-     */
-    public static class LoraAdapter {
-        private final String path;
-        private final float scale;
-
-        public LoraAdapter(String path) {
-            this(path, 1.0f);
+    public static String loadGrammar(String filePath) {
+        if (filePath == null || filePath.isEmpty()) {
+            return null;
         }
 
-        public LoraAdapter(String path, float scale) {
-            this.path = path;
-            this.scale = scale;
-        }
+        try {
+            java.io.File file = new java.io.File(filePath);
+            if (!file.exists()) {
+                return null;
+            }
 
-        public String getPath() { return path; }
-        public float getScale() { return scale; }
+            java.io.FileInputStream fis = new java.io.FileInputStream(file);
+            byte[] buffer = new byte[(int) file.length()];
+            fis.read(buffer);
+            fis.close();
+
+            return new String(buffer, "UTF-8");
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }
+
+
 
     /**
      * Result of a conversation generation
@@ -514,28 +810,14 @@ public class LlamaMobile {
         public int getTokensGenerated() { return tokensGenerated; }
     }
 
+
+
     /**
      * Loads the native libraries
      */
     static {
-        // Load C++ shared library first - explicitly handle potential errors
-        try {
-            System.loadLibrary("c++_shared");
-            // Then load our native libraries
-            System.loadLibrary("llama_mobile");
-            System.loadLibrary("llama_mobile_jni");
-        } catch (UnsatisfiedLinkError e) {
-            e.printStackTrace();
-            // Try alternative loading approach if primary fails
-            try {
-                System.loadLibrary("c++_shared");
-                System.loadLibrary("llama_mobile");
-                System.loadLibrary("llama_mobile_jni");
-            } catch (UnsatisfiedLinkError e2) {
-                e2.printStackTrace();
-                throw e2;
-            }
-        }
+        // Load JNI library (statically linked with c++_static, no external dependencies)
+        System.loadLibrary("llama_mobile_jni");
     }
 
     /**
@@ -693,6 +975,26 @@ public class LlamaMobile {
     public static native void releaseVocoder(long contextHandle);
 
     /**
+     * LoRA adapter configuration
+     */
+    public static class LoraAdapter {
+        private final String path;
+        private final float scale;
+
+        public LoraAdapter(String path) {
+            this(path, 1.0f);
+        }
+
+        public LoraAdapter(String path, float scale) {
+            this.path = path;
+            this.scale = scale;
+        }
+
+        public String getPath() { return path; }
+        public float getScale() { return scale; }
+    }
+
+    /**
      * Applies LoRA adapters to the model
      *
      * @param contextHandle Context handle obtained from initContext
@@ -773,6 +1075,433 @@ public class LlamaMobile {
      */
     public static native long getModelSize(long contextHandle);
 
+
+
+    /**
+     * Generates audio samples from text using TTS
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Text to convert to speech
+     * @param speakerJson JSON string with speaker configuration (optional, defaults to default speaker)
+     * @return Array of floating-point audio samples, or null if an error occurred
+     */
+    public static float[] generateAudioFromText(long contextHandle, String text, String speakerJson) {
+        if (contextHandle == 0L) {
+            return null;
+        }
+        
+        if (!isVocoderEnabled(contextHandle)) {
+            return null;
+        }
+        
+        if (text == null || text.isEmpty()) {
+            return null;
+        }
+        
+        if (speakerJson == null) {
+            speakerJson = "{\"speaker\": \"default\"}";
+        }
+        
+        // Get formatted audio completion
+        String formattedPrompt = getFormattedAudioCompletion(contextHandle, speakerJson, text);
+        if (formattedPrompt == null) {
+            return null;
+        }
+        
+        // Get audio guide tokens
+        int[] guideTokens = getAudioGuideTokens(contextHandle, formattedPrompt);
+        if (guideTokens == null) {
+            return null;
+        }
+        
+        // Set guide tokens for audio generation
+        setGuideTokens(contextHandle, guideTokens);
+        
+        // Generate completion using the formatted prompt with proper constructor
+        CompletionParams completionParams = new CompletionParams(
+            formattedPrompt, // prompt
+            0.0f, // temperature
+            200, // maxTokens
+            null, // nThreads
+            -1, // seed
+            40, // topK
+            0.95, // topP
+            0.05, // minP
+            1.0, // typicalP
+            64, // penaltyLastN
+            1.1, // penaltyRepeat
+            0.0, // penaltyFreq
+            0.0, // penaltyPresent
+            0, // mirostat
+            5.0, // mirostatTau
+            0.1, // mirostatEta
+            false, // ignoreEos
+            0, // nProbs
+            null, // grammar
+            null, // stopSequences
+            null, // mediaPaths
+            null, // tokenCallback
+            null, // chatMessages
+            true, // useJsonResponse
+            null, // jsonSchema
+            null, // tools
+            false, // parallelToolCalls
+            null // toolChoice
+        );
+        
+        CompletionResult completionResult = generateCompletion(contextHandle, completionParams);
+        if (completionResult == null) {
+            return null;
+        }
+        
+        // Tokenize only the completion (not the prompt + completion)
+        int[] audioTokens = tokenize(contextHandle, completionResult.text);
+        if (audioTokens == null) {
+            return null;
+        }
+        
+        // Filter audio tokens - match iOS implementation
+        java.util.ArrayList<Integer> filteredTokens = new java.util.ArrayList<>();
+        int audioEndToken = 151668; // <|audio_end|>
+        int minAudioToken = 151672;
+        int maxAudioToken = 155772;
+        
+        for (int token : audioTokens) {
+            // Check if token is in audio range
+            if (token >= minAudioToken && token <= maxAudioToken) {
+                filteredTokens.add(token);
+            }
+            
+            // Check for end token
+            if (token == audioEndToken) {
+                break;
+            }
+        }
+        
+        // Convert ArrayList to int array
+        int[] filteredTokenArray = new int[filteredTokens.size()];
+        for (int i = 0; i < filteredTokens.size(); i++) {
+            filteredTokenArray[i] = filteredTokens.get(i);
+        }
+        
+        // Decode audio tokens to samples
+        return decodeAudioTokens(contextHandle, filteredTokenArray);
+    }
+
+    /**
+     * Generates audio samples from text using TTS with default speaker
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Text to convert to speech
+     * @return Array of floating-point audio samples, or null if an error occurred
+     */
+    public static float[] generateAudioFromText(long contextHandle, String text) {
+        return generateAudioFromText(contextHandle, text, "{\"speaker\": \"default\"}");
+    }
+
+    /**
+     * Generates speech from text using the best available method (synchronous)
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Text to convert to speech
+     * @param options TTS configuration options
+     * @return Result containing the generated audio samples and metadata
+     */
+    public static Result<SpeechResult, TTSError> generateSpeechSync(long contextHandle, String text, TTSOptions options) {
+        if (contextHandle == 0L) {
+            return Result.failure(TTSError.noModelLoaded());
+        }
+        
+        if (!isVocoderEnabled(contextHandle)) {
+            return Result.failure(TTSError.noVocoderEnabled());
+        }
+        
+        float[] audioSamples = generateAudioFromText(contextHandle, text);
+        
+        if (audioSamples == null) {
+            return Result.failure(TTSError.generationFailed());
+        }
+        
+        double duration = audioSamples.length / (double) options.getSampleRate();
+        
+        short[] shortSamples = new short[audioSamples.length];
+        for (int i = 0; i < audioSamples.length; i++) {
+            shortSamples[i] = (short) (audioSamples[i] * Short.MAX_VALUE);
+        }
+        
+        String savedFilePath = null;
+        if (options.isSaveToFile() && options.getOutputFilePath() != null) {
+            boolean saveSuccess = saveAudioToWav(contextHandle, options.getOutputFilePath(), audioSamples, options.getSampleRate());
+            if (saveSuccess) {
+                savedFilePath = options.getOutputFilePath();
+            } else {
+                return Result.failure(TTSError.fileSaveFailed());
+            }
+        }
+        
+        TTSMethod methodUsed = TTSMethod.BUILT_IN;
+        SpeechResult speechResult = new SpeechResult(
+            shortSamples,
+            options.getSampleRate(),
+            duration,
+            savedFilePath,
+            methodUsed
+        );
+        
+        return Result.success(speechResult);
+    }
+
+    /**
+     * Generates speech from text using the best available method (synchronous) with default options
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Text to convert to speech
+     * @return Result containing the generated audio samples and metadata
+     */
+    public static Result<SpeechResult, TTSError> generateSpeechSync(long contextHandle, String text) {
+        return generateSpeechSync(contextHandle, text, new TTSOptions());
+    }
+
+    /**
+     * Generates speech from text using the best available method (asynchronous)
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Text to convert to speech
+     * @param options TTS configuration options
+     * @param progressHandler Optional callback for progress updates
+     * @return Result containing the generated audio samples and metadata
+     */
+    public static Result<SpeechResult, TTSError> generateSpeech(long contextHandle, String text, TTSOptions options, ProgressCallback progressHandler) {
+        if (contextHandle == 0L) {
+            return Result.failure(TTSError.noModelLoaded());
+        }
+        
+        if (!isVocoderEnabled(contextHandle)) {
+            return Result.failure(TTSError.noVocoderEnabled());
+        }
+        
+        if (progressHandler != null) {
+            progressHandler.onProgress(0.1f);
+        }
+        
+        float[] audioSamples = generateAudioFromText(contextHandle, text);
+        
+        if (progressHandler != null) {
+            progressHandler.onProgress(0.8f);
+        }
+        
+        if (audioSamples == null) {
+            return Result.failure(TTSError.generationFailed());
+        }
+        
+        double duration = audioSamples.length / (double) options.getSampleRate();
+        
+        short[] shortSamples = new short[audioSamples.length];
+        for (int i = 0; i < audioSamples.length; i++) {
+            shortSamples[i] = (short) (audioSamples[i] * Short.MAX_VALUE);
+        }
+        
+        String savedFilePath = null;
+        if (options.isSaveToFile() && options.getOutputFilePath() != null) {
+            boolean saveSuccess = saveAudioToWav(contextHandle, options.getOutputFilePath(), audioSamples, options.getSampleRate());
+            if (saveSuccess) {
+                savedFilePath = options.getOutputFilePath();
+            } else {
+                return Result.failure(TTSError.fileSaveFailed());
+            }
+        }
+        
+        if (progressHandler != null) {
+            progressHandler.onProgress(1.0f);
+        }
+        
+        TTSMethod methodUsed = TTSMethod.BUILT_IN;
+        SpeechResult speechResult = new SpeechResult(
+            shortSamples,
+            options.getSampleRate(),
+            duration,
+            savedFilePath,
+            methodUsed
+        );
+        
+        return Result.success(speechResult);
+    }
+
+    /**
+     * Generates speech from text using the best available method (asynchronous) with default options
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Text to convert to speech
+     * @return Result containing the generated audio samples and metadata
+     */
+    public static Result<SpeechResult, TTSError> generateSpeech(long contextHandle, String text) {
+        return generateSpeech(contextHandle, text, new TTSOptions(), null);
+    }
+
+    /**
+     * Generates speech from text using the best available method (asynchronous) with progress handler
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Text to convert to speech
+     * @param progressHandler Callback for progress updates
+     * @return Result containing the generated audio samples and metadata
+     */
+    public static Result<SpeechResult, TTSError> generateSpeech(long contextHandle, String text, ProgressCallback progressHandler) {
+        return generateSpeech(contextHandle, text, new TTSOptions(), progressHandler);
+    }
+
+    /**
+     * Generates speech from text using the best available method (asynchronous) with options
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Text to convert to speech
+     * @param options TTS configuration options
+     * @return Result containing the generated audio samples and metadata
+     */
+    public static Result<SpeechResult, TTSError> generateSpeech(long contextHandle, String text, TTSOptions options) {
+        return generateSpeech(contextHandle, text, options, null);
+    }
+
+    /**
+     * Generates speech from text with streaming support (simplified implementation)
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Text to convert to speech
+     * @param options TTS configuration options
+     * @param progressHandler Optional callback for progress updates
+     * @param audioChunkHandler Callback for receiving audio chunks
+     * @return Result containing metadata about the generated speech
+     */
+    public static Result<SpeechMetadata, TTSError> generateSpeechStream(long contextHandle, String text, TTSOptions options, ProgressCallback progressHandler, AudioChunkCallback audioChunkHandler) {
+        // Generate full audio first (simplified streaming)
+        Result<SpeechResult, TTSError> result = generateSpeech(contextHandle, text, options, progressHandler);
+        
+        if (result.isFailure()) {
+            return Result.failure(result.getError());
+        }
+        
+        SpeechResult speechResult = result.getValue();
+        
+        // Send the entire audio as a single chunk
+        if (audioChunkHandler != null) {
+            audioChunkHandler.onAudioChunk(speechResult.getAudioSamples());
+        }
+        
+        // Create metadata
+        SpeechMetadata metadata = new SpeechMetadata(
+            speechResult.getSampleRate(),
+            speechResult.getDuration(),
+            speechResult.getMethodUsed(),
+            speechResult.getOutputFilePath()
+        );
+        
+        return Result.success(metadata);
+    }
+
+    /**
+     * Generates speech from text with streaming support (simplified implementation) with default options
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Text to convert to speech
+     * @param audioChunkHandler Callback for receiving audio chunks
+     * @return Result containing metadata about the generated speech
+     */
+    public static Result<SpeechMetadata, TTSError> generateSpeechStream(long contextHandle, String text, AudioChunkCallback audioChunkHandler) {
+        return generateSpeechStream(contextHandle, text, new TTSOptions(), null, audioChunkHandler);
+    }
+
+    /**
+     * Generates speech from long text with real streaming capabilities
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Long text to convert to speech
+     * @param options TTS configuration options
+     * @param progressHandler Optional callback for progress updates
+     * @param audioChunkHandler Callback for receiving audio chunks as they're generated
+     * @return Result containing metadata about the generated speech
+     */
+    public static Result<SpeechMetadata, TTSError> generateSpeechStreamForLongText(long contextHandle, String text, TTSOptions options, ProgressCallback progressHandler, AudioChunkCallback audioChunkHandler) {
+        // Check if context is valid
+        if (contextHandle == 0L) {
+            return Result.failure(TTSError.noModelLoaded());
+        }
+        
+        // Check if vocoder is enabled
+        if (!isVocoderEnabled(contextHandle)) {
+            return Result.failure(TTSError.noVocoderEnabled());
+        }
+        
+        // Split long text into sentences
+        String[] sentences = text.split("[.!?]+\\s*");
+        int totalSentences = sentences.length;
+        
+        double totalDuration = 0;
+        TTSMethod methodUsed = TTSMethod.BUILT_IN;
+        String outputFilePath = null;
+        
+        for (int i = 0; i < totalSentences; i++) {
+            String sentence = sentences[i].trim();
+            if (sentence.isEmpty()) {
+                continue;
+            }
+            
+            // Update progress
+            if (progressHandler != null) {
+                float progress = (float) (i + 1) / totalSentences;
+                progressHandler.onProgress(0.1f + (progress * 0.8f)); // 0.1 to 0.9
+            }
+            
+            // Generate speech for this sentence
+            Result<SpeechResult, TTSError> sentenceResult = generateSpeechSync(contextHandle, sentence, options);
+            
+            if (sentenceResult.isFailure()) {
+                return Result.failure(sentenceResult.getError());
+            }
+            
+            SpeechResult speechResult = sentenceResult.getValue();
+            
+            // Send audio chunk
+            if (audioChunkHandler != null) {
+                audioChunkHandler.onAudioChunk(speechResult.getAudioSamples());
+            }
+            
+            // Accumulate metadata
+            totalDuration += speechResult.getDuration();
+            methodUsed = speechResult.getMethodUsed();
+            if (outputFilePath == null) {
+                outputFilePath = speechResult.getOutputFilePath();
+            }
+        }
+        
+        if (progressHandler != null) {
+            progressHandler.onProgress(1.0f); // Completed
+        }
+        
+        // Create metadata
+        SpeechMetadata metadata = new SpeechMetadata(
+            options.getSampleRate(),
+            totalDuration,
+            methodUsed,
+            outputFilePath
+        );
+        
+        return Result.success(metadata);
+    }
+
+    /**
+     * Generates speech from long text with real streaming capabilities with default options
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param text Long text to convert to speech
+     * @param audioChunkHandler Callback for receiving audio chunks
+     * @return Result containing metadata about the generated speech
+     */
+    public static Result<SpeechMetadata, TTSError> generateSpeechStreamForLongText(long contextHandle, String text, AudioChunkCallback audioChunkHandler) {
+        return generateSpeechStreamForLongText(contextHandle, text, new TTSOptions(), null, audioChunkHandler);
+    }
+
+
+
     /**
      * Gets the number of parameters in the loaded model
      *
@@ -787,6 +1516,17 @@ public class LlamaMobile {
      * @param params Initialization parameters
      * @return Context handle, or 0 if initialization failed
      */
+    /**
+     * Initializes a new LlamaMobile context with the given parameters.
+     *
+     * @param params Initialization parameters including model path, context size, and callbacks
+     * @return Context handle, or 0 if initialization failed
+     * 
+     * @warning Callback Limitations: Due to native API design, progress callbacks are shared
+     * across all contexts. Only one context should be initialized with a progress callback
+     * at a time. Multiple contexts with progress callbacks will result in only the last
+     * callback being used. See CRITICAL_CALLBACK_ISSUE.md for details.
+     */
     public static native long initContext(InitParams params);
 
     /**
@@ -795,78 +1535,14 @@ public class LlamaMobile {
      * @param contextHandle Context handle obtained from initContext
      * @param params Completion parameters
      * @return Generated text result, or null if generation failed
+     * 
+     * @warning Callback Limitations: Due to native API design, token callbacks are shared
+     * across all completions. Only one completion should run with a token callback
+     * at a time. Multiple concurrent completions with token callbacks will result in
+     * only the last callback being used. See CRITICAL_CALLBACK_ISSUE.md for details.
      */
     public static CompletionResult generateCompletion(long contextHandle, CompletionParams params) {
-        // Handle chat messages formatting (same as iOS)
-        CompletionParams processedParams = params;
-        
-        if (params.chatMessages != null && !params.chatMessages.isEmpty()) {
-            try {
-                // Convert chat messages to JSON format
-                StringBuilder messagesJson = new StringBuilder();
-                messagesJson.append("[");
-                for (int i = 0; i < params.chatMessages.size(); i++) {
-                    ChatMessage message = params.chatMessages.get(i);
-                    if (i > 0) {
-                        messagesJson.append(",");
-                    }
-                    messagesJson.append("{\"role\":\"").append(message.role)
-                              .append("\",\"content\":\"").append(message.content.replace("\"", "\\\""))
-                              .append("\"}");
-                }
-                messagesJson.append("]");
-                
-                // Determine which chat template to use:
-                // 1. First check if params has a custom template
-                // 2. If not, check if we have a globally set template
-                // 3. If either is available, use it; otherwise let the native function use the built-in one
-                String templateToUse = params.chatTemplate != null ? params.chatTemplate : chatTemplate;
-                
-                // Format the chat messages using the appropriate template
-                String formattedPrompt = formatChatMessages(contextHandle, messagesJson.toString(), templateToUse);
-                
-                if (formattedPrompt != null) {
-                    System.out.println("LlamaMobile: Successfully formatted chat messages");
-                    // Update params to use formatted prompt instead of chat messages
-                    processedParams = new CompletionParams(
-                        formattedPrompt,                    // prompt
-                        params.temperature,                 // temperature
-                        params.maxTokens,                   // maxTokens
-                        params.nThreads,                    // nThreads
-                        params.seed,                        // seed
-                        params.topK,                        // topK
-                        params.topP,                        // topP
-                        params.minP,                        // minP
-                        params.typicalP,                    // typicalP
-                        params.penaltyLastN,                // penaltyLastN
-                        params.penaltyRepeat,               // penaltyRepeat
-                        params.penaltyFreq,                 // penaltyFreq
-                        params.penaltyPresent,              // penaltyPresent
-                        params.mirostat,                    // mirostat
-                        params.mirostatTau,                 // mirostatTau
-                        params.mirostatEta,                 // mirostatEta
-                        params.ignoreEos,                   // ignoreEos
-                        params.nProbs,                      // nProbs
-                        params.grammar,                     // grammar
-                        params.stopSequences,               // stopSequences
-                        params.mediaPaths,                  // mediaPaths
-                        params.tokenCallback,               // tokenCallback
-                        null,                               // chatMessages (empty)
-                        params.useJsonResponse,             // useJsonResponse
-                        params.chatTemplate                 // chatTemplate
-                    );
-                } else {
-                    System.err.println("LlamaMobile: Cannot format chat messages: Formatting failed");
-                    // Fall back to original params
-                    return nativeGenerateCompletion(contextHandle, processedParams);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-                // Fall back to original params if formatting fails
-            }
-        }
-        
-        return nativeGenerateCompletion(contextHandle, processedParams);
+        return nativeGenerateCompletion(contextHandle, params);
     }
     
     /**
@@ -882,22 +1558,37 @@ public class LlamaMobile {
     public static native void releaseContext(long contextHandle);
 
     /**
-     * Gets the content of a grammar file
-     *
-     * @param context Application context to access assets
-     * @param name Grammar name
-     * @return Grammar content as string, or null if not found or error occurred
-     */
-    public static native String grammarContent(android.content.Context context, GrammarName name);
-
-    /**
      * Downloads a model from Hugging Face repository
      *
      * @param params Download parameters
      * @param progressCallback Callback for download progress updates
      * @return Download result, or null if download failed
      */
-    public static native DownloadResult downloadModel(DownloadParams params, ProgressCallback progressCallback);
+    public static DownloadResult downloadModel(DownloadParams params, DownloadProgressCallback progressCallback) {
+        String url;
+        String filename;
+        String destinationPath = params.getDestinationPath();
+        
+        if (params.getRepoId().contains("://")) {
+            url = params.getRepoId();
+            filename = params.getFilename();
+        } else {
+            String[] components = params.getRepoId().split("/");
+            if (components.length < 2) {
+                return new DownloadResult(false, destinationPath + "/" + params.getFilename(), 
+                    "Invalid Hugging Face repo ID format. Expected: owner/repo/filename");
+            }
+            
+            String owner = components[0];
+            String repo = components[1];
+            String file = components.length > 2 ? String.join("/", java.util.Arrays.copyOfRange(components, 2, components.length)) : params.getFilename();
+            
+            filename = file;
+            url = "https://huggingface.co/" + owner + "/" + repo + "/resolve/main/" + file;
+        }
+        
+        return downloadFromURL(url, filename, destinationPath, params.getBearerToken(), progressCallback);
+    }
 
     /**
      * Downloads a specific file from Hugging Face repository
@@ -910,13 +1601,104 @@ public class LlamaMobile {
      * @param progressCallback Callback for download progress updates
      * @return Download result, or null if download failed
      */
-    public static native DownloadResult downloadHfFile(
+    public static DownloadResult downloadHfFile(
             String repoId,
             String filename,
             String destinationPath,
             String bearerToken,
             boolean offline,
-            ProgressCallback progressCallback);
+            DownloadProgressCallback progressCallback) {
+        
+        String url = "https://huggingface.co/" + repoId + "/resolve/main/" + filename;
+        return downloadFromURL(url, filename, destinationPath, bearerToken, progressCallback);
+    }
+
+    /**
+     * Downloads a file from a URL using Android's native networking
+     *
+     * @param url URL to download from
+     * @param filename Name of the file
+     * @param destinationPath Local path to save the file
+     * @param bearerToken Bearer token for authentication (optional)
+     * @param progressCallback Callback for download progress updates
+     * @return Download result
+     */
+    private static DownloadResult downloadFromURL(
+            String url,
+            String filename,
+            String destinationPath,
+            String bearerToken,
+            DownloadProgressCallback progressCallback) {
+        
+        java.io.File destDir = new java.io.File(destinationPath);
+        if (!destDir.exists()) {
+            if (!destDir.mkdirs()) {
+                return new DownloadResult(false, destinationPath + "/" + filename, 
+                    "Failed to create destination directory");
+            }
+        }
+        
+        java.io.File destFile = new java.io.File(destDir, filename);
+        
+        try {
+            java.net.URL downloadUrl = new java.net.URL(url);
+            java.net.HttpURLConnection connection = (java.net.HttpURLConnection) downloadUrl.openConnection();
+            
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(30000);
+            connection.setReadTimeout(30000);
+            
+            if (bearerToken != null && !bearerToken.isEmpty()) {
+                connection.setRequestProperty("Authorization", "Bearer " + bearerToken);
+            }
+            
+            connection.connect();
+            
+            int responseCode = connection.getResponseCode();
+            if (responseCode != 200) {
+                return new DownloadResult(false, destFile.getAbsolutePath(), 
+                    "HTTP error: " + responseCode);
+            }
+            
+            int contentLength = connection.getContentLength();
+            java.io.InputStream inputStream = connection.getInputStream();
+            java.io.FileOutputStream outputStream = new java.io.FileOutputStream(destFile);
+            
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            long totalBytesRead = 0;
+            
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+                totalBytesRead += bytesRead;
+                
+                if (progressCallback != null && contentLength > 0) {
+                    float progress = (float) totalBytesRead / contentLength;
+                    String status = "Downloading...";
+                    progressCallback.onProgress(progress, status, totalBytesRead, contentLength);
+                }
+            }
+            
+            outputStream.close();
+            inputStream.close();
+            connection.disconnect();
+            
+            return new DownloadResult(true, destFile.getAbsolutePath(), null);
+            
+        } catch (java.net.SocketTimeoutException e) {
+            return new DownloadResult(false, destFile.getAbsolutePath(), 
+                "Connection timed out. Please check your internet connection and try again.");
+        } catch (java.net.UnknownHostException e) {
+            return new DownloadResult(false, destFile.getAbsolutePath(), 
+                "No internet connection. Please check your network settings.");
+        } catch (java.io.IOException e) {
+            return new DownloadResult(false, destFile.getAbsolutePath(), 
+                "Download failed: " + e.getMessage());
+        } catch (Exception e) {
+            return new DownloadResult(false, destFile.getAbsolutePath(), 
+                "Download failed: " + e.getMessage());
+        }
+    }
 
     /**
      * Convenience method for generating text completion with simplified parameters
@@ -937,95 +1719,17 @@ public class LlamaMobile {
      *
      * @param contextHandle Context handle obtained from initContext
      * @param openAIJSON JSON string in OpenAI format containing messages
-     * @param grammar Optional grammar string to constrain generation
      * @return Completion result, or null if generation failed
      */
-    public static CompletionResult generateOpenAICompletion(long contextHandle, String openAIJSON, String grammar) {
+    public static CompletionResult generateOpenAICompletion(long contextHandle, String openAIJSON) {
         try {
             CompletionParams params = CompletionParams.fromOpenAIJSON(openAIJSON);
-            params = new CompletionParams(
-                params.getPrompt(),
-                params.getTemperature(),
-                params.getMaxTokens(),
-                params.getNThreads(),
-                params.getSeed(),
-                params.getTopK(),
-                params.getTopP(),
-                params.getMinP(),
-                params.getTypicalP(),
-                params.getPenaltyLastN(),
-                params.getPenaltyRepeat(),
-                params.getPenaltyFreq(),
-                params.getPenaltyPresent(),
-                params.getMirostat(),
-                params.getMirostatTau(),
-                params.getMirostatEta(),
-                params.isIgnoreEos(),
-                params.getNProbs(),
-                grammar != null ? grammar : params.getGrammar(),
-                params.getStopSequences(),
-                params.getMediaPaths(),
-                params.getTokenCallback(),
-                params.getChatMessages(),
-                grammar != null ? false : params.isUseJsonResponse(),
-                chatTemplate
-            );
             return generateCompletion(contextHandle, params);
         } catch (Exception e) {
             return null;
         }
     }
 
-    /**
-     * Generates text completion from OpenAI format JSON with default grammar
-     *
-     * @param contextHandle Context handle obtained from initContext
-     * @param openAIJSON JSON string in OpenAI format containing messages
-     * @return Completion result, or null if generation failed
-     */
-    public static CompletionResult generateOpenAICompletion(long contextHandle, String openAIJSON) {
-        return generateOpenAICompletion(contextHandle, openAIJSON, null);
-    }
-
-    /**
-     * Generates audio samples from text using TTS
-     *
-     * @param contextHandle Context handle obtained from initContext
-     * @param text Text to convert to speech
-     * @param speakerJson JSON string with speaker configuration (optional, defaults to default speaker)
-     * @return Array of floating-point audio samples, or null if an error occurred
-     */
-    public static float[] generateAudioFromText(long contextHandle, String text, String speakerJson) {
-        if (!isVocoderEnabled(contextHandle)) {
-            return null;
-        }
-        
-        // Get formatted audio completion
-        String formattedPrompt = getFormattedAudioCompletion(contextHandle, speakerJson, text);
-        if (formattedPrompt == null) {
-            return null;
-        }
-        
-        // Generate audio tokens
-        int[] audioTokens = getAudioGuideTokens(contextHandle, formattedPrompt);
-        if (audioTokens == null) {
-            return null;
-        }
-        
-        // Decode audio tokens to samples
-        return decodeAudioTokens(contextHandle, audioTokens);
-    }
-
-    /**
-     * Convenience method for generating audio samples from text using default speaker
-     *
-     * @param contextHandle Context handle obtained from initContext
-     * @param text Text to convert to speech
-     * @return Array of floating-point audio samples, or null if an error occurred
-     */
-    public static float[] generateAudioFromText(long contextHandle, String text) {
-        return generateAudioFromText(contextHandle, text, "{\"speaker\": \"default\"}");
-    }
 
     /**
      * Convenience method for downloading models
@@ -1034,7 +1738,7 @@ public class LlamaMobile {
      * @return Download result, or null if download failed
      */
     public static DownloadResult download(DownloadParams params) {
-        return downloadModel(params, null);
+        return downloadModel(params, params.getProgressCallback());
     }
 
     // Private constructor to prevent instantiation

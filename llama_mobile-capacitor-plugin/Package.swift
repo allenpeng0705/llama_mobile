@@ -7,7 +7,7 @@ let package = Package(
     products: [
         .library(
             name: "LlamaMobileCapacitorPlugin",
-            targets: ["LlamaMobileCapacitorPluginPlugin"])
+            targets: ["LlamaMobileCapacitorPlugin"])
     ],
     dependencies: [
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "8.0.0")
@@ -18,16 +18,16 @@ let package = Package(
             path: "ios/Libraries/llama_mobile.xcframework"
         ),
         .target(
-            name: "LlamaMobileCapacitorPluginPlugin",
+            name: "LlamaMobileCapacitorPlugin",
             dependencies: [
                 .product(name: "Capacitor", package: "capacitor-swift-pm"),
                 .product(name: "Cordova", package: "capacitor-swift-pm"),
                 "llama_mobile"
             ],
-            path: "ios/Sources/LlamaMobileCapacitorPluginPlugin"),
+            path: "ios/Sources"),
         .testTarget(
-            name: "LlamaMobileCapacitorPluginPluginTests",
-            dependencies: ["LlamaMobileCapacitorPluginPlugin"],
-            path: "ios/Tests/LlamaMobileCapacitorPluginPluginTests")
+            name: "LlamaMobileCapacitorPluginTests",
+            dependencies: ["LlamaMobileCapacitorPlugin"],
+            path: "ios/Tests")
     ]
 )

@@ -26,6 +26,10 @@ export class LlamaMobileCapacitorPluginWeb extends WebPlugin implements LlamaMob
     throw this.unavailable('LlamaMobile is not available on web');
   }
 
+  async loadGrammar(_options: any): Promise<any> {
+    throw this.unavailable('LlamaMobile is not available on web');
+  }
+
   async initVocoder(_options: any): Promise<any> {
     throw this.unavailable('LlamaMobile is not available on web');
   }
@@ -43,6 +47,22 @@ export class LlamaMobileCapacitorPluginWeb extends WebPlugin implements LlamaMob
   }
 
   async generateAudioFromText(_options: any): Promise<any> {
+    throw this.unavailable('LlamaMobile is not available on web');
+  }
+
+  async generateSpeech(_options: any): Promise<any> {
+    throw this.unavailable('LlamaMobile is not available on web');
+  }
+
+  async generateSpeechSync(_options: any): Promise<any> {
+    throw this.unavailable('LlamaMobile is not available on web');
+  }
+
+  async generateSpeechStream(_options: any): Promise<any> {
+    throw this.unavailable('LlamaMobile is not available on web');
+  }
+
+  async generateSpeechStreamForLongText(_options: any): Promise<any> {
     throw this.unavailable('LlamaMobile is not available on web');
   }
 
@@ -130,31 +150,11 @@ export class LlamaMobileCapacitorPluginWeb extends WebPlugin implements LlamaMob
     throw this.unavailable('LlamaMobile is not available on web');
   }
 
-  async listFiles(_options: any): Promise<any> {
-    throw this.unavailable('LlamaMobile is not available on web');
-  }
-
-  async listModels(_options: any): Promise<any> {
-    throw this.unavailable('LlamaMobile is not available on web');
-  }
-
   async downloadModel(_options: any): Promise<any> {
     throw this.unavailable('LlamaMobile is not available on web');
   }
 
   async downloadHfFile(_options: any): Promise<any> {
-    throw this.unavailable('LlamaMobile is not available on web');
-  }
-
-  async getJsonGrammar(_options: any): Promise<any> {
-    throw this.unavailable('LlamaMobile is not available on web');
-  }
-
-  async getArithmeticGrammar(_options: any): Promise<any> {
-    throw this.unavailable('LlamaMobile is not available on web');
-  }
-
-  async getCGrammar(_options: any): Promise<any> {
     throw this.unavailable('LlamaMobile is not available on web');
   }
 

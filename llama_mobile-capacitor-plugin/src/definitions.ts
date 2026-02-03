@@ -9,6 +9,7 @@ export interface LlamaMobileCapacitorPlugin {
   generateCompletion(options: { contextHandle: number; params: CompletionParams }): Promise<CompletionResult>;
   generateOpenAICompletion(options: { contextHandle: number; openAIJSON: string; grammar?: string; stopSequences?: string[] }): Promise<CompletionResult>;
   stopCompletion(options: { contextHandle: number }): Promise<void>;
+  loadGrammar(options: { filePath: string }): Promise<{ grammar: string }>;
   
   // TTS
   initVocoder(options: { contextHandle: number; vocoderModelPath: string }): Promise<{ success: boolean; modelType: TTSModelType }>;
@@ -16,6 +17,10 @@ export interface LlamaMobileCapacitorPlugin {
   isVocoderEnabled(options: { contextHandle: number }): Promise<{ enabled: boolean }>;
   getTTSType(options: { contextHandle: number }): Promise<{ type: TTSModelType }>;
   generateAudioFromText(options: { contextHandle: number; text: string; speakerJson?: string }): Promise<{ audio: number[] }>;
+  generateSpeech(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod; speakerJson?: string }): Promise<SpeechResult>;
+  generateSpeechSync(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod }): Promise<SpeechResult>;
+  generateSpeechStream(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod }): Promise<SpeechMetadata>;
+  generateSpeechStreamForLongText(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod }): Promise<SpeechMetadata>;
   saveAudioToWav(options: { contextHandle: number; filePath: string; audioData: number[]; sampleRate: number }): Promise<{ success: boolean }>;
   playAudio(options: { audioData: number[]; sampleRate?: number }): Promise<{ success: boolean }>;
   
@@ -49,17 +54,10 @@ export interface LlamaMobileCapacitorPlugin {
   getModelDescription(options: { contextHandle: number }): Promise<{ description: string }>;
   getModelSize(options: { contextHandle: number }): Promise<{ size: number }>;
   getModelParametersCount(options: { contextHandle: number }): Promise<{ count: number }>;
-  listFiles(options: { directoryPath: string }): Promise<{ files?: string[]; modelFiles?: string[]; error?: string[] }>;
-  listModels(options?: {}): Promise<{ modelFiles?: string[] }>;
   
   // Download
   downloadModel(options: DownloadParams): Promise<DownloadResult>;
   downloadHfFile(options: DownloadHfFileParams): Promise<DownloadResult>;
-  
-  // Grammar
-  getJsonGrammar(options?: {}): Promise<{ grammar: string }>;
-  getArithmeticGrammar(options?: {}): Promise<{ grammar: string }>;
-  getCGrammar(options?: {}): Promise<{ grammar: string }>;
   
   // Chat
   setChatTemplate(options: { contextHandle: number; chatTemplate: string }): Promise<{ success: boolean }>;
@@ -77,6 +75,12 @@ export enum TTSModelType {
   UNKNOWN = -1,
   OUT_ETTS_V02 = 1,
   OUT_ETTS_V03 = 2
+}
+
+export enum TTSMethod {
+  BUILT_IN = 'BUILT_IN',
+  CUSTOM_WORKFLOW = 'CUSTOM_WORKFLOW',
+  BEST = 'BEST'
 }
 
 export enum CacheType {
@@ -103,6 +107,30 @@ export interface ChatMessage {
 export interface LoraAdapter {
   path: string;
   scale: number;
+}
+
+export interface TTSOptions {
+  sampleRate?: number;
+  method?: TTSMethod;
+  voice?: string;
+  speed?: number;
+  saveToFile?: boolean;
+  outputFilePath?: string;
+}
+
+export interface SpeechResult {
+  audio: number[];
+  sampleRate: number;
+  duration: number;
+  methodUsed: TTSMethod;
+  outputFilePath?: string;
+}
+
+export interface SpeechMetadata {
+  sampleRate: number;
+  duration: number;
+  methodUsed: TTSMethod;
+  outputFilePath?: string;
 }
 
 export interface InitParams {
