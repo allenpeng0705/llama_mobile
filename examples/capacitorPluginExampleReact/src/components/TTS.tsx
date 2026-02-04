@@ -53,7 +53,7 @@ const TTS: React.FC<TTSProps> = ({
             {isGeneratingAudio ? 'Generating Audio...' : 'Generate Audio'}
           </button>
           
-          {audioSamples.length > 0 && (
+          {(audioSamples.length > 0 || audioFilePath) && (
             <div className="tts-actions">
               <button 
                 onClick={playAudio} 
@@ -65,7 +65,7 @@ const TTS: React.FC<TTSProps> = ({
             </div>
           )}
           
-          {audioSamples.length > 0 && (
+          {(audioSamples.length > 0 || audioFilePath) && (
             <div className="status-message success">
               Audio generated and saved to: {audioFilePath}
             </div>
