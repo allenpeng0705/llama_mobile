@@ -191,7 +191,7 @@ export class LlamaMobileCapacitorPluginWeb extends WebPlugin implements LlamaMob
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async addListener(eventName: 'token' | 'progress', listenerFunc: any): Promise<PluginListenerHandle> {
+  async addListener(_eventName: 'token' | 'progress', _listenerFunc: any): Promise<PluginListenerHandle> {
     throw new Error('LlamaMobile is not available on web');
   }
 

@@ -511,6 +511,7 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
     var options = LlamaMobile.TTSOptions()
     options.sampleRate = sampleRate
     
+    let pluginCall = call
     
     DispatchQueue.global(qos: .userInitiated).async {
         let result = llamaMobile.generateSpeech(
@@ -554,19 +555,19 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
                     // Round duration to 2 decimal places for better JSON serialization
                     let roundedDuration = Double(round(speechResult.duration * 100) / 100)
                     
-                    call.resolve([
+                    pluginCall.resolve([
                         "audioPath": tempFilePath,
                         "sampleRate": speechResult.sampleRate,
                         "duration": roundedDuration,
                         "methodUsed": methodUsedString
                     ])
                 } else {
-                    call.reject("Failed to save audio to file")
+                    pluginCall.reject("Failed to save audio to file")
                 }
             }
         case .failure(let error):
             DispatchQueue.main.async {
-                call.reject("Failed to generate speech sync: \(error.localizedDescription)")
+                pluginCall.reject("Failed to generate speech sync: \(error.localizedDescription)")
             }
         }
     }
