@@ -22,13 +22,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "releaseVocoder", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "isVocoderEnabled", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getTTSType", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "generateAudioFromText", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "generateSpeechAsync", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "generateSpeech", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "generateSpeechSync", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "generateSpeechStream", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "generateSpeechStreamForLongText", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "generateSpeechStreamForLongTextAsync", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "saveAudioToWav", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "playAudio", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "playAudioFromFile", returnType: CAPPluginReturnPromise),
         
         // Multimodal
         CAPPluginMethod(name: "initMultimodal", returnType: CAPPluginReturnPromise),
@@ -67,10 +66,6 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "downloadModel", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "downloadHfFile", returnType: CAPPluginReturnPromise),
         
-        // Chat
-        CAPPluginMethod(name: "setChatTemplate", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getModelChatTemplate", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "formatChatMessages", returnType: CAPPluginReturnPromise)
     ]
     
     private var contexts: [Int: LlamaMobile] = [:]
@@ -111,9 +106,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         let cacheTypeV = call.getString("cacheTypeV")
         let enableChatTemplate = call.getBool("enableChatTemplate") ?? true
         
+        // Resolve model path if it's just a filename
+        let resolvedModelPath = resolveModelPath(modelPath)
+        
         Task.detached {
             do {
-                var initParams = LlamaMobile.InitParams(modelPath: modelPath)
+                var initParams = LlamaMobile.InitParams(modelPath: resolvedModelPath)
                 initParams.nCtx = Int32(nCtx)
                 initParams.nGpuLayers = Int32(nGpuLayers)
                 initParams.nThreads = Int32(nThreads)
@@ -148,6 +146,43 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
     
+    // Helper method to resolve model paths
+    private func resolveModelPath(_ modelPath: String) -> String {
+        // If the path is already absolute, return it as-is
+        if modelPath.hasPrefix("/") {
+            return modelPath
+        }
+        
+        let fileManager = FileManager.default
+        
+        // List of common directories to search for models
+        var searchDirs: [String] = []
+        
+        // Get documents directory
+        if let documentsDirectory = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first {
+            searchDirs.append(documentsDirectory)
+            searchDirs.append(documentsDirectory + "/models")
+            searchDirs.append(documentsDirectory + "/Downloads")
+            searchDirs.append(documentsDirectory + "/Downloads/models")
+        }
+        
+        // Add app bundle directories for bundled models
+        let bundlePath = Bundle.main.bundlePath
+        searchDirs.append(bundlePath + "/public/models")
+        searchDirs.append(bundlePath + "/models")
+        
+        // Search for the model file in common directories
+        for dir in searchDirs {
+            let fullPath = dir + (dir.hasSuffix("/") ? "" : "/") + modelPath
+            if fileManager.fileExists(atPath: fullPath) {
+                return fullPath
+            }
+        }
+        
+        // If not found, return the original path (will likely fail, but let the error propagate)
+        return modelPath
+    }
+    
     @objc func releaseContext(_ call: CAPPluginCall) {
         guard let contextHandle = call.getInt("contextHandle"),
               let llamaMobile = contexts[contextHandle] else {
@@ -169,12 +204,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func generateCompletion(_ call: CAPPluginCall) {
         guard let contextHandle = call.getInt("contextHandle"),
               let llamaMobile = contexts[contextHandle],
-              let params = call.getObject("params"),
-              let prompt = params["prompt"] as? String else {
-            call.reject("contextHandle and params.prompt are required")
+              let params = call.getObject("params")
+        else {
+            call.reject("Invalid parameters")
             return
         }
-        
+        let prompt = params["prompt"] as? String ?? ""       
         let maxTokens = (params["maxTokens"] as? Int) ?? 128
         let nThreads = (params["nThreads"] as? Int)
         let seed = (params["seed"] as? Int) ?? -1
@@ -192,7 +227,7 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         let mirostatEta = (params["mirostatEta"] as? Double) ?? 0.1
         let ignoreEos = (params["ignoreEos"] as? Bool) ?? false
         let stopSequences = (params["stopSequences"] as? [String]) ?? []
-        let grammar = (params["grammar"] as? String)
+        let grammar = (params["grammar"] as? String) ?? nil
         let mediaPaths = (params["mediaPaths"] as? [String]) ?? []
         let chatMessages = (params["chatMessages"] as? [[String: Any]]) ?? []
         let useJsonResponse = (params["useJsonResponse"] as? Bool) ?? true
@@ -385,30 +420,7 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve(["type": type.rawValue])
     }
     
-    @objc func generateAudioFromText(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let text = call.getString("text") else {
-            call.reject("contextHandle and text are required")
-            return
-        }
-        
-        let speakerJson = call.getString("speakerJson") ?? "{\"speaker\": \"default\"}"
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let audioSamples = llamaMobile.generateAudioFromText(text: text, speakerJson: speakerJson)
-            
-            DispatchQueue.main.async {
-                if let audioSamples = audioSamples {
-                    call.resolve(["audio": audioSamples])
-                } else {
-                    call.reject("Failed to generate audio from text")
-                }
-            }
-        }
-    }
-    
-    @objc func generateSpeech(_ call: CAPPluginCall) {
+    @objc func generateSpeechAsync(_ call: CAPPluginCall) {
         guard let contextHandle = call.getInt("contextHandle"),
               let llamaMobile = contexts[contextHandle],
               let text = call.getString("text") else {
@@ -428,25 +440,56 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         let localOptions = options
         
         Task.detached {
-            let result = await llamaMobile.generateSpeech(
+            let result = llamaMobile.generateSpeech(
                 text: text,
-                options: localOptions,
-                progressHandler: { progress in
-                    DispatchQueue.main.async {
-                        pluginSelf.notifyListeners("progress", data: ["progress": progress])
-                    }
-                }
+                options: localOptions
             )
             
             await MainActor.run {
                 switch result {
                 case .success(let speechResult):
-                    pluginCall.resolve([
-                        "audio": speechResult.audioSamples,
-                        "sampleRate": speechResult.sampleRate,
-                        "duration": speechResult.duration,
-                        "methodUsed": speechResult.methodUsed
-                    ])
+                    // Generate temporary file path
+                    let tempFileName = "temp_audio_\(UUID().uuidString).wav"
+                    
+                    // Convert Int16 audio samples to Float by normalizing to [-1.0, 1.0]
+                    let floatAudioData = speechResult.audioSamples.map { Float($0) / Float(Int16.max) }
+                    
+                    // Use existing saveAudioToWav method internally
+                    let saveSuccess = pluginSelf.saveAudioToWavInternal(
+                        contextHandle: contextHandle,
+                        llamaMobile: llamaMobile,
+                        filePath: tempFileName,
+                        audioData: floatAudioData,
+                        sampleRate: speechResult.sampleRate
+                    )
+                    
+                    if saveSuccess {
+                        // Resolve with the file path
+                        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                        let tempFilePath = documentsDir.appendingPathComponent(tempFileName).path
+                        
+                        // Convert TTSMethod to string for JSON serialization
+                        var methodUsedString: String {
+                            switch speechResult.methodUsed {
+                            case .builtIn:
+                                return "builtIn"
+                            case .customWorkflow:
+                                return "customWorkflow"
+                            }
+                        }
+                        
+                        // Round duration to 2 decimal places for better JSON serialization
+                        let roundedDuration = Double(round(speechResult.duration * 100) / 100)
+                        
+                        pluginCall.resolve([
+                            "audioPath": tempFilePath,
+                            "sampleRate": speechResult.sampleRate,
+                            "duration": roundedDuration,
+                            "methodUsed": methodUsedString
+                        ])
+                    } else {
+                        pluginCall.reject("Failed to save audio to file")
+                    }
                 case .failure(let error):
                     pluginCall.reject("Failed to generate speech: \(error.localizedDescription)")
                 }
@@ -454,89 +497,110 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
     
-    @objc func generateSpeechSync(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let text = call.getString("text") else {
-            call.reject("contextHandle and text are required")
-            return
-        }
+@objc func generateSpeech(_ call: CAPPluginCall) {
+    guard let contextHandle = call.getInt("contextHandle"),
+          let llamaMobile = contexts[contextHandle],
+          let text = call.getString("text") else {
+        call.reject("contextHandle and text are required")
+        return
+    }
+    
+    let sampleRate = call.getInt("sampleRate") ?? 24000
+    let method = call.getString("method") ?? "best"
+    
+    var options = LlamaMobile.TTSOptions()
+    options.sampleRate = sampleRate
+    
+    
+    DispatchQueue.global(qos: .userInitiated).async {
+        let result = llamaMobile.generateSpeech(
+            text: text,
+            options: options
+        )
         
-        let sampleRate = call.getInt("sampleRate") ?? 24000
-        let method = call.getString("method") ?? "best"
-        
-        var options = LlamaMobile.TTSOptions()
-        options.sampleRate = sampleRate
-        
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let result = llamaMobile.generateSpeechSync(
-                text: text,
-                options: options
+        switch result {
+        case .success(let speechResult):
+            // Generate temporary file path
+            let tempFileName = "temp_audio_\(UUID().uuidString).wav"
+            
+            // Convert Int16 audio samples to Float by normalizing to [-1.0, 1.0]
+            let floatAudioData = speechResult.audioSamples.map { Float($0) / Float(Int16.max) }
+            
+            // Use existing saveAudioToWav method internally (still in background thread)
+            let saveSuccess = self.saveAudioToWavInternal(
+                contextHandle: contextHandle,
+                llamaMobile: llamaMobile,
+                filePath: tempFileName,
+                audioData: floatAudioData,
+                sampleRate: speechResult.sampleRate
             )
             
             DispatchQueue.main.async {
-                switch result {
-                case .success(let speechResult):
-                    call.resolve([
-                        "audio": speechResult.audioSamples,
-                        "sampleRate": speechResult.sampleRate,
-                        "duration": speechResult.duration,
-                        "methodUsed": speechResult.methodUsed
-                    ])
-                case .failure(let error):
-                    call.reject("Failed to generate speech sync: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
-    
-    @objc func generateSpeechStream(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let text = call.getString("text") else {
-            call.reject("contextHandle and text are required")
-            return
-        }
-        
-        let sampleRate = call.getInt("sampleRate") ?? 24000
-        
-        var ttsOptions = LlamaMobile.TTSOptions()
-        ttsOptions.sampleRate = sampleRate
-        
-        let pluginSelf = self
-        let pluginCall = call
-        let localTTSOptions = ttsOptions
-        Task.detached {
-            let result = await llamaMobile.generateSpeech(
-                text: text,
-                options: localTTSOptions,
-                progressHandler: { progress in
-                    DispatchQueue.main.async {
-                        pluginSelf.notifyListeners("progress", data: ["progress": progress])
-                    }
-                }
-            )
-            
-            await MainActor.run {
-                switch result {
-                case .success(let speechResult):
-                    let audioChunk = speechResult.audioSamples
-                    pluginSelf.notifyListeners("audioChunk", data: ["audio": audioChunk])
+                if saveSuccess {
+                    // Resolve with the file path
+                    let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                    let tempFilePath = documentsDir.appendingPathComponent(tempFileName).path
                     
-                    pluginCall.resolve([
+                    // Convert TTSMethod to string for JSON serialization
+                    var methodUsedString: String {
+                        switch speechResult.methodUsed {
+                        case .builtIn:
+                            return "builtIn"
+                        case .customWorkflow:
+                            return "customWorkflow"
+                        }
+                    }
+                    
+                    // Round duration to 2 decimal places for better JSON serialization
+                    let roundedDuration = Double(round(speechResult.duration * 100) / 100)
+                    
+                    call.resolve([
+                        "audioPath": tempFilePath,
                         "sampleRate": speechResult.sampleRate,
-                        "duration": speechResult.duration,
-                        "methodUsed": speechResult.methodUsed
+                        "duration": roundedDuration,
+                        "methodUsed": methodUsedString
                     ])
-                case .failure(let error):
-                    pluginCall.reject("Failed to generate speech stream: \(error.localizedDescription)")
+                } else {
+                    call.reject("Failed to save audio to file")
                 }
+            }
+        case .failure(let error):
+            DispatchQueue.main.async {
+                call.reject("Failed to generate speech sync: \(error.localizedDescription)")
             }
         }
     }
+}
     
-    @objc func generateSpeechStreamForLongText(_ call: CAPPluginCall) {
+    // Internal method to save audio to WAV using existing logic
+    private func saveAudioToWavInternal(
+        contextHandle: Int,
+        llamaMobile: LlamaMobile,
+        filePath: String,
+        audioData: [Float],
+        sampleRate: Int
+    ) -> Bool {
+        // Resolve filePath to app's documents directory
+        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let finalPath = documentsDir.appendingPathComponent(filePath).path
+        
+        // Ensure directory exists
+        let fileManager = FileManager.default
+        let directory = (finalPath as NSString).deletingLastPathComponent
+        if !fileManager.fileExists(atPath: directory) {
+            do {
+                try fileManager.createDirectory(atPath: directory, withIntermediateDirectories: true, attributes: nil)
+            } catch {
+                print("Error creating directory: \(error.localizedDescription)")
+                return false
+            }
+        }
+        
+        return llamaMobile.saveAudioToWav(filePath: finalPath, audioData: audioData, sampleRate: Int32(sampleRate))
+    }
+    
+    
+    @objc func generateSpeechStreamForLongTextAsync(_ call: CAPPluginCall) {
         guard let contextHandle = call.getInt("contextHandle"),
               let llamaMobile = contexts[contextHandle],
               let text = call.getString("text") else {
@@ -549,22 +613,21 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         var ttsOptions = LlamaMobile.TTSOptions()
         ttsOptions.sampleRate = sampleRate
         
-        let pluginSelf = self
         let pluginCall = call
         let localTTSOptions = ttsOptions
         
         Task.detached {
-            let result = await llamaMobile.generateSpeechStreamForLongText(
+            let result = await llamaMobile.generateSpeechStreamForLongTextAsync(
                 text: text,
                 options: localTTSOptions,
                 progressHandler: { progress in
                     DispatchQueue.main.async {
-                        pluginSelf.notifyListeners("progress", data: ["progress": progress])
+                        self.notifyListeners("progress", data: ["progress": progress])
                     }
                 },
                 audioChunkHandler: { audioChunk in
                     DispatchQueue.main.async {
-                        pluginSelf.notifyListeners("audioChunk", data: ["audio": audioChunk])
+                        self.notifyListeners("audioChunk", data: ["audio": audioChunk])
                     }
                 }
             )
@@ -572,10 +635,23 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             await MainActor.run {
                 switch result {
                 case .success(let metadata):
+                    // Convert TTSMethod to string for JSON serialization
+                    var methodUsedString: String {
+                        switch metadata.methodUsed {
+                        case .builtIn:
+                            return "builtIn"
+                        case .customWorkflow:
+                            return "customWorkflow"
+                        }
+                    }
+                    
+                    // Round duration to 2 decimal places for better JSON serialization
+                    let roundedDuration = Double(round(metadata.duration * 100) / 100)
+                    
                     pluginCall.resolve([
                         "sampleRate": metadata.sampleRate,
-                        "duration": metadata.duration,
-                        "methodUsed": metadata.methodUsed
+                        "duration": roundedDuration,
+                        "methodUsed": methodUsedString
                     ])
                 case .failure(let error):
                     pluginCall.reject("Failed to generate speech stream: \(error.localizedDescription)")
@@ -699,6 +775,63 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return true
         } catch {
             print("Error playing audio: \(error.localizedDescription)")
+            // Clean up references on error
+            self.playerNode = nil
+            self.audioEngine = nil
+            return false
+        }
+    }
+    
+    @objc func playAudioFromFile(_ call: CAPPluginCall) {
+        guard let filePath = call.getString("filePath") else {
+            call.reject("filePath is required")
+            return
+        }
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            let success = self.playAudioFromFilePath(filePath: filePath)
+            
+            DispatchQueue.main.async {
+                call.resolve(["success": success])
+            }
+        }
+    }
+    
+    private func playAudioFromFilePath(filePath: String) -> Bool {
+        do {
+            // Stop any existing audio playback
+            if let existingPlayerNode = playerNode {
+                existingPlayerNode.stop()
+            }
+            
+            if let existingAudioEngine = audioEngine {
+                existingAudioEngine.stop()
+                existingAudioEngine.reset()
+            }
+            
+            // Create audio player with the file
+            let audioURL = URL(fileURLWithPath: filePath)
+            let audioPlayer = try AVAudioPlayer(contentsOf: audioURL)
+            
+            // Set up audio session with proper options
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .default, options: [])
+            try audioSession.setActive(true)
+            
+            // Play audio
+            audioPlayer.play()
+            
+            // Wait for playback to complete
+            while audioPlayer.isPlaying {
+                Thread.sleep(forTimeInterval: 0.1)
+            }
+            
+            // Deactivate audio session with proper options
+            try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
+            
+            return true
+        } catch {
+            print("Error playing audio from file: \(error.localizedDescription)")
             // Clean up references on error
             self.playerNode = nil
             self.audioEngine = nil
@@ -843,18 +976,31 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         }
         
         let maxTokens = call.getInt("maxTokens") ?? 128
+        let enableStreaming = call.getBool("enableStreaming") ?? false
+        
+        let pluginSelf = self
+        let pluginCall = call
         
         DispatchQueue.global(qos: .userInitiated).async {
-            let result = llamaMobile.generateResponse(userMessage: userMessage, maxTokens: Int32(maxTokens))
+            let result = llamaMobile.generateResponse(
+                userMessage: userMessage,
+                maxTokens: Int32(maxTokens),
+                tokenCallback: enableStreaming ? { token in
+                    DispatchQueue.main.async {
+                        pluginSelf.notifyListeners("token", data: ["token": token])
+                    }
+                    return true
+                } : nil
+            )
             
             DispatchQueue.main.async {
                 if let result = result {
-                    call.resolve([
+                    pluginCall.resolve([
                         "text": result.text,
                         "tokensGenerated": result.tokensGenerated
                     ])
                 } else {
-                    call.reject("Failed to generate response")
+                    pluginCall.reject("Failed to generate response")
                 }
             }
         }
@@ -1149,19 +1295,6 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
     
-    // MARK: - Chat
-    
-    @objc func setChatTemplate(_ call: CAPPluginCall) {
-        call.resolve()
-    }
-    
-    @objc func getModelChatTemplate(_ call: CAPPluginCall) {
-        call.resolve(["template": ""])
-    }
-    
-    @objc func formatChatMessages(_ call: CAPPluginCall) {
-        call.resolve(["formattedPrompt": ""])
-    }
     
     // MARK: - Helper Methods
     

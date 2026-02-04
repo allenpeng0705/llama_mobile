@@ -1532,6 +1532,48 @@ JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_generateResponse(JNIE
     return responseResult;
 }
 
+// Generates a response in conversation mode with token streaming callback
+JNIEXPORT jobject JNICALL Java_com_llamamobile_LlamaMobile_generateResponseWithCallback(JNIEnv* env, jclass clazz, jlong contextHandle, jstring userMessage, jint maxTokens, jobject tokenCallback) {
+    if (contextHandle == 0) {
+        return nullptr;
+    }
+    
+    if (env->ExceptionCheck()) {
+        return nullptr;
+    }
+    
+    llama_mobile_context_handle_t context = reinterpret_cast<llama_mobile_context_handle_t>(contextHandle);
+    
+    const char* cUserMessage = getStringUTFChars(env, userMessage);
+    if (cUserMessage == nullptr) {
+        return nullptr;
+    }
+    
+    llama_mobile_conversation_result_c_t cResult = llama_mobile_continue_conversation_with_callback_c(
+        context,
+        cUserMessage,
+        maxTokens,
+        tokenCallback != nullptr ? tokenCallbackWrapper : nullptr,
+        tokenCallback
+    );
+    
+    releaseStringUTFChars(env, userMessage, cUserMessage);
+    
+    if (env->ExceptionCheck()) {
+        return nullptr;
+    }
+    
+    jobject responseResult = createConversationResult(env, cResult.text, cResult.time_to_first_token, cResult.total_time, cResult.tokens_generated);
+    
+    llama_mobile_free_conversation_result_members_c(&cResult);
+    
+    if (env->ExceptionCheck()) {
+        return nullptr;
+    }
+    
+    return responseResult;
+}
+
 // Clears the current conversation context
 JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_clearConversation(JNIEnv* env, jclass clazz, jlong contextHandle) {
     if (contextHandle == 0) {

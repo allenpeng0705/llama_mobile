@@ -6,5 +6,8 @@ export default defineConfig({
     outDir: '../dist',
     minify: false,
     emptyOutDir: true,
-  },
+    rollupOptions: {
+      external: ['@capacitor/core']
+    }
+  }
 });

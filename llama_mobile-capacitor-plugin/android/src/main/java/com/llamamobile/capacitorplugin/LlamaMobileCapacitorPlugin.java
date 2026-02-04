@@ -17,8 +17,14 @@ import com.llamamobile.LlamaMobile.ProgressCallback;
 import com.llamamobile.LlamaMobile.AudioChunkCallback;
 import org.json.JSONObject;
 
+import android.os.Environment;
+import java.io.File;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -63,10 +69,13 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             return;
         }
 
+        // Resolve model path if it's just a filename
+        String resolvedModelPath = resolveModelPath(modelPath);
+
         executor.execute(() -> {
             try {
                 LlamaMobile.InitParams params = new LlamaMobile.InitParams(
-                    modelPath, nCtx, null, null, 512, 512, nGpuLayers, nThreads, 
+                    resolvedModelPath, nCtx, null, null, 512, 512, nGpuLayers, nThreads, 
                     true, false, embedding, poolingType, embdNormalize, false, 
                     null, null, false, null
                 );
@@ -82,6 +91,66 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 call.reject("Failed to initialize context: " + e.getMessage());
             }
         });
+    }
+
+    // Helper method to resolve model paths
+    private String resolveModelPath(String modelPath) {
+        // If the path is already absolute, return it as-is
+        if (modelPath.startsWith("/")) {
+            return modelPath;
+        }
+
+        // List of common directories to search for models
+        String[] searchDirs = {
+            // App's internal files directory
+            getContext().getFilesDir().getAbsolutePath(),
+            getContext().getFilesDir().getAbsolutePath() + File.separator + "models",
+            getContext().getFilesDir().getAbsolutePath() + File.separator + "Downloads",
+            getContext().getFilesDir().getAbsolutePath() + File.separator + "Downloads" + File.separator + "models",
+            // App's external files directory
+            getContext().getExternalFilesDir(null).getAbsolutePath(),
+            getContext().getExternalFilesDir(null).getAbsolutePath() + File.separator + "models",
+            getContext().getExternalFilesDir(null).getAbsolutePath() + File.separator + "Downloads",
+            getContext().getExternalFilesDir(null).getAbsolutePath() + File.separator + "Downloads" + File.separator + "models",
+            // Legacy LlamaMobile/models directory (from Android SDK example)
+            getContext().getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS).getAbsolutePath() + File.separator + "LlamaMobile" + File.separator + "models"
+        };
+
+        // Search for the model file in common directories and their subdirectories
+        for (String dir : searchDirs) {
+            File directory = new File(dir);
+            if (directory.exists() && directory.isDirectory()) {
+                String foundPath = searchForModelRecursive(directory, modelPath);
+                if (foundPath != null) {
+                    return foundPath;
+                }
+            }
+        }
+
+        // If not found, return the original path (will likely fail, but let the error propagate)
+        return modelPath;
+    }
+
+    // Helper method to recursively search for a model file
+    private String searchForModelRecursive(File directory, String modelFileName) {
+        File[] files = directory.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    // Recursively search subdirectories
+                    String foundPath = searchForModelRecursive(file, modelFileName);
+                    if (foundPath != null) {
+                        return foundPath;
+                    }
+                } else {
+                    // Check if this file matches the model name
+                    if (file.getName().equals(modelFileName)) {
+                        return file.getAbsolutePath();
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     @PluginMethod
@@ -104,6 +173,105 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 call.reject("Failed to release context: " + e.getMessage());
             }
         });
+    }
+
+    // Model info class for listModels method
+    private static class ModelInfo {
+        String name;
+        String path;
+
+        ModelInfo(String name, String path) {
+            this.name = name;
+            this.path = path;
+        }
+    }
+
+    @PluginMethod
+    public void listModels(PluginCall call) {
+        executor.execute(() -> {
+            try {
+                List<ModelInfo> models = new ArrayList<>();
+
+                // List of common directories to search for models
+                List<String> modelDirectories = new ArrayList<>();
+
+                // Get documents directory
+                String documentsDir = getContext().getFilesDir().getAbsolutePath();
+                modelDirectories.add(documentsDir);
+                modelDirectories.add(documentsDir + File.separator + "models");
+                modelDirectories.add(documentsDir + File.separator + "Downloads");
+                modelDirectories.add(documentsDir + File.separator + "Downloads" + File.separator + "models");
+
+                // Add app's external files directory
+                String externalFilesDir = getContext().getExternalFilesDir(null).getAbsolutePath();
+                modelDirectories.add(externalFilesDir);
+                modelDirectories.add(externalFilesDir + File.separator + "models");
+                modelDirectories.add(externalFilesDir + File.separator + "Downloads");
+                modelDirectories.add(externalFilesDir + File.separator + "Downloads" + File.separator + "models");
+
+                // Add legacy LlamaMobile/models directory
+                String legacyExternalDir = getContext().getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS).getAbsolutePath() + File.separator + "LlamaMobile" + File.separator + "models";
+                modelDirectories.add(legacyExternalDir);
+
+                // Model file extensions to look for
+                List<String> modelExtensions = List.of("gguf", "safetensors", "bin");
+
+                // Scan directories for model files
+                for (String directory : modelDirectories) {
+                    File dir = new File(directory);
+                    if (dir.exists() && dir.isDirectory()) {
+                        scanDirectoryForModels(dir, modelExtensions, models);
+                    }
+                }
+
+                // Remove duplicates by file name
+                Set<String> seenFileNames = new HashSet<>();
+                List<ModelInfo> uniqueModels = new ArrayList<>();
+                for (ModelInfo model : models) {
+                    if (!seenFileNames.contains(model.name)) {
+                        seenFileNames.add(model.name);
+                        uniqueModels.add(model);
+                    }
+                }
+
+                // Convert to the expected format
+                List<Map<String, String>> modelArray = new ArrayList<>();
+                for (ModelInfo model : uniqueModels) {
+                    Map<String, String> modelMap = new HashMap<>();
+                    modelMap.put("name", model.name);
+                    modelMap.put("path", model.path);
+                    modelArray.add(modelMap);
+                }
+
+                JSObject ret = new JSObject();
+                ret.put("models", modelArray);
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject("Failed to list models: " + e.getMessage());
+            }
+        });
+    }
+
+    // Helper method to scan a directory for model files
+    private void scanDirectoryForModels(File directory, List<String> modelExtensions, List<ModelInfo> models) {
+        File[] files = directory.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    // Recursively scan subdirectories
+                    scanDirectoryForModels(file, modelExtensions, models);
+                } else {
+                    // Check if file has a model extension
+                    String fileName = file.getName().toLowerCase();
+                    for (String ext : modelExtensions) {
+                        if (fileName.endsWith("." + ext)) {
+                            models.add(new ModelInfo(file.getName(), file.getAbsolutePath()));
+                            break;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Completion
@@ -341,45 +509,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
     }
 
     @PluginMethod
-    public void generateAudioFromText(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
-        String text = call.getString("text");
-
-        if (contextHandle == -1 || text == null) {
-            call.reject("contextHandle and text are required");
-            return;
-        }
-
-        String speakerJson = call.getString("speakerJson", "{\"speaker\": \"default\"}");
-
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                float[] audioSamples = LlamaMobile.generateAudioFromText(
-                    nativeContextHandle, text, speakerJson
-                );
-
-                JSArray audioArray = new JSArray();
-                for (float sample : audioSamples) {
-                    audioArray.put(sample);
-                }
-
-                JSObject ret = new JSObject();
-                ret.put("audio", audioArray);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to generate audio from text: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void generateSpeech(PluginCall call) {
+    public void generateSpeechAsync(PluginCall call) {
         long contextHandle = call.getLong("contextHandle", -1L);
         String text = call.getString("text");
 
@@ -416,28 +546,34 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 }
 
                 Result<SpeechResult, TTSError> result = LlamaMobile.generateSpeech(
-                    nativeContextHandle, text, optionsBuilder.build(),
-                    new ProgressCallback() {
-                        @Override
-                        public void onProgress(float progress) {
-                            notifyListeners("progress", new JSObject().put("progress", progress));
-                        }
-                    }
+                    nativeContextHandle, text, optionsBuilder.build()
                 );
 
                 if (result.isSuccess()) {
                     SpeechResult speechResult = result.getValue();
-                    JSArray audioArray = new JSArray();
-                    for (short sample : speechResult.getAudioSamples()) {
-                        audioArray.put(sample);
-                    }
+                    
+                    // Generate temporary file path
+                    String tempFileName = "temp_audio_" + System.currentTimeMillis() + ".wav";
+                    
+                    // Save audio to temporary file
+                    boolean saveSuccess = saveAudioToWavInternal(
+                        nativeContextHandle, tempFileName, 
+                        speechResult.getAudioSamples(), speechResult.getSampleRate()
+                    );
 
-                    JSObject ret = new JSObject();
-                    ret.put("audio", audioArray);
-                    ret.put("sampleRate", speechResult.getSampleRate());
-                    ret.put("duration", speechResult.getDuration());
-                    ret.put("methodUsed", speechResult.getMethodUsed().toString());
-                    call.resolve(ret);
+                    if (saveSuccess) {
+                        // Resolve with the file path
+                        String tempFilePath = getContext().getFilesDir().getAbsolutePath() + "/" + tempFileName;
+                        
+                        JSObject ret = new JSObject();
+                        ret.put("audioPath", tempFilePath);
+                        ret.put("sampleRate", speechResult.getSampleRate());
+                        ret.put("duration", speechResult.getDuration());
+                        ret.put("methodUsed", speechResult.getMethodUsed().toString());
+                        call.resolve(ret);
+                    } else {
+                        call.reject("Failed to save audio to file");
+                    }
                 } else {
                     TTSError error = result.getError();
                     call.reject("Failed to generate speech: " + error.getMessage());
@@ -449,7 +585,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
     }
 
     @PluginMethod
-    public void generateSpeechSync(PluginCall call) {
+    public void generateSpeech(PluginCall call) {
         long contextHandle = call.getLong("contextHandle", -1L);
         String text = call.getString("text");
 
@@ -484,23 +620,35 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                     return;
                 }
 
-                Result<SpeechResult, TTSError> result = LlamaMobile.generateSpeechSync(
+                Result<SpeechResult, TTSError> result = LlamaMobile.generateSpeech(
                     nativeContextHandle, text, optionsBuilder.build()
                 );
 
                 if (result.isSuccess()) {
                     SpeechResult speechResult = result.getValue();
-                    JSArray audioArray = new JSArray();
-                    for (short sample : speechResult.getAudioSamples()) {
-                        audioArray.put(sample);
-                    }
+                    
+                    // Generate temporary file path
+                    String tempFileName = "temp_audio_" + System.currentTimeMillis() + ".wav";
+                    
+                    // Save audio to temporary file
+                    boolean saveSuccess = saveAudioToWavInternal(
+                        nativeContextHandle, tempFileName, 
+                        speechResult.getAudioSamples(), speechResult.getSampleRate()
+                    );
 
-                    JSObject ret = new JSObject();
-                    ret.put("audio", audioArray);
-                    ret.put("sampleRate", speechResult.getSampleRate());
-                    ret.put("duration", speechResult.getDuration());
-                    ret.put("methodUsed", speechResult.getMethodUsed().toString());
-                    call.resolve(ret);
+                    if (saveSuccess) {
+                        // Resolve with the file path
+                        String tempFilePath = getContext().getFilesDir().getAbsolutePath() + "/" + tempFileName;
+                        
+                        JSObject ret = new JSObject();
+                        ret.put("audioPath", tempFilePath);
+                        ret.put("sampleRate", speechResult.getSampleRate());
+                        ret.put("duration", speechResult.getDuration());
+                        ret.put("methodUsed", speechResult.getMethodUsed().toString());
+                        call.resolve(ret);
+                    } else {
+                        call.reject("Failed to save audio to file");
+                    }
                 } else {
                     TTSError error = result.getError();
                     call.reject("Failed to generate speech sync: " + error.getMessage());
@@ -510,82 +658,36 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             }
         });
     }
-
-    @PluginMethod
-    public void generateSpeechStream(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
-        String text = call.getString("text");
-
-        if (contextHandle == -1 || text == null) {
-            call.reject("contextHandle and text are required");
-            return;
-        }
-
-        int sampleRate = call.getInt("sampleRate", 24000);
-        String method = call.getString("method", "best");
-
-        TTSOptions.Builder optionsBuilder = new TTSOptions.Builder();
-        optionsBuilder.sampleRate(sampleRate);
-
-        switch (method.toLowerCase()) {
-            case "custom":
-                // optionsBuilder.method(LlamaMobile.TTSMethod.CUSTOM_WORKFLOW);
-                break;
-            case "builtin":
-                // optionsBuilder.method(LlamaMobile.TTSMethod.BUILT_IN);
-                break;
-            default:
-                // optionsBuilder.method(LlamaMobile.TTSMethod.BUILT_IN);
-                break;
-        }
-
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                Result<SpeechMetadata, TTSError> result = LlamaMobile.generateSpeechStream(
-                    nativeContextHandle, text, optionsBuilder.build(),
-                    new ProgressCallback() {
-                        @Override
-                        public void onProgress(float progress) {
-                            notifyListeners("progress", new JSObject().put("progress", progress));
-                        }
-                    },
-                    new AudioChunkCallback() {
-                        @Override
-                        public void onAudioChunk(short[] audioChunk) {
-                            JSArray audioArray = new JSArray();
-                            for (short sample : audioChunk) {
-                                audioArray.put(sample);
-                            }
-                            notifyListeners("audioChunk", new JSObject().put("audio", audioArray));
-                        }
-                    }
-                );
-
-                if (result.isSuccess()) {
-                    SpeechMetadata metadata = result.getValue();
-                    JSObject ret = new JSObject();
-                    ret.put("sampleRate", metadata.getSampleRate());
-                    ret.put("duration", metadata.getDuration());
-                    ret.put("methodUsed", metadata.getMethodUsed().toString());
-                    call.resolve(ret);
-                } else {
-                    TTSError error = result.getError();
-                    call.reject("Failed to generate speech stream: " + error.getMessage());
-                }
-            } catch (Exception e) {
-                call.reject("Failed to generate speech stream: " + e.getMessage());
+    
+    // Internal method to save audio to WAV using existing logic
+    private boolean saveAudioToWavInternal(long nativeContextHandle, String filePath, short[] audioData, int sampleRate) {
+        try {
+            // Handle relative file paths by using app's files directory
+            String finalFilePath = filePath;
+            if (!filePath.startsWith("/")) {
+                // Use app's internal files directory for relative paths
+                java.io.File filesDir = getContext().getFilesDir();
+                finalFilePath = filesDir.getAbsolutePath() + "/" + filePath;
             }
-        });
+
+            // Convert short[] to float[] for saveAudioToWav
+            float[] floatAudioData = new float[audioData.length];
+            for (int i = 0; i < audioData.length; i++) {
+                // Convert 16-bit short to float in range [-1, 1]
+                floatAudioData[i] = audioData[i] / (float) Short.MAX_VALUE;
+            }
+
+            return LlamaMobile.saveAudioToWav(
+                nativeContextHandle, finalFilePath, floatAudioData, sampleRate
+            );
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
     @PluginMethod
-    public void generateSpeechStreamForLongText(PluginCall call) {
+    public void generateSpeechStreamForLongTextAsync(PluginCall call) {
         long contextHandle = call.getLong("contextHandle", -1L);
         String text = call.getString("text");
 
@@ -620,7 +722,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                     return;
                 }
 
-                Result<SpeechMetadata, TTSError> result = LlamaMobile.generateSpeechStreamForLongText(
+                LlamaMobile.generateSpeechStreamForLongTextAsync(
                     nativeContextHandle, text, optionsBuilder.build(),
                     new ProgressCallback() {
                         @Override
@@ -637,20 +739,24 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                             }
                             notifyListeners("audioChunk", new JSObject().put("audio", audioArray));
                         }
+                    },
+                    new LlamaMobile.SpeechMetadataCallback() {
+                        @Override
+                        public void onResult(Result<SpeechMetadata, TTSError> result) {
+                            if (result.isSuccess()) {
+                                SpeechMetadata metadata = result.getValue();
+                                JSObject ret = new JSObject();
+                                ret.put("sampleRate", metadata.getSampleRate());
+                                ret.put("duration", metadata.getDuration());
+                                ret.put("methodUsed", metadata.getMethodUsed().toString());
+                                call.resolve(ret);
+                            } else {
+                                TTSError error = result.getError();
+                                call.reject("Failed to generate speech stream: " + error.getMessage());
+                            }
+                        }
                     }
                 );
-
-                if (result.isSuccess()) {
-                    SpeechMetadata metadata = result.getValue();
-                    JSObject ret = new JSObject();
-                    ret.put("sampleRate", metadata.getSampleRate());
-                    ret.put("duration", metadata.getDuration());
-                    ret.put("methodUsed", metadata.getMethodUsed().toString());
-                    call.resolve(ret);
-                } else {
-                    TTSError error = result.getError();
-                    call.reject("Failed to generate speech stream: " + error.getMessage());
-                }
             } catch (Exception e) {
                 call.reject("Failed to generate speech stream: " + e.getMessage());
             }
@@ -767,6 +873,48 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 call.resolve(ret);
             } catch (Exception e) {
                 call.reject("Failed to play audio: " + e.getMessage());
+            }
+        });
+    }
+    
+    @PluginMethod
+    public void playAudioFromFile(PluginCall call) {
+        String filePath = call.getString("filePath");
+
+        if (filePath == null) {
+            call.reject("filePath is required");
+            return;
+        }
+
+        executor.execute(() -> {
+            try {
+                // Handle relative file paths by using app's files directory
+                String finalFilePath = filePath;
+                if (!filePath.startsWith("/")) {
+                    // Use app's internal files directory for relative paths
+                    java.io.File filesDir = getContext().getFilesDir();
+                    finalFilePath = filesDir.getAbsolutePath() + "/" + filePath;
+                }
+
+                // Create MediaPlayer
+                android.media.MediaPlayer mediaPlayer = new android.media.MediaPlayer();
+                mediaPlayer.setDataSource(finalFilePath);
+                mediaPlayer.prepare();
+                mediaPlayer.start();
+
+                // Wait for playback to complete
+                while (mediaPlayer.isPlaying()) {
+                    Thread.sleep(100);
+                }
+
+                // Release resources
+                mediaPlayer.release();
+
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject("Failed to play audio from file: " + e.getMessage());
             }
         });
     }
@@ -1031,7 +1179,14 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 }
 
                 LlamaMobile.ConversationResult result = LlamaMobile.generateResponse(
-                    nativeContextHandle, userMessage, maxTokens
+                    nativeContextHandle, userMessage, maxTokens,
+                    new LlamaMobile.TokenCallback() {
+                        @Override
+                        public boolean onToken(String token) {
+                            notifyListeners("token", new JSObject().put("token", token));
+                            return true;
+                        }
+                    }
                 );
 
                 JSObject ret = new JSObject();

@@ -45,6 +45,8 @@ interface MoreProps {
   availableLoraModels: ModelInfo[];
   availableGrammars: string[];
   isModelInitialized: boolean;
+  isInitializing: boolean;
+  isApplyingLora: boolean;
   isDownloading: boolean;
   downloadProgress: number;
   downloadStatus: string;
@@ -102,6 +104,8 @@ const More: React.FC<MoreProps> = ({
   availableLoraModels,
   availableGrammars,
   isModelInitialized,
+  isInitializing,
+  isApplyingLora,
   isDownloading,
   downloadProgress,
   downloadStatus,
@@ -313,9 +317,9 @@ const More: React.FC<MoreProps> = ({
         <button 
           onClick={initializeModel} 
           className="primary-button"
-          disabled={isModelInitialized || !modelPath}
+          disabled={isModelInitialized || !modelPath || isInitializing}
         >
-          {isModelInitialized ? 'Reinitialize Model' : 'Initialize Model'}
+          {isInitializing ? 'Initializing...' : isModelInitialized ? 'Reinitialize Model' : 'Initialize Model'}
         </button>
         {isModelInitialized && (
           <button 
@@ -349,19 +353,22 @@ const More: React.FC<MoreProps> = ({
             min={0.1}
             max={2.0}
             step={0.1}
+            disabled={isApplyingLora}
           />
         </div>
         <button 
           onClick={applyLora} 
           className="primary-button"
+          disabled={!isModelInitialized || !loraPath || isApplyingLora}
         >
-          Apply LoRA Adapter
+          {isApplyingLora ? 'Applying LoRA...' : 'Apply LoRA Adapter'}
         </button>
         <button 
           onClick={removeLora} 
           className="secondary-button"
+          disabled={!isModelInitialized || isApplyingLora}
         >
-          Remove LoRA Adapter
+          {isApplyingLora ? 'Removing LoRA...' : 'Remove LoRA Adapter'}
         </button>
       </div>
       

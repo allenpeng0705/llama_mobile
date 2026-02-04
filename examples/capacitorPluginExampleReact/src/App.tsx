@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { LlamaMobileCapacitorPlugin } from '../../../llama_mobile-capacitor-plugin/src/index';
+import { LlamaMobileCapacitorPlugin } from 'llama-mobile-capacitor-plugin';
 import './App.css';
 import Chat from './components/Chat';
 import Embed from './components/Embed';
@@ -89,12 +89,16 @@ function App() {
   const [contextHandle, setContextHandle] = useState<number>(-1);
   const [isModelInitialized, setIsModelInitialized] = useState<boolean>(false);
   const [isVocoderInitialized, setIsVocoderInitialized] = useState<boolean>(false);
+  const [isInitializing, setIsInitializing] = useState<boolean>(false);
+  const [isApplyingLora, setIsApplyingLora] = useState<boolean>(false);
+  const [isGeneratingAudio, setIsGeneratingAudio] = useState<boolean>(false);
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   
 
   // Initialize model
   const initializeModel = async () => {
     try {
+      setIsInitializing(true);
       console.log('Initializing model with modelPath:', modelPath);
       console.log('Initializing model with mmprojModelPath:', mmprojModelPath);
       
@@ -186,6 +190,8 @@ function App() {
     } catch (error) {
       console.error('Error initializing model:', error);
       alert('Error initializing model: ' + (error as Error).message);
+    } finally {
+      setIsInitializing(false);
     }
   };
 
@@ -495,61 +501,102 @@ function App() {
     setAudioFilePath('');
     
     try {
-      const result = await LlamaMobileCapacitorPlugin.generateAudioFromText({
+      setIsGeneratingAudio(true);
+      const result = await LlamaMobileCapacitorPlugin.generateSpeech({
         contextHandle: contextHandle,
-        text: ttsText
-      });
-      
-      console.log('Audio generated successfully:', result.audio.length, 'samples');
-      setAudioSamples(result.audio);
-      
-      // Automatically save to WAV file
-      const fileName = 'tts_output_latest.wav';
-      const saveResult = await LlamaMobileCapacitorPlugin.saveAudioToWav({
-        contextHandle: contextHandle,
-        filePath: fileName,
-        audioData: result.audio,
+        text: ttsText,
         sampleRate: 24000
       });
       
-      if (saveResult.success) {
-        setAudioFilePath(fileName);
-        console.log('Audio saved successfully to:', fileName);
+      console.log('Audio generated successfully:', result);
+      
+      // Check if audio data exists and is serializable
+      if (result && typeof result === 'object') {
+        // Handle both formats: audioPath (new) and audio (old)
+        if (result.audioPath) {
+          // New format: plugin returns file path directly
+          setAudioFilePath(result.audioPath);
+          console.log('Audio saved successfully to:', result.audioPath);
+        } else if (result.audio) {
+          // Old format: plugin returns audio samples
+          // Save audio file directly without storing samples in state
+          const fileName = 'tts_output_latest.wav';
+          const saveResult = await LlamaMobileCapacitorPlugin.saveAudioToWav({
+            contextHandle: contextHandle,
+            filePath: fileName,
+            audioData: result.audio || [],
+            sampleRate: result.sampleRate || 24000
+          });
+          
+          if (saveResult.success) {
+            setAudioFilePath(fileName);
+            console.log('Audio saved successfully to:', fileName);
+          } else {
+            console.error('Failed to save audio automatically');
+          }
+        } else {
+          console.error('Invalid response: neither audioPath nor audio found');
+        }
       } else {
-        console.error('Failed to save audio automatically');
+        console.error('Invalid response from generateSpeech');
       }
     } catch (error) {
       console.error('Error generating audio:', error);
+      alert('Error generating audio: ' + (error as Error).message);
+    } finally {
+      setIsGeneratingAudio(false);
     }
   };
   
   // Play audio from samples using native audio playback
   const playAudio = async () => {
-    if (audioSamples.length === 0) {
-      console.warn('No audio samples to play. Please generate audio first.');
+    if (audioSamples.length === 0 && !audioFilePath) {
+      console.warn('No audio to play. Please generate audio first.');
       return;
     }
     
     try {
       setIsPlaying(true);
       
-      const result = await LlamaMobileCapacitorPlugin.playAudio({
-        audioData: audioSamples,
-        sampleRate: 24000
-      });
-      
-      if (result.success) {
-        console.log('Audio playback started successfully');
+      // Check if we have audio samples or a file path
+      if (audioSamples.length > 0) {
+        // Play from audio samples
+        const result = await LlamaMobileCapacitorPlugin.playAudio({
+          audioData: audioSamples,
+          sampleRate: 24000
+        });
         
-        // Set a timeout to reset playing state (estimated duration)
-        const durationSeconds = audioSamples.length / 24000;
-        setTimeout(() => {
+        if (result.success) {
+          console.log('Audio playback started successfully');
+          
+          // Set a timeout to reset playing state (estimated duration)
+          const durationSeconds = audioSamples.length / 24000;
+          setTimeout(() => {
+            setIsPlaying(false);
+            console.log('Audio playback completed');
+          }, durationSeconds * 1000 + 500); // Add 500ms buffer
+        } else {
+          console.error('Failed to play audio');
           setIsPlaying(false);
-          console.log('Audio playback completed');
-        }, durationSeconds * 1000 + 500); // Add 500ms buffer
-      } else {
-        console.error('Failed to play audio');
-        setIsPlaying(false);
+        }
+      } else if (audioFilePath) {
+        // Play from file path using new plugin method
+        console.log('Playing audio from file:', audioFilePath);
+        const result = await LlamaMobileCapacitorPlugin.playAudioFromFile({
+          filePath: audioFilePath
+        });
+        
+        if (result.success) {
+          console.log('Audio playback started successfully from file');
+          // Playback is synchronous in the plugin, so we can reset immediately
+          setTimeout(() => {
+            setIsPlaying(false);
+            console.log('Audio playback completed from file');
+          }, 500); // Small buffer to ensure UI updates
+        } else {
+          console.error('Failed to play audio from file');
+          setIsPlaying(false);
+        }
       }
     } catch (error) {
       console.error('Error playing audio:', error);
@@ -565,6 +612,7 @@ function App() {
     }
     
     try {
+      setIsApplyingLora(true);
       // Resolve LoRA model path
       const resolvedLoraPath = await resolveModelPath(loraPath);
       console.log('Resolved LoRA model path:', resolvedLoraPath);
@@ -584,6 +632,8 @@ function App() {
       }
     } catch (error) {
       console.error('Error applying LoRA adapter:', error);
+    } finally {
+      setIsApplyingLora(false);
     }
   };
 
@@ -595,6 +645,7 @@ function App() {
     }
     
     try {
+      setIsApplyingLora(true);
       await LlamaMobileCapacitorPlugin.removeLoraAdapters({
         contextHandle: contextHandle
       });
@@ -602,6 +653,8 @@ function App() {
       console.log('LoRA adapter removed successfully');
     } catch (error) {
       console.error('Error removing LoRA adapter:', error);
+    } finally {
+      setIsApplyingLora(false);
     }
   };
   
@@ -981,6 +1034,7 @@ function App() {
                 audioSamples={audioSamples}
                 audioFilePath={audioFilePath}
                 isPlaying={isPlaying}
+                isGeneratingAudio={isGeneratingAudio}
                 isModelInitialized={isModelInitialized}
                 isVocoderInitialized={isVocoderInitialized}
               />
@@ -1034,6 +1088,8 @@ function App() {
                 availableLoraModels={availableLoraModels}
                 availableGrammars={availableGrammars}
                 isModelInitialized={isModelInitialized}
+                isInitializing={isInitializing}
+                isApplyingLora={isApplyingLora}
                 isDownloading={isDownloading}
                 downloadProgress={downloadProgress}
                 downloadStatus={downloadStatus}

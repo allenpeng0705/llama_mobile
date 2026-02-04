@@ -1595,7 +1595,7 @@ public class LlamaMobile: NSObject {
             let cResult = llama_mobile_tokenize_c(context, textC)
             defer { llama_mobile_free_token_array_c(cResult) }
             
-            guard let tokens = cResult.tokens else {
+            guard let tokens = cResult.tokens, cResult.count > 0 else {
                 return nil
             }
             
@@ -1740,7 +1740,7 @@ public class LlamaMobile: NSObject {
     ///   - speakerJson: JSON string with speaker configuration
     ///   - textToSpeak: Text to convert to speech
     /// - Returns: Formatted audio completion string, or nil if an error occurred
-    public func getFormattedAudioCompletion(speakerJson: String, textToSpeak: String) -> String? {
+    private func getFormattedAudioCompletion(speakerJson: String, textToSpeak: String) -> String? {
         guard let context = context else {
             return nil
         }
@@ -1766,7 +1766,7 @@ public class LlamaMobile: NSObject {
     /// Get guide tokens for audio completion
     /// - Parameter textToSpeak: Text to convert to speech
     /// - Returns: Array of guide tokens for audio generation, or nil if an error occurred
-    public func getAudioGuideTokens(textToSpeak: String) -> [Int32]? {
+    private func getAudioGuideTokens(textToSpeak: String) -> [Int32]? {
         guard let context = context else {
             return nil
         }
@@ -1785,7 +1785,7 @@ public class LlamaMobile: NSObject {
     
     /// Set guide tokens for audio generation
     /// - Parameter tokens: Array of guide tokens to use
-    public func setGuideTokens(tokens: [Int32]) {
+    private func setGuideTokens(tokens: [Int32]) {
         guard let context = context else {
             return
         }
@@ -1800,7 +1800,7 @@ public class LlamaMobile: NSObject {
     /// Decode audio tokens into raw audio data
     /// - Parameter tokens: Audio tokens to decode
     /// - Returns: Array of floating-point audio samples, or nil if an error occurred
-    public func decodeAudioTokens(tokens: [Int32]) -> [Float]? {
+    private func decodeAudioTokens(tokens: [Int32]) -> [Float]? {
         guard let context = context else {
             return nil
         }
@@ -1858,7 +1858,7 @@ public class LlamaMobile: NSObject {
     ///   - speakerJson: JSON string with speaker configuration (optional, defaults to default speaker)
     /// - Returns: Array of floating-point audio samples, or nil if an error occurred
     /// - Note: This method handles the entire TTS workflow in a single call: formatting, token generation, and audio decoding
-    public func generateAudioFromText(text: String, speakerJson: String = "{\"speaker\": \"default\"}") -> [Float]? {
+    private func generateAudioFromText(text: String, speakerJson: String = "{\"speaker\": \"default\"}") -> [Float]? {
         guard let context = context, isVocoderEnabled() else {
             return nil
         }
@@ -2030,7 +2030,7 @@ public class LlamaMobile: NSObject {
     ///   - options: TTS configuration options
     ///   - progressHandler: Optional callback for progress updates
     /// - Returns: Result containing the generated audio samples and metadata
-    public func generateSpeech(
+    public func generateSpeechAsync(
         text: String,
         options: TTSOptions = TTSOptions(),
         progressHandler: ((Float) -> Void)? = nil
@@ -2120,7 +2120,7 @@ public class LlamaMobile: NSObject {
     ///   - text: Text to convert to speech
     ///   - options: TTS configuration options
     /// - Returns: Result containing the generated audio samples and metadata
-    public func generateSpeechSync(
+    public func generateSpeech(
         text: String,
         options: TTSOptions = TTSOptions()
     ) -> Result<SpeechResult, TTSError> {
@@ -2197,7 +2197,7 @@ public class LlamaMobile: NSObject {
     ///   - progressHandler: Optional callback for progress updates (0.0 to 1.0)
     ///   - audioChunkHandler: Callback for receiving audio chunks as they're generated
     /// - Returns: Result containing final metadata (duration, method used, etc.)
-    public func generateSpeechStreamForLongText(
+    public func generateSpeechStreamForLongTextAsync(
         text: String,
         options: TTSOptions = TTSOptions(),
         progressHandler: ((Float) -> Void)? = nil,
@@ -2235,10 +2235,9 @@ public class LlamaMobile: NSObject {
             progressHandler?(0.2 + chunkProgress) // Update progress
             
             // Generate speech for this chunk
-            let chunkResult = await self.generateSpeech(
+            let chunkResult = self.generateSpeech(
                 text: chunk,
-                options: options,
-                progressHandler: { _ in }
+                options: options
             )
             
             switch chunkResult {
@@ -2553,41 +2552,9 @@ public class LlamaMobile: NSObject {
     /// - Parameters:
     ///   - userMessage: User's message
     ///   - maxTokens: Maximum number of tokens to generate
+    ///   - tokenCallback: Optional streaming callback for generated tokens
     /// - Returns: Conversation result, or nil if an error occurred
-    public func generateResponse(userMessage: String, maxTokens: Int32 = 128) -> ConversationResult? {
-        guard let context = context else {
-            return nil
-        }
-        
-        return userMessage.withCString { messageC in
-            var cResult = llama_mobile_continue_conversation_c(
-                context,
-                messageC,
-                maxTokens
-            )
-            
-            defer { llama_mobile_free_conversation_result_members_c(&cResult) }
-            
-            guard let text = cResult.text.map({ String(cString: $0) }) else {
-                return nil
-            }
-            
-            return ConversationResult(
-                text: text,
-                timeToFirstToken: cResult.time_to_first_token,
-                totalTime: cResult.total_time,
-                tokensGenerated: cResult.tokens_generated
-            )
-        }
-    }
-    
-    /// Generate a response to a user message with streaming token callback
-    /// - Parameters:
-    ///   - userMessage: User's message
-    ///   - maxTokens: Maximum number of tokens to generate
-    ///   - tokenCallback: Streaming callback for generated tokens
-    /// - Returns: Conversation result, or nil if an error occurred
-    public func generateResponse(userMessage: String, maxTokens: Int32 = 1024, tokenCallback: ((String) -> Bool)?) -> ConversationResult? {
+    public func generateResponse(userMessage: String, maxTokens: Int32 = 128, tokenCallback: ((String) -> Bool)? = nil) -> ConversationResult? {
         guard let context = context else {
             return nil
         }

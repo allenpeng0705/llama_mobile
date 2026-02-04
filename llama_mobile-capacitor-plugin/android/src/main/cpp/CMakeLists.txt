@@ -7,7 +7,7 @@ set(ANDROID_STL c++_static)
 
 # Add include directories for llama_mobile headers
 include_directories(
-    ../../../../llama_mobile-android/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 

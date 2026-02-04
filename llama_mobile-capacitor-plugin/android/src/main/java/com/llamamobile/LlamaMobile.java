@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 import org.json.JSONObject;
 import org.json.JSONArray;
+import android.os.Handler;
+import android.os.Looper;
 
 /**
  * LlamaMobile Android Library
@@ -702,6 +704,7 @@ public class LlamaMobile {
             return new CompletionParams(prompt, 0.8f, maxTokens, null, -1, 40, 0.95, 0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, null, new ArrayList<>(), new ArrayList<>(), null);
         }
 
+
         /**
          * Parse chat messages from OpenAI JSON
          */
@@ -928,7 +931,7 @@ public class LlamaMobile {
      * @param textToSpeak Text to convert to speech
      * @return Formatted audio completion string, or null if an error occurred
      */
-    public static native String getFormattedAudioCompletion(long contextHandle, String speakerJson, String textToSpeak);
+    private static native String getFormattedAudioCompletion(long contextHandle, String speakerJson, String textToSpeak);
 
     /**
      * Gets guide tokens for audio completion
@@ -937,7 +940,7 @@ public class LlamaMobile {
      * @param textToSpeak Text to convert to speech
      * @return Array of guide tokens for audio generation, or null if an error occurred
      */
-    public static native int[] getAudioGuideTokens(long contextHandle, String textToSpeak);
+    private static native int[] getAudioGuideTokens(long contextHandle, String textToSpeak);
 
     /**
      * Decodes audio tokens into raw audio data
@@ -946,7 +949,7 @@ public class LlamaMobile {
      * @param tokens Audio tokens to decode
      * @return Array of floating-point audio samples, or null if an error occurred
      */
-    public static native float[] decodeAudioTokens(long contextHandle, int[] tokens);
+    private static native float[] decodeAudioTokens(long contextHandle, int[] tokens);
 
     /**
      * Sets guide tokens for audio generation
@@ -954,7 +957,7 @@ public class LlamaMobile {
      * @param contextHandle Context handle obtained from initContext
      * @param tokens Guide tokens to set for audio generation
      */
-    public static native void setGuideTokens(long contextHandle, int[] tokens);
+    private static native void setGuideTokens(long contextHandle, int[] tokens);
 
     /**
      * Saves audio samples to WAV file
@@ -1029,6 +1032,30 @@ public class LlamaMobile {
     public static native ConversationResult generateResponse(long contextHandle, String userMessage, int maxTokens);
 
     /**
+     * Generates a response to a user message in a conversation with streaming token callback
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param userMessage User's message
+     * @param maxTokens Maximum number of tokens to generate
+     * @param tokenCallback Optional callback for streaming tokens as they are generated
+     * @return Conversation result, or null if an error occurred
+     */
+    public static native ConversationResult generateResponseWithCallback(long contextHandle, String userMessage, int maxTokens, TokenCallback tokenCallback);
+
+    /**
+     * Generates a response to a user message in a conversation with optional streaming token callback
+     *
+     * @param contextHandle Context handle obtained from initContext
+     * @param userMessage User's message
+     * @param maxTokens Maximum number of tokens to generate
+     * @param tokenCallback Optional callback for streaming tokens as they are generated
+     * @return Conversation result, or null if an error occurred
+     */
+    public static ConversationResult generateResponse(long contextHandle, String userMessage, int maxTokens, TokenCallback tokenCallback) {
+        return generateResponseWithCallback(contextHandle, userMessage, maxTokens, tokenCallback);
+    }
+
+    /**
      * Clears the current conversation context
      *
      * @param contextHandle Context handle obtained from initContext
@@ -1085,7 +1112,7 @@ public class LlamaMobile {
      * @param speakerJson JSON string with speaker configuration (optional, defaults to default speaker)
      * @return Array of floating-point audio samples, or null if an error occurred
      */
-    public static float[] generateAudioFromText(long contextHandle, String text, String speakerJson) {
+    private static float[] generateAudioFromText(long contextHandle, String text, String speakerJson) {
         if (contextHandle == 0L) {
             return null;
         }
@@ -1195,7 +1222,7 @@ public class LlamaMobile {
      * @param text Text to convert to speech
      * @return Array of floating-point audio samples, or null if an error occurred
      */
-    public static float[] generateAudioFromText(long contextHandle, String text) {
+    private static float[] generateAudioFromText(long contextHandle, String text) {
         return generateAudioFromText(contextHandle, text, "{\"speaker\": \"default\"}");
     }
 
@@ -1207,7 +1234,7 @@ public class LlamaMobile {
      * @param options TTS configuration options
      * @return Result containing the generated audio samples and metadata
      */
-    public static Result<SpeechResult, TTSError> generateSpeechSync(long contextHandle, String text, TTSOptions options) {
+    public static Result<SpeechResult, TTSError> generateSpeech(long contextHandle, String text, TTSOptions options) {
         if (contextHandle == 0L) {
             return Result.failure(TTSError.noModelLoaded());
         }
@@ -1249,17 +1276,6 @@ public class LlamaMobile {
         );
         
         return Result.success(speechResult);
-    }
-
-    /**
-     * Generates speech from text using the best available method (synchronous) with default options
-     *
-     * @param contextHandle Context handle obtained from initContext
-     * @param text Text to convert to speech
-     * @return Result containing the generated audio samples and metadata
-     */
-    public static Result<SpeechResult, TTSError> generateSpeechSync(long contextHandle, String text) {
-        return generateSpeechSync(contextHandle, text, new TTSOptions());
     }
 
     /**
@@ -1269,146 +1285,142 @@ public class LlamaMobile {
      * @param text Text to convert to speech
      * @param options TTS configuration options
      * @param progressHandler Optional callback for progress updates
-     * @return Result containing the generated audio samples and metadata
+     * @param resultCallback Callback for receiving the final result
      */
-    public static Result<SpeechResult, TTSError> generateSpeech(long contextHandle, String text, TTSOptions options, ProgressCallback progressHandler) {
+    public static void generateSpeechAsync(long contextHandle, String text, TTSOptions options, final ProgressCallback progressHandler, final SpeechResultCallback resultCallback) {
         if (contextHandle == 0L) {
-            return Result.failure(TTSError.noModelLoaded());
+            resultCallback.onResult(Result.failure(TTSError.noModelLoaded()));
+            return;
         }
         
         if (!isVocoderEnabled(contextHandle)) {
-            return Result.failure(TTSError.noVocoderEnabled());
+            resultCallback.onResult(Result.failure(TTSError.noVocoderEnabled()));
+            return;
         }
         
-        if (progressHandler != null) {
-            progressHandler.onProgress(0.1f);
-        }
-        
-        float[] audioSamples = generateAudioFromText(contextHandle, text);
-        
-        if (progressHandler != null) {
-            progressHandler.onProgress(0.8f);
-        }
-        
-        if (audioSamples == null) {
-            return Result.failure(TTSError.generationFailed());
-        }
-        
-        double duration = audioSamples.length / (double) options.getSampleRate();
-        
-        short[] shortSamples = new short[audioSamples.length];
-        for (int i = 0; i < audioSamples.length; i++) {
-            shortSamples[i] = (short) (audioSamples[i] * Short.MAX_VALUE);
-        }
-        
-        String savedFilePath = null;
-        if (options.isSaveToFile() && options.getOutputFilePath() != null) {
-            boolean saveSuccess = saveAudioToWav(contextHandle, options.getOutputFilePath(), audioSamples, options.getSampleRate());
-            if (saveSuccess) {
-                savedFilePath = options.getOutputFilePath();
-            } else {
-                return Result.failure(TTSError.fileSaveFailed());
+        // Execute in a background thread
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (progressHandler != null) {
+                        runOnMainThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                progressHandler.onProgress(0.1f);
+                            }
+                        });
+                    }
+                    
+                    float[] audioSamples = generateAudioFromText(contextHandle, text);
+                    
+                    if (progressHandler != null) {
+                        runOnMainThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                progressHandler.onProgress(0.8f);
+                            }
+                        });
+                    }
+                    
+                    if (audioSamples == null) {
+                        final Result<SpeechResult, TTSError> failureResult = Result.failure(TTSError.generationFailed());
+                        runOnMainThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                resultCallback.onResult(failureResult);
+                            }
+                        });
+                        return;
+                    }
+                    
+                    double duration = audioSamples.length / (double) options.getSampleRate();
+                    
+                    short[] shortSamples = new short[audioSamples.length];
+                    for (int i = 0; i < audioSamples.length; i++) {
+                        shortSamples[i] = (short) (audioSamples[i] * Short.MAX_VALUE);
+                    }
+                    
+                    String savedFilePath = null;
+                    if (options.isSaveToFile() && options.getOutputFilePath() != null) {
+                        boolean saveSuccess = saveAudioToWav(contextHandle, options.getOutputFilePath(), audioSamples, options.getSampleRate());
+                        if (saveSuccess) {
+                            savedFilePath = options.getOutputFilePath();
+                        } else {
+                            final Result<SpeechResult, TTSError> failureResult = Result.failure(TTSError.fileSaveFailed());
+                            runOnMainThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    resultCallback.onResult(failureResult);
+                                }
+                            });
+                            return;
+                        }
+                    }
+                    
+                    if (progressHandler != null) {
+                        runOnMainThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                progressHandler.onProgress(1.0f);
+                            }
+                        });
+                    }
+                    
+                    TTSMethod methodUsed = TTSMethod.BUILT_IN;
+                    final SpeechResult speechResult = new SpeechResult(
+                        shortSamples,
+                        options.getSampleRate(),
+                        duration,
+                        savedFilePath,
+                        methodUsed
+                    );
+                    
+                    final Result<SpeechResult, TTSError> successResult = Result.success(speechResult);
+                    runOnMainThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            resultCallback.onResult(successResult);
+                        }
+                    });
+                } catch (final Exception e) {
+                    final Result<SpeechResult, TTSError> errorResult = Result.failure(TTSError.generationFailed());
+                    runOnMainThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            resultCallback.onResult(errorResult);
+                        }
+                    });
+                }
             }
+        }).start();
+    }
+    
+    /**
+     * Callback interface for speech generation results
+     */
+    public interface SpeechResultCallback {
+        void onResult(Result<SpeechResult, TTSError> result);
+    }
+    
+    /**
+     * Callback interface for speech metadata results
+     */
+    public interface SpeechMetadataCallback {
+        void onResult(Result<SpeechMetadata, TTSError> result);
+    }
+    
+    /**
+     * Runs a runnable on the main thread
+     */
+    private static void runOnMainThread(Runnable runnable) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            runnable.run();
+        } else {
+            new Handler(Looper.getMainLooper()).post(runnable);
         }
-        
-        if (progressHandler != null) {
-            progressHandler.onProgress(1.0f);
-        }
-        
-        TTSMethod methodUsed = TTSMethod.BUILT_IN;
-        SpeechResult speechResult = new SpeechResult(
-            shortSamples,
-            options.getSampleRate(),
-            duration,
-            savedFilePath,
-            methodUsed
-        );
-        
-        return Result.success(speechResult);
     }
 
-    /**
-     * Generates speech from text using the best available method (asynchronous) with default options
-     *
-     * @param contextHandle Context handle obtained from initContext
-     * @param text Text to convert to speech
-     * @return Result containing the generated audio samples and metadata
-     */
-    public static Result<SpeechResult, TTSError> generateSpeech(long contextHandle, String text) {
-        return generateSpeech(contextHandle, text, new TTSOptions(), null);
-    }
-
-    /**
-     * Generates speech from text using the best available method (asynchronous) with progress handler
-     *
-     * @param contextHandle Context handle obtained from initContext
-     * @param text Text to convert to speech
-     * @param progressHandler Callback for progress updates
-     * @return Result containing the generated audio samples and metadata
-     */
-    public static Result<SpeechResult, TTSError> generateSpeech(long contextHandle, String text, ProgressCallback progressHandler) {
-        return generateSpeech(contextHandle, text, new TTSOptions(), progressHandler);
-    }
-
-    /**
-     * Generates speech from text using the best available method (asynchronous) with options
-     *
-     * @param contextHandle Context handle obtained from initContext
-     * @param text Text to convert to speech
-     * @param options TTS configuration options
-     * @return Result containing the generated audio samples and metadata
-     */
-    public static Result<SpeechResult, TTSError> generateSpeech(long contextHandle, String text, TTSOptions options) {
-        return generateSpeech(contextHandle, text, options, null);
-    }
-
-    /**
-     * Generates speech from text with streaming support (simplified implementation)
-     *
-     * @param contextHandle Context handle obtained from initContext
-     * @param text Text to convert to speech
-     * @param options TTS configuration options
-     * @param progressHandler Optional callback for progress updates
-     * @param audioChunkHandler Callback for receiving audio chunks
-     * @return Result containing metadata about the generated speech
-     */
-    public static Result<SpeechMetadata, TTSError> generateSpeechStream(long contextHandle, String text, TTSOptions options, ProgressCallback progressHandler, AudioChunkCallback audioChunkHandler) {
-        // Generate full audio first (simplified streaming)
-        Result<SpeechResult, TTSError> result = generateSpeech(contextHandle, text, options, progressHandler);
-        
-        if (result.isFailure()) {
-            return Result.failure(result.getError());
-        }
-        
-        SpeechResult speechResult = result.getValue();
-        
-        // Send the entire audio as a single chunk
-        if (audioChunkHandler != null) {
-            audioChunkHandler.onAudioChunk(speechResult.getAudioSamples());
-        }
-        
-        // Create metadata
-        SpeechMetadata metadata = new SpeechMetadata(
-            speechResult.getSampleRate(),
-            speechResult.getDuration(),
-            speechResult.getMethodUsed(),
-            speechResult.getOutputFilePath()
-        );
-        
-        return Result.success(metadata);
-    }
-
-    /**
-     * Generates speech from text with streaming support (simplified implementation) with default options
-     *
-     * @param contextHandle Context handle obtained from initContext
-     * @param text Text to convert to speech
-     * @param audioChunkHandler Callback for receiving audio chunks
-     * @return Result containing metadata about the generated speech
-     */
-    public static Result<SpeechMetadata, TTSError> generateSpeechStream(long contextHandle, String text, AudioChunkCallback audioChunkHandler) {
-        return generateSpeechStream(contextHandle, text, new TTSOptions(), null, audioChunkHandler);
-    }
 
     /**
      * Generates speech from long text with real streaming capabilities
@@ -1418,88 +1430,122 @@ public class LlamaMobile {
      * @param options TTS configuration options
      * @param progressHandler Optional callback for progress updates
      * @param audioChunkHandler Callback for receiving audio chunks as they're generated
-     * @return Result containing metadata about the generated speech
+     * @param resultCallback Callback for receiving the final metadata result
      */
-    public static Result<SpeechMetadata, TTSError> generateSpeechStreamForLongText(long contextHandle, String text, TTSOptions options, ProgressCallback progressHandler, AudioChunkCallback audioChunkHandler) {
+    public static void generateSpeechStreamForLongTextAsync(long contextHandle, String text, TTSOptions options, final ProgressCallback progressHandler, final AudioChunkCallback audioChunkHandler, final SpeechMetadataCallback resultCallback) {
         // Check if context is valid
         if (contextHandle == 0L) {
-            return Result.failure(TTSError.noModelLoaded());
+            resultCallback.onResult(Result.failure(TTSError.noModelLoaded()));
+            return;
         }
         
         // Check if vocoder is enabled
         if (!isVocoderEnabled(contextHandle)) {
-            return Result.failure(TTSError.noVocoderEnabled());
+            resultCallback.onResult(Result.failure(TTSError.noVocoderEnabled()));
+            return;
         }
         
-        // Split long text into sentences
-        String[] sentences = text.split("[.!?]+\\s*");
-        int totalSentences = sentences.length;
-        
-        double totalDuration = 0;
-        TTSMethod methodUsed = TTSMethod.BUILT_IN;
-        String outputFilePath = null;
-        
-        for (int i = 0; i < totalSentences; i++) {
-            String sentence = sentences[i].trim();
-            if (sentence.isEmpty()) {
-                continue;
+        // Execute in a background thread
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    // Split long text into sentences
+                    String[] sentences = text.split("[.!?]+\\s*");
+                    int totalSentences = sentences.length;
+                    
+                    double totalDuration = 0;
+                    TTSMethod methodUsed = TTSMethod.BUILT_IN;
+                    String outputFilePath = null;
+                    
+                    for (int i = 0; i < totalSentences; i++) {
+                        final String sentence = sentences[i].trim();
+                        if (sentence.isEmpty()) {
+                            continue;
+                        }
+                        
+                        // Update progress
+                        if (progressHandler != null) {
+                            final float progress = (float) (i + 1) / totalSentences;
+                            runOnMainThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    progressHandler.onProgress(0.1f + (progress * 0.8f)); // 0.1 to 0.9
+                                }
+                            });
+                        }
+                        
+                        // Generate speech for this sentence
+                        Result<SpeechResult, TTSError> sentenceResult = generateSpeech(contextHandle, sentence, options);
+                        
+                        if (sentenceResult.isFailure()) {
+                            final Result<SpeechMetadata, TTSError> failureResult = Result.failure(sentenceResult.getError());
+                            runOnMainThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    resultCallback.onResult(failureResult);
+                                }
+                            });
+                            return;
+                        }
+                        
+                        SpeechResult speechResult = sentenceResult.getValue();
+                        
+                        // Send audio chunk
+                        if (audioChunkHandler != null) {
+                            final short[] audioSamples = speechResult.getAudioSamples();
+                            runOnMainThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    audioChunkHandler.onAudioChunk(audioSamples);
+                                }
+                            });
+                        }
+                        
+                        // Accumulate metadata
+                        totalDuration += speechResult.getDuration();
+                        methodUsed = speechResult.getMethodUsed();
+                        if (outputFilePath == null) {
+                            outputFilePath = speechResult.getOutputFilePath();
+                        }
+                    }
+                    
+                    if (progressHandler != null) {
+                        runOnMainThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                progressHandler.onProgress(1.0f); // Completed
+                            }
+                        });
+                    }
+                    
+                    // Create metadata
+                    final SpeechMetadata metadata = new SpeechMetadata(
+                        options.getSampleRate(),
+                        totalDuration,
+                        methodUsed,
+                        outputFilePath
+                    );
+                    
+                    final Result<SpeechMetadata, TTSError> successResult = Result.success(metadata);
+                    runOnMainThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            resultCallback.onResult(successResult);
+                        }
+                    });
+                } catch (final Exception e) {
+                    final Result<SpeechMetadata, TTSError> errorResult = Result.failure(TTSError.generationFailed());
+                    runOnMainThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            resultCallback.onResult(errorResult);
+                        }
+                    });
+                }
             }
-            
-            // Update progress
-            if (progressHandler != null) {
-                float progress = (float) (i + 1) / totalSentences;
-                progressHandler.onProgress(0.1f + (progress * 0.8f)); // 0.1 to 0.9
-            }
-            
-            // Generate speech for this sentence
-            Result<SpeechResult, TTSError> sentenceResult = generateSpeechSync(contextHandle, sentence, options);
-            
-            if (sentenceResult.isFailure()) {
-                return Result.failure(sentenceResult.getError());
-            }
-            
-            SpeechResult speechResult = sentenceResult.getValue();
-            
-            // Send audio chunk
-            if (audioChunkHandler != null) {
-                audioChunkHandler.onAudioChunk(speechResult.getAudioSamples());
-            }
-            
-            // Accumulate metadata
-            totalDuration += speechResult.getDuration();
-            methodUsed = speechResult.getMethodUsed();
-            if (outputFilePath == null) {
-                outputFilePath = speechResult.getOutputFilePath();
-            }
-        }
-        
-        if (progressHandler != null) {
-            progressHandler.onProgress(1.0f); // Completed
-        }
-        
-        // Create metadata
-        SpeechMetadata metadata = new SpeechMetadata(
-            options.getSampleRate(),
-            totalDuration,
-            methodUsed,
-            outputFilePath
-        );
-        
-        return Result.success(metadata);
+        }).start();
     }
-
-    /**
-     * Generates speech from long text with real streaming capabilities with default options
-     *
-     * @param contextHandle Context handle obtained from initContext
-     * @param text Long text to convert to speech
-     * @param audioChunkHandler Callback for receiving audio chunks
-     * @return Result containing metadata about the generated speech
-     */
-    public static Result<SpeechMetadata, TTSError> generateSpeechStreamForLongText(long contextHandle, String text, AudioChunkCallback audioChunkHandler) {
-        return generateSpeechStreamForLongText(contextHandle, text, new TTSOptions(), null, audioChunkHandler);
-    }
-
 
 
     /**

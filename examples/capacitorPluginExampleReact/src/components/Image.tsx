@@ -24,7 +24,7 @@ const Image: React.FC<ImageProps> = ({
   isMultimodalEnabled
 }) => {
   return (
-    <div className="settings-container">
+    <div className="settings-container" style={{ paddingBottom: '80px' }}>
       {!isModelInitialized ? (
         <div className="model-not-initialized">
           <h3>Model Not Initialized</h3>
@@ -61,13 +61,15 @@ const Image: React.FC<ImageProps> = ({
                 value={multimodalText}
                 onChange={(e) => setMultimodalText(e.target.value)}
                 placeholder="Enter text prompt..."
-                rows={5}
+                rows={8}
+                style={{ width: '100%', minWidth: '100%', maxWidth: '100%' }}
                 disabled={!isModelInitialized || !isMultimodalEnabled}
               ></textarea>
             </div>
             <button 
               onClick={generateMultimodalCompletion}
               className="primary-button"
+              style={{ marginTop: '16px', width: '100%' }}
               disabled={
                 !isModelInitialized || 
                 !isMultimodalEnabled || 

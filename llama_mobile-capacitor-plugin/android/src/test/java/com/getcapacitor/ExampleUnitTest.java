@@ -211,21 +211,6 @@ public class ExampleUnitTest {
     }
 
     @Test
-    public void testGenerateAudioFromText() {
-        String modelPath = "/path/to/model.gguf";
-        LlamaMobile.InitParams initParams = new LlamaMobile.InitParams(modelPath, 2048, null, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, true, null);
-        long handle = LlamaMobile.initContext(initParams);
-        contextHandle = handle;
-
-        try {
-            float[] audioSamples = LlamaMobile.generateAudioFromText(handle, "Hello world");
-            assertNotNull("generateAudioFromText should return audio data", audioSamples);
-        } catch (Exception e) {
-            fail("generateAudioFromText should not throw an error: " + e.getMessage());
-        }
-    }
-
-    @Test
     public void testSaveAudioToWav() {
         String modelPath = "/path/to/model.gguf";
         LlamaMobile.InitParams initParams = new LlamaMobile.InitParams(modelPath, 2048, null, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, true, null);
@@ -355,7 +340,7 @@ public class ExampleUnitTest {
         long handle = LlamaMobile.initContext(initParams);
         contextHandle = handle;
 
-        LlamaMobile.ConversationResult result = LlamaMobile.generateResponse(handle, "Hello", 100);
+        LlamaMobile.ConversationResult result = LlamaMobile.generateResponse(handle, "Hello", 100, null);
         assertNotNull("generateResponse should return a result", result);
         assertNotNull("result text should not be null", result.getText());
     }

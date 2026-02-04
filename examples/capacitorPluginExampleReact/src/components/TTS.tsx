@@ -8,6 +8,7 @@ interface TTSProps {
   audioSamples: number[];
   audioFilePath: string;
   isPlaying: boolean;
+  isGeneratingAudio: boolean;
   isModelInitialized: boolean;
   isVocoderInitialized: boolean;
 }
@@ -20,6 +21,7 @@ const TTS: React.FC<TTSProps> = ({
   audioSamples,
   audioFilePath,
   isPlaying,
+  isGeneratingAudio,
   isModelInitialized,
   isVocoderInitialized
 }) => {
@@ -39,16 +41,16 @@ const TTS: React.FC<TTSProps> = ({
               onChange={(e) => setTtsText(e.target.value)}
               placeholder="Enter text to convert to speech..."
               rows={5}
-              disabled={!isModelInitialized}
+              disabled={!isModelInitialized || isGeneratingAudio}
             ></textarea>
           </div>
           
           <button 
             onClick={generateAudio} 
             className="primary-button"
-            disabled={!isModelInitialized || !isVocoderInitialized || !ttsText.trim()}
+            disabled={!isModelInitialized || !isVocoderInitialized || !ttsText.trim() || isGeneratingAudio}
           >
-            Generate Audio
+            {isGeneratingAudio ? 'Generating Audio...' : 'Generate Audio'}
           </button>
           
           {audioSamples.length > 0 && (

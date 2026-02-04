@@ -12,17 +12,17 @@ export interface LlamaMobileCapacitorPlugin {
   loadGrammar(options: { filePath: string }): Promise<{ grammar: string }>;
   
   // TTS
-  initVocoder(options: { contextHandle: number; vocoderModelPath: string }): Promise<{ success: boolean; modelType: TTSModelType }>;
+  initVocoder(options: { contextHandle: number; vocoderModelPath: string }): Promise<{ success: boolean }>;
   releaseVocoder(options: { contextHandle: number }): Promise<void>;
   isVocoderEnabled(options: { contextHandle: number }): Promise<{ enabled: boolean }>;
   getTTSType(options: { contextHandle: number }): Promise<{ type: TTSModelType }>;
-  generateAudioFromText(options: { contextHandle: number; text: string; speakerJson?: string }): Promise<{ audio: number[] }>;
-  generateSpeech(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod; speakerJson?: string }): Promise<SpeechResult>;
-  generateSpeechSync(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod }): Promise<SpeechResult>;
+  generateSpeechAsync(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod; speakerJson?: string }): Promise<SpeechResult>;
+  generateSpeech(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod }): Promise<SpeechResult>;
   generateSpeechStream(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod }): Promise<SpeechMetadata>;
-  generateSpeechStreamForLongText(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod }): Promise<SpeechMetadata>;
+  generateSpeechStreamForLongTextAsync(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod }): Promise<SpeechMetadata>;
   saveAudioToWav(options: { contextHandle: number; filePath: string; audioData: number[]; sampleRate: number }): Promise<{ success: boolean }>;
   playAudio(options: { audioData: number[]; sampleRate?: number }): Promise<{ success: boolean }>;
+  playAudioFromFile(options: { filePath: string }): Promise<{ success: boolean }>;
   
   // Multimodal
   initMultimodal(options: { contextHandle: number; mmprojPath: string; useGpu?: boolean }): Promise<{ success: boolean }>;
@@ -37,7 +37,7 @@ export interface LlamaMobileCapacitorPlugin {
   getLoadedLoraAdapters(options: { contextHandle: number }): Promise<{ adapters: LoraAdapter[] }>;
   
   // Conversation
-  generateResponse(options: { contextHandle: number; userMessage: string; maxTokens: number }): Promise<ConversationResult>;
+  generateResponse(options: { contextHandle: number; userMessage: string; maxTokens?: number; enableStreaming?: boolean }): Promise<ConversationResult>;
   clearConversation(options: { contextHandle: number }): Promise<void>;
   isConversationActive(options: { contextHandle: number }): Promise<{ active: boolean }>;
   
@@ -123,7 +123,8 @@ export interface TTSOptions {
 }
 
 export interface SpeechResult {
-  audio: number[];
+  audio?: number[];
+  audioPath?: string;
   sampleRate: number;
   duration: number;
   methodUsed: TTSMethod;
@@ -143,7 +144,7 @@ export interface InitParams {
   chatTemplate?: string;
   systemPrompt?: string;
   nBatch?: number;
-  nUbatch?: number;
+  nUBatch?: number;
   nGpuLayers?: number;
   nThreads?: number;
   useMmap?: boolean;
@@ -151,10 +152,10 @@ export interface InitParams {
   embedding?: boolean;
   poolingType?: number;
   embdNormalize?: number;
-  flashAttn?: boolean;
+  flashAttention?: boolean;
   cacheTypeK?: string;
   cacheTypeV?: string;
-  cacheType?: CacheType;
+  enableChatTemplate?: boolean;
 }
 
 export interface CompletionParams {
@@ -181,6 +182,10 @@ export interface CompletionParams {
   mediaPaths?: string[];
   chatMessages?: ChatMessage[];
   useJsonResponse?: boolean;
+  jsonSchema?: string;
+  tools?: string;
+  parallelToolCalls?: boolean;
+  toolChoice?: string;
   chatTemplate?: string;
 }
 
@@ -197,8 +202,6 @@ export interface CompletionResult {
 
 export interface ConversationResult {
   text: string;
-  timeToFirstToken: number;
-  totalTime: number;
   tokensGenerated: number;
 }
 

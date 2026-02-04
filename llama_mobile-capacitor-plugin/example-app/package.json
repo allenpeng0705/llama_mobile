@@ -13,10 +13,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@capacitor/core": "latest",
-    "llama-mobile-capacitor-plugin": "file:..",
+    "@capacitor/android": "8.0.0",
+    "@capacitor/core": "^8.0.2",
     "@capacitor/ios": "8.0.0",
-    "@capacitor/android": "8.0.0"
+    "llama-mobile-capacitor-plugin": "file:.."
   },
   "devDependencies": {
     "@capacitor/cli": "latest",

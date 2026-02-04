@@ -307,11 +307,16 @@ fi
 if [ -d "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp" ]; then
     log "Emptying android/src/main/cpp directory..."
     # Remove all files except CMakeLists.txt
-    find "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp" -type f -not -name "CMakeLists.txt" -delete
+    #find "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp" -type f -not -name "CMakeLists.txt" -delete
+    rm -rf "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp/include"
+    rm -f "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp/llama_mobile_jni.cpp"
+    # Remove all subdirectories except include
+    #find "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp" -type d -not -name "cpp" -not -name "include" -exec rm -rf {} \;
     log "android/src/main/cpp directory emptied (kept CMakeLists.txt)"
 else
     log "android/src/main/cpp directory does not exist, creating it..."
     mkdir -p "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp"
+    mkdir -p "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp/include"
 fi
 
 # 2e. Delete llama_mobile-capacitor-plugin/android/src/main/java/com/llamamobile/LlamaMobile.java
@@ -372,10 +377,24 @@ if [ -d "$ANDROID_SDK_DIR/src/main/cpp" ]; then
     log "Copying Android JNI files from $ANDROID_SDK_DIR/src/main/cpp to $CAPACITOR_PLUGIN_DIR/android/src/main/..."
     mkdir -p "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp"
     # Only copy the .cpp files, not the CMakeLists.txt (we'll keep our modified version)
-    cp "$ANDROID_SDK_DIR/src/main/cpp"/*.cpp "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp/"
+    cp "$ANDROID_SDK_DIR/src/main/cpp"/llama_mobile_jni.cpp "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp/"
+    cp -R "$ANDROID_SDK_DIR/src/main/cpp/include" "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp/"
+    # Always create the include folder
+    # mkdir -p "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp/include"
+    # # Copy include files from ANDROID_SDK_DIR if available
+    # if [ -d "$ANDROID_SDK_DIR/src/main/cpp/include" ]; then
+    #     cp -r "$ANDROID_SDK_DIR/src/main/cpp/include"/* "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp/include/"
+    #     log "Android JNI include files copied from SDK"
+    # fi
     log "Android JNI files copied"
 else
     log "WARN: Android JNI files not found at $ANDROID_SDK_DIR/src/main/cpp"
+    # Even if SDK directory doesn't exist, copy include files from llama_mobile-android if available
+    if [ -d "$ROOT_DIR/llama_mobile-android/include" ]; then
+        mkdir -p "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp/include"
+        cp -r "$ROOT_DIR/llama_mobile-android/include"/* "$CAPACITOR_PLUGIN_DIR/android/src/main/cpp/include/"
+        log "Android JNI include files copied from llama_mobile-android"
+    fi
 fi
 
 # 3e. Copy llama_mobile-android-SDK/src/main/java/com/llamamobile/LlamaMobile.java to llama_mobile-capacitor-plugin/android/src/main/java/com/llamamobile/

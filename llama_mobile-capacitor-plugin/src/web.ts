@@ -1,36 +1,49 @@
-import { WebPlugin } from '@capacitor/core';
-import type { LlamaMobileCapacitorPlugin } from './definitions';
+import { WebPlugin, PluginListenerHandle } from '@capacitor/core';
+import type { 
+  LlamaMobileCapacitorPlugin, 
+  TTSModelType,
+  InitParams,
+  CompletionParams,
+  CompletionResult,
+  ConversationResult,
+  SpeechResult,
+  SpeechMetadata,
+  DownloadParams,
+  DownloadHfFileParams,
+  DownloadResult,
+  LoraAdapter
+} from './definitions';
 
 export class LlamaMobileCapacitorPluginWeb extends WebPlugin implements LlamaMobileCapacitorPlugin {
   constructor() {
     super();
   }
 
-  async initContext(_options: any): Promise<any> {
+  async initContext(_options: InitParams): Promise<{ contextHandle: number }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async releaseContext(_options: any): Promise<void> {
+  async releaseContext(_options: { contextHandle: number }): Promise<void> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async generateCompletion(_options: any): Promise<any> {
+  async generateCompletion(_options: { contextHandle: number; params: CompletionParams }): Promise<CompletionResult> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async generateOpenAICompletion(_options: any): Promise<any> {
+  async generateOpenAICompletion(_options: { contextHandle: number; openAIJSON: string; grammar?: string; stopSequences?: string[] }): Promise<CompletionResult> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async stopCompletion(_options: any): Promise<void> {
+  async stopCompletion(_options: { contextHandle: number }): Promise<void> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async loadGrammar(_options: any): Promise<any> {
+  async loadGrammar(_options: { filePath: string }): Promise<{ grammar: string }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async initVocoder(_options: any): Promise<any> {
+  async initVocoder(_options: any): Promise<{ success: boolean }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
@@ -38,147 +51,147 @@ export class LlamaMobileCapacitorPluginWeb extends WebPlugin implements LlamaMob
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async isVocoderEnabled(_options: any): Promise<any> {
+  async isVocoderEnabled(_options: any): Promise<{ enabled: boolean }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async getTTSType(_options: any): Promise<any> {
+  async getTTSType(_options: any): Promise<{ type: TTSModelType }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async generateAudioFromText(_options: any): Promise<any> {
+  async generateSpeechAsync(_options: { contextHandle: number; text: string; sampleRate?: number; method?: any; speakerJson?: string }): Promise<SpeechResult> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async generateSpeech(_options: any): Promise<any> {
+  async generateSpeech(_options: { contextHandle: number; text: string; sampleRate?: number; method?: any }): Promise<SpeechResult> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async generateSpeechSync(_options: any): Promise<any> {
+  async generateSpeechStream(_options: { contextHandle: number; text: string; sampleRate?: number; method?: any }): Promise<SpeechMetadata> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async generateSpeechStream(_options: any): Promise<any> {
+  async generateSpeechStreamForLongTextAsync(_options: { contextHandle: number; text: string; sampleRate?: number; method?: any }): Promise<SpeechMetadata> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async generateSpeechStreamForLongText(_options: any): Promise<any> {
+  async saveAudioToWav(_options: { contextHandle: number; filePath: string; audioData: number[]; sampleRate: number }): Promise<{ success: boolean }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async saveAudioToWav(_options: any): Promise<any> {
+  async playAudio(_options: { audioData: number[]; sampleRate?: number }): Promise<{ success: boolean }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async playAudio(_options: any): Promise<any> {
+  async playAudioFromFile(_options: { filePath: string }): Promise<{ success: boolean }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async initMultimodal(_options: any): Promise<any> {
+  async initMultimodal(_options: { contextHandle: number; mmprojPath: string; useGpu?: boolean }): Promise<{ success: boolean }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async releaseMultimodal(_options: any): Promise<void> {
+  async releaseMultimodal(_options: { contextHandle: number }): Promise<void> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async isMultimodalEnabled(_options: any): Promise<any> {
+  async isMultimodalEnabled(_options: { contextHandle: number }): Promise<{ enabled: boolean }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async supportsVision(_options: any): Promise<any> {
+  async supportsVision(_options: { contextHandle: number }): Promise<{ supported: boolean }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async supportsAudio(_options: any): Promise<any> {
+  async supportsAudio(_options: { contextHandle: number }): Promise<{ supported: boolean }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async applyLoraAdapters(_options: any): Promise<any> {
+  async applyLoraAdapters(_options: { contextHandle: number; adapters: LoraAdapter[] }): Promise<{ success: boolean }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async removeLoraAdapters(_options: any): Promise<void> {
+  async removeLoraAdapters(_options: { contextHandle: number }): Promise<void> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async getLoadedLoraAdapters(_options: any): Promise<any> {
+  async getLoadedLoraAdapters(_options: { contextHandle: number }): Promise<{ adapters: LoraAdapter[] }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async generateResponse(_options: any): Promise<any> {
+  async generateResponse(_options: { contextHandle: number; userMessage: string; maxTokens?: number; enableStreaming?: boolean }): Promise<ConversationResult> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async clearConversation(_options: any): Promise<void> {
+  async clearConversation(_options: { contextHandle: number }): Promise<void> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async isConversationActive(_options: any): Promise<any> {
+  async isConversationActive(_options: { contextHandle: number }): Promise<{ active: boolean }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async generateEmbeddings(_options: any): Promise<any> {
+  async generateEmbeddings(_options: { contextHandle: number; text: string }): Promise<{ embedding: number[] }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async tokenize(_options: any): Promise<any> {
+  async tokenize(_options: { contextHandle: number; text: string }): Promise<{ tokens: number[] }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async detokenize(_options: any): Promise<any> {
+  async detokenize(_options: { contextHandle: number; tokens: number[] }): Promise<{ text: string }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async getContextWindowSize(_options: any): Promise<any> {
+  async getContextWindowSize(_options: { contextHandle: number }): Promise<{ size: number }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async getEmbeddingDimension(_options: any): Promise<any> {
+  async getEmbeddingDimension(_options: { contextHandle: number }): Promise<{ dimension: number }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async getModelDescription(_options: any): Promise<any> {
+  async getModelDescription(_options: { contextHandle: number }): Promise<{ description: string }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async getModelSize(_options: any): Promise<any> {
+  async getModelSize(_options: { contextHandle: number }): Promise<{ size: number }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async getModelParametersCount(_options: any): Promise<any> {
+  async getModelParametersCount(_options: { contextHandle: number }): Promise<{ count: number }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async downloadModel(_options: any): Promise<any> {
+  async downloadModel(_options: DownloadParams): Promise<DownloadResult> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async downloadHfFile(_options: any): Promise<any> {
+  async downloadHfFile(_options: DownloadHfFileParams): Promise<DownloadResult> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async setChatTemplate(_options: any): Promise<{ success: boolean; }> {
+  async setChatTemplate(_options: { contextHandle: number; chatTemplate: string }): Promise<{ success: boolean }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async getModelChatTemplate(_options: any): Promise<{ chatTemplate: string }> {
+  async getModelChatTemplate(_options: { contextHandle: number }): Promise<{ chatTemplate: string }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async formatChatMessages(_options: any): Promise<any> {
+  async formatChatMessages(_options: { contextHandle: number; messagesJson: string; chatTemplate?: string }): Promise<{ formattedPrompt: string }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async listFiles(_options: any): Promise<any> {
+  async listFiles(_options: { directory: string }): Promise<{ files: string[] }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async listModels(): Promise<any> {
+  async listModels(): Promise<{ models: Array<{ name: string; path: string }> }> {
     throw new Error('LlamaMobile is not available on web');
   }
 
-  async addListener(_eventName: string, _listenerFunc: any): Promise<any> {
+  async addListener(eventName: 'token' | 'progress', listenerFunc: any): Promise<PluginListenerHandle> {
     throw new Error('LlamaMobile is not available on web');
   }
 
