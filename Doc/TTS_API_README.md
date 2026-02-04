@@ -2,7 +2,13 @@
 
 ## Overview
 
-This document provides comprehensive documentation for the Text-to-Speech (TTS) capabilities in the Llama Mobile SDK across multiple platforms. The SDK offers consistent API options for generating speech from text, including asynchronous, synchronous, and streaming interfaces, with platform-specific implementations for iOS, Android Kotlin, and Android Java.
+This document provides comprehensive documentation for the Text-to-Speech (TTS) capabilities in the Llama Mobile SDK across multiple platforms. The SDK offers consistent API options for generating speech from text, including asynchronous, synchronous, and streaming interfaces, with platform-specific implementations.
+
+### Platform-Specific Behavior
+
+- **iOS/Android**: Support both synchronous and asynchronous APIs
+- **Flutter**: Added asynchronous APIs
+- **Capacitor**: Asynchronous APIs by default for smooth integration
 
 ## Table of Contents
 
@@ -11,16 +17,19 @@ This document provides comprehensive documentation for the Text-to-Speech (TTS) 
    - [Android Kotlin](#android-kotlin)
    - [Android Java](#android-java)
    - [Flutter](#flutter)
+   - [Capacitor](#capacitor)
 2. [Supporting Types](#supporting-types)
    - [iOS](#ios-1)
    - [Android Kotlin](#android-kotlin-1)
    - [Android Java](#android-java-1)
    - [Flutter](#flutter-1)
+   - [Capacitor](#capacitor-1)
 3. [API Usage Examples](#api-usage-examples)
    - [iOS](#ios-2)
    - [Android Kotlin](#android-kotlin-2)
    - [Android Java](#android-java-2)
    - [Flutter](#flutter-2)
+   - [Capacitor](#capacitor-2)
 4. [Implementation Details](#implementation-details)
 5. [Streaming Implementation](#streaming-implementation)
 6. [Error Handling](#error-handling)
@@ -508,6 +517,91 @@ final success = await context?.loadTTSModelAsync(
 );
 print('Loaded TTS model: $success');
 ```
+
+### Capacitor
+
+The Capacitor plugin provides TTS functionality through asynchronous APIs that return promises, designed for smooth integration with web-based frameworks.
+
+#### 1. Initialize Vocoder: `initVocoder`
+
+Initializes the vocoder for TTS operations.
+
+```typescript
+import { LlamaMobileCapacitorPlugin } from 'llama-mobile-capacitor-plugin';
+
+await LlamaMobileCapacitorPlugin.initVocoder({
+  contextHandle,
+  vocoderModelPath: '/path/to/vocoder-model.bin'
+});
+```
+
+**Parameters:**
+- `contextHandle`: Handle to the model context
+- `vocoderModelPath`: Path to the vocoder model file
+
+#### 2. Generate Speech Async: `generateSpeechAsync`
+
+Generates speech from text asynchronously.
+
+```typescript
+const speechResult = await LlamaMobileCapacitorPlugin.generateSpeechAsync({
+  contextHandle,
+  text: 'Hello, this is a test of the text-to-speech functionality.',
+  options: {
+    sampleRate: 24000,
+    saveToFile: true
+  }
+});
+
+console.log('Speech generated at:', speechResult.audioPath);
+```
+
+**Parameters:**
+- `contextHandle`: Handle to the model context
+- `text`: Text to convert to speech
+- `options`: Optional TTS configuration options
+
+**Returns:**
+- A promise resolving to an object with `audioPath` (path to generated audio file) and other metadata
+
+#### 3. Play Audio: `playAudioFromFile`
+
+Plays the generated audio from a file.
+
+```typescript
+await LlamaMobileCapacitorPlugin.playAudioFromFile({
+  filePath: speechResult.audioPath
+});
+```
+
+**Parameters:**
+- `filePath`: Path to the audio file to play
+
+#### 4. Check Vocoder Status: `isVocoderEnabled`
+
+Checks if the vocoder is enabled and ready for use.
+
+```typescript
+const { enabled } = await LlamaMobileCapacitorPlugin.isVocoderEnabled({ contextHandle });
+console.log('Vocoder enabled:', enabled);
+```
+
+**Parameters:**
+- `contextHandle`: Handle to the model context
+
+**Returns:**
+- A promise resolving to an object with `enabled` (boolean indicating vocoder status)
+
+#### 5. Release Vocoder: `releaseVocoder`
+
+Releases the vocoder resources when done.
+
+```typescript
+await LlamaMobileCapacitorPlugin.releaseVocoder({ contextHandle });
+```
+
+**Parameters:**
+- `contextHandle`: Handle to the model context
 
 ## Supporting Types
 
@@ -1124,6 +1218,35 @@ enum TTSMethod {
         return builtIn;
     }
   }
+}
+```
+
+### Capacitor
+
+#### TTS Options
+
+Configuration options for TTS operations in Capacitor.
+
+```typescript
+interface TTSOptions {
+  sampleRate?: number;      // Sample rate for generated audio (default: 24000)
+  saveToFile?: boolean;     // Whether to save audio to file (default: true)
+  outputFilePath?: string;  // Custom output file path
+  voice?: string;           // Voice selection (if supported)
+  speed?: number;           // Speech speed (default: 1.0)
+}
+```
+
+#### Speech Result
+
+Result object returned by speech generation methods in Capacitor.
+
+```typescript
+interface SpeechResult {
+  audioPath: string;        // Path to generated audio file
+  sampleRate: number;       // Sample rate of the audio
+  duration: number;         // Duration of the audio in seconds
+  methodUsed: string;       // Method used for speech generation
 }
 ```
 
@@ -2033,6 +2156,91 @@ try {
   }
 } catch (e) {
   print('Exception: $e');
+}
+```
+
+#### Capacitor
+
+##### Basic TTS Usage
+
+```typescript
+import { LlamaMobileCapacitorPlugin } from 'llama-mobile-capacitor-plugin';
+
+// Initialize model context
+const { contextHandle } = await LlamaMobileCapacitorPlugin.initContext({
+  modelPath: '/path/to/model.gguf',
+  nCtx: 2048,
+  nGpuLayers: 4,
+  nThreads: 4
+});
+
+// Initialize vocoder for TTS
+await LlamaMobileCapacitorPlugin.initVocoder({
+  contextHandle,
+  vocoderModelPath: '/path/to/vocoder-model.bin'
+});
+
+// Generate speech asynchronously
+const speechResult = await LlamaMobileCapacitorPlugin.generateSpeechAsync({
+  contextHandle,
+  text: 'Hello, this is a test of the text-to-speech functionality.',
+  options: {
+    sampleRate: 24000,
+    saveToFile: true
+  }
+});
+
+console.log('Speech generated at:', speechResult.audioPath);
+
+// Play the generated audio
+await LlamaMobileCapacitorPlugin.playAudioFromFile({
+  filePath: speechResult.audioPath
+});
+
+// Release resources when done
+await LlamaMobileCapacitorPlugin.releaseVocoder({ contextHandle });
+await LlamaMobileCapacitorPlugin.releaseContext({ contextHandle });
+```
+
+##### Error Handling
+
+```typescript
+try {
+  // Initialize vocoder
+  await LlamaMobileCapacitorPlugin.initVocoder({
+    contextHandle,
+    vocoderModelPath: '/path/to/vocoder-model.bin'
+  });
+
+  // Generate speech
+  const speechResult = await LlamaMobileCapacitorPlugin.generateSpeechAsync({
+    contextHandle,
+    text: 'Hello, world!'
+  });
+
+  console.log('Speech generated successfully:', speechResult.audioPath);
+} catch (error) {
+  console.error('TTS error:', error);
+  // Handle error appropriately
+}
+```
+
+##### Check Vocoder Status
+
+```typescript
+// Check if vocoder is enabled before using
+const { enabled } = await LlamaMobileCapacitorPlugin.isVocoderEnabled({ contextHandle });
+
+if (enabled) {
+  console.log('Vocoder is ready for use');
+  // Proceed with TTS operations
+} else {
+  console.log('Vocoder not initialized. Please initialize it first.');
+  // Initialize vocoder
+  await LlamaMobileCapacitorPlugin.initVocoder({
+    contextHandle,
+    vocoderModelPath: '/path/to/vocoder-model.bin'
+  });
 }
 ```
 

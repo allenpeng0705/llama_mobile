@@ -2,42 +2,80 @@
 
 Capacitor plugin for llama_mobile SDK, providing native AI model inference capabilities for iOS and Android platforms.
 
-## Features
+## Overview
 
-- **Model Inference**: Run AI models locally on iOS and Android devices
-- **Text Generation**: Generate text completions from prompts
-- **Embeddings**: Generate text embeddings for similarity search
-- **Tokenization**: Convert text to tokens and vice versa
-- **TTS (Text-to-Speech)**: Generate audio from text
-- **Multimodal Support**: Process images and audio (if supported by the model)
-- **LoRA Adapters**: Apply LoRA adapters for model fine-tuning
-- **Conversation Support**: Maintain chat contexts for natural conversations
+This plugin allows you to run AI models locally on mobile devices using Capacitor, with asynchronous APIs by default for a smooth user experience.
 
-## Install
+## Getting Started
+
+### Installation
+
+#### From npm
 
 ```bash
 # Install the plugin
 npm install llama-mobile-capacitor-plugin
 
-# Sync the plugin with your Capacitor project
+# Sync with your Capacitor project
 npx cap sync
 ```
 
-## Platform Requirements
+#### From Local Directory
 
-### iOS
-- iOS 15.0+
-- Xcode 15.0+
-- Swift 5.1+
+```bash
+# Navigate to your Capacitor project
+cd your-capacitor-project
 
-### Android
-- Android 7.0+
-- Android Studio
-- Android SDK with NDK
+# Install from local path
+npm install /path/to/llama_mobile-capacitor-plugin
 
-## Usage
+# Sync the plugin
+npx cap sync
+```
 
-### Basic Example
+### Platform Requirements
+
+- **iOS**: iOS 15.0+, Xcode 15.0+, Swift 5.1+
+- **Android**: Android 7.0+, Android Studio, Android SDK with NDK
+
+## Building the Plugin
+
+### Prerequisites
+- Node.js and npm
+- Capacitor CLI (`npm install -g @capacitor/cli`)
+- iOS: Xcode with Command Line Tools
+- Android: Android Studio with SDK and NDK
+
+### Build Steps
+
+```bash
+# Clone the repository
+git clone https://github.com/llama-mobile/llama_mobile-capacitor-plugin.git
+cd llama_mobile-capacitor-plugin
+
+# Install dependencies
+npm install
+
+# Build the plugin
+npm run build
+
+# Verify the build
+npm run verify
+```
+
+### Build with Native Dependencies
+
+```bash
+# Build with bundled iOS and Android dependencies
+./scripts/build-capacitor-plugin.sh
+
+# Build with custom options
+./scripts/build-capacitor-plugin.sh --build-type=Release --verbose
+```
+
+## Usage Examples
+
+### Text Generation
 
 ```typescript
 import { LlamaMobileCapacitorPlugin } from 'llama-mobile-capacitor-plugin';
@@ -50,7 +88,7 @@ const { contextHandle } = await LlamaMobileCapacitorPlugin.initContext({
   nThreads: 4
 });
 
-// Generate text completion
+// Generate text
 const result = await LlamaMobileCapacitorPlugin.generateCompletion({
   contextHandle,
   params: {
@@ -62,24 +100,20 @@ const result = await LlamaMobileCapacitorPlugin.generateCompletion({
 
 console.log('Generated text:', result.text);
 
-// Release the context when done
+// Release resources
 await LlamaMobileCapacitorPlugin.releaseContext({ contextHandle });
 ```
 
-### Advanced Example with Conversation
+### Chat Conversation
 
 ```typescript
-import { LlamaMobileCapacitorPlugin } from 'llama-mobile-capacitor-plugin';
-
-// Initialize the model
+// Initialize with a chat model
 const { contextHandle } = await LlamaMobileCapacitorPlugin.initContext({
   modelPath: '/path/to/chat-model.gguf',
-  nCtx: 4096,
-  nGpuLayers: 4,
-  nThreads: 4
+  nCtx: 4096
 });
 
-// Generate response to user message
+// Generate chat response
 const response = await LlamaMobileCapacitorPlugin.generateResponse({
   contextHandle,
   userMessage: 'What is the capital of France?',
@@ -88,98 +122,129 @@ const response = await LlamaMobileCapacitorPlugin.generateResponse({
 
 console.log('AI Response:', response.text);
 
-// Generate another response (conversation context is maintained)
-const response2 = await LlamaMobileCapacitorPlugin.generateResponse({
-  contextHandle,
-  userMessage: 'What is its population?',
-  maxTokens: 100
-});
-
-console.log('AI Response:', response2.text);
-
-// Clear the conversation context
-await LlamaMobileCapacitorPlugin.clearConversation({ contextHandle });
-
-// Release the context
+// Release resources
 await LlamaMobileCapacitorPlugin.releaseContext({ contextHandle });
 ```
 
+### Text-to-Speech
 
-## Build Instructions
+```typescript
+// Initialize TTS vocoder
+await LlamaMobileCapacitorPlugin.initVocoder({
+  contextHandle,
+  vocoderModelPath: '/path/to/vocoder-model.bin'
+});
 
-### Prerequisites
-- Node.js and npm
-- Capacitor CLI
-- iOS: Xcode with Command Line Tools
-- Android: Android Studio with SDK and NDK
+// Generate speech
+const speechResult = await LlamaMobileCapacitorPlugin.generateSpeechAsync({
+  contextHandle,
+  text: 'Hello, this is a test of the text-to-speech functionality.'
+});
 
-### Build the Plugin
-
-```bash
-# Clone the repository
-git clone https://github.com/llama-mobile/llama-mobile-capacitor-plugin.git
-cd llama-mobile-capacitor-plugin
-
-# Install dependencies
-npm install
-
-# Build the plugin
-npm run build
-
-# Run tests
-npm run verify
+// Play the audio
+await LlamaMobileCapacitorPlugin.playAudioFromFile({
+  filePath: speechResult.audioPath
+});
 ```
 
-### Build with Native Dependencies
+### Model Download
 
-```bash
-# Build the plugin with bundled iOS and Android dependencies
-./scripts/build-capacitor-plugin.sh
+```typescript
+// Listen to download progress
+const progressListener = await LlamaMobileCapacitorPlugin.addListener(
+  'progress',
+  (data) => {
+    console.log('Download progress:', (data.progress * 100).toFixed(0) + '%');
+  }
+);
 
-# Build with custom options
-./scripts/build-capacitor-plugin.sh --build-type=Release --verbose
+// Download from Hugging Face
+const downloadResult = await LlamaMobileCapacitorPlugin.downloadHfFile({
+  repoId: 'meta-llama/Llama-3.2-1B-Instruct',
+  filename: 'Llama-3.2-1B-Instruct.Q4_K_M.gguf',
+  localPath: '/path/to/save/model.gguf'
+});
+
+// Remove listener
+await progressListener.remove();
+
+if (downloadResult.success) {
+  console.log('Model downloaded to:', downloadResult.localPath);
+} else {
+  console.error('Download failed:', downloadResult.errorMessage);
+}
 ```
 
-## Platform-Specific Notes
+## Major API Reference
 
-### iOS
-- The plugin uses Metal for GPU acceleration when available
-- **Metal Support**: GPU acceleration is automatically enabled when `nGpuLayers > 0`
-  - The plugin automatically includes and copies all necessary metal files (`ggml-llama.metallib`, `ggml-llama-sim.metallib`, `ggml-metal.metal`) to your app bundle during build
-  - No manual file copying required!
-- Models are loaded from the app's documents directory or a custom path
-- For best performance, use models optimized for mobile devices
-- iOS 15.0+ is recommended for optimal Metal performance
+### Initialization
+- `initContext`: Initialize a model context
+- `releaseContext`: Release a model context
 
-### Android
-- The plugin uses the Android NDK for native performance
-- Models are loaded from the app's files directory or a custom path
-- GPU acceleration is available on devices with Vulkan support
+### Text Generation
+- `generateCompletion`: Generate text from a prompt
+- `generateResponse`: Generate chat response (maintains context)
+- `stopCompletion`: Stop ongoing text generation
+
+### TTS
+- `initVocoder`: Initialize TTS vocoder
+- `generateSpeechAsync`: Generate speech asynchronously
+- `playAudioFromFile`: Play generated audio
+
+### Embeddings
+- `generateEmbeddings`: Generate text embeddings
+
+### Model Management
+- `downloadHfFile`: Download model from Hugging Face
+- `listModels`: List available models
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Model not found**: Ensure the model path is correct and the model file exists
-2. **Out of memory**: Try using a smaller model or reducing the context size
-3. **Slow performance**: Increase the number of GPU layers or threads if available
-4. **Plugin not syncing**: Run `npx cap sync` to ensure the plugin is properly installed
+1. **Model not found**
+   - Check the model path is correct
+   - Verify the file exists at the specified location
+   - Use `listModels` to see available models
+
+2. **Out of memory**
+   - Use a smaller model
+   - Reduce `nCtx` (context size)
+   - Decrease `nGpuLayers` if using too much GPU memory
+
+3. **Slow performance**
+   - Increase `nGpuLayers` (if device supports)
+   - Adjust `nThreads` based on device CPU
+   - Use quantized models (Q4_K_M, Q5_K_M)
+
+4. **Plugin not syncing**
+   - Run `npx cap sync`
+   - Check for Capacitor CLI updates
+   - Verify platform requirements
+
+5. **TTS issues**
+   - Ensure vocoder model is properly initialized
+   - Check audio permissions on the device
+   - Verify TTS model compatibility
 
 ### Debugging
 
 ```bash
-# Enable verbose logging for iOS
-XCODE_ATTRIBUTE_ENABLE_BITCODE=NO npx cap run ios --verbose
-
-# Enable verbose logging for Android
+# Run with verbose logging
+npx cap run ios --verbose
 npx cap run android --verbose
+
+# Check device logs
+npx cap log ios
+npx cap log android
 ```
 
-## Contributing
+## Platform Notes
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to this project.
+- **iOS**: Metal GPU acceleration enabled automatically when `nGpuLayers > 0`
+- **Android**: Vulkan support for GPU acceleration on compatible devices
+- **Async by default**: All Capacitor APIs return promises for smooth integration
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-

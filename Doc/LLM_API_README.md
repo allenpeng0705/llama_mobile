@@ -2,7 +2,13 @@
 
 ## Overview
 
-The Llama Mobile SDK provides a comprehensive set of APIs for working with Large Language Models (LLMs) on iOS and Android devices. This documentation covers all major API categories including model loading, text completion, multimodal processing, embeddings, and vocoder functionality for both platforms.
+The Llama Mobile SDK provides a comprehensive set of APIs for working with Large Language Models (LLMs) across multiple platforms. This documentation covers all major API categories including model loading, text completion, multimodal processing, embeddings, and vocoder functionality.
+
+### Platform-Specific Behavior
+
+- **iOS/Android**: Support both synchronous and asynchronous APIs
+- **Flutter**: Added asynchronous APIs
+- **Capacitor**: Asynchronous APIs by default for smooth integration
 
 ## Table of Contents
 
@@ -11,35 +17,42 @@ The Llama Mobile SDK provides a comprehensive set of APIs for working with Large
    - [Android Kotlin](#android-kotlin-loading)
    - [Android Java](#android-java-loading)
    - [Flutter](#flutter-loading)
+   - [Capacitor](#capacitor-loading)
 2. [Completion APIs](#completion-apis)
    - [iOS](#ios-completion)
    - [Android Kotlin](#android-kotlin-completion)
    - [Android Java](#android-java-completion)
    - [Flutter](#flutter-completion)
+   - [Capacitor](#capacitor-completion)
 3. [Multimodal APIs](#multimodal-apis)
    - [iOS](#ios-multimodal)
    - [Android Kotlin](#android-kotlin-multimodal)
    - [Android Java](#android-java-multimodal)
    - [Flutter](#flutter-multimodal)
+   - [Capacitor](#capacitor-multimodal)
 4. [Embedding APIs](#embedding-apis)
    - [iOS](#ios-embedding)
    - [Android Kotlin](#android-kotlin-embedding)
    - [Android Java](#android-java-embedding)
    - [Flutter](#flutter-embedding)
+   - [Capacitor](#capacitor-embedding)
 5. [Vocoder Load APIs](#vocoder-load-apis)
    - [iOS](#ios-vocoder)
    - [Android Kotlin](#android-kotlin-vocoder)
    - [Android Java](#android-java-vocoder)
+   - [Capacitor](#capacitor-vocoder)
 6. [Supporting Types](#supporting-types)
    - [iOS](#ios-types)
    - [Android Kotlin](#android-kotlin-types)
    - [Android Java](#android-java-types)
    - [Flutter](#flutter-types)
+   - [Capacitor](#capacitor-types)
 7. [API Usage Examples](#api-usage-examples)
    - [iOS](#ios-examples)
    - [Android Kotlin](#android-kotlin-examples)
    - [Android Java](#android-java-examples)
    - [Flutter](#flutter-examples)
+   - [Capacitor](#capacitor-examples)
 
 ## Loading Model APIs
 
@@ -780,6 +793,56 @@ if (context != null) {
 } else {
   print('Failed to load model');
 }
+```
+
+### Capacitor {#capacitor-loading}
+
+#### Initialization Methods
+
+##### Basic Initialization
+
+```typescript
+import { LlamaMobileCapacitorPlugin } from 'llama-mobile-capacitor-plugin';
+
+// Initialize the model context
+const { contextHandle } = await LlamaMobileCapacitorPlugin.initContext({
+  modelPath: '/path/to/model.gguf',
+  nCtx: 2048,
+  nGpuLayers: 4,
+  nThreads: 4
+});
+
+// Release the context when done
+await LlamaMobileCapacitorPlugin.releaseContext({ contextHandle });
+```
+
+##### Parameters
+
+- `modelPath`: Path to the GGUF model file
+- `nCtx`: Context window size (default: 2048)
+- `nGpuLayers`: Number of layers to offload to GPU (default: 0)
+- `nThreads`: Number of CPU threads to use (default: 4)
+- `nBatch`: Batch size for processing (default: 512)
+- `nUBatch`: Micro batch size (default: 512)
+- `useMmap`: Enable memory mapping (default: true)
+- `useMlock`: Enable memory locking (default: false)
+- `embedding`: Enable embedding generation (default: false)
+
+##### Returns
+
+- `contextHandle`: Unique identifier for the model context
+
+##### Advanced Initialization
+
+```typescript
+const { contextHandle } = await LlamaMobileCapacitorPlugin.initContext({
+  modelPath: '/path/to/model.gguf',
+  nCtx: 4096,
+  nGpuLayers: 8,
+  nThreads: 6,
+  nBatch: 1024,
+  embedding: true
+});
 ```
 
 ## 2. Completion APIs
@@ -2022,6 +2085,84 @@ if (result != null) {
 }
 ```
 
+### Capacitor {#capacitor-completion}
+
+#### Completion Methods
+
+##### Basic Text Completion
+
+```typescript
+import { LlamaMobileCapacitorPlugin } from 'llama-mobile-capacitor-plugin';
+
+// Generate text completion
+const result = await LlamaMobileCapacitorPlugin.generateCompletion({
+  contextHandle,
+  params: {
+    prompt: 'Tell me a short story about AI',
+    maxTokens: 200,
+    temperature: 0.7,
+    topP: 0.95,
+    topK: 40
+  }
+});
+
+console.log('Generated text:', result.text);
+```
+
+##### Chat Conversation
+
+```typescript
+// Generate chat response
+const response = await LlamaMobileCapacitorPlugin.generateResponse({
+  contextHandle,
+  userMessage: 'What is the capital of France?',
+  maxTokens: 100,
+  temperature: 0.7
+});
+
+console.log('AI Response:', response.text);
+
+// Generate another response (conversation context is maintained)
+const response2 = await LlamaMobileCapacitorPlugin.generateResponse({
+  contextHandle,
+  userMessage: 'What is its population?',
+  maxTokens: 100
+});
+
+console.log('AI Response:', response2.text);
+
+// Clear conversation context
+await LlamaMobileCapacitorPlugin.clearConversation({ contextHandle });
+```
+
+##### OpenAI-Compatible Completion
+
+```typescript
+const openAIJSON = JSON.stringify({
+  model: 'gpt-3.5-turbo',
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'Tell me a joke about computers.' }
+  ],
+  max_tokens: 150,
+  temperature: 0.7
+});
+
+const result = await LlamaMobileCapacitorPlugin.generateOpenAICompletion({
+  contextHandle,
+  openAIJSON
+});
+
+console.log('Generated response:', result.text);
+```
+
+##### Stop Completion
+
+```typescript
+// Stop ongoing completion
+await LlamaMobileCapacitorPlugin.stopCompletion({ contextHandle });
+```
+
 ## Multimodal APIs
 
 ### Multimodal Completion
@@ -2317,6 +2458,43 @@ if (result != null) {
 } else {
   print('Failed to analyze images');
 }
+```
+
+### Capacitor {#capacitor-multimodal}
+
+#### Multimodal Methods
+
+##### Initialize Multimodal Support
+
+```typescript
+import { LlamaMobileCapacitorPlugin } from 'llama-mobile-capacitor-plugin';
+
+// Initialize multimodal support
+await LlamaMobileCapacitorPlugin.initMultimodal({ contextHandle });
+
+// Check if multimodal is enabled
+const { enabled } = await LlamaMobileCapacitorPlugin.isMultimodalEnabled({ contextHandle });
+console.log('Multimodal enabled:', enabled);
+```
+
+##### Multimodal Completion
+
+```typescript
+// Generate multimodal completion with image
+const result = await LlamaMobileCapacitorPlugin.generateCompletion({
+  contextHandle,
+  params: {
+    prompt: 'Describe this image in detail.',
+    maxTokens: 500,
+    temperature: 0.7,
+    mediaPaths: ['/path/to/image.jpg']
+  }
+});
+
+console.log('Image description:', result.text);
+
+// Release multimodal resources when done
+await LlamaMobileCapacitorPlugin.releaseMultimodal({ contextHandle });
 ```
 
 ## 4. Embedding APIs
@@ -2652,6 +2830,58 @@ double cosineSimilarity(List<double> vector1, List<double> vector2) {
 }
 ```
 
+### Capacitor {#capacitor-embedding}
+
+#### Embedding Methods
+
+##### Generate Embeddings
+
+```typescript
+import { LlamaMobileCapacitorPlugin } from 'llama-mobile-capacitor-plugin';
+
+// Generate embeddings (model must be initialized with embedding=true)
+const result = await LlamaMobileCapacitorPlugin.generateEmbeddings({
+  contextHandle,
+  text: 'The quick brown fox jumps over the lazy dog'
+});
+
+console.log('Embedding generated:', result.embedding);
+console.log('Embedding dimension:', result.embedding.length);
+
+// Get embedding dimension
+const { dimension } = await LlamaMobileCapacitorPlugin.getEmbeddingDimension({ contextHandle });
+console.log('Embedding dimension:', dimension);
+```
+
+##### Semantic Similarity Example
+
+```typescript
+// Generate embeddings for comparison
+const text1 = 'A cat sitting on a couch';
+const text2 = 'A feline resting on furniture';
+
+const result1 = await LlamaMobileCapacitorPlugin.generateEmbeddings({ contextHandle, text: text1 });
+const result2 = await LlamaMobileCapacitorPlugin.generateEmbeddings({ contextHandle, text: text2 });
+
+// Calculate cosine similarity (implement this function)
+function cosineSimilarity(vec1, vec2) {
+  let dotProduct = 0;
+  let norm1 = 0;
+  let norm2 = 0;
+  
+  for (let i = 0; i < vec1.length; i++) {
+    dotProduct += vec1[i] * vec2[i];
+    norm1 += vec1[i] * vec1[i];
+    norm2 += vec2[i] * vec2[i];
+  }
+  
+  return dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
+}
+
+const similarity = cosineSimilarity(result1.embedding, result2.embedding);
+console.log('Semantic similarity:', similarity);
+```
+
 ## 5. Vocoder Load APIs
 
 ### iOS {#ios-vocoder}
@@ -2885,6 +3115,50 @@ if (isEnabled ?? false) {
   await context?.releaseVocoder();
   print('Vocoder resources released');
 }
+```
+
+### Capacitor {#capacitor-vocoder}
+
+#### Vocoder Methods
+
+##### Initialize Vocoder
+
+```typescript
+import { LlamaMobileCapacitorPlugin } from 'llama-mobile-capacitor-plugin';
+
+// Initialize vocoder for TTS
+await LlamaMobileCapacitorPlugin.initVocoder({
+  contextHandle,
+  vocoderModelPath: '/path/to/vocoder-model.bin'
+});
+
+// Check if vocoder is enabled
+const { enabled } = await LlamaMobileCapacitorPlugin.isVocoderEnabled({ contextHandle });
+console.log('Vocoder enabled:', enabled);
+```
+
+##### Generate Speech
+
+```typescript
+// Generate speech asynchronously
+const speechResult = await LlamaMobileCapacitorPlugin.generateSpeechAsync({
+  contextHandle,
+  text: 'Hello, this is a test of the text-to-speech functionality.',
+  options: {
+    sampleRate: 24000,
+    saveToFile: true
+  }
+});
+
+console.log('Speech generated at:', speechResult.audioPath);
+
+// Play the generated audio
+await LlamaMobileCapacitorPlugin.playAudioFromFile({
+  filePath: speechResult.audioPath
+});
+
+// Release vocoder resources when done
+await LlamaMobileCapacitorPlugin.releaseVocoder({ contextHandle });
 ```
 
 ### Flutter {#flutter-types}
