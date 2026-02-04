@@ -1,6 +1,11 @@
 Pod::Spec.new do |s|
   s.name         = "llama_mobile"
-  s.version      = "1.0.0"
+  
+  # Read version from llama_mobile_version.h
+  version_header = File.read('../lib/llama_mobile_version.h')
+  version_string = version_header.match(/\#define LLAMA_MOBILE_VERSION_STRING "([^"]+)"/)[1]
+  s.version      = version_string
+  
   s.summary      = "llama_mobile iOS SDK"
   s.description  = <<-DESC
                    llama_mobile iOS SDK provides a Swift wrapper around the llama_mobile C API for easy integration into iOS projects.
