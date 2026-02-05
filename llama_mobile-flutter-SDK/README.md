@@ -193,13 +193,51 @@ flutter pub get
 
    **What Happens Automatically:**
    - The SDK checks if `.metallib` files exist in the app bundle
-   - Copies them from the framework bundle to the app's binary directory if needed
-   - Verifies they're accessible for the Metal runtime
+   - The podspec includes a post-install script to copy Metal shader files from the xcframework
+   - Verifies they're accessible for the Metal runtime during initialization
 
    **Verification:**
    - The SDK will log Metal library setup during initialization
    - Look for logs like "✓ Found metallib file" in your console
-   - If you see "✗ Metallib file not found", check that the framework is properly included
+   - If you see "⚠ No metallib files found in framework bundle", check the troubleshooting section below
+
+   **Troubleshooting Metal Shader Issues:**
+
+   If you encounter issues with Metal shaders not loading:
+
+   1. **Clean and Rebuild:**
+      ```bash
+      cd ios
+      rm -rf Pods Podfile.lock
+      pod install
+      cd ..
+      flutter clean
+      flutter pub get
+      flutter build ios
+      ```
+
+   2. **Check Framework Bundle:**
+      - Open Xcode and navigate to your app target
+      - Go to "Build Phases" → "Link Binary With Libraries"
+      - Ensure `llama_mobile.xcframework` is listed
+      - Check that Metal framework is also linked
+
+   3. **Verify Metal Files in App Bundle:**
+      - After building, check your app's `.app` bundle
+      - Look for `.metallib` files in the framework directory
+      - They should be located at: `YourApp.app/Frameworks/llama_mobile.framework/*.metallib`
+
+   4. **Check Console Logs:**
+      - Run your app with Xcode connected
+      - Look for Metal-related log messages
+      - Check for errors about missing or inaccessible metallib files
+
+   5. **Manual Verification:**
+      - If issues persist, verify the xcframework contains Metal files:
+      ```bash
+      ls -la ios/LlamaMobile/llama_mobile.xcframework/ios-arm64/llama_mobile.framework/
+      ```
+      - You should see files like `ggml-llama.metallib` and `ggml-metal.metal`
 
 ### Step 4: Build Your App
 
@@ -863,11 +901,6 @@ Releases the LoRA adapter resources.
 - Adjust `nThreads` based on device capabilities
 - For Android, increase `nGpuLayers` to offload more work to GPU
 - For iOS, Metal acceleration is automatic but can be tuned via `nGpuLayers`
-
-#### Grammar Issues
-- Ensure the grammar file path is correct
-- Some complex grammars may increase generation time
-- Verify the grammar file format is correct (.gbnf)
 
 #### Build Issues
 - Ensure you've run `flutter pub get` after adding the dependency

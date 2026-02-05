@@ -158,7 +158,7 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
     
     print("[DEBUG] Flutter Plugin: Setting log level to: \(level)")
     // Convert the integer level to LogLevel enum
-    let logLevel = LogLevel(rawValue: Int32(level)) ?? .info
+    let logLevel = LogLevel(rawValue: level) ?? .info
     // Call the global setLogLevel function
     setLogLevel(logLevel)
     print("[DEBUG] Flutter Plugin: Log level set successfully")

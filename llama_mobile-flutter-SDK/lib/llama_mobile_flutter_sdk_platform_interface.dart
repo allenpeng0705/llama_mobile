@@ -24,6 +24,10 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     _instance = instance;
   }
 
+  Future<void> setLogLevel(int level) {
+    throw UnimplementedError('setLogLevel() has not been implemented.');
+  }
+
   // Core initialization methods
   Future<Map<String, dynamic>?> initContext(Map<String, dynamic> params) {
     throw UnimplementedError('initContext() has not been implemented.');
