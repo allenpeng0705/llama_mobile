@@ -18,6 +18,7 @@ import com.llamamobile.LlamaMobile.AudioChunkCallback;
 import org.json.JSONObject;
 
 import android.os.Environment;
+import android.util.Log;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,8 +40,27 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         return nextContextHandle++;
     }
 
+    private long getContextHandle(PluginCall call) {
+        long contextHandle = -1L;
+        Object contextHandleObj = call.getData().opt("contextHandle");
+        if (contextHandleObj != null) {
+            if (contextHandleObj instanceof Integer) {
+                contextHandle = ((Integer) contextHandleObj).longValue();
+            } else if (contextHandleObj instanceof Long) {
+                contextHandle = ((Long) contextHandleObj).longValue();
+            } else if (contextHandleObj instanceof Number) {
+                contextHandle = ((Number) contextHandleObj).longValue();
+            }
+        }
+        return contextHandle;
+    }
+
     private Long getNativeContextHandle(long contextHandle) {
-        return contextHandles.get(contextHandle);
+        Long nativeHandle = contextHandles.get(contextHandle);
+        Log.d("LlamaMobilePlugin", "getNativeContextHandle: Called with handle: " + contextHandle);
+        Log.d("LlamaMobilePlugin", "getNativeContextHandle: Returning native handle: " + nativeHandle);
+        Log.d("LlamaMobilePlugin", "getNativeContextHandle: Current contextHandles: " + contextHandles);
+        return nativeHandle;
     }
 
     @Override
@@ -56,6 +76,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void initContext(PluginCall call) {
+        // Log the entire call object
+        Log.d("LlamaMobilePlugin", "initContext called with call: " + call);
+        Log.d("LlamaMobilePlugin", "initContext: All parameters: " + call.getData());
+        
         String modelPath = call.getString("modelPath");
         int nCtx = call.getInt("nCtx", 2048);
         int nGpuLayers = call.getInt("nGpuLayers", 0);
@@ -65,29 +89,47 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         int embdNormalize = call.getInt("embdNormalize", 1);
 
         if (modelPath == null) {
+            Log.d("LlamaMobilePlugin", "initContext: modelPath is null, rejecting call");
             call.reject("modelPath is required");
             return;
         }
 
+        // Log the received model path
+        Log.d("LlamaMobilePlugin", "Received model path: " + modelPath);
+        
         // Resolve model path if it's just a filename
         String resolvedModelPath = resolveModelPath(modelPath);
+        
+        // Log the resolved model path
+        Log.d("LlamaMobilePlugin", "Resolved model path: " + resolvedModelPath);
 
         executor.execute(() -> {
             try {
+                Log.d("LlamaMobilePlugin", "initContext: Creating InitParams with modelPath: " + resolvedModelPath);
                 LlamaMobile.InitParams params = new LlamaMobile.InitParams(
                     resolvedModelPath, nCtx, null, null, 512, 512, nGpuLayers, nThreads, 
                     true, false, embedding, poolingType, embdNormalize, false, 
                     null, null, false, null
                 );
+                
+                Log.d("LlamaMobilePlugin", "initContext: Calling LlamaMobile.initContext");
                 long nativeContextHandle = LlamaMobile.initContext(params);
+                Log.d("LlamaMobilePlugin", "initContext: Native context handle returned: " + nativeContextHandle);
 
                 long handle = getNextContextHandle();
+                Log.d("LlamaMobilePlugin", "initContext: Generated handle: " + handle + " for native handle: " + nativeContextHandle);
+                
                 contextHandles.put(handle, nativeContextHandle);
+                Log.d("LlamaMobilePlugin", "initContext: Stored context handle mapping: " + handle + " -> " + nativeContextHandle);
+                Log.d("LlamaMobilePlugin", "initContext: Current contextHandles size: " + contextHandles.size());
 
                 JSObject ret = new JSObject();
                 ret.put("contextHandle", handle);
+                Log.d("LlamaMobilePlugin", "initContext: Resolving call with handle: " + handle);
                 call.resolve(ret);
             } catch (Exception e) {
+                Log.d("LlamaMobilePlugin", "initContext: Exception occurred: " + e.getMessage());
+                e.printStackTrace();
                 call.reject("Failed to initialize context: " + e.getMessage());
             }
         });
@@ -97,8 +139,13 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
     private String resolveModelPath(String modelPath) {
         // If the path is already absolute, return it as-is
         if (modelPath.startsWith("/")) {
+            System.out.println("Model path is already absolute: " + modelPath);
             return modelPath;
         }
+
+        // Log the external files directory path
+        String externalFilesDir = getContext().getExternalFilesDir(null).getAbsolutePath();
+        System.out.println("External files directory: " + externalFilesDir);
 
         // List of common directories to search for models
         String[] searchDirs = {
@@ -108,13 +155,20 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             getContext().getFilesDir().getAbsolutePath() + File.separator + "Downloads",
             getContext().getFilesDir().getAbsolutePath() + File.separator + "Downloads" + File.separator + "models",
             // App's external files directory
-            getContext().getExternalFilesDir(null).getAbsolutePath(),
-            getContext().getExternalFilesDir(null).getAbsolutePath() + File.separator + "models",
-            getContext().getExternalFilesDir(null).getAbsolutePath() + File.separator + "Downloads",
-            getContext().getExternalFilesDir(null).getAbsolutePath() + File.separator + "Downloads" + File.separator + "models",
+            externalFilesDir,
+            externalFilesDir + File.separator + "models",
+            externalFilesDir + File.separator + "Downloads",
+            externalFilesDir + File.separator + "Downloads" + File.separator + "models",
             // Legacy LlamaMobile/models directory (from Android SDK example)
             getContext().getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS).getAbsolutePath() + File.separator + "LlamaMobile" + File.separator + "models"
         };
+
+        // Log all search directories
+        System.out.println("Searching for model " + modelPath + " in directories:");
+        for (String dir : searchDirs) {
+            File directory = new File(dir);
+            System.out.println("- " + dir + " (exists: " + directory.exists() + ")");
+        }
 
         // Search for the model file in common directories and their subdirectories
         for (String dir : searchDirs) {
@@ -122,12 +176,14 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             if (directory.exists() && directory.isDirectory()) {
                 String foundPath = searchForModelRecursive(directory, modelPath);
                 if (foundPath != null) {
+                    System.out.println("Found model at: " + foundPath);
                     return foundPath;
                 }
             }
         }
 
         // If not found, return the original path (will likely fail, but let the error propagate)
+        System.out.println("Model not found in any search directory, returning original path: " + modelPath);
         return modelPath;
     }
 
@@ -135,36 +191,63 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
     private String searchForModelRecursive(File directory, String modelFileName) {
         File[] files = directory.listFiles();
         if (files != null) {
+            System.out.println("Scanning directory: " + directory.getAbsolutePath());
+            System.out.println("Found " + files.length + " files/directories");
             for (File file : files) {
                 if (file.isDirectory()) {
                     // Recursively search subdirectories
+                    System.out.println("Entering subdirectory: " + file.getName());
                     String foundPath = searchForModelRecursive(file, modelFileName);
                     if (foundPath != null) {
                         return foundPath;
                     }
                 } else {
                     // Check if this file matches the model name
+                    System.out.println("Checking file: " + file.getName());
                     if (file.getName().equals(modelFileName)) {
+                        System.out.println("Found matching file: " + file.getAbsolutePath());
                         return file.getAbsolutePath();
                     }
                 }
             }
+        } else {
+            System.out.println("No files found in directory: " + directory.getAbsolutePath());
         }
         return null;
     }
 
     @PluginMethod
     public void releaseContext(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Log the entire call object to see what's being received
+        Log.d("LlamaMobilePlugin", "releaseContext called with call: " + call);
+        
+        // Log all parameters in the call
+        Log.d("LlamaMobilePlugin", "releaseContext: All parameters: " + call.getData());
+        
+        // Retrieve contextHandle - handle both Integer and Long types
+        long contextHandle = -1L;
+        Object contextHandleObj = call.getData().opt("contextHandle");
+        if (contextHandleObj != null) {
+            if (contextHandleObj instanceof Integer) {
+                contextHandle = ((Integer) contextHandleObj).longValue();
+            } else if (contextHandleObj instanceof Long) {
+                contextHandle = ((Long) contextHandleObj).longValue();
+            } else if (contextHandleObj instanceof Number) {
+                contextHandle = ((Number) contextHandleObj).longValue();
+            }
+        }
+        Log.d("LlamaMobilePlugin", "releaseContext: Retrieved contextHandle: " + contextHandle);
 
         if (contextHandle == -1) {
+            Log.d("LlamaMobilePlugin", "releaseContext: contextHandle is -1, rejecting call");
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = contextHandles.remove(contextHandle);
+                Long nativeContextHandle = contextHandles.remove(finalContextHandle);
                 if (nativeContextHandle != null) {
                     LlamaMobile.releaseContext(nativeContextHandle);
                 }
@@ -278,7 +361,8 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void generateCompletion(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
         JSObject params = call.getObject("params");
         String prompt = params != null ? params.optString("prompt", null) : null;
         int maxTokens = params != null ? params.optInt("maxTokens", 128) : 128;
@@ -289,9 +373,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -321,7 +406,8 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void generateOpenAICompletion(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
         String openAIJSON = call.getString("openAIJSON");
 
         if (contextHandle == -1 || openAIJSON == null) {
@@ -329,9 +415,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -358,16 +445,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void stopCompletion(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle != null) {
                     LlamaMobile.stopCompletion(nativeContextHandle);
                 }
@@ -403,7 +492,8 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void initVocoder(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
         String vocoderModelPath = call.getString("vocoderModelPath");
 
         if (contextHandle == -1 || vocoderModelPath == null) {
@@ -411,9 +501,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -434,16 +525,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void releaseVocoder(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle != null) {
                     LlamaMobile.releaseVocoder(nativeContextHandle);
                 }
@@ -456,16 +549,26 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void isVocoderEnabled(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Log the entire call object to see what's being received
+        Log.d("LlamaMobilePlugin", "isVocoderEnabled called with call: " + call);
+        
+        // Log all parameters in the call
+        Log.d("LlamaMobilePlugin", "isVocoderEnabled: All parameters: " + call.getData());
+        
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
+        Log.d("LlamaMobilePlugin", "isVocoderEnabled: Retrieved contextHandle: " + contextHandle);
 
         if (contextHandle == -1) {
+            Log.d("LlamaMobilePlugin", "isVocoderEnabled: contextHandle is -1, rejecting call");
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -483,16 +586,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void getTTSType(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -510,7 +615,8 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void generateSpeechAsync(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
         String text = call.getString("text");
 
         if (contextHandle == -1 || text == null) {
@@ -537,9 +643,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 break;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -586,7 +693,8 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void generateSpeech(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
         String text = call.getString("text");
 
         if (contextHandle == -1 || text == null) {
@@ -612,9 +720,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 break;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -688,7 +797,8 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void generateSpeechStreamForLongTextAsync(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
         String text = call.getString("text");
 
         if (contextHandle == -1 || text == null) {
@@ -714,9 +824,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 break;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -765,7 +876,8 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void saveAudioToWav(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
         String filePath = call.getString("filePath");
         JSArray audioDataArray = call.getArray("audioData");
 
@@ -776,9 +888,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
         int sampleRate = call.getInt("sampleRate", 24000);
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -923,7 +1036,8 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void initMultimodal(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
         String mmprojPath = call.getString("mmprojPath");
         boolean useGpu = call.getBoolean("useGpu", true);
 
@@ -932,9 +1046,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -955,16 +1070,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void releaseMultimodal(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle != null) {
                     LlamaMobile.releaseMultimodal(nativeContextHandle);
                 }
@@ -977,16 +1094,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void isMultimodalEnabled(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -1004,16 +1123,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void supportsVision(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -1031,16 +1152,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void supportsAudio(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -1060,7 +1183,8 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void applyLoraAdapters(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
         JSArray adaptersArray = call.getArray("adapters");
 
         if (contextHandle == -1 || adaptersArray == null) {
@@ -1068,9 +1192,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -1080,8 +1205,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 for (int i = 0; i < adaptersArray.length(); i++) {
                     JSONObject adapterObj = adaptersArray.getJSONObject(i);
                     String path = adapterObj.getString("path");
+                    // Resolve LoRA adapter path like we do for model paths
+                    String resolvedPath = resolveModelPath(path);
                     double scale = adapterObj.has("scale") ? adapterObj.getDouble("scale") : 1.0;
-                    adapters[i] = new LlamaMobile.LoraAdapter(path, (float) scale);
+                    adapters[i] = new LlamaMobile.LoraAdapter(resolvedPath, (float) scale);
                 }
 
                 boolean success = LlamaMobile.applyLoraAdapters(
@@ -1099,16 +1226,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void removeLoraAdapters(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle != null) {
                     LlamaMobile.removeLoraAdapters(nativeContextHandle);
                 }
@@ -1121,16 +1250,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void getLoadedLoraAdapters(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -1161,7 +1292,8 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void generateResponse(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
         String userMessage = call.getString("userMessage");
         int maxTokens = call.getInt("maxTokens", 128);
 
@@ -1170,9 +1302,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -1201,16 +1334,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void clearConversation(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle != null) {
                     LlamaMobile.clearConversation(nativeContextHandle);
                 }
@@ -1223,16 +1358,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void isConversationActive(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -1252,17 +1389,27 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void generateEmbeddings(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Log the entire call object
+        Log.d("LlamaMobilePlugin", "generateEmbeddings called with call: " + call);
+        Log.d("LlamaMobilePlugin", "generateEmbeddings: All parameters: " + call.getData());
+        
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
+        Log.d("LlamaMobilePlugin", "generateEmbeddings: Final contextHandle: " + contextHandle);
+        
         String text = call.getString("text");
+        Log.d("LlamaMobilePlugin", "generateEmbeddings: Retrieved text: " + text);
 
         if (contextHandle == -1 || text == null) {
+            Log.d("LlamaMobilePlugin", "generateEmbeddings: Rejecting call - contextHandle: " + contextHandle + ", text: " + text);
             call.reject("contextHandle and text are required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -1290,7 +1437,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void tokenize(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle - handle both Integer and Long types
+        long contextHandle = -1L;
+        Object contextHandleObj = call.getData().opt("contextHandle");
+        if (contextHandleObj != null) {
+            if (contextHandleObj instanceof Integer) {
+                contextHandle = ((Integer) contextHandleObj).longValue();
+            } else if (contextHandleObj instanceof Long) {
+                contextHandle = ((Long) contextHandleObj).longValue();
+            } else if (contextHandleObj instanceof Number) {
+                contextHandle = ((Number) contextHandleObj).longValue();
+            }
+        }
         String text = call.getString("text");
 
         if (contextHandle == -1 || text == null) {
@@ -1298,9 +1456,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -1324,7 +1483,8 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void detokenize(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
         JSArray tokensArray = call.getArray("tokens");
 
         if (contextHandle == -1 || tokensArray == null) {
@@ -1332,9 +1492,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -1360,16 +1521,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void getContextWindowSize(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -1387,16 +1550,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void getEmbeddingDimension(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -1414,16 +1579,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void getModelDescription(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -1441,16 +1608,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void getModelSize(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;
@@ -1468,16 +1637,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void getModelParametersCount(PluginCall call) {
-        long contextHandle = call.getLong("contextHandle", -1L);
+        // Retrieve contextHandle using helper function
+        long contextHandle = getContextHandle(call);
 
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
         }
 
+        final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(contextHandle);
+                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
                 if (nativeContextHandle == null) {
                     call.reject("Invalid context handle");
                     return;

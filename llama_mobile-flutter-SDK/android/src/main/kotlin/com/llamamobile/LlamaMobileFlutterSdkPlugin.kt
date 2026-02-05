@@ -54,6 +54,7 @@ class LlamaMobileFlutterSdkPlugin :
     ) {
         try {
             when (call.method) {
+                "setLogLevel" -> handleSetLogLevel(call, result)
                 "initContext" -> handleInitContext(call, result)
                 "freeContext" -> handleFreeContext(call, result)                
                 "initContextAsync" -> handleInitContextAsync(call, result)
@@ -127,6 +128,19 @@ class LlamaMobileFlutterSdkPlugin :
         // Clear event sinks
         tokenEventSink = null
         progressEventSink = null
+    }
+
+    // MARK: - Logging
+    private fun handleSetLogLevel(call: MethodCall, result: Result) {
+        val level = call.argument<Int>("level")
+        if (level == null) {
+            result.error("INVALID_ARGS", "Missing log level parameter", null)
+            return
+        }
+        
+        // Android LlamaMobile SDK doesn't currently support setting log level
+        // This is a no-op implementation to maintain API consistency with iOS
+        result.success(null)
     }
 
     // MARK: - StreamHandler Methods

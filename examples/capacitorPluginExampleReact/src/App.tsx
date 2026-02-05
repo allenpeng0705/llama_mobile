@@ -261,13 +261,15 @@ function App() {
       if (typeof window !== 'undefined' && window.Capacitor) {
         console.log('Resolving model path for native platform:', modelPath);
         
-        // For native platforms, use the Filesystem API to get the URI
-        // Model files are stored in the public/models directory, which gets bundled into the app
-        // On native platforms, the public directory is bundled into the app's assets
-        // We'll use Directory.Data for writable storage, but for bundled files, we need a different approach
-        // For now, return the path as-is, assuming the plugin handles asset paths correctly
-        console.log('Returning model path for native platform:', modelPath);
-        return modelPath;
+        // For native platforms, if the path is already absolute, return it as-is
+        // Otherwise, return the model name only, letting the plugin resolve it
+        if (modelPath.startsWith('/')) {
+          console.log('Returning absolute model path for native platform:', modelPath);
+          return modelPath;
+        } else {
+          console.log('Returning model name for plugin resolution:', modelPath);
+          return modelPath;
+        }
       } else {
         // For web platform, return the relative path
         console.log('Resolving model path for web platform:', modelPath);

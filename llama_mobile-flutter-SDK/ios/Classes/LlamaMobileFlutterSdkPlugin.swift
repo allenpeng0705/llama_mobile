@@ -26,6 +26,8 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
+    case "setLogLevel":
+      handleSetLogLevel(call, result: result)
     case "initContext":
       handleInitContext(call, result: result)
     case "freeContext":
@@ -142,6 +144,25 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
       print("[DEBUG] Flutter Plugin: Method not implemented: \(call.method)")
       result(FlutterMethodNotImplemented)
     }
+  }
+
+  // MARK: - Logging
+  private func handleSetLogLevel(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    print("[DEBUG] Flutter Plugin: handleSetLogLevel called")
+    guard let args = call.arguments as? [String: Any],
+          let level = args["level"] as? Int else {
+      print("[DEBUG] Flutter Plugin: Missing log level")
+      result(FlutterError(code: "INVALID_ARGS", message: "Missing log level parameter", details: nil))
+      return
+    }
+    
+    print("[DEBUG] Flutter Plugin: Setting log level to: \(level)")
+    // Convert the integer level to LogLevel enum
+    let logLevel = LogLevel(rawValue: Int32(level)) ?? .info
+    // Call the global setLogLevel function
+    setLogLevel(logLevel)
+    print("[DEBUG] Flutter Plugin: Log level set successfully")
+    result(nil)
   }
 
   // MARK: - Context Management
