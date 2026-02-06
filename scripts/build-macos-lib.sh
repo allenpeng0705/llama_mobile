@@ -266,7 +266,7 @@ if [[ -f "$ROOT_DIR/lib/llama_cpp/ggml-metal.metal" ]]; then
     # Compile Metal files into metallib
     if [[ -x "$(which xcrun)" ]]; then
         cd "$STATIC_METAL_DIR"
-        xcrun -sdk macosx metal -I"$STATIC_INCLUDE_DIR" -std=metal3.1 -mmacosx-version-min=10.15 ggml-metal.metal -o ggml-llama.metallib 2>/dev/null || true
+        xcrun -sdk macosx metal -I"$STATIC_INCLUDE_DIR" -I"$STATIC_INCLUDE_DIR/llama_cpp" -std=metal3.1 -mmacosx-version-min=10.15 ggml-metal.metal -o ggml-llama.metallib
         cd "$ROOT_DIR"
     fi
     
