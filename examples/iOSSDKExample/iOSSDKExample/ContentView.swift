@@ -629,7 +629,7 @@ struct SettingsView: View {
     @ObservedObject var appState: AppState
     @State private var nGpuLayers = 99
     @State private var nThreads = 4
-    @State private var nCtx = 2048
+    @State private var nCtx = 1024
     @State private var imageSize = 512
     
     // Download progress variables
@@ -727,7 +727,7 @@ struct SettingsView: View {
                     HStack {
                         Text("Context Size")
                         Spacer()
-                        Stepper(value: $nCtx, in: 512...4096, step: 512) {
+                        Stepper(value: $nCtx, in: 512...2048, step: 512) {
                             Text("\(nCtx)")
                                 .frame(width: 80, alignment: .trailing)
                         }
@@ -1006,13 +1006,14 @@ struct SettingsView: View {
         // Configure model with proper embedding support
         var initParams = LlamaMobile.InitParams(modelPath: appState.modelPath)
         initParams.nCtx = Int32(nCtx)
-        initParams.nGpuLayers = 10//Int32(nGpuLayers)
+        initParams.nGpuLayers = 99//Int32(nGpuLayers)
         initParams.nThreads = Int32(nThreads)
         initParams.embedding = appState.enableEmbedding
         initParams.poolingType = 0 // Mean pooling
         initParams.embdNormalize = 1 // Normalize embeddings
         initParams.systemPrompt = appState.systemPrompt
         initParams.imageMinTokens = 1024 // Set minimum image tokens for Qwen-VL models
+        initParams.flashAttention = true
         
         // Set custom chat template if Template switch is on
         if appState.useCustomTemplate {
