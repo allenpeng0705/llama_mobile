@@ -113,6 +113,7 @@ class InitParams {
   final String? cacheTypeK;
   final String? cacheTypeV;
   final bool enableChatTemplate;
+  final int imageMinTokens;
 
   InitParams({
     required this.modelPath,
@@ -132,6 +133,7 @@ class InitParams {
     this.cacheTypeK,
     this.cacheTypeV,
     this.enableChatTemplate = true,
+    this.imageMinTokens = -1,
   });
 
   Map<String, dynamic> toMap() {
@@ -153,6 +155,7 @@ class InitParams {
       'cacheTypeK': cacheTypeK,
       'cacheTypeV': cacheTypeV,
       'enableChatTemplate': enableChatTemplate,
+      'imageMinTokens': imageMinTokens,
     };
   }
 }

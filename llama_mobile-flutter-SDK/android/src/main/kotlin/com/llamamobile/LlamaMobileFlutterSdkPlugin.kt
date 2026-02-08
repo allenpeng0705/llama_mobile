@@ -180,6 +180,7 @@ class LlamaMobileFlutterSdkPlugin :
         val flashAttention = call.argument<Boolean>("flashAttention") ?: false
         val cacheTypeK = call.argument<String>("cacheTypeK")
         val cacheTypeV = call.argument<String>("cacheTypeV")
+        val imageMinTokens = call.argument<Int>("imageMinTokens") ?: -1
 
         val initParams = LlamaMobile.InitParams(
             modelPath,
@@ -199,7 +200,8 @@ class LlamaMobileFlutterSdkPlugin :
             cacheTypeK,
             cacheTypeV,
             true, // enableChatTemplate
-            null // progressCallback
+            null, // progressCallback
+            imageMinTokens
         )
 
         val contextHandle = LlamaMobile.initContext(initParams)
@@ -244,6 +246,7 @@ class LlamaMobileFlutterSdkPlugin :
         val flashAttention = call.argument<Boolean>("flashAttention") ?: false
         val cacheTypeK = call.argument<String>("cacheTypeK")
         val cacheTypeV = call.argument<String>("cacheTypeV")
+        val imageMinTokens = call.argument<Int>("imageMinTokens") ?: -1
 
         Thread {
             try {
@@ -265,7 +268,8 @@ class LlamaMobileFlutterSdkPlugin :
                     cacheTypeK,
                     cacheTypeV,
                     true, // enableChatTemplate
-                    null // progressCallback
+                    null, // progressCallback
+                    imageMinTokens
                 )
 
                 val contextHandle = LlamaMobile.initContext(initParams)

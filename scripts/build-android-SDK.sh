@@ -37,6 +37,51 @@ log_message() {
     echo "[$timestamp] [$level] $message"
 }
 
+# Function to print final summary
+print_final_summary() {
+    local status="$1"
+    local sdk_name="$2"
+    local message="$3"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    
+    echo ""
+    echo "============================================================================"
+    echo "                    BUILD SUMMARY - $timestamp"
+    echo "============================================================================"
+    echo ""
+    echo "SDK: $sdk_name"
+    echo "Status: $status"
+    echo "Message: $message"
+    echo ""
+    
+    if [ "$status" = "SUCCESS" ]; then
+        echo "✓ Build completed successfully!"
+        echo ""
+        echo "Output Locations:"
+        echo "  SDK Directory: $KOTLIN_SDK_DIR"
+        echo "  AAR Files: $KOTLIN_SDK_DIR/build/outputs/aar/"
+        echo "  Centralized Output: $ROOT_DIR/output/llama_mobile-android-SDK/"
+        echo ""
+        echo "Next Steps:"
+        echo "  1. Integrate AAR files into your Android project"
+        echo "  2. Run build-flutter-SDK.sh to build Flutter SDK"
+        echo "  3. Run build-capacitor-plugin.sh to build Capacitor plugin"
+        echo ""
+    else
+        echo "✗ Build failed!"
+        echo ""
+        echo "Troubleshooting:"
+        echo "  1. Check error messages above for specific issues"
+        echo "  2. Ensure pre-built libraries exist at $STATIC_LIB_DIR"
+        echo "  3. Verify ANDROID_HOME and NDK_PATH are set correctly"
+        echo "  4. Run ./scripts/build-android-lib.sh to rebuild native libraries"
+        echo ""
+    fi
+    
+    echo "============================================================================"
+    echo ""
+}
+
 # Function to load config from config.env
 load_config_env() {
     local config_file="$ROOT_DIR/config.env"
@@ -248,8 +293,9 @@ log_message "INFO" "Verifying SDK structure..."
 
 all_valid=true
 
-# Common directories required for SDK
-required_dirs=("src/main/jniLibs/arm64-v8a" "src/main/jniLibs/x86_64" "src/main/java/com/llamamobile" "src/main/kotlin/com/llamamobile" "src/main/cpp" "gradle/wrapper")
+# Common directories required for SDK (gradle/wrapper is optional - only needed for gradlew)
+required_dirs=("src/main/jniLibs/arm64-v8a" "src/main/jniLibs/x86_64" "src/main/java/com/llamamobile" "src/main/kotlin/com/llamamobile" "src/main/cpp")
+optional_dirs=("gradle/wrapper")
 
 # Verify SDK structure
 log_message "INFO" "Verifying consolidated SDK structure..."
@@ -261,6 +307,15 @@ for dir in "${required_dirs[@]}"; do
     else
         log_message "ERROR" "SDK: Missing directory: $dir"
         all_valid=false
+    fi
+done
+
+# Check optional directories (warn if missing, don't fail)
+for dir in "${optional_dirs[@]}"; do
+    if [ -d "$KOTLIN_SDK_DIR/$dir" ]; then
+        log_message "SUCCESS" "SDK: Found optional directory: $dir"
+    else
+        log_message "WARN" "SDK: Optional directory not found: $dir (will use system gradle if available)"
     fi
 done
 
@@ -282,13 +337,18 @@ run_tests() {
     if command -v gradle &> /dev/null; then
         GRADLE_CMD="gradle"
         log_message "INFO" "Using system gradle command"
-    elif [ -f "$KOTLIN_SDK_DIR/gradlew" ]; then
+    elif [ -f "$KOTLIN_SDK_DIR/gradlew" ] && [ -d "$KOTLIN_SDK_DIR/gradle/wrapper" ]; then
         GRADLE_CMD="$KOTLIN_SDK_DIR/gradlew"
         log_message "INFO" "Using SDK gradlew script"
     else
-        log_message "WARN" "No gradle executable found, skipping tests"
-        log_message "INFO" "Please install gradle or ensure gradlew is available in the SDK"
-        return 1
+        log_message "WARN" "No valid gradle executable found"
+        if command -v gradle &> /dev/null; then
+            log_message "INFO" "Will use system gradle command"
+            GRADLE_CMD="gradle"
+        else
+            log_message "ERROR" "Please install gradle or ensure gradlew with gradle/wrapper is available in the SDK"
+            return 1
+        fi
     fi
     
     # Make gradlew executable if needed
@@ -447,14 +507,18 @@ build_sdks() {
     if command -v gradle &> /dev/null; then
         GRADLE_CMD="gradle"
         log_message "INFO" "Using system gradle command"
-    elif [ -f "$KOTLIN_SDK_DIR/gradlew" ]; then
+    elif [ -f "$KOTLIN_SDK_DIR/gradlew" ] && [ -d "$KOTLIN_SDK_DIR/gradle/wrapper" ]; then
         GRADLE_CMD="$KOTLIN_SDK_DIR/gradlew"
         log_message "INFO" "Using SDK gradlew script"
     else
-        log_message "WARN" "No gradle executable found, skipping build tests"
-        log_message "INFO" "AAR files will not be generated without running the build"
-        log_message "INFO" "Please install gradle or ensure gradlew is available in the SDK"
-        return 0
+        log_message "WARN" "No valid gradle executable found"
+        if command -v gradle &> /dev/null; then
+            log_message "INFO" "Will use system gradle command"
+            GRADLE_CMD="gradle"
+        else
+            log_message "ERROR" "Please install gradle or ensure gradlew with gradle/wrapper is available in the SDK"
+            return 1
+        fi
     fi
     
     # Make gradlew executable if needed
@@ -537,12 +601,21 @@ if [ "$all_valid" = true ]; then
             log_message "INFO" ""
             log_message "INFO" "Other scripts (build-flutter-SDK.sh, build-capacitor-plugin.sh) can now copy required files from output directory."
             log_message "INFO" "The output directory contains AAR files for integration with other platforms."
+            
+            # Print final success summary
+            print_final_summary "SUCCESS" "Android SDK" "All tests passed and build completed successfully"
         else
             log_message "ERROR" "SDK Build failed!"
+            print_final_summary "FAILED" "Android SDK" "Build process failed"
             exit 1
         fi
     else
         log_message "ERROR" "SDK Run test failed!"
+        print_final_summary "FAILED" "Android SDK" "Tests failed"
         exit 1
     fi
+else
+    log_message "ERROR" "SDK validation failed!"
+    print_final_summary "FAILED" "Android SDK" "SDK structure validation failed"
+    exit 1
 fi

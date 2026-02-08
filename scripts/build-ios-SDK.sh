@@ -14,6 +14,57 @@ log_message() {
     echo "[$timestamp] [$level] $message"
 }
 
+# Function to print final summary
+print_final_summary() {
+    local status="$1"
+    local sdk_name="$2"
+    local message="$3"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    
+    echo ""
+    echo "============================================================================"
+    echo "                    BUILD SUMMARY - $timestamp"
+    echo "============================================================================"
+    echo ""
+    echo "SDK: $sdk_name"
+    echo "Status: $status"
+    echo "Message: $message"
+    echo ""
+    
+    if [ "$status" = "SUCCESS" ]; then
+        echo "✓ Build completed successfully!"
+        echo ""
+        echo "Output Locations:"
+        echo "  SDK Directory: $SDK_DIR"
+        echo "  Framework Bundle: $SDK_DIR/${FRAMEWORK_NAME}Bundle"
+        echo "  XCFramework: $SDK_DIR/$XCFRAMEWORK_NAME"
+        echo "  Swift Wrapper: $SDK_DIR/Sources/LlamaMobile/LlamaMobile.swift"
+        echo "  Centralized Output: $OUTPUT_SDK_DIR/${FRAMEWORK_NAME}Bundle"
+        echo ""
+        echo "Next Steps:"
+        echo "  1. Use bundle from output directory for easy integration"
+        echo "  2. Drag and drop ${FRAMEWORK_NAME}Bundle into your Xcode project"
+        echo "  3. Ensure XCFramework is added to your target's Frameworks, Libraries, and Embedded Content"
+        echo "  4. Import LlamaMobile in your Swift files"
+        echo "  5. Run build-flutter-SDK.sh to build Flutter SDK"
+        echo "  6. Run build-capacitor-plugin.sh to build Capacitor plugin"
+        echo ""
+    else
+        echo "✗ Build failed!"
+        echo ""
+        echo "Troubleshooting:"
+        echo "  1. Check error messages above for specific issues"
+        echo "  2. Ensure pre-built framework exists at $SHARED_DIR/$XCFRAMEWORK_NAME"
+        echo "  3. Run ./scripts/build-ios-framework.sh to rebuild iOS framework"
+        echo "  4. Verify Swift wrapper exists at $SDK_DIR/Sources/LlamaMobile/LlamaMobile.swift"
+        echo "  5. Check XCFramework contains required platforms (ios-arm64, ios-arm64-simulator)"
+        echo ""
+    fi
+    
+    echo "============================================================================"
+    echo ""
+}
+
 # Directory paths
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 FRAMEWORK_DIR="$ROOT_DIR/llama_mobile-ios"
@@ -214,6 +265,7 @@ copy_to_output() {
         log_message "SUCCESS" "SDK bundle copied to output directory: $output_sdk_dir/${bundle_name}"
     else
         log_message "ERROR" "Bundle directory not found at $bundle_dir"
+        print_final_summary "FAILED" "iOS SDK" "Bundle directory not found"
         return 1
     fi
 }
@@ -226,6 +278,7 @@ log_message "INFO" "Starting iOS SDK build process..."
 if [ ! -d "$SHARED_DIR/$XCFRAMEWORK_NAME" ]; then
     log_message "ERROR" "Framework not found at $SHARED_DIR/$XCFRAMEWORK_NAME"
     log_message "INFO" "Please run build-ios-framework.sh first to build the iOS framework"
+    print_final_summary "FAILED" "iOS SDK" "Pre-built framework not found"
     exit 1
 fi
 
@@ -269,12 +322,14 @@ cp -R "$SHARED_DIR/$XCFRAMEWORK_NAME" "$SDK_DIR/"
 # Verify the Swift wrapper exists
 if [ ! -f "$SDK_DIR/Sources/LlamaMobile/LlamaMobile.swift" ]; then
     log_message "ERROR" "Swift wrapper not found at $SDK_DIR/Sources/LlamaMobile/LlamaMobile.swift"
+    print_final_summary "FAILED" "iOS SDK" "Swift wrapper not found"
     exit 1
 fi
 
 # Validate SDK structure and buildability before creating the framework bundle
 if ! validate_sdk "$SDK_DIR"; then
     log_message "ERROR" "SDK validation failed. Aborting framework bundle creation."
+    print_final_summary "FAILED" "iOS SDK" "SDK validation failed"
     exit 1
 fi
 
@@ -331,4 +386,7 @@ log_message "INFO" "5. Import LlamaMobile in your Swift files"
 log_message "INFO" ""
 log_message "INFO" "For development, use the full SDK at: $SDK_DIR"
 log_message "INFO" ""
+
+# Print final success summary
+print_final_summary "SUCCESS" "iOS SDK" "All validations passed and framework bundle created successfully"
 

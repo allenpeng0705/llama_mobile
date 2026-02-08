@@ -198,6 +198,7 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
     let flashAttention = args["flashAttention"] as? Bool ?? false
     let cacheTypeK = args["cacheTypeK"] as? String
     let cacheTypeV = args["cacheTypeV"] as? String
+    let imageMinTokens = args["imageMinTokens"] as? Int32 ?? -1
 
     print("[DEBUG] Flutter Plugin: Creating InitParams")
     print("[DEBUG] Flutter Plugin: modelPath: \(modelPath)")
@@ -234,6 +235,7 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
     initParams.flashAttention = flashAttention
     initParams.cacheTypeK = cacheTypeK
     initParams.cacheTypeV = cacheTypeV
+    initParams.imageMinTokens = imageMinTokens
 
     print("[DEBUG] Flutter Plugin: Calling LlamaMobile(with: initParams)")
     if let llamaMobile = LlamaMobile(with: initParams) {
@@ -281,6 +283,7 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
     let flashAttention = args["flashAttention"] as? Bool ?? false
     let cacheTypeK = args["cacheTypeK"] as? String
     let cacheTypeV = args["cacheTypeV"] as? String
+    let imageMinTokens = args["imageMinTokens"] as? Int32 ?? -1
 
     print("[DEBUG] Flutter Plugin: Creating InitParams")
     print("[DEBUG] Flutter Plugin: modelPath: \(modelPath)")
@@ -317,8 +320,9 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
     initParams.flashAttention = flashAttention
     initParams.cacheTypeK = cacheTypeK
     initParams.cacheTypeV = cacheTypeV
+    initParams.imageMinTokens = imageMinTokens
 
-    // Run the initialization asynchronously
+    // Run initialization asynchronously
     DispatchQueue.global(qos: .userInitiated).async {
       print("[DEBUG] Flutter Plugin: Calling LlamaMobile(with: initParams) asynchronously")
       if let llamaMobile = LlamaMobile(with: initParams) {

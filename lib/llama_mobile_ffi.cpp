@@ -97,6 +97,7 @@ llama_mobile_context_handle_t llama_mobile_init_context_c(const llama_mobile_ini
         cpp_params.pooling_type = static_cast<enum llama_pooling_type>(params->pooling_type);
         cpp_params.embd_normalize = params->embd_normalize;
         context->params.enable_chat_template = params->enable_chat_template;
+        cpp_params.image_min_tokens = params->image_min_tokens;
 
         if (params->cache_type_k) {
              std::cout << "[FFI] Processing cache_type_k: " << params->cache_type_k << std::endl;

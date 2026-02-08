@@ -189,6 +189,7 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     jfieldID cacheTypeVField = env->GetFieldID(paramsClass, "cacheTypeV", "Ljava/lang/String;");
     jfieldID enableChatTemplateField = env->GetFieldID(paramsClass, "enableChatTemplate", "Z");
     jfieldID progressCallbackField = env->GetFieldID(paramsClass, "progressCallback", "Lcom/llamamobile/LlamaMobile$ProgressCallback;");
+    jfieldID imageMinTokensField = env->GetFieldID(paramsClass, "imageMinTokens", "I");
     
     if (modelPathField == nullptr || nCtxField == nullptr) {
         env->DeleteLocalRef(paramsClass);
@@ -212,6 +213,7 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     jboolean flashAttn = (flashAttnField != nullptr) ? env->GetBooleanField(initParamsObj, flashAttnField) : false;
     jboolean enableChatTemplate = (enableChatTemplateField != nullptr) ? env->GetBooleanField(initParamsObj, enableChatTemplateField) : true;
     jobject progressCallbackObj = (progressCallbackField != nullptr) ? env->GetObjectField(initParamsObj, progressCallbackField) : nullptr;
+    jint imageMinTokens = (imageMinTokensField != nullptr) ? env->GetIntField(initParamsObj, imageMinTokensField) : -1;
     cacheTypeKStr = (cacheTypeKField != nullptr) ? (jstring)env->GetObjectField(initParamsObj, cacheTypeKField) : nullptr;
     cacheTypeVStr = (cacheTypeVField != nullptr) ? (jstring)env->GetObjectField(initParamsObj, cacheTypeVField) : nullptr;
     
@@ -241,6 +243,7 @@ static bool extractInitParams(JNIEnv* env, jobject initParamsObj, llama_mobile_i
     params.cache_type_k = cacheTypeK;
     params.cache_type_v = cacheTypeV;
     params.enable_chat_template = enableChatTemplate;
+    params.image_min_tokens = imageMinTokens;
     
     if (progressCallbackObj != nullptr) {
         params.progress_callback = progressCallbackWrapper;

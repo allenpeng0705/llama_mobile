@@ -156,6 +156,7 @@ export interface InitParams {
   cacheTypeK?: string;
   cacheTypeV?: string;
   enableChatTemplate?: boolean;
+  imageMinTokens?: number;
 }
 
 export interface CompletionParams {

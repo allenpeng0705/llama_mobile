@@ -105,6 +105,7 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         let cacheTypeK = call.getString("cacheTypeK")
         let cacheTypeV = call.getString("cacheTypeV")
         let enableChatTemplate = call.getBool("enableChatTemplate") ?? true
+        let imageMinTokens = call.getInt("imageMinTokens") ?? -1
         
         // Resolve model path if it's just a filename
         let resolvedModelPath = resolveModelPath(modelPath)
@@ -128,6 +129,7 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
                 initParams.cacheTypeK = cacheTypeK
                 initParams.cacheTypeV = cacheTypeV
                 initParams.enableChatTemplate = enableChatTemplate
+                initParams.imageMinTokens = Int32(imageMinTokens)
                 
                 guard let llamaMobile = LlamaMobile(with: initParams) else {
                     throw NSError(domain: "LlamaMobile", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to initialize LlamaMobile context"])

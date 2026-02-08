@@ -263,6 +263,9 @@ public class LlamaMobile: NSObject {
         /// Enable chat template functionality
         public var enableChatTemplate: Bool = true
         
+        /// Minimum number of image tokens for multimodal models (default: -1, use model default)
+        public var imageMinTokens: Int32 = Int32(-1)
+        
         /// Callback for model loading progress (0.0 to 1.0)
         public var progressCallback: ((Float) -> Void)? = nil
         
@@ -837,6 +840,7 @@ public class LlamaMobile: NSObject {
         cParams.pooling_type = params.poolingType
         cParams.embd_normalize = params.embdNormalize
         cParams.flash_attn = params.flashAttention
+        cParams.image_min_tokens = params.imageMinTokens
         
         // Set callback with self as user_data
         cParams.progress_callback = callbackWrapper

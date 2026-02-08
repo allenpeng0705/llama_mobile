@@ -476,20 +476,21 @@ public class LlamaMobile {
         private final String cacheTypeV;
         private final boolean enableChatTemplate;
         private final ProgressCallback progressCallback;
+        private final int imageMinTokens;
 
         public InitParams(String modelPath) {
-            this(modelPath, 2048, null, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, true, null);
+            this(modelPath, 2048, null, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, true, null, -1);
         }
 
         public InitParams(String modelPath, int nCtx) {
-            this(modelPath, nCtx, null, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, true, null);
+            this(modelPath, nCtx, null, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, true, null, -1);
         }
 
         public InitParams(String modelPath, int nCtx, String chatTemplate) {
-            this(modelPath, nCtx, chatTemplate, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, true, null);
+            this(modelPath, nCtx, chatTemplate, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, true, null, -1);
         }
 
-        public InitParams(String modelPath, int nCtx, String chatTemplate, String systemPrompt, int nBatch, int nUBatch, int nGpuLayers, int nThreads, boolean useMmap, boolean useMlock, boolean embedding, int poolingType, int embdNormalize, boolean flashAttention, String cacheTypeK, String cacheTypeV, boolean enableChatTemplate, ProgressCallback progressCallback) {
+        public InitParams(String modelPath, int nCtx, String chatTemplate, String systemPrompt, int nBatch, int nUBatch, int nGpuLayers, int nThreads, boolean useMmap, boolean useMlock, boolean embedding, int poolingType, int embdNormalize, boolean flashAttention, String cacheTypeK, String cacheTypeV, boolean enableChatTemplate, ProgressCallback progressCallback, int imageMinTokens) {
             this.modelPath = modelPath;
             this.nCtx = nCtx;
             this.chatTemplate = chatTemplate;
@@ -508,6 +509,7 @@ public class LlamaMobile {
             this.cacheTypeV = cacheTypeV;
             this.enableChatTemplate = enableChatTemplate;
             this.progressCallback = progressCallback;
+            this.imageMinTokens = imageMinTokens;
         }
 
         public String getModelPath() { return modelPath; }
@@ -528,6 +530,7 @@ public class LlamaMobile {
         public String getCacheTypeV() { return cacheTypeV; }
         public boolean isEnableChatTemplate() { return enableChatTemplate; }
         public ProgressCallback getProgressCallback() { return progressCallback; }
+        public int getImageMinTokens() { return imageMinTokens; }
 
         /**
          * Convenience factory for GPU-accelerated inference

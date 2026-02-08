@@ -25,6 +25,7 @@ static llama_mobile_init_params_c_t convert_init_params(const llama_mobile_init_
         ffi_params.progress_callback = api_params->progress_callback;
         ffi_params.cache_type_k = api_params->cache_type_k;
         ffi_params.cache_type_v = api_params->cache_type_v;
+        ffi_params.image_min_tokens = api_params->image_min_tokens;
     }
     
     return ffi_params;

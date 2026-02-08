@@ -21,7 +21,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   integration_test: 252f60fa39af5e17c3aa9899d35d908a0721b573
-  llama_mobile_flutter_sdk: ffb2c1aab8cba6c7e5b1d85f0813dad22e2fe41a
+  llama_mobile_flutter_sdk: 786f2215ed917cf551ac46591b68dba65719086e
 
 PODFILE CHECKSUM: 3c63482e143d1b91d2d2560aee9fb04ecc74ac7e
 

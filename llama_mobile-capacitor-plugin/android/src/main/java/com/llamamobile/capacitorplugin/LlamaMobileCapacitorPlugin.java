@@ -87,6 +87,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         boolean embedding = call.getBoolean("embedding", false);
         int poolingType = call.getInt("poolingType", 0);
         int embdNormalize = call.getInt("embdNormalize", 1);
+        int imageMinTokens = call.getInt("imageMinTokens", -1);
 
         if (modelPath == null) {
             Log.d("LlamaMobilePlugin", "initContext: modelPath is null, rejecting call");
@@ -109,7 +110,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 LlamaMobile.InitParams params = new LlamaMobile.InitParams(
                     resolvedModelPath, nCtx, null, null, 512, 512, nGpuLayers, nThreads, 
                     true, false, embedding, poolingType, embdNormalize, false, 
-                    null, null, false, null
+                    null, null, false, null, imageMinTokens
                 );
                 
                 Log.d("LlamaMobilePlugin", "initContext: Calling LlamaMobile.initContext");

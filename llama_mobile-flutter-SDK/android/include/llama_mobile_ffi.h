@@ -57,7 +57,8 @@ typedef struct llama_mobile_init_params_c {
     const char* cache_type_v; 
     void (*progress_callback)(float progress, void* user_data); 
     void* progress_callback_user_data;
-    bool enable_chat_template;  
+    bool enable_chat_template;
+    int32_t image_min_tokens;
 } llama_mobile_init_params_c_t;
 
 // Chat message structure for structured input

@@ -629,7 +629,8 @@ struct SettingsView: View {
     @ObservedObject var appState: AppState
     @State private var nGpuLayers = 99
     @State private var nThreads = 4
-    @State private var nCtx = 4096
+    @State private var nCtx = 2048
+    @State private var imageSize = 512
     
     // Download progress variables
     @State private var isDownloading = false
@@ -730,6 +731,20 @@ struct SettingsView: View {
                             Text("\(nCtx)")
                                 .frame(width: 80, alignment: .trailing)
                         }
+                    }
+                    .disabled(appState.isModelLoaded)
+                    
+                    HStack {
+                        Text("Image Size (px)")
+                        Spacer()
+                        Picker("", selection: $imageSize) {
+                            Text("256").tag(256)
+                            Text("384").tag(384)
+                            Text("512").tag(512)
+                            Text("768").tag(768)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 150)
                     }
                     .disabled(appState.isModelLoaded)
                 }
@@ -991,12 +1006,13 @@ struct SettingsView: View {
         // Configure model with proper embedding support
         var initParams = LlamaMobile.InitParams(modelPath: appState.modelPath)
         initParams.nCtx = Int32(nCtx)
-        initParams.nGpuLayers = Int32(nGpuLayers)
+        initParams.nGpuLayers = 10//Int32(nGpuLayers)
         initParams.nThreads = Int32(nThreads)
         initParams.embedding = appState.enableEmbedding
         initParams.poolingType = 0 // Mean pooling
         initParams.embdNormalize = 1 // Normalize embeddings
         initParams.systemPrompt = appState.systemPrompt
+        initParams.imageMinTokens = 1024 // Set minimum image tokens for Qwen-VL models
         
         // Set custom chat template if Template switch is on
         if appState.useCustomTemplate {
@@ -1005,13 +1021,14 @@ struct SettingsView: View {
         } else {
             print("[INFO] Using model's built-in chat template")
         }
-        
+    
         // Increase batch sizes for TTS support (to handle large audio token batches)
-        initParams.nBatch = 1024 // Increase from default 512
-        initParams.nUBatch = 1024 // Increase from default 512 - must be >= number of audio tokens
+        initParams.nBatch = 512 // Increase from default 512
+        initParams.nUBatch = 512 // Increase from default 512 - must be >= number of audio tokens
+
         
         // Enable flash attention for faster GPU performance
-        initParams.flashAttention = true
+        initParams.flashAttention = false
         
         appState.llamaMobile = LlamaMobile(with: initParams)
         
@@ -2009,6 +2026,7 @@ struct MultimodalTestView: View {
     @State private var isImagePickerPresented = false
     @State private var completionResult = ""
     @State private var isGenerating = false
+    @State private var imageSize = 512
     
     var body: some View {
         Form {
@@ -2055,6 +2073,26 @@ struct MultimodalTestView: View {
                 }
             }
             
+            Section(header: Text("Image Size Configuration")) {
+                HStack {
+                    Text("Image Size (px)")
+                    Spacer()
+                    Picker("", selection: $imageSize) {
+                        Text("256").tag(256)
+                        Text("384").tag(384)
+                        Text("512").tag(512)
+                        Text("768").tag(768)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 150)
+                }
+                .disabled(!appState.isModelLoaded || isGenerating)
+                
+                Text("Tip: Use smaller sizes (256-384) for larger VL models to avoid Metal threadgroup limits")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+            
             Section(header: Text("Text Input")) {
                 TextField("Enter text prompt...", text: $text, axis: .vertical)
                     .textFieldStyle(.roundedBorder)
@@ -2090,7 +2128,7 @@ struct MultimodalTestView: View {
         }
         .navigationTitle("Multimodal Test")
         .sheet(isPresented: $isImagePickerPresented) {
-            ImagePicker(selectedImage: $selectedImage, selectedImagePath: $selectedImagePath)
+            ImagePicker(selectedImage: $selectedImage, selectedImagePath: $selectedImagePath, imageSize: $imageSize)
         }
     }
     
@@ -2126,17 +2164,45 @@ struct MultimodalTestView: View {
                 topP: 0.9
             )
             params.mediaPaths = [imagePath]
+            params.useJsonResponse = false
+            
+            print("[DEBUG] Starting multimodal completion with prompt: \(text)")
+            print("[DEBUG] Image path: \(imagePath)")
+            print("[DEBUG] useJsonResponse: \(params.useJsonResponse)")
             
             if let result = await Task.detached { appState.llamaMobile?.generateCompletion(with: params) }.value {
+                print("[DEBUG] Completion result received")
+                print("[DEBUG] Tokens generated: \(result.tokensGenerated)")
+                print("[DEBUG] Tokens evaluated: \(result.tokensEvaluated)")
+                print("[DEBUG] Result text length: \(result.text.count)")
+                print("[DEBUG] Result text preview: \(result.text.prefix(100))")
+                
                 DispatchQueue.main.async {
-                    self.completionResult = result.text
+                    if result.tokensGenerated == 0 {
+                        print("[DEBUG] No tokens generated - timeout or model limitation")
+                        self.completionResult = "No completion generated. This may be due to a timeout or model limitations."
+                    } else if result.text.isEmpty {
+                        print("[DEBUG] Empty text received")
+                        self.completionResult = "No completion generated. This may be due to a timeout or model limitations."
+                    } else if result.text.trimmingCharacters(in: .whitespacesAndNewlines) == "<|im_end|>" {
+                        print("[DEBUG] Only end-of-image marker generated - timeout or model limitation")
+                        self.completionResult = "No completion generated. This may be due to a timeout or model limitations."
+                    } else if result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        print("[DEBUG] Only whitespace generated - timeout or model limitation")
+                        self.completionResult = "No completion generated. This may be due to a timeout or model limitations."
+                    } else {
+                        print("[DEBUG] Valid completion received")
+                        self.completionResult = result.text
+                    }
                 }
             } else {
+                print("[DEBUG] Completion failed - generateCompletion returned nil")
                 DispatchQueue.main.async {
                     self.completionResult = "Failed to generate multimodal completion"
                 }
             }
         } catch {
+            print("[DEBUG] Completion error: \(error.localizedDescription)")
             DispatchQueue.main.async {
                 self.completionResult = "Error: \(error.localizedDescription)"
             }
@@ -2144,10 +2210,35 @@ struct MultimodalTestView: View {
     }
 }
 
+// Image Resizing Helper
+func resizeImage(_ image: UIImage, targetSize: CGSize) -> UIImage {
+    let size = image.size
+    
+    let widthRatio  = targetSize.width  / size.width
+    let heightRatio = targetSize.height / size.height
+    
+    var newSize: CGSize
+    if widthRatio > heightRatio {
+        newSize = CGSize(width: size.width * heightRatio, height: size.height * heightRatio)
+    } else {
+        newSize = CGSize(width: size.width * widthRatio, height: size.height * widthRatio)
+    }
+    
+    let rect = CGRect(origin: .zero, size: newSize)
+    
+    UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+    image.draw(in: rect)
+    let newImage = UIGraphicsGetImageFromCurrentImageContext()!
+    UIGraphicsEndImageContext()
+    
+    return newImage
+}
+
 // Image Picker Helper
 struct ImagePicker: UIViewControllerRepresentable {
     @Binding var selectedImage: UIImage?
     @Binding var selectedImagePath: String?
+    @Binding var imageSize: Int
     
     class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
         let parent: ImagePicker
@@ -2158,18 +2249,19 @@ struct ImagePicker: UIViewControllerRepresentable {
         
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
             if let image = info[.originalImage] as? UIImage {
-                parent.selectedImage = image
+                let targetSize = CGSize(width: CGFloat(parent.imageSize), height: CGFloat(parent.imageSize))
+                let resizedImage = resizeImage(image, targetSize: targetSize)
+                parent.selectedImage = resizedImage
                 
-                // Save image to temporary directory for processing
-                if let imageData = image.jpegData(compressionQuality: 0.8) {
-                    let tempDir = NSTemporaryDirectory()
-                    let tempPath = tempDir + "selected_image.jpg"
-                    do {
+                let tempDir = NSTemporaryDirectory()
+                let tempPath = tempDir + "selected_image.jpg"
+                do {
+                    if let imageData = resizedImage.jpegData(compressionQuality: 0.8) {
                         try imageData.write(to: URL(fileURLWithPath: tempPath))
                         parent.selectedImagePath = tempPath
-                    } catch {
-                        print("Error saving image: \(error)")
                     }
+                } catch {
+                    print("Error saving image: \(error)")
                 }
             }
             

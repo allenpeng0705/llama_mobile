@@ -115,6 +115,7 @@ typedef struct {
     void (*progress_callback)(float progress, void* user_data);  /**< Model loading progress callback (optional) */
     void* progress_callback_user_data;  /**< User data to pass to progress callback (optional) */
     bool enable_chat_template;        /**< Enable chat template (default: false) */
+    int32_t image_min_tokens;         /**< Minimum number of image tokens for multimodal models (default: -1, use model default) */
 } llama_mobile_init_params_t;
 
 /**
