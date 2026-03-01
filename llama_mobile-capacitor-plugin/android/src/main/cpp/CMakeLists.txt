@@ -29,6 +29,24 @@ add_library(llama_mobile_jni SHARED
 find_library(log-lib log)
 find_library(android-lib android)
 
+# Find OpenCL library for GPU support
+find_library(OpenCL_LIBRARY OpenCL)
+if(OpenCL_LIBRARY)
+    message(STATUS "OpenCL found: ${OpenCL_LIBRARY}")
+else()
+    message(STATUS "OpenCL not found - will be loaded at runtime")
+    set(OpenCL_LIBRARY "")
+endif()
+
+# Find Vulkan library for GPU support
+find_library(Vulkan_LIBRARY vulkan)
+if(Vulkan_LIBRARY)
+    message(STATUS "Vulkan found: ${Vulkan_LIBRARY}")
+else()
+    message(STATUS "Vulkan not found - will be loaded at runtime")
+    set(Vulkan_LIBRARY "")
+endif()
+
 # Add linker flags for 16 KB page alignment
 target_link_options(llama_mobile_jni PRIVATE
     -Wl,-z,max-page-size=16384
@@ -41,4 +59,6 @@ target_link_libraries(
     llama_mobile
     ${log-lib}
     ${android-lib}
+    ${OpenCL_LIBRARY}
+    ${Vulkan_LIBRARY}
 )

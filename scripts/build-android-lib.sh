@@ -21,6 +21,12 @@ BUILD_TYPE=${ANDROID_BUILD_TYPE:-"Release"}    # Release or Debug build
 ABIS=${ANDROID_ABIS:-"arm64-v8a,x86_64"}       # Target ABIs to build for
 NUM_JOBS=${CMAKE_JOBS:-""}                    # Number of parallel build jobs
 
+# GPU Backend flags (enabled by default for Android)
+# Both OpenCL and Vulkan are now supported
+ENABLE_GPU=${ENABLE_GPU:-"true"}              # Enable GPU support by default
+GGML_OPENCL=${GGML_OPENCL:-"ON"}              # Enable OpenCL backend
+GGML_VULKAN=${GGML_VULKAN:-"ON"}              # Enable Vulkan backend (requires Vulkan SDK)
+
 # Debug log to verify NDK_PATH
 log_message "[DEBUG] NDK_PATH from config.env: $NDK_PATH"
 
@@ -124,6 +130,18 @@ show_help() {
     echo "  --debug                 Build with Debug configuration (same as --build-type=Debug)"
     echo "  --verbose               Show verbose output"
     echo ""
+    echo "GPU Backend Options:"
+    echo "  --no-gpu                Disable GPU support (default: enabled)"
+    echo "  --opencl                Enable OpenCL backend (default: enabled)"
+    echo "  --no-opencl             Disable OpenCL backend"
+    echo "  --vulkan                Enable Vulkan backend (default: enabled)"
+    echo "  --no-vulkan             Disable Vulkan backend"
+    echo ""
+    echo "Notes:"
+    echo "  - Both OpenCL and Vulkan backends are enabled by default"
+    echo "  - Vulkan requires Vulkan SDK installed on the build host"
+    echo "  - Backend selection happens at runtime based on device capabilities"
+    echo ""
     echo "ANDROID_HOME Configuration:"
     echo "  The script automatically detects ANDROID_HOME from common SDK paths."
     echo ""
@@ -140,10 +158,24 @@ while [[ "$#" -gt 0 ]]; do
         --platform=*) ANDROID_PLATFORM="${1#*=}" ;;
         --debug) BUILD_TYPE="Debug" ;;
         --verbose) VERBOSE=true ;;
+        --no-gpu) ENABLE_GPU="false" ;;
+        --opencl) GGML_OPENCL="ON" ;;
+        --no-opencl) GGML_OPENCL="OFF" ;;
+        --vulkan) GGML_VULKAN="ON" ;;
+        --no-vulkan) GGML_VULKAN="OFF" ;;
         *) log_message "[ERROR] Unknown parameter: $1" ; show_help ;;
     esac
     shift
 done
+
+# Disable GPU backends if GPU support is disabled
+if [[ "$ENABLE_GPU" == "false" ]]; then
+    GGML_OPENCL="OFF"
+    GGML_VULKAN="OFF"
+    log_message "[INFO] GPU support disabled"
+else
+    log_message "[INFO] GPU support enabled (OpenCL: $GGML_OPENCL, Vulkan: $GGML_VULKAN)"
+fi
 
 # ============================================================================
 # MAIN BUILD PROCESS
@@ -271,111 +303,117 @@ for ABI in "${ABI_LIST[@]}"; do
         PLATFORM_FLAGS="-DGGML_NO_POSIX_MADVISE=ON"
     fi
     
-    # Build shared library
-    log_message "[INFO] Building shared library for $ABI..."
-    SHARED_BUILD_DIR="$ROOT_DIR/build-android-native-shared-$ABI"
-    rm -rf "$SHARED_BUILD_DIR"
-    mkdir -p "$SHARED_BUILD_DIR"
-    
-    # Configure CMake for shared library
-    script_progress "Configuring CMake for shared library ($ABI)..."
-    SHARED_CMAKE_COMMAND="cmake -S $ROOT_DIR/lib -B $SHARED_BUILD_DIR \
-        -DCMAKE_TOOLCHAIN_FILE=\"$CMAKE_TOOLCHAIN_FILE\" \
-        -DANDROID_ABI=\"$ABI\" \
-        -DANDROID_PLATFORM=\"$ANDROID_PLATFORM\" \
-        -DCMAKE_BUILD_TYPE=\"$CMAKE_BUILD_TYPE\" \
-        -DANDROID_STL=c++_shared \
-        -DBUILD_SHARED_LIBS=ON \
-        -DLLAMA_USE_HTTPLIB=OFF \
-        $PLATFORM_FLAGS"
-    
-    verbose_output "Shared library CMake command: $SHARED_CMAKE_COMMAND"
-    
-    if ! eval "$SHARED_CMAKE_COMMAND" 2>&1 | (if [ "$VERBOSE" = true ]; then cat; else grep -E "(error|warning|CMake Error|CMake Warning)" || true; fi); then
-        handle_error 1 "CMake configuration failed for shared library ($ABI)!"
-    fi
-    
-    # Build shared library
-    script_progress "Building shared library for $ABI..."
-    # Use NUM_JOBS from config.env if set, otherwise detect automatically based on OS
-    DETECTED_NUM_JOBS="$NUM_JOBS"
-    if [ -z "$DETECTED_NUM_JOBS" ]; then
-        if [ "$(uname)" = "Darwin" ]; then
-            # macOS
-            DETECTED_NUM_JOBS=$(sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
-        elif [ "$(uname)" = "Linux" ]; then
-            # Linux
-            DETECTED_NUM_JOBS=$(nproc 2>/dev/null || echo 4)
-        else
-            # Default
-            DETECTED_NUM_JOBS=4
-        fi
-    fi
-    SHARED_BUILD_COMMAND="cmake --build $SHARED_BUILD_DIR --config \"$CMAKE_BUILD_TYPE\" -j \"$DETECTED_NUM_JOBS\""
-    
-    verbose_output "Shared library build command: $SHARED_BUILD_COMMAND"
-    
-    if ! eval "$SHARED_BUILD_COMMAND" 2>&1 | (if [ "$VERBOSE" = true ]; then cat; else grep -E "(error|warning|FAILED|FAILED_LINK|Build failed)" || true; fi); then
-        handle_error 1 "Shared library build failed for $ABI!"
-    fi
-    
-    # Copy the built shared library
-    SHARED_DEST_DIR="$SHARED_LIBS_DIR/$ABI"
-    SHARED_DEST_LIB="$SHARED_DEST_DIR/libllama_mobile.so"
-    
-    # Find the actual built shared library
-    SHARED_SOURCE_LIB=""
-    # Check standard locations
-    if [ -f "$SHARED_BUILD_DIR/libllama_mobile_core.so" ]; then
-        SHARED_SOURCE_LIB="$SHARED_BUILD_DIR/libllama_mobile_core.so"
-    elif [ -f "$SHARED_BUILD_DIR/lib/libllama_mobile_core.so" ]; then
-        SHARED_SOURCE_LIB="$SHARED_BUILD_DIR/lib/libllama_mobile_core.so"
-    elif [ -f "$SHARED_BUILD_DIR/Release/libllama_mobile_core.so" ]; then
-        SHARED_SOURCE_LIB="$SHARED_BUILD_DIR/Release/libllama_mobile_core.so"
-    elif [ -f "$SHARED_BUILD_DIR/Debug/libllama_mobile_core.so" ]; then
-        SHARED_SOURCE_LIB="$SHARED_BUILD_DIR/Debug/libllama_mobile_core.so"
-    else
-        # Search the build directory
-        SHARED_SOURCE_LIB=$(find "$SHARED_BUILD_DIR" -name "libllama_mobile_core.so" 2>/dev/null | head -1)
-    fi
-    
-    if [ -n "$SHARED_SOURCE_LIB" ]; then
-        mkdir -p "$SHARED_DEST_DIR"
-        cp "$SHARED_SOURCE_LIB" "$SHARED_DEST_LIB"
-        log_message "[SUCCESS] Built shared library: $SHARED_DEST_LIB"
+    # Skip building shared library when GPU support is enabled (OpenCL linking issues)
+    if [[ "$ENABLE_GPU" != "true" ]]; then
+        # Build shared library
+        log_message "[INFO] Building shared library for $ABI..."
+        SHARED_BUILD_DIR="$ROOT_DIR/build-android-native-shared-$ABI"
+        rm -rf "$SHARED_BUILD_DIR"
+        mkdir -p "$SHARED_BUILD_DIR"
         
-        # Copy libc++_shared.so from NDK to ensure compatibility
-        if [ "$ABI" = "arm64-v8a" ]; then
-            LINUX_ABI="aarch64-linux-android"
-        elif [ "$ABI" = "x86_64" ]; then
-            LINUX_ABI="x86_64-linux-android"
+        # Configure CMake for shared library
+        script_progress "Configuring CMake for shared library ($ABI)..."
+        
+        SHARED_CMAKE_COMMAND="cmake -S $ROOT_DIR/lib -B $SHARED_BUILD_DIR \
+            -DCMAKE_TOOLCHAIN_FILE=\"$CMAKE_TOOLCHAIN_FILE\" \
+            -DANDROID_ABI=\"$ABI\" \
+            -DANDROID_PLATFORM=\"$ANDROID_PLATFORM\" \
+            -DCMAKE_BUILD_TYPE=\"$CMAKE_BUILD_TYPE\" \
+            -DANDROID_STL=c++_shared \
+            -DBUILD_SHARED_LIBS=ON \
+            -DLLAMA_USE_HTTPLIB=OFF \
+            $PLATFORM_FLAGS"
+        
+        verbose_output "Shared library CMake command: $SHARED_CMAKE_COMMAND"
+        
+        if ! eval "$SHARED_CMAKE_COMMAND" 2>&1 | (if [ "$VERBOSE" = true ]; then cat; else grep -E "(error|warning|CMake Error|CMake Warning)" || true; fi); then
+            handle_error 1 "CMake configuration failed for shared library ($ABI)!"
         fi
         
-        if [ -n "$LINUX_ABI" ]; then
-            # Try to find libc++_shared.so in NDK
-            LIB_CPP_SHARED="$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/lib/$LINUX_ABI/libc++_shared.so"
-            if [ -f "$LIB_CPP_SHARED" ]; then
-                cp "$LIB_CPP_SHARED" "$SHARED_DEST_DIR/"
-                log_message "[SUCCESS] Copied libc++_shared.so for $ABI"
+        # Build shared library
+        script_progress "Building shared library for $ABI..."
+        # Use NUM_JOBS from config.env if set, otherwise detect automatically based on OS
+        DETECTED_NUM_JOBS="$NUM_JOBS"
+        if [ -z "$DETECTED_NUM_JOBS" ]; then
+            if [ "$(uname)" = "Darwin" ]; then
+                # macOS
+                DETECTED_NUM_JOBS=$(sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
+            elif [ "$(uname)" = "Linux" ]; then
+                # Linux
+                DETECTED_NUM_JOBS=$(nproc 2>/dev/null || echo 4)
             else
-                # Try older NDK path structure
-                LIB_CPP_SHARED_OLD="$NDK_PATH/sources/cxx-stl/llvm-libc++/libs/$ABI/libc++_shared.so"
-                if [ -f "$LIB_CPP_SHARED_OLD" ]; then
-                    cp "$LIB_CPP_SHARED_OLD" "$SHARED_DEST_DIR/"
-                    log_message "[SUCCESS] Copied libc++_shared.so for $ABI (old NDK path)"
+                # Default
+                DETECTED_NUM_JOBS=4
+            fi
+        fi
+        SHARED_BUILD_COMMAND="cmake --build $SHARED_BUILD_DIR --config \"$CMAKE_BUILD_TYPE\" -j \"$DETECTED_NUM_JOBS\""
+        
+        verbose_output "Shared library build command: $SHARED_BUILD_COMMAND"
+        
+        if ! eval "$SHARED_BUILD_COMMAND" 2>&1 | (if [ "$VERBOSE" = true ]; then cat; else grep -E "(error|warning|FAILED|FAILED_LINK|Build failed)" || true; fi); then
+            handle_error 1 "Shared library build failed for $ABI!"
+        fi
+        
+        # Copy the built shared library
+        SHARED_DEST_DIR="$SHARED_LIBS_DIR/$ABI"
+        SHARED_DEST_LIB="$SHARED_DEST_DIR/libllama_mobile.so"
+        
+        # Find the actual built shared library
+        SHARED_SOURCE_LIB=""
+        # Check standard locations
+        if [ -f "$SHARED_BUILD_DIR/libllama_mobile_core.so" ]; then
+            SHARED_SOURCE_LIB="$SHARED_BUILD_DIR/libllama_mobile_core.so"
+        elif [ -f "$SHARED_BUILD_DIR/lib/libllama_mobile_core.so" ]; then
+            SHARED_SOURCE_LIB="$SHARED_BUILD_DIR/lib/libllama_mobile_core.so"
+        elif [ -f "$SHARED_BUILD_DIR/Release/libllama_mobile_core.so" ]; then
+            SHARED_SOURCE_LIB="$SHARED_BUILD_DIR/Release/libllama_mobile_core.so"
+        elif [ -f "$SHARED_BUILD_DIR/Debug/libllama_mobile_core.so" ]; then
+            SHARED_SOURCE_LIB="$SHARED_BUILD_DIR/Debug/libllama_mobile_core.so"
+        else
+            # Search the build directory
+            SHARED_SOURCE_LIB=$(find "$SHARED_BUILD_DIR" -name "libllama_mobile_core.so" 2>/dev/null | head -1)
+        fi
+        
+        if [ -n "$SHARED_SOURCE_LIB" ]; then
+            mkdir -p "$SHARED_DEST_DIR"
+            cp "$SHARED_SOURCE_LIB" "$SHARED_DEST_LIB"
+            log_message "[SUCCESS] Built shared library: $SHARED_DEST_LIB"
+            
+            # Copy libc++_shared.so from NDK to ensure compatibility
+            if [ "$ABI" = "arm64-v8a" ]; then
+                LINUX_ABI="aarch64-linux-android"
+            elif [ "$ABI" = "x86_64" ]; then
+                LINUX_ABI="x86_64-linux-android"
+            fi
+            
+            if [ -n "$LINUX_ABI" ]; then
+                # Try to find libc++_shared.so in NDK
+                LIB_CPP_SHARED="$NDK_PATH/toolchains/llvm/prebuilt/darwin-x86_64/sysroot/usr/lib/$LINUX_ABI/libc++_shared.so"
+                if [ -f "$LIB_CPP_SHARED" ]; then
+                    cp "$LIB_CPP_SHARED" "$SHARED_DEST_DIR/"
+                    log_message "[SUCCESS] Copied libc++_shared.so for $ABI"
                 else
-                    log_message "WARNING" "Could not find libc++_shared.so for $ABI"
+                    # Try older NDK path structure
+                    LIB_CPP_SHARED_OLD="$NDK_PATH/sources/cxx-stl/llvm-libc++/libs/$ABI/libc++_shared.so"
+                    if [ -f "$LIB_CPP_SHARED_OLD" ]; then
+                        cp "$LIB_CPP_SHARED_OLD" "$SHARED_DEST_DIR/"
+                        log_message "[SUCCESS] Copied libc++_shared.so for $ABI (old NDK path)"
+                    else
+                        log_message "WARNING" "Could not find libc++_shared.so for $ABI"
+                    fi
                 fi
+            else
+                log_message "WARNING" "Unsupported ABI: $ABI"
             fi
         else
-            log_message "WARNING" "Unsupported ABI: $ABI"
+            log_message "ERROR" "Could not find built shared library for $ABI!"
         fi
+        
+        # Clean up shared library build directory
+        rm -rf "$SHARED_BUILD_DIR"
     else
-        log_message "ERROR" "Could not find built shared library for $ABI!"
+        log_message "[INFO] Skipping shared library build for $ABI (GPU support enabled - static library only)"
     fi
-    
-    # Clean up shared library build directory
-    rm -rf "$SHARED_BUILD_DIR"
     
     # Build static library
     log_message "[INFO] Building static library for $ABI..."
@@ -385,6 +423,14 @@ for ABI in "${ABI_LIST[@]}"; do
     
     # Configure CMake for static library
     script_progress "Configuring CMake for static library ($ABI)..."
+    
+    # Build GPU flags for static library
+    STATIC_GPU_FLAGS=""
+    if [[ "$ENABLE_GPU" == "true" ]]; then
+        STATIC_GPU_FLAGS="-DGGML_OPENCL=$GGML_OPENCL -DGGML_VULKAN=$GGML_VULKAN"
+        log_message "[INFO] GPU flags for static library: $STATIC_GPU_FLAGS"
+    fi
+    
     STATIC_CMAKE_COMMAND="cmake -S $ROOT_DIR/lib -B $STATIC_BUILD_DIR \
         -DCMAKE_TOOLCHAIN_FILE=\"$CMAKE_TOOLCHAIN_FILE\" \
         -DANDROID_ABI=\"$ABI\" \
@@ -393,7 +439,8 @@ for ABI in "${ABI_LIST[@]}"; do
         -DANDROID_STL=c++_static \
         -DBUILD_SHARED_LIBS=OFF \
         -DLLAMA_USE_HTTPLIB=OFF \
-        $PLATFORM_FLAGS"
+        $PLATFORM_FLAGS \
+        $STATIC_GPU_FLAGS"
     
     verbose_output "Static library CMake command: $STATIC_CMAKE_COMMAND"
     

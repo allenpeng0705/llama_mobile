@@ -1,7 +1,7 @@
 ---
 name: llama_mobile_flutter_sdk
 description: A new Flutter plugin project.
-version: 1.0.1
+version: 1.0.3
 homepage:
 environment:
   sdk: "^3.9.2"
@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   plugin_platform_interface: "^2.0.2"
+  http: "^1.2.1"
 dev_dependencies:
   flutter_test:
     sdk: flutter

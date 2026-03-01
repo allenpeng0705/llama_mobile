@@ -1346,19 +1346,13 @@ class AppState extends ChangeNotifier {
     print("Starting download: $repoID to $localPath");
 
     try {
-      final progressChannel = const EventChannel(
-        'llama_mobile_flutter_sdk/progress',
-      );
-      _progressSubscription = progressChannel
-          .receiveBroadcastStream('progress')
+      _progressSubscription = LlamaMobile().onProgressStream
           .listen(
-            (event) {
-              if (event is Map && event['progress'] != null) {
-                downloadProgress = (event['progress'] as num).toDouble();
-                downloadStatus =
-                    "Downloading... ${(downloadProgress * 100).toInt()}%";
-                notifyListeners();
-              }
+            (progress) {
+              downloadProgress = progress;
+              downloadStatus =
+                  "Downloading... ${(downloadProgress * 100).toInt()}%";
+              notifyListeners();
             },
             onError: (error) {
               print("Progress stream error: $error");

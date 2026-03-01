@@ -22,6 +22,7 @@
 # - Copies Android JNI files from llama_mobile-android-SDK
 # - Ensures SDKs are build-ready with proper directory structure
 # - Creates centralized output directory with all required files
+# - GPU Support: Includes OpenCL and Vulkan GPU acceleration backends for Android
 #
 # Output Directories:
 # - llama_mobile/llama_mobile-flutter-SDK/ (Self-contained Flutter plugin)
@@ -29,6 +30,14 @@
 #
 # Backup Directory:
 # - llama_mobile/scripts/sdk_backup/ (timestamped backups)
+#
+# GPU Support Configuration:
+# - GPU support is enabled by default in build-android-lib.sh
+# - Uses OpenCL backend for Adreno/Qualcomm GPUs
+# - Uses Vulkan backend for broader GPU compatibility
+# - GPU libraries are built with both OpenCL and Vulkan support
+# - Runtime detection determines which backend to use based on device capabilities
+# - GPU headers (ggml-opencl.h, ggml-vulkan.h) are included for native development
 #
 # How Developers Use This Plugin:
 # 1. Add to pubspec.yaml:
@@ -50,6 +59,7 @@
 # - Kotlin extension file is NOT copied (not used by Flutter plugin)
 # - This is NOT a Flutter Module for native app integration
 # - This IS a Flutter Plugin for Flutter app development
+# - GPU support is automatically included when building Android libraries with GPU enabled
 # ============================================================================
 
 # Load centralized configuration from config.env

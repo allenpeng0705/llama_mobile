@@ -1006,14 +1006,13 @@ struct SettingsView: View {
         // Configure model with proper embedding support
         var initParams = LlamaMobile.InitParams(modelPath: appState.modelPath)
         initParams.nCtx = Int32(nCtx)
-        initParams.nGpuLayers = 99//Int32(nGpuLayers)
+        initParams.nGpuLayers = 10//Int32(nGpuLayers)
         initParams.nThreads = Int32(nThreads)
         initParams.embedding = appState.enableEmbedding
         initParams.poolingType = 0 // Mean pooling
         initParams.embdNormalize = 1 // Normalize embeddings
         initParams.systemPrompt = appState.systemPrompt
         initParams.imageMinTokens = 1024 // Set minimum image tokens for Qwen-VL models
-        initParams.flashAttention = true
         
         // Set custom chat template if Template switch is on
         if appState.useCustomTemplate {

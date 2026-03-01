@@ -834,20 +834,14 @@ if (downloadResult?.success == true) {
 #### 3. Download with Progress Tracking
 
 ```dart
-import 'package:flutter/services.dart';
-
 // Listen to progress events
-final progressChannel = const EventChannel('llama_mobile_flutter_sdk/progress');
-final progressSubscription = progressChannel.receiveBroadcastStream().listen(
-  (event) {
-    if (event is Map && event['progress'] != null) {
-      final progress = (event['progress'] as num).toDouble();
-      print('Download progress: ${(progress * 100).toInt()}%');
-      // Update UI with progress
-      setState(() {
-        _downloadProgress = progress;
-      });
-    }
+final progressSubscription = LlamaMobile().onProgressStream.listen(
+  (progress) {
+    print('Download progress: ${(progress * 100).toInt()}%');
+    // Update UI with progress
+    setState(() {
+      _downloadProgress = progress;
+    });
   },
   onError: (error) {
     print('Progress stream error: $error');

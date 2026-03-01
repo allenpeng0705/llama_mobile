@@ -1,0 +1,7 @@
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/llama_cpp/ggml-vulkan/vulkan-shaders/build/CMakeFiles/vulkan-shaders-gen.dir
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/llama_cpp/ggml-vulkan/vulkan-shaders/build/CMakeFiles/edit_cache.dir
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/llama_cpp/ggml-vulkan/vulkan-shaders/build/CMakeFiles/rebuild_cache.dir
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/llama_cpp/ggml-vulkan/vulkan-shaders/build/CMakeFiles/list_install_components.dir
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/llama_cpp/ggml-vulkan/vulkan-shaders/build/CMakeFiles/install.dir
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/llama_cpp/ggml-vulkan/vulkan-shaders/build/CMakeFiles/install/local.dir
+/Users/shileipeng/Documents/mygithub/llama_mobile/lib/llama_cpp/ggml-vulkan/vulkan-shaders/build/CMakeFiles/install/strip.dir

@@ -2,8 +2,29 @@
 
 # ============================================================================
 # CAPACITOR PLUGIN BUILD SCRIPT
-# Builds a self-contained Capacitor plugin with bundled iOS and Android dependencies
+# ============================================================================
+# Purpose: Builds a self-contained Capacitor plugin with bundled iOS and Android dependencies
+#
+# Key Features:
+# - Bundles iOS frameworks and Android libraries into the plugin
+# - Copies native dependencies from pre-built locations
+# - Creates a ready-to-use Capacitor plugin for web developers
+# - GPU Support: Includes OpenCL and Vulkan GPU acceleration backends for Android
+#
 # Output: llama_mobile/llama_mobile-capacitor-plugin/
+#
+# GPU Support Configuration:
+# - GPU support is enabled by default in build-android-lib.sh
+# - Uses OpenCL backend for Adreno/Qualcomm GPUs
+# - Uses Vulkan backend for broader GPU compatibility
+# - GPU libraries are built with both OpenCL and Vulkan support
+# - Runtime detection determines which backend to use based on device capabilities
+# - GPU headers (ggml-opencl.h, ggml-vulkan.h) are included for native development
+#
+# Notes:
+# - Android libraries must be built first using build-android-lib.sh
+# - iOS framework must be built first using build-ios-framework.sh
+# - GPU support is automatically included when building Android libraries with GPU enabled
 # ============================================================================
 
 # Simple logging function
