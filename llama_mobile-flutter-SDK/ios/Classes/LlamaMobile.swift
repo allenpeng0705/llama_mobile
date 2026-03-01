@@ -161,46 +161,6 @@ public class LlamaMobile: NSObject {
         
         log("Framework bundle path: \(frameworkPath)", level: .debug)
         log("Framework bundle resources path: \(frameworkBundle.resourcePath ?? "nil")", level: .debug)
-        
-        // Find and handle Metal shader files
-        if let resourcePath = frameworkBundle.resourcePath {
-            let metallibFiles = findFiles(in: resourcePath, withExtension: "metallib")
-            
-            if metallibFiles.isEmpty {
-                log("⚠ No metallib files found in framework bundle", level: .warning)
-            } else {
-                log("✓ Found \(metallibFiles.count) metallib file(s)", level: .info)
-                
-                for metallibFile in metallibFiles {
-                    log("  - \(metallibFile.lastPathComponent)", level: .debug)
-                    
-                    // Ensure the metallib file is accessible
-                    if FileManager.default.fileExists(atPath: metallibFile.path) {
-                        log("  ✓ Metallib file accessible: \(metallibFile.path)", level: .debug)
-                    } else {
-                        log("  ✗ Metallib file not accessible: \(metallibFile.path)", level: .error)
-                    }
-                }
-            }
-        }
-    }
-    
-    /// Helper function to find files with a specific extension in a directory
-    private func findFiles(in directoryPath: String, withExtension ext: String) -> [URL] {
-        var foundFiles: [URL] = []
-        
-        guard let enumerator = FileManager.default.enumerator(atPath: directoryPath) else {
-            return foundFiles
-        }
-        
-        while let element = enumerator.nextObject() as? String {
-            let fullPath = (directoryPath as NSString).appendingPathComponent(element)
-            if fullPath.hasSuffix(".\(ext)") {
-                foundFiles.append(URL(fileURLWithPath: fullPath))
-            }
-        }
-        
-        return foundFiles
     }
     
     /// Text-to-Speech model types
@@ -300,11 +260,11 @@ public class LlamaMobile: NSObject {
         /// V cache type (e.g., "fp16", "q4_0")
         public var cacheTypeV: String? = nil
         
-        /// Minimum number of image tokens for multimodal models (default: -1, use model default)
-        public var imageMinTokens: Int32 = Int32(-1)
-        
         /// Enable chat template functionality
         public var enableChatTemplate: Bool = true
+        
+        /// Minimum number of image tokens for multimodal models (default: -1, use model default)
+        public var imageMinTokens: Int32 = Int32(-1)
         
         /// Callback for model loading progress (0.0 to 1.0)
         public var progressCallback: ((Float) -> Void)? = nil

@@ -12,7 +12,6 @@
 # - Ensures SDKs are build-ready with proper directory structure
 # - Builds SDKs and runs tests
 # - Creates centralized output directory with all required files
-# - GPU Support: Includes OpenCL and Vulkan GPU acceleration backends
 #
 # Output Directories:
 # - llama_mobile/llama_mobile-android-SDK/ (Consolidated SDK with both Java and Kotlin support)
@@ -21,13 +20,6 @@
 # Backup Directory:
 # - llama_mobile/scripts/sdk_backup/ (timestamped backups)
 #
-# GPU Support Configuration:
-# - GPU support is enabled by default in build-android-lib.sh
-# - Uses OpenCL backend for Adreno/Qualcomm GPUs
-# - Uses Vulkan backend for broader GPU compatibility
-# - GPU libraries are built with both OpenCL and Vulkan support
-# - Runtime detection determines which backend to use based on device capabilities
-#
 # Notes:
 # - Only uses static libraries (libllama_mobile.a)
 # - Uses c++_static STL to avoid external dependencies on libc++_shared.so
@@ -35,7 +27,6 @@
 # - All Java/Kotlin/JNI files are preserved from existing SDKs
 # - Consolidated SDK provides both Java and Kotlin APIs from single module
 # - Tests are in Kotlin only (LlamaMobileComprehensiveTests.kt)
-# - GPU headers (ggml-opencl.h, ggml-vulkan.h) are included for native development
 # ============================================================================
 
 # Function to log messages
@@ -93,12 +84,18 @@ print_final_summary() {
 
 # Function to load config from config.env
 load_config_env() {
-    local config_file="$ROOT_DIR/config.env"
+    local config_file="$ROOT_DIR/scripts/config.env"
     if [ -f "$config_file" ]; then
         source "$config_file"
-        log_message "INFO" "Loaded configuration from config.env"
+        log_message "INFO" "Loaded configuration from scripts/config.env"
     else
-        log_message "INFO" "config.env not found, using default values"
+        config_file="$ROOT_DIR/config.env"
+        if [ -f "$config_file" ]; then
+            source "$config_file"
+            log_message "INFO" "Loaded configuration from config.env"
+        else
+            log_message "INFO" "config.env not found, using default values"
+        fi
     fi
 }
 
@@ -106,7 +103,7 @@ load_config_env() {
 update_config_env() {
     local key="$1"
     local value="$2"
-    local config_file="$ROOT_DIR/config.env"
+    local config_file="$ROOT_DIR/scripts/config.env"
     
     # Create config.env if it doesn't exist
     if [ ! -f "$config_file" ]; then
@@ -122,7 +119,7 @@ update_config_env() {
         echo "$key=$value" >> "$config_file"
     fi
     
-    log_message "INFO" "Updated config.env: $key=$value"
+    log_message "INFO" "Updated scripts/config.env: $key=$value"
 }
 
 # Function to create persistent backup of SDK directories

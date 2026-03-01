@@ -536,14 +536,14 @@ public class LlamaMobile {
          * Convenience factory for GPU-accelerated inference
          */
         public static InitParams gpu(String modelPath, int nGpuLayers, int nCtx) {
-            return new InitParams(modelPath, nCtx, null, null, 512, 512, nGpuLayers, 4, true, false, false, 0, 0, false, null, null, true, null);
+            return new InitParams(modelPath, nCtx, null, null, 512, 512, nGpuLayers, 4, true, false, false, 0, 0, false, null, null, true, null, 0);
         }
 
         /**
          * Convenience factory for embedding generation
          */
         public static InitParams embedding(String modelPath, int poolingType) {
-            return new InitParams(modelPath, 2048, null, null, 512, 512, 0, 4, true, false, true, poolingType, 0, false, null, null, true, null);
+            return new InitParams(modelPath, 2048, null, null, 512, 512, 0, 4, true, false, true, poolingType, 0, false, null, null, true, null, 0);
         }
     }
 
