@@ -484,7 +484,7 @@ copy_sdk_to_output() {
     # Simple and safe copy using cp -r
     # Copy entire directory structure without complex excludes
     log_message "[INFO] Starting copy: cp -r \"$sdk_dir\" \"$output_sdk_dir\""
-    rsync -a --copy-links --exclude='.symlinks' "$sdk_dir/" "$output_sdk_dir/"
+    rsync -a --copy-links --exclude='.symlinks' --exclude='build' --exclude='.dart_tool' --exclude='.symlinks' "$sdk_dir/" "$output_sdk_dir/"
     log_message "[INFO] Copy completed successfully"
     
     # Remove build artifacts from output (safe to delete)
@@ -635,6 +635,21 @@ if [ -d "$ANDROID_SDK_DIR/src/main/cpp" ]; then
     log_message "[SUCCESS] Android JNI files copied to Flutter SDK from Android SDK directory (synced with latest)"
 else
     log_message "[WARN] Android JNI files not found, skipping JNI file copy"
+fi
+
+# Copy libs folder from Android SDK to Flutter SDK (for stub libraries)
+script_progress "Copying libs folder from Android SDK to Flutter SDK..."
+mkdir -p "$FLUTTER_SDK_DIR/android/libs"
+
+# Copy libs folder from Android SDK directory
+if [ -d "$ANDROID_SDK_DIR/libs" ]; then
+    if [ -d "$FLUTTER_SDK_DIR/android/libs" ]; then
+        rm -rf "$FLUTTER_SDK_DIR/android/libs"/*
+    fi
+    cp -Rf "$ANDROID_SDK_DIR/libs/"* "$FLUTTER_SDK_DIR/android/libs/"
+    log_message "[SUCCESS] Libs folder copied to Flutter SDK from Android SDK directory"
+else
+    log_message "[WARN] Libs folder not found at $ANDROID_SDK_DIR/libs, skipping libs folder copy"
 fi
 
 # Copy include directory to Flutter SDK for self-contained builds

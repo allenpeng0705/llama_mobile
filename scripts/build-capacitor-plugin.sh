@@ -418,6 +418,16 @@ else
     fi
 fi
 
+# 3f. Copy libs folder from Android SDK to Capacitor plugin (for stub libraries)
+if [ -d "$ANDROID_SDK_DIR/libs" ]; then
+    log "Copying libs folder from $ANDROID_SDK_DIR/libs to $CAPACITOR_PLUGIN_DIR/android/..."
+    mkdir -p "$CAPACITOR_PLUGIN_DIR/android/libs"
+    cp -R "$ANDROID_SDK_DIR/libs"/* "$CAPACITOR_PLUGIN_DIR/android/libs/"
+    log "Android libs folder copied"
+else
+    log "WARN: Android libs folder not found at $ANDROID_SDK_DIR/libs"
+fi
+
 # 3e. Copy llama_mobile-android-SDK/src/main/java/com/llamamobile/LlamaMobile.java to llama_mobile-capacitor-plugin/android/src/main/java/com/llamamobile/
 if [ -f "$ANDROID_SDK_DIR/src/main/java/com/llamamobile/LlamaMobile.java" ]; then
     log "Copying Android LlamaMobile.java from $ANDROID_SDK_DIR/src/main/java/com/llamamobile/LlamaMobile.java to $CAPACITOR_PLUGIN_DIR/android/src/main/java/com/llamamobile/..."
@@ -558,6 +568,14 @@ if [ "$IOS_SUCCESS" = true ] || [ "$ANDROID_SUCCESS" = true ]; then
     # Copy built Capacitor plugin to output directory
     log_message "[INFO] Copying built Capacitor plugin to output directory..."
     cp -R "$CAPACITOR_PLUGIN_DIR" "$OUTPUT_DIR/"
+    
+    # Ensure libs folder is copied (it might have been excluded)
+    if [ -d "$CAPACITOR_PLUGIN_DIR/android/libs" ]; then
+        log_message "[INFO] Ensuring libs folder is copied to output..."
+        mkdir -p "$OUTPUT_DIR/llama_mobile-capacitor-plugin/android"
+        cp -R "$CAPACITOR_PLUGIN_DIR/android/libs" "$OUTPUT_DIR/llama_mobile-capacitor-plugin/android/"
+        log_message "[SUCCESS] libs folder copied to output directory"
+    fi
     
     log_message "[SUCCESS] Self-contained Capacitor plugin build completed successfully!"
     log_message "[INFO] To use this plugin in a Capacitor app, add it to your package.json:"
