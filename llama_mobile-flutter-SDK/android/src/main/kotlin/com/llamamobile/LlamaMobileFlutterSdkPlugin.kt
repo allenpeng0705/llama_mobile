@@ -99,6 +99,7 @@ class LlamaMobileFlutterSdkPlugin :
                 "downloadModelAsync" -> handleDownloadModelAsync(call, result)
                 "downloadHfFile" -> handleDownloadHfFile(call, result)
                 "downloadHfFileAsync" -> handleDownloadHfFileAsync(call, result)
+                "extractAsset" -> handleExtractAsset(call, result)
                 "getContextWindowSize" -> handleGetContextWindowSize(call, result)
                 "getEmbeddingDimension" -> handleGetEmbeddingDimension(call, result)
                 "getModelDescription" -> handleGetModelDescription(call, result)
@@ -110,6 +111,8 @@ class LlamaMobileFlutterSdkPlugin :
                 "supportsAudio" -> handleSupportsAudio(call, result)
                 "isVocoderEnabled" -> handleIsVocoderEnabled(call, result)
                 "getTTSType" -> handleGetTTSType(call, result)
+                "getGpuBackendInfo" -> handleGetGpuBackendInfo(call, result)
+                "setVerboseLogging" -> handleSetVerboseLogging(call, result)
                 "getPlatformVersion" -> result.success("Android ${android.os.Build.VERSION.RELEASE}")
                 else -> result.notImplemented()
             }
@@ -1224,6 +1227,74 @@ class LlamaMobileFlutterSdkPlugin :
         }.start()
     }
 
+    // MARK: - Asset Extraction Methods
+    private fun handleExtractAsset(call: MethodCall, result: Result) {
+        val assetPath = call.argument<String>("assetPath") ?: throw IllegalArgumentException("assetPath is required")
+        val localPath = call.argument<String>("localPath") ?: throw IllegalArgumentException("localPath is required")
+
+        Thread {
+            try {
+                val localFile = java.io.File(localPath)
+                val parentDir = localFile.parentFile
+                if (parentDir != null && !parentDir.exists()) {
+                    parentDir.mkdirs()
+                }
+
+                // Convert Flutter asset path to Android AssetManager path
+                // Flutter assets are stored in "flutter_assets/" directory in the APK
+                // So "assets/models/file.gguf" becomes "flutter_assets/assets/models/file.gguf"
+                val androidAssetPath = "flutter_assets/$assetPath"
+
+                var bytesCopied = 0L
+                val totalBytes = try {
+                    context.assets.openFd(androidAssetPath).use { assetFd ->
+                        assetFd.length
+                    }
+                } catch (e: Exception) {
+                    -1L
+                }
+
+                context.assets.open(androidAssetPath).use { inputStream ->
+                    java.io.FileOutputStream(localFile).use { outputStream ->
+                        val buffer = ByteArray(8192) // 8KB buffer for better performance
+                        var read: Int
+                        while (inputStream.read(buffer).also { read = it } != -1) {
+                            outputStream.write(buffer, 0, read)
+                            bytesCopied += read
+
+                            // Report progress every 1MB
+                            if (totalBytes > 0 && bytesCopied % (1024 * 1024) == 0L) {
+                                val progress = bytesCopied.toDouble() / totalBytes
+                                Handler(Looper.getMainLooper()).post {
+                                    progressEventSink?.success(progress)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Report final progress
+                if (totalBytes > 0) {
+                    Handler(Looper.getMainLooper()).post {
+                        progressEventSink?.success(1.0)
+                    }
+                }
+
+                Handler(Looper.getMainLooper()).post {
+                    result.success(mapOf(
+                        "success" to true,
+                        "localPath" to localPath,
+                        "errorMessage" to ""
+                    ))
+                }
+            } catch (e: Exception) {
+                Handler(Looper.getMainLooper()).post {
+                    result.error("EXTRACT_ERROR", "An error occurred: ${e.message}", e.stackTraceToString())
+                }
+            }
+        }.start()
+    }
+
  // MARK: - Model Info Methods
     private fun handleGetContextWindowSize(call: MethodCall, result: Result) {
         val handle = call.argument<Int>("contextHandle") ?: throw IllegalArgumentException("contextHandle is required")
@@ -1328,5 +1399,25 @@ class LlamaMobileFlutterSdkPlugin :
         builder.saveToFile((optionsMap["saveToFile"] as? Boolean) ?: false)
         builder.outputFilePath(optionsMap["outputFilePath"] as? String)
         return builder.build()
+    }
+
+    // MARK: - GPU Diagnostic Methods
+    private fun handleGetGpuBackendInfo(call: MethodCall, result: Result) {
+        try {
+            val info = LlamaMobile.getGpuBackendInfo()
+            result.success(info)
+        } catch (e: Exception) {
+            result.error("GPU_INFO_ERROR", "Failed to get GPU backend info: ${e.message}", e.stackTraceToString())
+        }
+    }
+
+    private fun handleSetVerboseLogging(call: MethodCall, result: Result) {
+        val enabled = call.argument<Boolean>("enabled") ?: false
+        try {
+            LlamaMobile.setVerboseLogging(enabled)
+            result.success(null)
+        } catch (e: Exception) {
+            result.error("VERBOSE_LOGGING_ERROR", "Failed to set verbose logging: ${e.message}", e.stackTraceToString())
+        }
     }
 }

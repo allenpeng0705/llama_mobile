@@ -1,5 +1,5 @@
 #include "llama_mobile.h"
-#include "llama_cpp/common.h"
+#include "llama.cpp-master/common/common.h"
 #include <stdexcept>
 
 namespace llama_mobile {
@@ -53,21 +53,21 @@ bool llama_mobile_context::validateModelChatTemplate(bool use_jinja, const char 
     return common_chat_verify_template(tmpl, use_jinja);
 }
 
-const std::vector<lm_ggml_type> kv_cache_types = {
-    LM_GGML_TYPE_F32,
-    LM_GGML_TYPE_F16,
-    LM_GGML_TYPE_BF16,
-    LM_GGML_TYPE_Q8_0,
-    LM_GGML_TYPE_Q4_0,
-    LM_GGML_TYPE_Q4_1,
-    LM_GGML_TYPE_IQ4_NL,
-    LM_GGML_TYPE_Q5_0,
-    LM_GGML_TYPE_Q5_1,
+const std::vector<ggml_type> kv_cache_types = {
+    GGML_TYPE_F32,
+    GGML_TYPE_F16,
+    GGML_TYPE_BF16,
+    GGML_TYPE_Q8_0,
+    GGML_TYPE_Q4_0,
+    GGML_TYPE_Q4_1,
+    GGML_TYPE_IQ4_NL,
+    GGML_TYPE_Q5_0,
+    GGML_TYPE_Q5_1,
 };
 
-lm_ggml_type kv_cache_type_from_str(const std::string & s) {
+ggml_type kv_cache_type_from_str(const std::string & s) {
     for (const auto & type : kv_cache_types) {
-        if (lm_ggml_type_name(type) == s) {
+        if (ggml_type_name(type) == s) {
             return type;
         }
     }

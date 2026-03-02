@@ -1,14 +1,14 @@
 #include "llama_mobile.h"
-#include "llama_cpp/common.h"
+#include "llama.cpp-master/common/common.h"
 #include <vector>
 #include <string>
 #include <fstream>
 #include <stdexcept>
 
 #ifndef LM_GGML_DISABLE_MULTIMODAL
-#include "llama_cpp/tools/mtmd/mtmd.h"
-#include "llama_cpp/tools/mtmd/clip.h"
-#include "llama_cpp/tools/mtmd/mtmd-helper.h"
+#include "llama.cpp-master/tools/mtmd/mtmd.h"
+#include "llama.cpp-master/tools/mtmd/clip.h"
+#include "llama.cpp-master/tools/mtmd/mtmd-helper.h"
 #endif
 
 namespace llama_mobile {

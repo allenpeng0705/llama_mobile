@@ -1,38 +1,34 @@
 #!/bin/bash
 
-# Color definitions for better output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 echo -e "${BLUE}=== llama_mobile Tests Build & Run Script ===${NC}"
 
-# Define paths
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LLAMA_MOBILE_DIR="$PROJECT_ROOT/lib"
-BUILD_DIR="$LLAMA_MOBILE_DIR/build"
-OUTPUT_DIR="$BUILD_DIR/output"
+BUILD_DIR="$LLAMA_MOBILE_DIR/tests/build"
 MODELS_DIR="$PROJECT_ROOT/models"
-TESTS_DIR="$OUTPUT_DIR"
 
-# Check if build directory exists
-check_build_dir() {
-    if [ ! -d "$BUILD_DIR" ]; then
-        echo -e "${RED}✗ Build directory not found: $BUILD_DIR${NC}"
-        echo -e "${YELLOW}Please run cmake and make first to build the core library${NC}"
-        exit 1
-    fi
-}
-
-# Build only test executables (not core library)
 build_tests() {
     echo -e "${BLUE}Building test executables...${NC}"
+    
+    mkdir -p "$BUILD_DIR"
     cd "$BUILD_DIR"
     
-    # Build all test executables
-    make test_api test_advanced_chat test_chat_template test_streaming test_download direct_test chat_example test_conversation
+    cmake -B . -DCMAKE_BUILD_TYPE=Release -S "$LLAMA_MOBILE_DIR/tests" > /dev/null 2>&1
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}✗ CMake configuration failed${NC}"
+        cmake -B . -DCMAKE_BUILD_TYPE=Release -S "$LLAMA_MOBILE_DIR/tests"
+        exit 1
+    fi
+    
+    NPROC=$(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 4)
+    cmake --build . -j$NPROC
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ Test executables built successfully${NC}"
@@ -42,11 +38,9 @@ build_tests() {
     fi
 }
 
-# List available models
 list_models() {
     echo -e "${BLUE}Available models:${NC}"
     
-    # List .gguf files
     MODELS=($(find "$MODELS_DIR" -type f -name "*.gguf" 2>/dev/null | sort))
     
     if [ ${#MODELS[@]} -eq 0 ]; then
@@ -65,7 +59,6 @@ list_models() {
     return 0
 }
 
-# Select model
 select_model() {
     if ! list_models; then
         SELECTED_MODEL=""
@@ -74,7 +67,6 @@ select_model() {
     
     read -p "Enter model number (or press Enter to skip): " MODEL_SELECTION
     
-    # Allow skipping model selection
     if [ -z "$MODEL_SELECTION" ]; then
         SELECTED_MODEL=""
         echo -e "${YELLOW}⚠ Skipping model selection${NC}"
@@ -82,7 +74,6 @@ select_model() {
         return 0
     fi
     
-    # Validate selection
     if ! [[ "$MODEL_SELECTION" =~ ^[0-9]+$ ]] || [ "$MODEL_SELECTION" -lt 1 ] || [ "$MODEL_SELECTION" -gt ${#MODELS[@]} ]; then
         echo -e "${RED}✗ Invalid selection${NC}"
         exit 1
@@ -94,7 +85,6 @@ select_model() {
     echo
 }
 
-# Select program to run
 select_program() {
     echo -e "${BLUE}Select program to run:${NC}"
     echo -e "  1. test_api (API test program)"
@@ -111,87 +101,57 @@ select_program() {
     read -p "Enter selection: " PROGRAM_SELECTION
     
     case "$PROGRAM_SELECTION" in
-        1)
-            PROGRAM="test_api"
-            echo -e "${GREEN}✓ Selected: test_api${NC}"
-            ;;
-        2)
-            PROGRAM="test_advanced_chat"
-            echo -e "${GREEN}✓ Selected: test_advanced_chat${NC}"
-            ;;
-        3)
-            PROGRAM="test_chat_template"
-            echo -e "${GREEN}✓ Selected: test_chat_template${NC}"
-            ;;
-        4)
-            PROGRAM="test_streaming"
-            echo -e "${GREEN}✓ Selected: test_streaming${NC}"
-            ;;
-        5)
-            PROGRAM="test_download"
-            echo -e "${GREEN}✓ Selected: test_download${NC}"
-            ;;
-        6)
-            PROGRAM="direct_test"
-            echo -e "${GREEN}✓ Selected: direct_test${NC}"
-            ;;
-        7)
-            PROGRAM="chat_example"
-            echo -e "${GREEN}✓ Selected: chat_example${NC}"
-            ;;
-        8)
-            PROGRAM="test_conversation"
-            echo -e "${GREEN}✓ Selected: test_conversation${NC}"
-            ;;
-        9)
-            PROGRAM="all"
-            echo -e "${GREEN}✓ Selected: Run all tests${NC}"
-            ;;
+        1) PROGRAM="test_api" ;;
+        2) PROGRAM="test_advanced_chat" ;;
+        3) PROGRAM="test_chat_template" ;;
+        4) PROGRAM="test_streaming" ;;
+        5) PROGRAM="test_download" ;;
+        6) PROGRAM="direct_test" ;;
+        7) PROGRAM="chat_example" ;;
+        8) PROGRAM="test_conversation" ;;
+        9) PROGRAM="all" ;;
         *)
             echo -e "${RED}✗ Invalid selection${NC}"
             exit 1
             ;;
     esac
+    echo -e "${GREEN}✓ Selected: $PROGRAM${NC}"
     echo
 }
 
-# Run the selected program
 run_program() {
-    cd "$TESTS_DIR"
+    cd "$BUILD_DIR"
     
     if [ "$PROGRAM" = "all" ]; then
         echo -e "${BLUE}Running all tests...${NC}"
         echo -e "${YELLOW}====================================${NC}"
         
-        # Run tests that don't require a model
-        echo -e "\n${BLUE}1. Running test_download (interactive mode)...${NC}"
-        ./"test_download"
+        echo -e "\n${BLUE}1. Running test_download...${NC}"
+        ./"test_download" --help
         
-        echo -e "\n${BLUE}2. Running direct_test...${NC}"
-        ./"direct_test"
-        
-        # Run tests with model if selected
         if [ -n "$SELECTED_MODEL" ]; then
-            echo -e "\n${BLUE}3. Running test_api...${NC}"
+            echo -e "\n${BLUE}2. Running test_api...${NC}"
             ./"test_api" "$SELECTED_MODEL"
             
-            echo -e "\n${BLUE}4. Running test_advanced_chat...${NC}"
+            echo -e "\n${BLUE}3. Running test_advanced_chat...${NC}"
             ./"test_advanced_chat" "$SELECTED_MODEL"
             
-            echo -e "\n${BLUE}5. Running test_chat_template...${NC}"
+            echo -e "\n${BLUE}4. Running test_chat_template...${NC}"
             ./"test_chat_template" "$SELECTED_MODEL"
             
-            echo -e "\n${BLUE}6. Running test_streaming...${NC}"
+            echo -e "\n${BLUE}5. Running test_streaming...${NC}"
             ./"test_streaming" "$SELECTED_MODEL"
             
-            echo -e "\n${BLUE}7. Running chat_example...${NC}"
+            echo -e "\n${BLUE}6. Running chat_example...${NC}"
             ./"chat_example" "$SELECTED_MODEL"
             
-            echo -e "\n${BLUE}8. Running test_conversation...${NC}"
+            echo -e "\n${BLUE}7. Running test_conversation...${NC}"
             ./"test_conversation" "$SELECTED_MODEL"
+            
+            echo -e "\n${BLUE}8. Running direct_test...${NC}"
+            ./"direct_test" "$SELECTED_MODEL"
         else
             echo -e "${YELLOW}⚠ Skipping model-dependent tests (no model selected)${NC}"
-            echo -e "${YELLOW}  To run all tests including model-dependent ones, select a model first${NC}"
         fi
         
         echo -e "${YELLOW}====================================${NC}"
@@ -201,13 +161,9 @@ run_program() {
         echo -e "${YELLOW}====================================${NC}"
         
         if [ "$PROGRAM" = "test_download" ]; then
-            # Run test_download in interactive mode
-            ./"$PROGRAM"
-        elif [ "$PROGRAM" = "direct_test" ]; then
-            # Run direct_test without model
             ./"$PROGRAM"
         elif [ -n "$SELECTED_MODEL" ]; then
-            echo -e "${BLUE}With model: $MODEL_NAME${NC}"
+            echo -e "${BLUE}With model: $(basename "$SELECTED_MODEL")${NC}"
             ./"$PROGRAM" "$SELECTED_MODEL"
         else
             echo -e "${YELLOW}⚠ No model selected${NC}"
@@ -220,35 +176,25 @@ run_program() {
     fi
 }
 
-# Show usage
 show_usage() {
     echo -e "${BLUE}Usage: $0 [OPTIONS]${NC}"
     echo -e ""
     echo -e "Options:"
     echo -e "  --build-only    Only build test executables, don't run"
     echo -e "  --run-only      Only run tests, don't build"
-    echo -e "  --help, -h      Show this help message"
+    echo -e " --help, -h      Show this help message"
     echo -e ""
     echo -e "If no options specified, the script will build and then run tests interactively."
 }
 
-# Main execution flow
 BUILD_ONLY=false
 RUN_ONLY=false
 
-# Parse command line arguments
 for arg in "$@"; do
     case $arg in
-        --build-only)
-            BUILD_ONLY=true
-            ;;
-        --run-only)
-            RUN_ONLY=true
-            ;;
-        --help|-h)
-            show_usage
-            exit 0
-            ;;
+        --build-only) BUILD_ONLY=true ;;
+        --run-only) RUN_ONLY=true ;;
+        --help|-h) show_usage; exit 0 ;;
         *)
             echo -e "${RED}✗ Unknown option: $arg${NC}"
             show_usage
@@ -257,22 +203,15 @@ for arg in "$@"; do
     esac
 done
 
-# Check build directory
-check_build_dir
-
-# Build tests if needed
 if [ "$RUN_ONLY" = false ]; then
     build_tests
 fi
 
-# Run tests if needed
 if [ "$BUILD_ONLY" = false ]; then
     select_program
-    # Only select model if the program needs it
-    if [ "$PROGRAM" != "test_download" ] && [ "$PROGRAM" != "direct_test" ]; then
+    if [ "$PROGRAM" != "test_download" ]; then
         select_model
     else
-        # For test_download and direct_test, skip model selection
         SELECTED_MODEL=""
         echo -e "${YELLOW}⚠ Skipping model selection (not needed for $PROGRAM)${NC}"
         echo

@@ -1,18 +1,24 @@
 #include "llama_mobile.h"
-#include "llama_cpp/common.h"
-#include "llama_cpp/llama.h"
+#include "llama.cpp-master/common/common.h"
+#include "llama.cpp-master/include/llama.h"
 
 #include <iostream>
 #include <vector>
 #include <string>
 #include <iomanip>
 
-// Test result structure
 struct TestResult {
     std::string name;
     bool passed;
     std::string details;
 };
+
+static common_chat_msg make_msg(const std::string& role, const std::string& content) {
+    common_chat_msg msg;
+    msg.role = role;
+    msg.content = content;
+    return msg;
+}
 
 int main(int argc, char** argv) {
     if (argc < 2) {
@@ -27,10 +33,8 @@ int main(int argc, char** argv) {
     std::vector<TestResult> test_results;
     
     try {
-        // Initialize the llama_mobile context
         auto context = std::make_shared<llama_mobile::llama_mobile_context>();
         
-        // Set up params
         common_params params;
         params.model.path = model_path;
         params.n_ctx = 2048;
@@ -39,7 +43,6 @@ int main(int argc, char** argv) {
         params.n_predict = 50;
         params.sampling.temp = 0.7;
         params.sampling.top_p = 0.9;
-        params.enable_chat_template = true;
         
         if (!context->loadModel(params)) {
             std::cerr << "Failed to load model" << std::endl;
@@ -52,14 +55,11 @@ int main(int argc, char** argv) {
         std::cout << "\n--- Test 1: Basic Chat Messages with Built-in Template ---" << std::endl;
         TestResult test1 = {"Basic Chat Messages", false, ""};
         try {
-            std::vector<llama_chat_message> chat_messages = {
-                {"system", "You are a helpful assistant."},
-                {"user", "What is 2+2?"}
-            };
+            context->chat_messages.clear();
+            context->chat_messages.push_back(make_msg("system", "You are a helpful assistant."));
+            context->chat_messages.push_back(make_msg("user", "What is 2+2?"));
+            context->enable_chat_template = true;
             
-            context->params.chat_messages = chat_messages;
-            
-            // Initialize sampling before loading prompt
             if (!context->initSampling()) {
                 throw std::runtime_error("Failed to initialize sampling");
             }
@@ -83,15 +83,12 @@ int main(int argc, char** argv) {
         std::cout << "\n--- Test 2: JSON Schema Parameter ---" << std::endl;
         TestResult test2 = {"JSON Schema Parameter", false, ""};
         try {
-            std::vector<llama_chat_message> chat_messages = {
-                {"system", "You are a helpful assistant."},
-                {"user", "Generate a simple JSON object with name and age fields."}
-            };
+            context->chat_messages.clear();
+            context->chat_messages.push_back(make_msg("system", "You are a helpful assistant."));
+            context->chat_messages.push_back(make_msg("user", "Generate a simple JSON object with name and age fields."));
+            context->json_schema = R"({"type": "object", "properties": {"name": {"type": "string"}, "age": {"type": "number"}}})";
+            context->tools = "";
             
-            context->params.chat_messages = chat_messages;
-            context->params.json_schema = R"({"type": "object", "properties": {"name": {"type": "string"}, "age": {"type": "number"}}})";
-            
-            // Initialize sampling before loading prompt
             if (!context->initSampling()) {
                 throw std::runtime_error("Failed to initialize sampling");
             }
@@ -111,13 +108,10 @@ int main(int argc, char** argv) {
         std::cout << "\n--- Test 3: Tools Parameter ---" << std::endl;
         TestResult test3 = {"Tools Parameter", false, ""};
         try {
-            std::vector<llama_chat_message> chat_messages = {
-                {"system", "You are a helpful assistant with access to tools."},
-                {"user", "What's the weather?"}
-            };
-            
-            context->params.chat_messages = chat_messages;
-            context->params.tools = R"([
+            context->chat_messages.clear();
+            context->chat_messages.push_back(make_msg("system", "You are a helpful assistant with access to tools."));
+            context->chat_messages.push_back(make_msg("user", "What's the weather?"));
+            context->tools = R"([
                 {
                     "type": "function",
                     "function": {
@@ -133,7 +127,6 @@ int main(int argc, char** argv) {
                 }
             ])";
             
-            // Initialize sampling before loading prompt
             if (!context->initSampling()) {
                 throw std::runtime_error("Failed to initialize sampling");
             }
@@ -153,13 +146,10 @@ int main(int argc, char** argv) {
         std::cout << "\n--- Test 4: Tool Choice Parameter ---" << std::endl;
         TestResult test4 = {"Tool Choice Parameter", false, ""};
         try {
-            std::vector<llama_chat_message> chat_messages = {
-                {"system", "You are a helpful assistant."},
-                {"user", "Calculate 2+2"}
-            };
-            
-            context->params.chat_messages = chat_messages;
-            context->params.tools = R"([
+            context->chat_messages.clear();
+            context->chat_messages.push_back(make_msg("system", "You are a helpful assistant."));
+            context->chat_messages.push_back(make_msg("user", "Calculate 2+2"));
+            context->tools = R"([
                 {
                     "type": "function",
                     "function": {
@@ -174,9 +164,8 @@ int main(int argc, char** argv) {
                     }
                 }
             ])";
-            context->params.tool_choice = "calculate";
+            context->tool_choice = "calculate";
             
-            // Initialize sampling before loading prompt
             if (!context->initSampling()) {
                 throw std::runtime_error("Failed to initialize sampling");
             }
@@ -196,13 +185,10 @@ int main(int argc, char** argv) {
         std::cout << "\n--- Test 5: Parallel Tool Calls Parameter ---" << std::endl;
         TestResult test5 = {"Parallel Tool Calls Parameter", false, ""};
         try {
-            std::vector<llama_chat_message> chat_messages = {
-                {"system", "You are a helpful assistant."},
-                {"user", "What's the weather in NY and LA?"}
-            };
-            
-            context->params.chat_messages = chat_messages;
-            context->params.tools = R"([
+            context->chat_messages.clear();
+            context->chat_messages.push_back(make_msg("system", "You are a helpful assistant."));
+            context->chat_messages.push_back(make_msg("user", "What's the weather in NY and LA?"));
+            context->tools = R"([
                 {
                     "type": "function",
                     "function": {
@@ -217,9 +203,8 @@ int main(int argc, char** argv) {
                     }
                 }
             ])";
-            context->params.parallel_tool_calls = true;
+            context->parallel_tool_calls = true;
             
-            // Initialize sampling before loading prompt
             if (!context->initSampling()) {
                 throw std::runtime_error("Failed to initialize sampling");
             }
@@ -239,16 +224,12 @@ int main(int argc, char** argv) {
         std::cout << "\n--- Test 6: JSON Escaping in Chat Messages ---" << std::endl;
         TestResult test6 = {"JSON Escaping", false, ""};
         try {
-            std::vector<llama_chat_message> chat_messages = {
-                {"system", "You are a helpful assistant."},
-                {"user", "Explain JSON with quotes: {\"key\": \"value\"}"}
-            };
+            context->chat_messages.clear();
+            context->chat_messages.push_back(make_msg("system", "You are a helpful assistant."));
+            context->chat_messages.push_back(make_msg("user", "Explain JSON with quotes: {\"key\": \"value\"}"));
+            context->json_schema = "";
+            context->tools = "";
             
-            context->params.chat_messages = chat_messages;
-            context->params.json_schema = "";
-            context->params.tools = "";
-            
-            // Initialize sampling before loading prompt
             if (!context->initSampling()) {
                 throw std::runtime_error("Failed to initialize sampling");
             }
@@ -268,15 +249,11 @@ int main(int argc, char** argv) {
         std::cout << "\n--- Test 7: Enable Chat Template = false ---" << std::endl;
         TestResult test7 = {"Disable Chat Template", false, ""};
         try {
-            std::vector<llama_chat_message> chat_messages = {
-                {"system", "You are a helpful assistant."},
-                {"user", "Hello!"}
-            };
+            context->chat_messages.clear();
+            context->chat_messages.push_back(make_msg("system", "You are a helpful assistant."));
+            context->chat_messages.push_back(make_msg("user", "Hello!"));
+            context->enable_chat_template = false;
             
-            context->params.chat_messages = chat_messages;
-            context->params.enable_chat_template = false;
-            
-            // Initialize sampling before loading prompt
             if (!context->initSampling()) {
                 throw std::runtime_error("Failed to initialize sampling");
             }
@@ -296,16 +273,12 @@ int main(int argc, char** argv) {
         std::cout << "\n--- Test 8: Custom Jinja Template ---" << std::endl;
         TestResult test8 = {"Custom Jinja Template", false, ""};
         try {
-            std::vector<llama_chat_message> chat_messages = {
-                {"system", "You are a helpful assistant."},
-                {"user", "Hello!"}
-            };
+            context->chat_messages.clear();
+            context->chat_messages.push_back(make_msg("system", "You are a helpful assistant."));
+            context->chat_messages.push_back(make_msg("user", "Hello!"));
+            context->chat_template = "{% for message in messages %}{{ message.role }}: {{ message.content }}\n{% endfor %}Assistant:";
+            context->enable_chat_template = true;
             
-            context->params.chat_messages = chat_messages;
-            context->params.chat_template = "{% for message in messages %}{{ message.role }}: {{ message.content }}\n{% endfor %}Assistant:";
-            context->params.enable_chat_template = true;
-            
-            // Initialize sampling before loading prompt
             if (!context->initSampling()) {
                 throw std::runtime_error("Failed to initialize sampling");
             }
@@ -325,14 +298,11 @@ int main(int argc, char** argv) {
         std::cout << "\n--- Test 9: Multiple Advanced Parameters Together ---" << std::endl;
         TestResult test9 = {"Multiple Advanced Parameters", false, ""};
         try {
-            std::vector<llama_chat_message> chat_messages = {
-                {"system", "You are a helpful assistant with access to tools."},
-                {"user", "Generate a weather report in JSON format."}
-            };
-            
-            context->params.chat_messages = chat_messages;
-            context->params.json_schema = R"({"type": "object", "properties": {"location": {"type": "string"}, "temperature": {"type": "number"}}})";
-            context->params.tools = R"([
+            context->chat_messages.clear();
+            context->chat_messages.push_back(make_msg("system", "You are a helpful assistant with access to tools."));
+            context->chat_messages.push_back(make_msg("user", "Generate a weather report in JSON format."));
+            context->json_schema = R"({"type": "object", "properties": {"location": {"type": "string"}, "temperature": {"type": "number"}}})";
+            context->tools = R"([
                 {
                     "type": "function",
                     "function": {
@@ -347,10 +317,9 @@ int main(int argc, char** argv) {
                     }
                 }
             ])";
-            context->params.parallel_tool_calls = true;
-            context->params.tool_choice = "auto";
+            context->parallel_tool_calls = true;
+            context->tool_choice = "auto";
             
-            // Initialize sampling before loading prompt
             if (!context->initSampling()) {
                 throw std::runtime_error("Failed to initialize sampling");
             }
@@ -370,10 +339,9 @@ int main(int argc, char** argv) {
         std::cout << "\n--- Test 10: Empty Chat Messages ---" << std::endl;
         TestResult test10 = {"Empty Chat Messages", false, ""};
         try {
-            context->params.chat_messages.clear();
+            context->chat_messages.clear();
             context->params.prompt = "Direct prompt without chat messages";
             
-            // Initialize sampling before loading prompt
             if (!context->initSampling()) {
                 throw std::runtime_error("Failed to initialize sampling");
             }
@@ -401,7 +369,6 @@ int main(int argc, char** argv) {
         int passed_count = 0;
         int failed_count = 0;
         
-        // Summary table
         std::cout << "\nSUMMARY:" << std::endl;
         std::cout << std::string(70, '-') << std::endl;
         std::cout << std::left << std::setw(45) << "Test" << std::setw(10) << "Status" << "Details" << std::endl;

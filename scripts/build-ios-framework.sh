@@ -351,31 +351,59 @@ build_library() {
         -DCMAKE_XCODE_ATTRIBUTE_SDKROOT="$SYSROOT" \
         -DCMAKE_XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET="17.0" \
         -DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH="NO" \
+        -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED="NO" \
+        -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED="NO" \
+        -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY="" \
         -DLLAMA_USE_CURL=OFF \
-        -DLLAMA_USE_HTTPLIB=OFF
+        -DLLAMA_USE_HTTPLIB=OFF \
+        -DGGML_OPENMP=OFF
     
     if [[ $? -ne 0 ]]; then
         handle_error 1 "CMake configuration failed for $LIB_TYPE library $OUTPUT_SUBDIR!"
     fi
     
-    # Build the static library target
-    cmake --build . --config "$BUILD_TYPE" --target llama_mobile_core_static -j $(sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
+    # Build all targets to ensure all libraries are built
+    cmake --build . --config "$BUILD_TYPE" -j $(sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
     
     if [[ $? -ne 0 ]]; then
         handle_error 1 "Static library build failed for $OUTPUT_SUBDIR!"
     fi
     
-    # Find the static library
-    local LIB_PATH=$(find "$BUILD_DIR" -name "libllama_mobile_core*.a" | head -1)
-    if [[ -z "$LIB_PATH" ]]; then
-        handle_error 1 "Could not find the built static library!"
+    # List of all static libraries we need to combine
+    local STATIC_LIBS=(
+        "$(find "$BUILD_DIR" -name "libllama_mobile_core*.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libllama.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libggml.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libggml-base.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libggml-cpu.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libggml-metal.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libggml-blas.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libcommon.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libmtmd.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libcpp-httplib.a" | head -1)"
+    )
+    
+    # Filter out any empty paths
+    local VALID_LIBS=()
+    for LIB in "${STATIC_LIBS[@]}"; do
+        if [[ -f "$LIB" ]]; then
+            VALID_LIBS+=("$LIB")
+        fi
+    done
+    
+    # Combine all static libraries using libtool
+    local COMBINED_LIB="$BUILD_DIR/libllama_mobile_combined.a"
+    libtool -static -o "$COMBINED_LIB" "${VALID_LIBS[@]}"
+    
+    if [[ $? -ne 0 ]]; then
+        handle_error 1 "Failed to combine static libraries!"
     fi
     
-    # Copy the static library
+    # Copy the combined static library
     local STATIC_DEST_DIR="$STATIC_LIBS_DIR/$OUTPUT_SUBDIR"
     local STATIC_DEST_LIB="$STATIC_DEST_DIR/libllama_mobile.a"
     mkdir -p "$STATIC_DEST_DIR"
-    cp "$LIB_PATH" "$STATIC_DEST_LIB"
+    cp "$COMBINED_LIB" "$STATIC_DEST_LIB"
     log_message "[SUCCESS] Built static library: $STATIC_DEST_LIB"
     
     # Clean up
@@ -415,21 +443,56 @@ build_shared_framework() {
         -DCMAKE_IOS_INSTALL_COMBINED=YES \
         -DCMAKE_XCODE_ATTRIBUTE_SDKROOT="$SYSROOT" \
         -DCMAKE_XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET="17.0" \
-        -DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH="NO"
+        -DCMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH="NO" \
+        -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED="NO" \
+        -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED="NO" \
+        -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY="" \
+        -DGGML_OPENMP=OFF \
+        -DBUILD_SHARED_LIBS=OFF
     
     if [[ $? -ne 0 ]]; then
         handle_error 1 "CMake configuration failed for shared framework $OUTPUT_SUBDIR!"
     fi
     
-    # Build the static library target (we'll create framework from this)
-    cmake --build . --config "$BUILD_TYPE" --target llama_mobile_core_static -j $(sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
+    # Build all targets to ensure all libraries are built
+    cmake --build . --config "$BUILD_TYPE" -j $(sysctl -n hw.logicalcpu 2>/dev/null || echo 4)
     
     if [[ $? -ne 0 ]]; then
         handle_error 1 "Shared framework build failed for $OUTPUT_SUBDIR!"
     fi
     
-    # Find the static library
-    local LIB_PATH=$(find "$BUILD_DIR" -name "libllama_mobile_core*.a" | head -1)
+    # List of all static libraries we need to combine
+    local STATIC_LIBS=(
+        "$(find "$BUILD_DIR" -name "libllama_mobile_core*.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libllama.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libggml.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libggml-base.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libggml-cpu.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libggml-metal.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libggml-blas.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libcommon.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libmtmd.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libcpp-httplib.a" | head -1)"
+    )
+    
+    # Filter out any empty paths
+    local VALID_LIBS=()
+    for LIB in "${STATIC_LIBS[@]}"; do
+        if [[ -f "$LIB" ]]; then
+            VALID_LIBS+=("$LIB")
+        fi
+    done
+    
+    # Combine all static libraries using libtool
+    local COMBINED_LIB="$BUILD_DIR/libllama_mobile_combined.a"
+    libtool -static -o "$COMBINED_LIB" "${VALID_LIBS[@]}"
+    
+    if [[ $? -ne 0 ]]; then
+        handle_error 1 "Failed to combine static libraries for framework!"
+    fi
+    
+    # Use the combined library
+    local LIB_PATH="$COMBINED_LIB"
     if [[ -z "$LIB_PATH" ]]; then
         handle_error 1 "Could not find the built library for framework!"
     fi
@@ -447,11 +510,14 @@ build_shared_framework() {
     
     # Copy all llama_cpp headers recursively
     mkdir -p "$DEST_PATH/Headers/llama_cpp"
-    rsync -av "$ROOT_DIR/lib/llama_cpp/" "$DEST_PATH/Headers/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
+    rsync -av "$ROOT_DIR/lib/llama.cpp-master/ggml/include/" "$DEST_PATH/Headers/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
+    rsync -av "$ROOT_DIR/lib/llama.cpp-master/include/" "$DEST_PATH/Headers/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
+    rsync -av "$ROOT_DIR/lib/llama.cpp-master/common/" "$DEST_PATH/Headers/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
+    rsync -av "$ROOT_DIR/lib/llama.cpp-master/vendor/" "$DEST_PATH/Headers/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
     
-    # Copy Metal files
-    if [[ -f "$ROOT_DIR/lib/llama_cpp/ggml-metal.metal" ]]; then
-        cp "$ROOT_DIR/lib/llama_cpp/ggml-metal.metal" "$DEST_PATH/"
+    # Copy Metal files from llama.cpp-master
+    if [[ -f "$ROOT_DIR/lib/llama.cpp-master/ggml/src/ggml-metal.metal" ]]; then
+        cp "$ROOT_DIR/lib/llama.cpp-master/ggml/src/ggml-metal.metal" "$DEST_PATH/"
     fi
     
     # Compile Metal files into metallib
@@ -630,7 +696,10 @@ script_progress "Copying header files..."
 cp "$ROOT_DIR/lib/llama_mobile_ffi.h" "$STATIC_INCLUDE_DIR/"
 cp "$ROOT_DIR/lib/llama_mobile_api.h" "$STATIC_INCLUDE_DIR/"
 mkdir -p "$STATIC_INCLUDE_DIR/llama_cpp"
-rsync -av "$ROOT_DIR/lib/llama_cpp/" "$STATIC_INCLUDE_DIR/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
+rsync -av "$ROOT_DIR/lib/llama.cpp-master/ggml/include/" "$STATIC_INCLUDE_DIR/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
+rsync -av "$ROOT_DIR/lib/llama.cpp-master/include/" "$STATIC_INCLUDE_DIR/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
+rsync -av "$ROOT_DIR/lib/llama.cpp-master/common/" "$STATIC_INCLUDE_DIR/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
+rsync -av "$ROOT_DIR/lib/llama.cpp-master/vendor/" "$STATIC_INCLUDE_DIR/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
 
 log_message "[SUCCESS] Header files copied"
 

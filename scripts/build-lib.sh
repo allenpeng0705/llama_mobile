@@ -283,34 +283,17 @@ build_core_library() {
         exit 1
     fi
     
-    # Build only the core library
-    echo -e "${BLUE}Building core library (llama_mobile_core_lib)...${NC}"
-    if make llama_mobile_core_lib -j"$NUM_JOBS"; then
-        echo -e "${GREEN}✓ Core library built successfully${NC}"
+    # Build the llama_mobile core library
+    echo -e "${BLUE}Building llama_mobile core library...${NC}"
+    if make llama_mobile_core_static -j"$NUM_JOBS"; then
+        echo -e "${GREEN}✓ llama_mobile core library built successfully${NC}"
     else
-        echo -e "${RED}✗ Core library build failed${NC}"
+        echo -e "${RED}✗ llama_mobile core library build failed${NC}"
         exit 1
     fi
 }
 
-# Copy grammar files to output directory
-copy_grammars() {
-    echo -e "${BLUE}Copying grammar files...${NC}"
-    local GRAMMAR_SRC_DIR="$LLAMA_MOBILE_DIR/grammars"
-    local GRAMMAR_DEST_DIR="$OUTPUT_DIR/grammars"
-    
-    mkdir -p "$GRAMMAR_DEST_DIR"
-    
-    if [ -d "$GRAMMAR_SRC_DIR" ]; then
-        if cp "$GRAMMAR_SRC_DIR"/*.gbnf "$GRAMMAR_DEST_DIR/" 2>/dev/null; then
-            echo -e "${GREEN}✓ Grammar files copied successfully${NC}"
-        else
-            echo -e "${YELLOW}ℹ No grammar files found to copy${NC}"
-        fi
-    else
-        echo -e "${YELLOW}ℹ Grammar source directory not found, skipping grammar files${NC}"
-    fi
-}
+
 
 # Display summary
 show_summary() {
@@ -320,7 +303,6 @@ show_summary() {
     echo -e "${BLUE}Build directory:${NC} $BUILD_DIR"
     echo -e "${BLUE}Output directory:${NC} $OUTPUT_DIR"
     echo -e "${BLUE}SDK path:${NC} $SDK_PATH"
-    echo -e "${BLUE}Grammar files:${NC} $(ls -la "$OUTPUT_DIR/grammars"/*.gbnf 2>/dev/null | wc -l | tr -d ' ') files copied"
     echo -e "${BLUE}=====================${NC}"
     echo -e "${YELLOW}Note: To build and run tests, use: bash scripts/build-tests-run.sh${NC}"
 }
@@ -331,7 +313,6 @@ main() {
     validate_environment
     clean_build
     build_core_library
-    copy_grammars
     show_summary
 }
 

@@ -805,6 +805,24 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
   }
 
   @override
+  Future<Map<String, dynamic>?> extractAsset(
+    Map<String, dynamic> params,
+  ) async {
+    debugPrint("[DEBUG] Dart: extractAsset called - params: $params");
+    try {
+      final result = await methodChannel.invokeMapMethod<String, dynamic>(
+        'extractAsset',
+        params,
+      );
+      debugPrint("[DEBUG] Dart: extractAsset result: $result");
+      return result;
+    } catch (e) {
+      debugPrint("[DEBUG] Dart: Error in extractAsset: $e");
+      rethrow;
+    }
+  }
+
+  @override
   Future<bool> isMultimodalEnabled(int contextHandle) async {
     debugPrint(
       "[DEBUG] Dart: isMultimodalEnabled called - contextHandle: $contextHandle",
@@ -887,6 +905,35 @@ class MethodChannelLlamaMobileFlutterSdk extends LlamaMobileFlutterSdkPlatform {
       return result;
     } catch (e) {
       debugPrint("[DEBUG] Dart: Error in getTTSType: $e");
+      rethrow;
+    }
+  }
+
+  @override
+  Future<String?> getGpuBackendInfo() async {
+    debugPrint("[DEBUG] Dart: getGpuBackendInfo called");
+    try {
+      final result = await methodChannel.invokeMethod<String>(
+        'getGpuBackendInfo',
+      );
+      debugPrint("[DEBUG] Dart: getGpuBackendInfo result: $result");
+      return result;
+    } catch (e) {
+      debugPrint("[DEBUG] Dart: Error in getGpuBackendInfo: $e");
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> setVerboseLogging(bool enabled) async {
+    debugPrint("[DEBUG] Dart: setVerboseLogging called - enabled: $enabled");
+    try {
+      await methodChannel.invokeMethod<void>('setVerboseLogging', {
+        'enabled': enabled,
+      });
+      debugPrint("[DEBUG] Dart: setVerboseLogging completed");
+    } catch (e) {
+      debugPrint("[DEBUG] Dart: Error in setVerboseLogging: $e");
       rethrow;
     }
   }

@@ -5,6 +5,7 @@
 #include <chrono>
 #include <atomic>
 #include <iomanip>
+#include <sstream>
 #include <unistd.h>
 
 static const char* DEFAULT_BEARER_TOKEN = "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";

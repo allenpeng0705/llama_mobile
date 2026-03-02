@@ -131,9 +131,13 @@ class AppState {
                     }
                     mmprojModels.addAll(assetMmprojModels)
                     
-                    // Extract vocoder models - filter for relevant file types
+                    // Extract vocoder models - include only likely vocoder models
                     val vocoderFiles = assetFiles.filter { fileName -> 
-                        (fileName.contains("vocoder") || fileName.contains("voco")) && 
+                        val lowerName = fileName.lowercase()
+                        (lowerName.contains("vocoder") || lowerName.contains("voco") ||
+                         lowerName.contains("wav") || lowerName.contains("tts") ||
+                         lowerName.contains("audio") || lowerName.contains("speech") ||
+                         lowerName.contains("tokenizer") || lowerName.contains("oute")) &&
                         (fileName.endsWith(".bin") || fileName.endsWith(".gguf") || fileName.endsWith(".pth")) &&
                         !fileName.endsWith(".mmproj")
                     }
@@ -210,8 +214,19 @@ class AppState {
                     }
                     mmprojModels.addAll(externalMmprojModels)
                     
-                    // Add vocoder models - filter for relevant file types
-                    val externalVocoderModels = allFiles.filter { it.isFile && (it.name.endsWith(".bin") || it.name.endsWith(".gguf") || it.name.endsWith(".pth")) }.map { file ->
+                    // Add vocoder models - include only likely vocoder models
+                    val externalVocoderModels = allFiles.filter { 
+                        if (it.isFile) {
+                            val lowerName = it.name.lowercase()
+                            (lowerName.contains("vocoder") || lowerName.contains("voco") ||
+                             lowerName.contains("wav") || lowerName.contains("tts") ||
+                             lowerName.contains("audio") || lowerName.contains("speech") ||
+                             lowerName.contains("tokenizer") || lowerName.contains("oute")) &&
+                            (it.name.endsWith(".bin") || it.name.endsWith(".gguf") || it.name.endsWith(".pth"))
+                        } else {
+                            false
+                        }
+                    }.map { file ->
                         Pair(file.name, file.absolutePath)
                     }
                     vocoderModels.addAll(externalVocoderModels)
@@ -254,8 +269,19 @@ class AppState {
                     }
                     loraModels.addAll(externalLoRAModels)
                     
-                    // Add vocoder models - filter for relevant file types
-                    val externalVocoderModels = allFiles.filter { it.isFile && (it.name.endsWith(".bin") || it.name.endsWith(".gguf") || it.name.endsWith(".pth")) }.map { file ->
+                    // Add vocoder models - include only likely vocoder models
+                    val externalVocoderModels = allFiles.filter { 
+                        if (it.isFile) {
+                            val lowerName = it.name.lowercase()
+                            (lowerName.contains("vocoder") || lowerName.contains("voco") ||
+                             lowerName.contains("wav") || lowerName.contains("tts") ||
+                             lowerName.contains("audio") || lowerName.contains("speech") ||
+                             lowerName.contains("tokenizer") || lowerName.contains("oute")) &&
+                            (it.name.endsWith(".bin") || it.name.endsWith(".gguf") || it.name.endsWith(".pth"))
+                        } else {
+                            false
+                        }
+                    }.map { file ->
                         Pair(file.name, file.absolutePath)
                     }
                     vocoderModels.addAll(externalVocoderModels)
@@ -459,65 +485,11 @@ class AppState {
                 null,  // cacheTypeK
                 null,  // cacheTypeV
                 true,  // enableChatTemplate
-                null  // progressCallback
+                null,  // progressCallback
+                -1  // imageMinTokens
             )
 
-            // Initialize the context handle directly on UI thread with extensive safety checks
-            val modelFile = File(params.modelPath)
-            
-            // Extra validation before calling native method
-            try {
-                // Check model file validity
-                if (!modelFile.exists()) {
-                    Log.e(TAG, "Model file does not exist: ${params.modelPath}")
-                    errorMessage = "Model file not found: ${params.modelPath}"
-                    callback(false)
-                    return
-                }
-                
-                if (!modelFile.isFile) {
-                    Log.e(TAG, "Path is not a file: ${params.modelPath}")
-                    errorMessage = "Path is not a file: ${params.modelPath}"
-                    callback(false)
-                    return
-                }
-                
-                if (!modelFile.canRead()) {
-                    Log.e(TAG, "Cannot read model file: ${params.modelPath}")
-                    errorMessage = "Cannot read model file: ${params.modelPath}"
-                    callback(false)
-                    return
-                }
-                
-                if (modelFile.length() < 1000000) { // Less than 1MB
-                    Log.e(TAG, "Model file too small (${modelFile.length()} bytes) - might be corrupted")
-                    errorMessage = "Model file is too small - might be corrupted"
-                    callback(false)
-                    return
-                }
-                
-                // Log comprehensive information
-                Log.i(TAG, "=== Model Loading Debug Info ===")
-                Log.i(TAG, "About to call LlamaMobile.initContext() with:")
-                // Check if getVersion method exists before calling
-                // LlamaMobile.getVersion() might not be available
-                Log.i(TAG, "- Model path: ${params.modelPath}")
-                Log.i(TAG, "- Model file exists: ${modelFile.exists()}")
-                Log.i(TAG, "- Model file readable: ${modelFile.canRead()}")
-                Log.i(TAG, "- Model file size: ${modelFile.length()} bytes")
-                Log.i(TAG, "- Context size: ${params.nCtx}")
-                Log.i(TAG, "- GPU layers: ${params.nGpuLayers}")
-                Log.i(TAG, "- Threads: ${params.nThreads}")
-                Log.i(TAG, "- Embedding enabled: ${params.isEmbedding()}")
-                Log.i(TAG, "- System prompt length: ${params.systemPrompt?.length ?: 0} characters")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error during pre-validation:", e)
-                errorMessage = "Validation error: ${e.message}"
-                callback(false)
-                return
-            }
-            
-            // Now call the native method with maximum error handling
+            // Initialize the context handle directly on UI thread with maximum error handling
             try {
                 Log.i(TAG, "Calling LlamaMobile.initContext()...")
                 contextHandle = LlamaMobile.initContext(params)

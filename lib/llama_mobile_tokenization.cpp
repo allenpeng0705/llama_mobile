@@ -1,6 +1,6 @@
 #include "llama_mobile.h"
-#include "llama_cpp/common.h"
-#include "llama_cpp/tools/mtmd/mtmd.h"
+#include "llama.cpp-master/common/common.h"
+#include "llama.cpp-master/tools/mtmd/mtmd.h"
 
 namespace llama_mobile {
 

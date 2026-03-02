@@ -1,6 +1,6 @@
 #include "llama_mobile.h"
-#include "llama_cpp/common.h"
-#include "llama_cpp/nlohmann/json.hpp"
+#include "llama.cpp-master/common/common.h"
+#include "llama.cpp-master/vendor/nlohmann/json.hpp"
 
 using json = nlohmann::ordered_json;
 

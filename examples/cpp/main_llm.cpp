@@ -14,7 +14,7 @@
 #include "../../lib/llama_mobile.h"
 
 // Include nlohmann json for proper JSON handling
-#include "../../lib/llama_cpp/nlohmann/json.hpp"
+#include "llama.cpp-master/vendor/nlohmann/json.hpp"
 using json = nlohmann::ordered_json;
 
 namespace fs = std::filesystem;

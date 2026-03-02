@@ -198,7 +198,7 @@ void display_results(const std::vector<BenchmarkResults>& results) {
 
 int main(int argc, char** argv) {
     std::string model_path;
-    const std::string models_dir = "../../models";
+    const std::string models_dir = "../../../models";
     
     if (argc < 2) {
         // List available models in top-level models directory (excluding embedding folder)

@@ -1,15 +1,14 @@
 #define _USE_MATH_DEFINES // For M_PI on MSVC
 
 #include "llama_mobile.h"
-#include "llama_cpp/arg.h"
-#include "llama_cpp/common.h"
-#include "llama_cpp/llama-sampling.h"
-#include "llama_cpp/log.h"
-#include "llama_cpp/llama.h"
-#include "llama_cpp/sampling.h"
+#include "llama.cpp-master/common/arg.h"
+#include "llama.cpp-master/common/common.h"
+#include "llama.cpp-master/common/sampling.h"
+#include "llama.cpp-master/common/log.h"
+#include "llama.cpp-master/include/llama.h"
 
-#define JSON_ASSERT LM_GGML_ASSERT
-#include <nlohmann/json.hpp>
+#define JSON_ASSERT GGML_ASSERT
+#include "llama.cpp-master/vendor/nlohmann/json.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -103,7 +102,7 @@ bool save_wav16(const std::string & fname, const std::vector<float> & data, int 
     header.byte_rate = header.sample_rate * header.num_channels * (header.bits_per_sample / 8);
     header.block_align = header.num_channels * (header.bits_per_sample / 8);
     header.data_size = data.size() * (header.bits_per_sample / 8);
-    header.chunk_size = 28 + header.data_size;
+    header.chunk_size = 36 + header.data_size;
 
     file.write(reinterpret_cast<const char*>(&header), sizeof(header));
 
@@ -608,7 +607,7 @@ int tts_main(int argc, char **argv) {
 
     LOG_INF("%s: loading done\n", __func__);
 
-    const auto t_main_start = lm_ggml_time_us();
+    const auto t_main_start = ggml_time_us();
 
     std::vector<llama_token> codes;
     std::vector<llama_token> guide_tokens;
@@ -839,7 +838,7 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
         for (size_t i = 0; i < prompt_inp.size(); ++i) {
             common_batch_add(batch, prompt_inp[i], i, seq_ids, false);
         }
-        LM_GGML_ASSERT(batch.n_tokens == (int) prompt_inp.size());
+        GGML_ASSERT(batch.n_tokens == (int) prompt_inp.size());
 
         // llama_decode will output logits only for the last token of the prompt
         batch.logits[batch.n_tokens - 1] = true;
@@ -855,9 +854,9 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
 
         llama_synchronize(ctx_ttc);
 
-        LOG_INF("%s: time for prompt: %.3f ms\n\n", __func__, (lm_ggml_time_us() - t_main_start) / 1000.0f);
+        LOG_INF("%s: time for prompt: %.3f ms\n\n", __func__, (ggml_time_us() - t_main_start) / 1000.0f);
 
-        const auto t_dec_start = lm_ggml_time_us();
+        const auto t_dec_start = ggml_time_us();
 
         // main loop
 
@@ -952,7 +951,7 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
         llama_batch_free(batch);
 
         LOG("\n");
-        LOG_INF("%s: time for decoder:       %.3f ms\n", __func__, (lm_ggml_time_us() - t_dec_start) / 1000.0f);
+        LOG_INF("%s: time for decoder:       %.3f ms\n", __func__, (ggml_time_us() - t_dec_start) / 1000.0f);
     }
 
     common_perf_print(ctx_ttc, smpl[0]);
@@ -1014,7 +1013,7 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
         token -= 151672;
     }
 
-    const auto t_voc_start = lm_ggml_time_us();
+    const auto t_voc_start = ggml_time_us();
 
     const int n_codes = codes.size();
 
@@ -1023,7 +1022,7 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
     for (size_t i = 0; i < codes.size(); ++i) {
         common_batch_add(batch, codes[i], i, { 0 }, true); // TODO: all logits?
     }
-    LM_GGML_ASSERT(batch.n_tokens == n_codes);
+    GGML_ASSERT(batch.n_tokens == n_codes);
 
     if (llama_encode(ctx_cts, batch) != 0) {
         LOG_ERR("%s: llama_encode() failed\n", __func__);
@@ -1032,13 +1031,13 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
 
     llama_synchronize(ctx_cts);
 
-    LOG_INF("%s: time for vocoder:      %.3f ms\n", __func__, (lm_ggml_time_us() - t_voc_start) / 1000.0f);
+    LOG_INF("%s: time for vocoder:      %.3f ms\n", __func__, (ggml_time_us() - t_voc_start) / 1000.0f);
 
-    const auto t_spec_start = lm_ggml_time_us();
+    const auto t_spec_start = ggml_time_us();
 
 #if 1
     // spectral operations
-    const int n_embd = llama_model_n_embd(model_cts);
+    const int n_embd = llama_model_n_embd_out(model_cts);
     const float * embd = llama_get_embeddings(ctx_cts);
 
     auto audio = embd_to_audio(embd, n_codes, n_embd, params.cpuparams.n_threads);
@@ -1078,8 +1077,8 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
         audio[i] = 0.0f;
     }
 
-    LOG_INF("%s: time for spectral ops: %.3f ms\n", __func__, (lm_ggml_time_us() - t_spec_start) / 1000.0f);
-    LOG_INF("%s: total time:            %.3f ms\n", __func__, (lm_ggml_time_us() - t_main_start) / 1000.0f);
+    LOG_INF("%s: time for spectral ops: %.3f ms\n", __func__, (ggml_time_us() - t_spec_start) / 1000.0f);
+    LOG_INF("%s: total time:            %.3f ms\n", __func__, (ggml_time_us() - t_main_start) / 1000.0f);
 
     int retval = 0;
 

@@ -1,6 +1,6 @@
 #include "llama_mobile.h"
-#include "llama_cpp/common.h"
-#include "llama_cpp/llama.h"
+#include "llama.cpp-master/common/common.h"
+#include "llama.cpp-master/include/llama.h"
 
 #include <iostream>
 #include <vector>
@@ -42,6 +42,13 @@ void print_test_separator() {
     std::cout << std::string(70, '-') << std::endl;
 }
 
+static common_chat_msg make_msg(const std::string& role, const std::string& content) {
+    common_chat_msg msg;
+    msg.role = role;
+    msg.content = content;
+    return msg;
+}
+
 int main(int argc, char** argv) {
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " <model_path>" << std::endl;
@@ -80,9 +87,9 @@ int main(int argc, char** argv) {
         std::cout << "Model loaded successfully" << std::endl;
         
         // Create chat messages (OpenAI format)
-        std::vector<llama_chat_message> chat_messages;
-        chat_messages.push_back({"system", "You are a helpful assistant."});
-        chat_messages.push_back({"user", "Hello, how are you?"});
+        std::vector<common_chat_msg> chat_messages;
+        chat_messages.push_back(make_msg("system", "You are a helpful assistant."));
+        chat_messages.push_back(make_msg("user", "Hello, how are you?"));
         
         
         // Custom Jinja template for testing (Qwen format)
@@ -97,15 +104,15 @@ int main(int argc, char** argv) {
             TestResult test1 = {"Built-in Template + JSON Response = true", false, "", 0, 0};
             
             try {
-                context->params.chat_messages = chat_messages;
-                context->params.chat_template = "";
-                context->params.enable_chat_template = true;
-                context->params.use_json_response = true;
+                context->chat_messages = chat_messages;
+                context->chat_template = "";
+                context->enable_chat_template = true;
+                context->use_json_response = true;
                 
                 std::cout << "Chat messages: " << chat_messages.size() << std::endl;
                 std::cout << "Template: Built-in" << std::endl;
-                std::cout << "Enable template: " << (context->params.enable_chat_template ? "true" : "false") << std::endl;
-                std::cout << "JSON response: " << (context->params.use_json_response ? "true" : "false") << std::endl;
+                std::cout << "Enable template: " << (context->enable_chat_template ? "true" : "false") << std::endl;
+                std::cout << "JSON response: " << (context->use_json_response ? "true" : "false") << std::endl;
                 
                 if (!context->initSampling()) {
                     throw std::runtime_error("Failed to initialize sampling");
@@ -143,15 +150,15 @@ int main(int argc, char** argv) {
             TestResult test2 = {"Built-in Template + JSON Response = false", false, "", 0, 0};
             
             try {
-                context->params.chat_messages = chat_messages;
-                context->params.chat_template = "";
-                context->params.enable_chat_template = true;
-                context->params.use_json_response = false;
+                context->chat_messages = chat_messages;
+                context->chat_template = "";
+                context->enable_chat_template = true;
+                context->use_json_response = false;
                 
                 std::cout << "Chat messages: " << chat_messages.size() << std::endl;
                 std::cout << "Template: Built-in" << std::endl;
-                std::cout << "Enable template: " << (context->params.enable_chat_template ? "true" : "false") << std::endl;
-                std::cout << "JSON response: " << (context->params.use_json_response ? "true" : "false") << std::endl;
+                std::cout << "Enable template: " << (context->enable_chat_template ? "true" : "false") << std::endl;
+                std::cout << "JSON response: " << (context->use_json_response ? "true" : "false") << std::endl;
                 
                 if (!context->initSampling()) {
                     throw std::runtime_error("Failed to initialize sampling");
@@ -189,15 +196,15 @@ int main(int argc, char** argv) {
             TestResult test3 = {"Custom Jinja Template + JSON Response = true", false, "", 0, 0};
             
             try {
-                context->params.chat_messages = chat_messages;
-                context->params.chat_template = custom_jinja_template;
-                context->params.enable_chat_template = true;
-                context->params.use_json_response = true;
+                context->chat_messages = chat_messages;
+                context->chat_template = custom_jinja_template;
+                context->enable_chat_template = true;
+                context->use_json_response = true;
                 
                 std::cout << "Chat messages: " << chat_messages.size() << std::endl;
                 std::cout << "Template: Custom Jinja" << std::endl;
-                std::cout << "Enable template: " << (context->params.enable_chat_template ? "true" : "false") << std::endl;
-                std::cout << "JSON response: " << (context->params.use_json_response ? "true" : "false") << std::endl;
+                std::cout << "Enable template: " << (context->enable_chat_template ? "true" : "false") << std::endl;
+                std::cout << "JSON response: " << (context->use_json_response ? "true" : "false") << std::endl;
                 
                 if (!context->initSampling()) {
                     throw std::runtime_error("Failed to initialize sampling");
@@ -235,15 +242,15 @@ int main(int argc, char** argv) {
             TestResult test4 = {"Custom Jinja Template + JSON Response = false", false, "", 0, 0};
             
             try {
-                context->params.chat_messages = chat_messages;
-                context->params.chat_template = custom_jinja_template;
-                context->params.enable_chat_template = true;
-                context->params.use_json_response = false;
+                context->chat_messages = chat_messages;
+                context->chat_template = custom_jinja_template;
+                context->enable_chat_template = true;
+                context->use_json_response = false;
                 
                 std::cout << "Chat messages: " << chat_messages.size() << std::endl;
                 std::cout << "Template: Custom Jinja" << std::endl;
-                std::cout << "Enable template: " << (context->params.enable_chat_template ? "true" : "false") << std::endl;
-                std::cout << "JSON response: " << (context->params.use_json_response ? "true" : "false") << std::endl;
+                std::cout << "Enable template: " << (context->enable_chat_template ? "true" : "false") << std::endl;
+                std::cout << "JSON response: " << (context->use_json_response ? "true" : "false") << std::endl;
                 
                 if (!context->initSampling()) {
                     throw std::runtime_error("Failed to initialize sampling");
@@ -283,15 +290,15 @@ int main(int argc, char** argv) {
             TestResult test5 = {"Custom Non-Jinja Template + JSON Response = true", false, "", 0, 0};
             
             try {
-                context->params.chat_messages = chat_messages;
-                context->params.chat_template = custom_no_jinja_template;
-                context->params.enable_chat_template = true;
-                context->params.use_json_response = true;
+                context->chat_messages = chat_messages;
+                context->chat_template = custom_no_jinja_template;
+                context->enable_chat_template = true;
+                context->use_json_response = true;
                 
                 std::cout << "Chat messages: " << chat_messages.size() << std::endl;
                 std::cout << "Template: Custom Non-Jinja" << std::endl;
-                std::cout << "Enable template: " << (context->params.enable_chat_template ? "true" : "false") << std::endl;
-                std::cout << "JSON response: " << (context->params.use_json_response ? "true" : "false") << std::endl;
+                std::cout << "Enable template: " << (context->enable_chat_template ? "true" : "false") << std::endl;
+                std::cout << "JSON response: " << (context->use_json_response ? "true" : "false") << std::endl;
                 
                 if (!context->initSampling()) {
                     throw std::runtime_error("Failed to initialize sampling");
@@ -331,15 +338,15 @@ int main(int argc, char** argv) {
             TestResult test6 = {"Custom Non-Jinja Template + JSON Response = false", false, "", 0, 0};
             
             try {
-                context->params.chat_messages = chat_messages;
-                context->params.chat_template = custom_no_jinja_template;
-                context->params.enable_chat_template = true;
-                context->params.use_json_response = false;
+                context->chat_messages = chat_messages;
+                context->chat_template = custom_no_jinja_template;
+                context->enable_chat_template = true;
+                context->use_json_response = false;
                 
                 std::cout << "Chat messages: " << chat_messages.size() << std::endl;
                 std::cout << "Template: Custom Non-Jinja" << std::endl;
-                std::cout << "Enable template: " << (context->params.enable_chat_template ? "true" : "false") << std::endl;
-                std::cout << "JSON response: " << (context->params.use_json_response ? "true" : "false") << std::endl;
+                std::cout << "Enable template: " << (context->enable_chat_template ? "true" : "false") << std::endl;
+                std::cout << "JSON response: " << (context->use_json_response ? "true" : "false") << std::endl;
                 
                 if (!context->initSampling()) {
                     throw std::runtime_error("Failed to initialize sampling");
@@ -378,15 +385,15 @@ int main(int argc, char** argv) {
             TestResult test7 = {"Enable Template = false + JSON Response = true", false, "", 0, 0};
             
             try {
-                context->params.chat_messages = chat_messages;
-                context->params.chat_template = "";
-                context->params.enable_chat_template = false;
-                context->params.use_json_response = true;
+                context->chat_messages = chat_messages;
+                context->chat_template = "";
+                context->enable_chat_template = false;
+                context->use_json_response = true;
                 
                 std::cout << "Chat messages: " << chat_messages.size() << std::endl;
                 std::cout << "Template: None (disabled)" << std::endl;
-                std::cout << "Enable template: " << (context->params.enable_chat_template ? "true" : "false") << std::endl;
-                std::cout << "JSON response: " << (context->params.use_json_response ? "true" : "false") << std::endl;
+                std::cout << "Enable template: " << (context->enable_chat_template ? "true" : "false") << std::endl;
+                std::cout << "JSON response: " << (context->use_json_response ? "true" : "false") << std::endl;
                 
                 if (!context->initSampling()) {
                     throw std::runtime_error("Failed to initialize sampling");
@@ -425,15 +432,15 @@ int main(int argc, char** argv) {
             TestResult test8 = {"Enable Template = false + JSON Response = false", false, "", 0, 0};
             
             try {
-                context->params.chat_messages = chat_messages;
-                context->params.chat_template = "";
-                context->params.enable_chat_template = false;
-                context->params.use_json_response = false;
+                context->chat_messages = chat_messages;
+                context->chat_template = "";
+                context->enable_chat_template = false;
+                context->use_json_response = false;
                 
                 std::cout << "Chat messages: " << chat_messages.size() << std::endl;
                 std::cout << "Template: None (disabled)" << std::endl;
-                std::cout << "Enable template: " << (context->params.enable_chat_template ? "true" : "false") << std::endl;
-                std::cout << "JSON response: " << (context->params.use_json_response ? "true" : "false") << std::endl;
+                std::cout << "Enable template: " << (context->enable_chat_template ? "true" : "false") << std::endl;
+                std::cout << "JSON response: " << (context->use_json_response ? "true" : "false") << std::endl;
                 
                 if (!context->initSampling()) {
                     throw std::runtime_error("Failed to initialize sampling");

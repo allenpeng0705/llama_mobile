@@ -5,13 +5,12 @@
 #include <sstream>
 #include <iostream>
 #include <chrono>
-#include "llama_cpp/chat.h"
-#include "llama_cpp/common.h"
-#include "llama_cpp/ggml.h"
-#include "llama_cpp/gguf.h"
-#include "llama_cpp/llama.h"
-#include "llama_cpp/llama-impl.h"
-#include "llama_cpp/sampling.h"
+#include "llama.cpp-master/common/chat.h"
+#include "llama.cpp-master/common/common.h"
+#include "llama.cpp-master/ggml/include/ggml.h"
+#include "llama.cpp-master/ggml/include/gguf.h"
+#include "llama.cpp-master/include/llama.h"
+#include "llama.cpp-master/common/sampling.h"
 #if defined(__ANDROID__)
 #include <android/log.h>
 #endif
@@ -24,7 +23,7 @@ std::string tokens_to_output_formatted_string(const llama_context *ctx, const ll
 
 std::string tokens_to_str(llama_context *ctx, const std::vector<llama_token>::const_iterator begin, const std::vector<llama_token>::const_iterator end);
 
-lm_ggml_type kv_cache_type_from_str(const std::string & s);
+ggml_type kv_cache_type_from_str(const std::string & s);
 
 enum stop_type
 {
@@ -124,6 +123,16 @@ struct llama_mobile_context {
     // Conversation management state
     bool conversation_active = false;
     std::string last_chat_template = "";
+
+    // Chat-related parameters (stored here since new llama.cpp API moved them out of common_params)
+    std::vector<common_chat_msg> chat_messages;
+    std::string json_schema;
+    std::string tools;
+    bool parallel_tool_calls = false;
+    std::string tool_choice;
+    std::string chat_template;
+    bool enable_chat_template = true;
+    bool use_json_response = false;
 
     llama_mobile_context();
     ~llama_mobile_context();

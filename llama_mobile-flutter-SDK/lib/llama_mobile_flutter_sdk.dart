@@ -523,6 +523,22 @@ class LlamaMobile {
     await LlamaMobileFlutterSdkPlatform.instance.setLogLevel(level);
   }
 
+  /// Gets GPU backend information for debugging.
+  ///
+  /// Returns a string containing information about available GPU backends,
+  /// including OpenCL and Vulkan support status.
+  static Future<String?> getGpuBackendInfo() async {
+    return await LlamaMobileFlutterSdkPlatform.instance.getGpuBackendInfo();
+  }
+
+  /// Sets verbose logging for debugging GPU issues.
+  ///
+  /// Parameters:
+  /// - [enabled]: true to enable verbose logging, false to disable.
+  static Future<void> setVerboseLogging(bool enabled) async {
+    await LlamaMobileFlutterSdkPlatform.instance.setVerboseLogging(enabled);
+  }
+
   /// Initializes a new LlamaMobile context with the specified model.
   ///
   /// Parameters:
@@ -793,6 +809,39 @@ class LlamaMobile {
   ) async {
     final result = await LlamaMobileFlutterSdkPlatform.instance
         .downloadHfFileAsync(params.toMap());
+    if (result != null) {
+      return DownloadResult(
+        success: result['success'] as bool,
+        localPath: result['localPath'] as String,
+        errorMessage: result['errorMessage'] as String?,
+      );
+    }
+    return null;
+  }
+
+  /// Stream of progress values during downloads
+  Stream<double> get onProgressStream {
+    return LlamaMobileFlutterSdkPlatform.instance.onProgressStream;
+  }
+
+  /// Extracts an asset file to a local path using streaming for better performance
+  ///
+  /// This method uses Android's AssetManager for streaming extraction, which is much
+  /// faster than Flutter's rootBundle.load() for large files.
+  ///
+  /// Parameters:
+  /// - [assetPath]: The path to the asset file (e.g., "assets/models/model.gguf")
+  /// - [localPath]: The destination path for the extracted file
+  ///
+  /// Returns a [DownloadResult] indicating success or failure.
+  Future<DownloadResult?> extractAssetAsync({
+    required String assetPath,
+    required String localPath,
+  }) async {
+    final result = await LlamaMobileFlutterSdkPlatform.instance.extractAsset({
+      'assetPath': assetPath,
+      'localPath': localPath,
+    });
     if (result != null) {
       return DownloadResult(
         success: result['success'] as bool,

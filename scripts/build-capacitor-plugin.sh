@@ -418,12 +418,13 @@ else
     fi
 fi
 
-# 3f. Copy libs folder from Android SDK to Capacitor plugin (for stub libraries)
+# 3f. Copy libs folder from Android SDK to Capacitor plugin (excluding stubs)
 if [ -d "$ANDROID_SDK_DIR/libs" ]; then
     log "Copying libs folder from $ANDROID_SDK_DIR/libs to $CAPACITOR_PLUGIN_DIR/android/..."
     mkdir -p "$CAPACITOR_PLUGIN_DIR/android/libs"
-    cp -R "$ANDROID_SDK_DIR/libs"/* "$CAPACITOR_PLUGIN_DIR/android/libs/"
-    log "Android libs folder copied"
+    # Copy only static libraries, exclude stubs directory
+    cp -R "$ANDROID_SDK_DIR/libs/static" "$CAPACITOR_PLUGIN_DIR/android/libs/" 2>/dev/null || true
+    log "Android libs folder copied (stubs excluded)"
 else
     log "WARN: Android libs folder not found at $ANDROID_SDK_DIR/libs"
 fi

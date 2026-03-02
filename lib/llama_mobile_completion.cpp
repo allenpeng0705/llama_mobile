@@ -1,10 +1,10 @@
 #include "llama_mobile.h"
-#include "llama_cpp/common.h"
+#include "llama.cpp-master/common/common.h"
 #include <algorithm>
 #include <vector>
 #include <string>
 #include <sstream>
-#include "llama_cpp/llama.h"
+#include "llama.cpp-master/include/llama.h"
 
 namespace llama_mobile {
 
@@ -42,11 +42,11 @@ static bool is_jinja_template(const std::string& template_str) {
 }
 
 // Helper function to check if any advanced parameters are set
-static bool has_advanced_parameters(const common_params& params) {
-    return !params.json_schema.empty() || 
-           !params.tools.empty() || 
-           params.parallel_tool_calls || 
-           !params.tool_choice.empty();
+static bool has_advanced_parameters(const llama_mobile_context& ctx) {
+    return !ctx.json_schema.empty() || 
+           !ctx.tools.empty() || 
+           ctx.parallel_tool_calls || 
+           !ctx.tool_choice.empty();
 }
 
 void llama_mobile_context::loadPrompt() {
@@ -60,10 +60,10 @@ void llama_mobile_context::loadPrompt() {
     }
     
     // Check if chat_messages are provided and format them using chat template
-    if (!params.chat_messages.empty()) {
+    if (!chat_messages.empty()) {
         LOG_INFO("Formatting %zu chat messages (enable_chat_template=%s)", 
-                 params.chat_messages.size(), 
-                 params.enable_chat_template ? "true" : "false");
+                 chat_messages.size(), 
+                 enable_chat_template ? "true" : "false");
         
         // Helper function to escape JSON special characters
         auto escape_json = [](const std::string& s) -> std::string {
@@ -89,15 +89,15 @@ void llama_mobile_context::loadPrompt() {
         
         // Convert chat messages to JSON array string with proper escaping
         std::string messages_json = "[";
-        for (size_t i = 0; i < params.chat_messages.size(); ++i) {
-            const auto& msg = params.chat_messages[i];
+        for (size_t i = 0; i < chat_messages.size(); ++i) {
+            const auto& msg = chat_messages[i];
             
-            // Get role and content strings, defaulting to empty if null
-            std::string role = msg.role ? msg.role : "";
-            std::string content = msg.content ? msg.content : "";
-            std::string reasoning_content = msg.reasoning_content ? msg.reasoning_content : "";
-            std::string tool_name = msg.tool_name ? msg.tool_name : "";
-            std::string tool_call_id = msg.tool_call_id ? msg.tool_call_id : "";
+            // Get role and content strings
+            const std::string& role = msg.role;
+            const std::string& content = msg.content;
+            const std::string& reasoning_content = msg.reasoning_content;
+            const std::string& tool_name = msg.tool_name;
+            const std::string& tool_call_id = msg.tool_call_id;
             
             messages_json += "{\"role\":\"";
             messages_json += escape_json(role);
@@ -123,7 +123,7 @@ void llama_mobile_context::loadPrompt() {
             }
             
             messages_json += "}";
-            if (i < params.chat_messages.size() - 1) {
+            if (i < chat_messages.size() - 1) {
                 messages_json += ",";
             }
         }
@@ -131,17 +131,17 @@ void llama_mobile_context::loadPrompt() {
         
         // Check if chat templates are available (either built-in or custom)
         bool has_chat_template = templates && templates.get() && common_chat_templates_was_explicit(templates.get());
-        bool has_custom_template = !params.chat_template.empty();
+        bool has_custom_template = !chat_template.empty();
         
-        if (params.enable_chat_template && (has_chat_template || has_custom_template)) {
+        if (enable_chat_template && (has_chat_template || has_custom_template)) {
             // Determine template format
             bool use_jinja;
             std::string template_to_use;
             
             if (has_custom_template) {
                 // Use custom template and detect its format
-                template_to_use = params.chat_template;
-                use_jinja = is_jinja_template(params.chat_template);
+                template_to_use = chat_template;
+                use_jinja = is_jinja_template(chat_template);
                 LOG_INFO("Using custom template (Jinja: %s)", use_jinja ? "yes" : "no");
             } else {
                 // Use built-in template
@@ -164,10 +164,10 @@ void llama_mobile_context::loadPrompt() {
                                                  template_to_use.find("json_schema") != std::string::npos;
                     
                     // Determine which parameters to use based on template support
-                    std::string json_schema_to_use = template_supports_tools ? params.json_schema : "";
-                    std::string tools_to_use = template_supports_tools ? params.tools : "";
-                    bool parallel_tool_calls_to_use = template_supports_tools && params.parallel_tool_calls;
-                    std::string tool_choice_to_use = template_supports_tools ? params.tool_choice : "";
+                    std::string json_schema_to_use = template_supports_tools ? json_schema : "";
+                    std::string tools_to_use = template_supports_tools ? tools : "";
+                    bool parallel_tool_calls_to_use = template_supports_tools && parallel_tool_calls;
+                    std::string tool_choice_to_use = template_supports_tools ? tool_choice : "";
                     
                     LOG_INFO("Template tool support: %s", template_supports_tools ? "true" : "false");
                     LOG_INFO("Using advanced parameters: json_schema=%s, tools=%s, parallel_tool_calls=%s, tool_choice=%s",
@@ -193,7 +193,7 @@ void llama_mobile_context::loadPrompt() {
                     }
                 } else {
                     // Use legacy template engine
-                    if (has_advanced_parameters(params)) {
+                    if (has_advanced_parameters(*this)) {
                         LOG_WARNING("Legacy template engine doesn't support advanced parameters (tools, json_schema, etc.). These parameters will be ignored.");
                     }
                     formatted_prompt = getFormattedChat(messages_json, template_to_use);
@@ -232,7 +232,7 @@ void llama_mobile_context::loadPrompt() {
         } else {
             // No chat template available (no built-in and no custom)
             // Simply use the messages_json as the prompt
-            if (has_advanced_parameters(params)) {
+            if (has_advanced_parameters(*this)) {
                 LOG_WARNING("No chat template available. Advanced parameters (tools, json_schema, etc.) will be ignored.");
             }
             LOG_INFO("No chat template available, using messages_json directly as prompt");
@@ -248,7 +248,7 @@ void llama_mobile_context::loadPrompt() {
         }
     } else {
         // No chat messages provided, use the regular prompt directly
-        if (has_advanced_parameters(params)) {
+        if (has_advanced_parameters(*this)) {
             LOG_WARNING("No chat messages provided. Advanced parameters (tools, json_schema, etc.) only apply to chat messages and will be ignored.");
         }
         prompt_tokens = ::common_tokenize(ctx, params.prompt, true, true);
@@ -289,7 +289,7 @@ void llama_mobile_context::loadPrompt() {
         truncatePrompt(prompt_tokens);
         num_prompt_tokens = prompt_tokens.size();
 
-        LM_GGML_ASSERT(num_prompt_tokens < (size_t) n_ctx || n_ctx == 0);
+        GGML_ASSERT(num_prompt_tokens < (size_t) n_ctx || n_ctx == 0);
     }
     for (auto & token : prompt_tokens)
     {

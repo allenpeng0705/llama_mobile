@@ -270,22 +270,37 @@ for ABI in "arm64-v8a" "x86_64"; do
         exit 1
     fi
     
-    # Verify libllama_mobile.a exists
-    SOURCE_LIB="$LIB_DIR/$ABI/libllama_mobile.a"
-    if [ ! -f "$SOURCE_LIB" ]; then
-        log_message "ERROR" "Static library not found for ABI $ABI at $SOURCE_LIB"
+    # List of all static libraries we need to copy
+    STATIC_LIBS=(
+        "libllama_mobile_core.a"
+        "libllama.a"
+        "libcommon.a"
+        "libggml.a"
+        "libggml-base.a"
+        "libggml-cpu.a"
+        "libmtmd.a"
+        "libcpp-httplib.a"
+        "libggml-vulkan.a"
+    )
+    
+    # Copy all static libraries
+    ALL_COPIED=true
+    for LIB in "${STATIC_LIBS[@]}"; do
+        SOURCE_LIB="$LIB_DIR/$ABI/$LIB"
+        if [ -f "$SOURCE_LIB" ]; then
+            DEST_LIB="$KOTLIN_SDK_DIR/src/main/jniLibs/$ABI/$LIB"
+            if ! cp -f "$SOURCE_LIB" "$DEST_LIB"; then
+                log_message "ERROR" "Failed to copy $ABI $LIB to SDK"
+                ALL_COPIED=false
+            else
+                log_message "INFO" "Copied $ABI $LIB to SDK at $DEST_LIB"
+            fi
+        fi
+    done
+    
+    if [[ "$ALL_COPIED" == false ]]; then
         exit 1
     fi
-    
-    log_message "INFO" "Verified $ABI static library exists at $SOURCE_LIB"
-    
-    # Copy libllama_mobile.a to SDK
-    DEST_LIB="$KOTLIN_SDK_DIR/src/main/jniLibs/$ABI/libllama_mobile.a"
-    if ! cp -f "$SOURCE_LIB" "$DEST_LIB"; then
-        log_message "ERROR" "Failed to copy $ABI libllama_mobile.a to SDK"
-        exit 1
-    fi
-    log_message "INFO" "Copied $ABI libllama_mobile.a to SDK at $DEST_LIB"
     
     # Static libraries don't require libc++_shared.so - they include the C++ standard library internally
 done

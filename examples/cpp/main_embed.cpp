@@ -39,22 +39,8 @@ float cosineSimilarity(const std::vector<float>& a, const std::vector<float>& b)
 }
 
 std::vector<float> getSentenceEmbedding(llama_mobile::llama_mobile_context& context, const std::string& sentence) {
-    context.rewind();
-    context.params.prompt = sentence;
-    context.params.n_predict = 0; // We only want embeddings, no generation
-    
-    if (!context.initSampling()) {
-        std::cerr << "Failed to initialize sampling for: " << sentence << std::endl;
-        return {};
-    }
-    
-    context.beginCompletion();
-    context.loadPrompt();
-    
-    // Process the prompt to get embeddings
-    context.doCompletion();
-    
     common_params embd_params;
+    embd_params.prompt = sentence;
     embd_params.embd_normalize = context.params.embd_normalize;
     
     return context.getEmbedding(embd_params);
@@ -73,36 +59,39 @@ int main(int argc, char **argv) {
     } 
     // Option 2: Try to find a model in the default directory
     else {
-        std::string embedding_dir = "/Users/shileipeng/Documents/mygithub/llama_mobile/models/embedding";
-        std::cout << "Searching for embedding models in: " << embedding_dir << std::endl;
+        std::string models_dir = "../../../models";
+        std::cout << "Searching for embedding models in: " << models_dir << std::endl;
         
         // Check if directory exists
-        if (!fs::exists(embedding_dir)) {
-            std::cerr << "\n❌ ERROR: Embedding directory not found: " << embedding_dir << std::endl;
-            std::cerr << "Please create this directory and place GGUF embedding model files there.\n" << std::endl;
-            std::cerr << "Example commands:" << std::endl;
-            std::cerr << "  mkdir -p " << embedding_dir << std::endl;
-            std::cerr << "  cd " << embedding_dir << std::endl;
-            std::cerr << "  wget https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/blob/main/Qwen3-Embedding-0.6B-Q8_0.gguf\n" << std::endl;
+        if (!fs::exists(models_dir)) {
+            std::cerr << "\nERROR: Models directory not found: " << models_dir << std::endl;
+            std::cerr << "Please create this directory and place GGUF model files there.\n" << std::endl;
             return 1;
         }
         
         // Search for any GGUF file
         bool found = false;
-        for (const auto& entry : fs::directory_iterator(embedding_dir)) {
+        for (const auto& entry : fs::directory_iterator(models_dir)) {
             if (entry.is_regular_file() && entry.path().extension() == ".gguf") {
-                model_path = entry.path().string();
-                found = true;
-                break;
+                std::string filename = entry.path().filename().string();
+                // Prefer embedding models
+                if (filename.find("Embedding") != std::string::npos || 
+                    filename.find("embedding") != std::string::npos) {
+                    model_path = entry.path().string();
+                    found = true;
+                    break;
+                }
+                // Otherwise use any GGUF file
+                if (!found) {
+                    model_path = entry.path().string();
+                    found = true;
+                }
             }
         }
         
         if (!found) {
-            std::cerr << "\n❌ ERROR: No GGUF model files found in " << embedding_dir << std::endl;
+            std::cerr << "\nERROR: No GGUF model files found in " << models_dir << std::endl;
             std::cerr << "Please download at least one embedding model in GGUF format.\n" << std::endl;
-            std::cerr << "Example command:" << std::endl;
-            std::cerr << "  cd " << embedding_dir << std::endl;
-            std::cerr << "  wget https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/blob/main/Qwen3-Embedding-0.6B-Q8_0.gguf\n" << std::endl;
             return 1;
         }
         

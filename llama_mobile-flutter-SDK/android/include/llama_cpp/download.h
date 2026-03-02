@@ -1,12 +1,27 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 struct common_params_model;
 
-//
-// download functionalities
-//
+using common_header      = std::pair<std::string, std::string>;
+using common_header_list = std::vector<common_header>;
+
+struct common_remote_params {
+    common_header_list headers;
+    long timeout  = 0;           // in seconds, 0 means no timeout
+    long max_size = 0;           // unlimited if 0
+};
+
+// get remote file content, returns <http_code, raw_response_body>
+std::pair<long, std::vector<char>> common_remote_get_content(const std::string & url, const common_remote_params & params);
+
+// split HF repo with tag into <repo, tag>
+// for example: "user/model:tag" -> <"user/model", "tag">
+// if tag is not present, default to "latest"
+// example: "user/model" -> <"user/model", "latest">
+std::pair<std::string, std::string> common_download_split_repo_tag(const std::string & hf_repo_with_tag);
 
 struct common_cached_model_info {
     std::string manifest_path;
@@ -27,8 +42,6 @@ struct common_hf_file_res {
     std::string mmprojFile;
 };
 
-typedef void (*common_download_progress_callback)(float progress, const char* status, int64_t downloaded_bytes, int64_t total_bytes, void* user_data);
-
 /**
  * Allow getting the HF file from the HF repo with tag (like ollama), for example:
  * - bartowski/Llama-3.2-3B-Instruct-GGUF:q4
@@ -43,17 +56,28 @@ typedef void (*common_download_progress_callback)(float progress, const char* st
 common_hf_file_res common_get_hf_file(
     const std::string & hf_repo_with_tag,
     const std::string & bearer_token,
-    bool offline);
+    bool offline,
+    const common_header_list & headers = {}
+);
 
+// returns true if download succeeded
 bool common_download_model(
     const common_params_model & model,
     const std::string & bearer_token,
     bool offline,
-    common_download_progress_callback progress_callback = nullptr,
-    void* progress_callback_user_data = nullptr);
+    const common_header_list & headers = {}
+);
 
 // returns list of cached models
 std::vector<common_cached_model_info> common_list_cached_models();
+
+// download single file from url to local path
+// returns status code or -1 on error
+int common_download_file_single(const std::string & url,
+                                const std::string & path,
+                                const std::string & bearer_token,
+                                bool offline,
+                                const common_header_list & headers = {});
 
 // resolve and download model from Docker registry
 // return local path to downloaded model file

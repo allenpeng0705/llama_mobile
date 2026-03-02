@@ -637,17 +637,18 @@ else
     log_message "[WARN] Android JNI files not found, skipping JNI file copy"
 fi
 
-# Copy libs folder from Android SDK to Flutter SDK (for stub libraries)
+# Copy libs folder from Android SDK to Flutter SDK (excluding stubs)
 script_progress "Copying libs folder from Android SDK to Flutter SDK..."
 mkdir -p "$FLUTTER_SDK_DIR/android/libs"
 
-# Copy libs folder from Android SDK directory
+# Copy libs folder from Android SDK directory (excluding stubs)
 if [ -d "$ANDROID_SDK_DIR/libs" ]; then
     if [ -d "$FLUTTER_SDK_DIR/android/libs" ]; then
         rm -rf "$FLUTTER_SDK_DIR/android/libs"/*
     fi
-    cp -Rf "$ANDROID_SDK_DIR/libs/"* "$FLUTTER_SDK_DIR/android/libs/"
-    log_message "[SUCCESS] Libs folder copied to Flutter SDK from Android SDK directory"
+    # Copy only static libraries, exclude stubs directory
+    cp -Rf "$ANDROID_SDK_DIR/libs/static" "$FLUTTER_SDK_DIR/android/libs/" 2>/dev/null || true
+    log_message "[SUCCESS] Libs folder copied to Flutter SDK from Android SDK directory (stubs excluded)"
 else
     log_message "[WARN] Libs folder not found at $ANDROID_SDK_DIR/libs, skipping libs folder copy"
 fi

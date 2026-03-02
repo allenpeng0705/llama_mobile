@@ -16,16 +16,33 @@ fi
 # Variables with defaults
 ANDROID_HOME=${ANDROID_HOME:-""}              # Path to Android SDK root directory
 NDK_PATH=${NDK_PATH:-""}                     # Path to Android NDK
-ANDROID_PLATFORM=${ANDROID_PLATFORM:-"android-21"} # Minimum Android API level
+ANDROID_PLATFORM=${ANDROID_PLATFORM:-"android-28"} # Minimum Android API level (28 for Vulkan 1.1)
 BUILD_TYPE=${ANDROID_BUILD_TYPE:-"Release"}    # Release or Debug build
 ABIS=${ANDROID_ABIS:-"arm64-v8a,x86_64"}       # Target ABIs to build for
 NUM_JOBS=${CMAKE_JOBS:-""}                    # Number of parallel build jobs
 
-# GPU Backend flags (enabled by default for Android)
-# Both OpenCL and Vulkan are now supported
+# GPU Backend flags (Vulkan enabled by default for Android)
+# OpenCL is optional and disabled by default
 ENABLE_GPU=${ENABLE_GPU:-"true"}              # Enable GPU support by default
-GGML_OPENCL=${GGML_OPENCL:-"ON"}              # Enable OpenCL backend
-GGML_VULKAN=${GGML_VULKAN:-"ON"}              # Enable Vulkan backend (requires Vulkan SDK)
+GGML_OPENCL=${GGML_OPENCL:-"OFF"}             # Disable OpenCL backend by default
+GGML_VULKAN=${GGML_VULKAN:-"ON"}              # Enable Vulkan backend by default (requires Vulkan SDK)
+
+# VULKAN SDK INSTALLATION:
+# Vulkan is required for GPU acceleration on Android.
+# Please install Vulkan SDK using one of these methods:
+#
+# macOS (using Homebrew):
+#   brew install vulkan-sdk
+#
+# Linux (Ubuntu/Debian):
+#   sudo apt-get install vulkan-sdk
+#
+# Windows:
+#   Download from https://vulkan.lunarg.com/sdk/home
+#
+# After installation, this script will attempt to detect the Vulkan headers
+# in common locations like /opt/homebrew/include and /usr/local/include.
+
 
 # Debug log to verify NDK_PATH
 log_message "[DEBUG] NDK_PATH from config.env: $NDK_PATH"
@@ -269,7 +286,7 @@ CMAKE_BUILD_TYPE="$BUILD_TYPE"
 script_progress "Cleaning specific directories..."
 if [ -d "$OUTPUT_DIR" ]; then
     # Remove only the directories that need to be refreshed
-    rm -rf "$LIBS_DIR" "$INCLUDE_DIR" "$GRAMMARS_DIR"
+    rm -rf "$LIBS_DIR" "$INCLUDE_DIR"
     log_message "[INFO] Cleaned specific directories in: $OUTPUT_DIR"
 else
     log_message "[INFO] Output directory not found, will create it"
@@ -279,15 +296,23 @@ fi
 script_progress "Creating output directories..."
 # Create directory for static libraries only
 STATIC_LIBS_DIR="$LIBS_DIR/static"
-mkdir -p "$STATIC_LIBS_DIR" "$INCLUDE_DIR" "$GRAMMARS_DIR"
+mkdir -p "$STATIC_LIBS_DIR" "$INCLUDE_DIR"
 log_message "[SUCCESS] Output directories created"
 
 # Copy header files to include directory
 script_progress "Copying header files..."
-cp "$ROOT_DIR/lib/llama_mobile_ffi.h" "$INCLUDE_DIR/"
-cp "$ROOT_DIR/lib/llama_mobile_api.h" "$INCLUDE_DIR/"
+cp "$ROOT_DIR/lib/llama_mobile_ffi.h" "$INCLUDE_DIR/" 2>/dev/null || true
+cp "$ROOT_DIR/lib/llama_mobile_api.h" "$INCLUDE_DIR/" 2>/dev/null || true
+
+# Copy headers from llama.cpp-master
 mkdir -p "$INCLUDE_DIR/llama_cpp"
-rsync -av "$ROOT_DIR/lib/llama_cpp/" "$INCLUDE_DIR/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
+rsync -av "$ROOT_DIR/lib/llama.cpp-master/ggml/include/" "$INCLUDE_DIR/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
+rsync -av "$ROOT_DIR/lib/llama.cpp-master/include/" "$INCLUDE_DIR/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
+rsync -av "$ROOT_DIR/lib/llama.cpp-master/common/" "$INCLUDE_DIR/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
+
+# Copy third-party headers
+rsync -av "$ROOT_DIR/lib/llama.cpp-master/vendor/" "$INCLUDE_DIR/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
+
 log_message "[SUCCESS] Header files copied"
 
 # Build for each ABI
@@ -319,6 +344,24 @@ for ABI in "${ABI_LIST[@]}"; do
     STATIC_GPU_FLAGS=""
     if [[ "$ENABLE_GPU" == "true" ]]; then
         STATIC_GPU_FLAGS="-DGGML_OPENCL=$GGML_OPENCL -DGGML_VULKAN=$GGML_VULKAN"
+        
+        # Add Vulkan include path if Vulkan is enabled
+        if [[ "$GGML_VULKAN" == "ON" ]]; then
+            # Try to find Vulkan SDK on the system
+            VULKAN_INCLUDE_FOUND=false
+            if [[ -d "/opt/homebrew/include" ]]; then
+                STATIC_GPU_FLAGS="$STATIC_GPU_FLAGS -DCMAKE_CXX_FLAGS=\"-I/opt/homebrew/include\" -DCMAKE_C_FLAGS=\"-I/opt/homebrew/include\""
+                VULKAN_INCLUDE_FOUND=true
+            elif [[ -d "/usr/local/include" ]]; then
+                STATIC_GPU_FLAGS="$STATIC_GPU_FLAGS -DCMAKE_CXX_FLAGS=\"-I/usr/local/include\" -DCMAKE_C_FLAGS=\"-I/usr/local/include\""
+                VULKAN_INCLUDE_FOUND=true
+            fi
+            
+            if [[ "$VULKAN_INCLUDE_FOUND" == false ]]; then
+                log_message "[WARNING] Vulkan headers not found! Please install Vulkan SDK first."
+                log_message "[WARNING] See instructions at the top of this script."
+            fi
+        fi
         log_message "[INFO] GPU flags for static library: $STATIC_GPU_FLAGS"
     fi
     
@@ -330,6 +373,7 @@ for ABI in "${ABI_LIST[@]}"; do
         -DANDROID_STL=c++_static \
         -DBUILD_SHARED_LIBS=OFF \
         -DLLAMA_USE_HTTPLIB=OFF \
+        -DGGML_OPENMP=OFF \
         $PLATFORM_FLAGS \
         $STATIC_GPU_FLAGS"
     
@@ -341,7 +385,8 @@ for ABI in "${ABI_LIST[@]}"; do
     
     # Build static library
     script_progress "Building static library for $ABI..."
-    STATIC_BUILD_COMMAND="cmake --build $STATIC_BUILD_DIR --config \"$CMAKE_BUILD_TYPE\" -j \"$DETECTED_NUM_JOBS\""
+    NUM_JOBS=${NUM_JOBS:-4}
+    STATIC_BUILD_COMMAND="cmake --build $STATIC_BUILD_DIR --config \"$CMAKE_BUILD_TYPE\" -j $NUM_JOBS"
     
     verbose_output "Static library build command: $STATIC_BUILD_COMMAND"
     
@@ -349,36 +394,47 @@ for ABI in "${ABI_LIST[@]}"; do
         handle_error 1 "Static library build failed for $ABI!"
     fi
     
-    # Copy the built static library
+    # Copy ALL individual static libraries
     STATIC_DEST_DIR="$STATIC_LIBS_DIR/$ABI"
-    STATIC_DEST_LIB="$STATIC_DEST_DIR/libllama_mobile.a"
+    mkdir -p "$STATIC_DEST_DIR"
     
-    # Find the actual built static library
-    STATIC_SOURCE_LIB=""
-    # Check standard locations
-    if [ -f "$STATIC_BUILD_DIR/libllama_mobile_core.a" ]; then
-        STATIC_SOURCE_LIB="$STATIC_BUILD_DIR/libllama_mobile_core.a"
-    elif [ -f "$STATIC_BUILD_DIR/lib/libllama_mobile_core.a" ]; then
-        STATIC_SOURCE_LIB="$STATIC_BUILD_DIR/lib/libllama_mobile_core.a"
-    elif [ -f "$STATIC_BUILD_DIR/Release/libllama_mobile_core.a" ]; then
-        STATIC_SOURCE_LIB="$STATIC_BUILD_DIR/Release/libllama_mobile_core.a"
-    elif [ -f "$STATIC_BUILD_DIR/Debug/libllama_mobile_core.a" ]; then
-        STATIC_SOURCE_LIB="$STATIC_BUILD_DIR/Debug/libllama_mobile_core.a"
-    else
-        # Search the build directory
-        STATIC_SOURCE_LIB=$(find "$STATIC_BUILD_DIR" -name "libllama_mobile_core.a" 2>/dev/null | head -1)
+    # List of all static libraries we need to copy
+    STATIC_LIBS=(
+        "libllama_mobile_core.a"
+        "llama.cpp-master/src/libllama.a"
+        "llama.cpp-master/common/libcommon.a"
+        "llama.cpp-master/ggml/src/libggml.a"
+        "llama.cpp-master/ggml/src/libggml-base.a"
+        "llama.cpp-master/ggml/src/libggml-cpu.a"
+        "llama.cpp-master/tools/mtmd/libmtmd.a"
+        "llama.cpp-master/vendor/cpp-httplib/libcpp-httplib.a"
+    )
+    
+    # Add Vulkan library if Vulkan is enabled
+    if [[ "$GGML_VULKAN" == "ON" ]]; then
+        STATIC_LIBS+=("llama.cpp-master/ggml/src/ggml-vulkan/libggml-vulkan.a")
     fi
     
-    if [ -n "$STATIC_SOURCE_LIB" ]; then
-        mkdir -p "$STATIC_DEST_DIR"
-        cp "$STATIC_SOURCE_LIB" "$STATIC_DEST_LIB"
-        log_message "[SUCCESS] Built static library: $STATIC_DEST_LIB"
-    else
-        log_message "ERROR" "Could not find built static library for $ABI!"
+    # Copy all the libraries
+    ALL_COPIED=true
+    for LIB in "${STATIC_LIBS[@]}"; do
+        LIB_PATH="$STATIC_BUILD_DIR/$LIB"
+        if [ -f "$LIB_PATH" ]; then
+            LIB_NAME=$(basename "$LIB")
+            cp "$LIB_PATH" "$STATIC_DEST_DIR/"
+            log_message "[SUCCESS] Copied $LIB_NAME to $STATIC_DEST_DIR"
+        else
+            log_message "[ERROR] Could not find $LIB at $LIB_PATH"
+            ALL_COPIED=false
+        fi
+    done
+    
+    if [[ "$ALL_COPIED" == false ]]; then
+        handle_error 1 "Some static libraries were not found!"
     fi
     
     # Clean up static library build directory
-    rm -rf "$STATIC_BUILD_DIR"
+    # rm -rf "$STATIC_BUILD_DIR"
 done
 
 # Create CMakeLists.txt for easy integration only if it doesn't exist
@@ -428,15 +484,35 @@ rm -rf "$ROOT_DIR/build-android-native-*"
 # Verify the build
 script_progress "Verifying build..."
 
+# List of all static libraries we need to check
+STATIC_LIBS=(
+    "libllama_mobile_core.a"
+    "libllama.a"
+    "libcommon.a"
+    "libggml.a"
+    "libggml-base.a"
+    "libggml-cpu.a"
+    "libmtmd.a"
+    "libcpp-httplib.a"
+    "libggml-vulkan.a"
+)
+
 # Check if static libraries were built
 for ABI in "${ABI_LIST[@]}"; do
-    # Check static library
-    STATIC_LIB_PATH="$STATIC_LIBS_DIR/$ABI/libllama_mobile.a"
-    if [ -f "$STATIC_LIB_PATH" ]; then
-        log_message "[SUCCESS] Static library: $STATIC_LIB_PATH ($(ls -lh "$STATIC_LIB_PATH" | awk '{print $5}'))"
-        log_message "[INFO]   Architecture: $(file "$STATIC_LIB_PATH" | grep -o "ARM aarch64\|x86-64")"
-    else
-        log_message "[ERROR] Static library not found: $STATIC_LIB_PATH"
+    log_message "[INFO] Checking libraries for $ABI..."
+    ALL_FOUND=true
+    for LIB in "${STATIC_LIBS[@]}"; do
+        STATIC_LIB_PATH="$STATIC_LIBS_DIR/$ABI/$LIB"
+        if [ -f "$STATIC_LIB_PATH" ]; then
+            log_message "[SUCCESS] Found: $STATIC_LIB_PATH ($(ls -lh "$STATIC_LIB_PATH" | awk '{print $5}'))"
+        else
+            log_message "[ERROR] Not found: $STATIC_LIB_PATH"
+            ALL_FOUND=false
+        fi
+    done
+    
+    if [[ "$ALL_FOUND" == false ]]; then
+        handle_error 1 "Some libraries missing for $ABI!"
     fi
 done
 

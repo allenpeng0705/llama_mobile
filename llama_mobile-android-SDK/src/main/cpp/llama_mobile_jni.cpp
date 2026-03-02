@@ -6,10 +6,17 @@
 #include <vector>
 #include <map>
 #include <mutex>
+#include <dlfcn.h>
 
 // Include the llama_mobile headers
 #include "llama_mobile_api.h"
 #include "llama_mobile_ffi.h"
+
+// Include ggml backend headers for GPU detection
+#include "llama_cpp/ggml-backend.h"
+#include "llama_cpp/ggml-impl.h"
+#include "llama_cpp/llama.h"
+#include "llama_cpp/llama-impl.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -1675,7 +1682,46 @@ JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_releaseContext(JNIEnv* e
 // JNI initialization function
 JNIEXPORT jint JNI_OnLoad(JavaVM* vm, void* reserved) {
     g_jvm = vm;
+    
+    // TODO: Update to use llama.cpp-master's logging API
+    // llama_log_set(llama_log_callback_default, nullptr);
+    
     return JNI_VERSION_1_6;
+}
+
+// Gets GPU backend information
+JNIEXPORT jstring JNICALL Java_com_llamamobile_LlamaMobile_getGpuBackendInfo(JNIEnv* env, jclass clazz) {
+    std::string info = "GPU Backend Information:\n";
+    
+    // TODO: Update to use llama.cpp-master's backend API
+    info += "Note: Backend info not available in this version\n";
+    
+    // Check for OpenCL availability at runtime
+    info += "\nRuntime GPU Support:\n";
+    void* opencl_handle = dlopen("libOpenCL.so", RTLD_NOW | RTLD_LOCAL);
+    if (opencl_handle) {
+        info += "  OpenCL: Available (libOpenCL.so found)\n";
+        dlclose(opencl_handle);
+    } else {
+        info += "  OpenCL: Not available (libOpenCL.so not found)\n";
+    }
+    
+    // Check for Vulkan availability at runtime
+    void* vulkan_handle = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+    if (vulkan_handle) {
+        info += "  Vulkan: Available (libvulkan.so found)\n";
+        dlclose(vulkan_handle);
+    } else {
+        info += "  Vulkan: Not available (libvulkan.so not found)\n";
+    }
+    
+    return env->NewStringUTF(info.c_str());
+}
+
+// Sets verbose logging for debugging
+JNIEXPORT void JNICALL Java_com_llamamobile_LlamaMobile_setVerboseLogging(JNIEnv* env, jclass clazz, jboolean enabled) {
+    extern bool llama_mobile_verbose;
+    llama_mobile_verbose = enabled;
 }
 
 // JNI cleanup function

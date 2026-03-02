@@ -394,6 +394,11 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
     throw UnimplementedError('downloadHfFileAsync() has not been implemented.');
   }
 
+  // Asset extraction methods
+  Future<Map<String, dynamic>?> extractAsset(Map<String, dynamic> params) {
+    throw UnimplementedError('extractAsset() has not been implemented.');
+  }
+
   // OpenAI completion methods
   Future<Map<String, dynamic>?> generateOpenAICompletion(
     int contextHandle,
@@ -435,5 +440,14 @@ abstract class LlamaMobileFlutterSdkPlatform extends PlatformInterface {
 
   Future<int?> getTTSType(int contextHandle) {
     throw UnimplementedError('getTTSType() has not been implemented.');
+  }
+
+  // GPU diagnostic methods
+  Future<String?> getGpuBackendInfo() {
+    throw UnimplementedError('getGpuBackendInfo() has not been implemented.');
+  }
+
+  Future<void> setVerboseLogging(bool enabled) {
+    throw UnimplementedError('setVerboseLogging() has not been implemented.');
   }
 }

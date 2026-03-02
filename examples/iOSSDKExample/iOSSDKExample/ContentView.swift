@@ -1006,7 +1006,7 @@ struct SettingsView: View {
         // Configure model with proper embedding support
         var initParams = LlamaMobile.InitParams(modelPath: appState.modelPath)
         initParams.nCtx = Int32(nCtx)
-        initParams.nGpuLayers = 10//Int32(nGpuLayers)
+        initParams.nGpuLayers = 99//Int32(nGpuLayers)
         initParams.nThreads = Int32(nThreads)
         initParams.embedding = appState.enableEmbedding
         initParams.poolingType = 0 // Mean pooling

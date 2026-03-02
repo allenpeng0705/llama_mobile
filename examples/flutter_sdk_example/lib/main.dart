@@ -199,6 +199,26 @@ class AppState extends ChangeNotifier {
         return true;
       }).toList();
 
+      // 3. If no models found, add all local model files from assets
+      print("Total models found before fallback: ${uniqueModels.length}");
+      if (uniqueModels.isEmpty) {
+        print("No models found, adding local model files from assets");
+
+        // List all model files in assets/models directory
+        // These are the models you copied to the assets folder
+        List<String> localModelFiles = [
+          "OuteTTS-0.2-500M-Q6_K.gguf",
+          "Qwen3-Embedding-0.6B-Q8_0.gguf",
+          "WavTokenizer-Large-75-F16.gguf",
+        ];
+
+        for (String modelName in localModelFiles) {
+          String assetPath = "assets/models/$modelName";
+          uniqueModels.add({"name": modelName, "path": assetPath});
+          print("Added local model: $modelName from $assetPath");
+        }
+      }
+
       availableModels = uniqueModels;
     } else if (Platform.isIOS) {
       print("Using iOS-specific model loading logic");
@@ -264,9 +284,9 @@ class AppState extends ChangeNotifier {
         print("Error loading AssetManifest.json: $e");
         // Fallback: Add common model files
         List<String> commonModelFiles = [
-          "model.gguf",
+          "OuteTTS-0.2-500M-Q6_K.gguf",
           "Qwen3-Embedding-0.6B-Q8_0.gguf",
-          "Qwen3-1.7B-Q4_K_M.gguf",
+          "WavTokenizer-Large-75-F16.gguf",
         ];
 
         print("Adding common model files as fallback");
@@ -841,10 +861,23 @@ class AppState extends ChangeNotifier {
       // Handle asset paths by copying to temp
       if (modelPath.startsWith('assets/')) {
         print("Handling asset path: $modelPath");
-        final tempPath = await copyAssetToTemp(modelPath);
+        errorMessage = "Copying model file...";
+        notifyListeners();
+
+        final tempPath = await copyAssetToTemp(
+          modelPath,
+          onProgress: (progress) {
+            errorMessage =
+                "Copying model file... ${(progress * 100).toStringAsFixed(1)}%";
+            notifyListeners();
+          },
+        );
+
         if (tempPath == null) {
-          errorMessage = "Failed to copy asset to temporary file: $modelPath";
+          errorMessage =
+              "Failed to copy asset to temporary file: $modelPath\n\nPlease download model files first.";
           print("Error: Failed to copy asset to temporary file");
+          isLoading = false;
           notifyListeners();
           return;
         }
@@ -857,6 +890,7 @@ class AppState extends ChangeNotifier {
         if (!fileExists) {
           errorMessage = "Model file not found at path: $modelPath";
           print("Error: Model file not found at path: $modelPath");
+          isLoading = false;
           notifyListeners();
           return;
         }
@@ -1159,7 +1193,11 @@ class AppState extends ChangeNotifier {
   }
 
   // Copy asset to temporary file and return the path
-  Future<String?> copyAssetToTemp(String assetPath) async {
+  // Optimized with chunked reading for large files
+  Future<String?> copyAssetToTemp(
+    String assetPath, {
+    Function(double)? onProgress,
+  }) async {
     try {
       print("Copying asset to temp: $assetPath");
 
@@ -1178,25 +1216,102 @@ class AppState extends ChangeNotifier {
       // Check if temp file already exists
       final tempFile = File(tempPath);
       if (await tempFile.exists()) {
-        print("Temp file already exists, returning existing path");
+        final existingSize = await tempFile.length();
+        print(
+          "Temp file already exists, size: $existingSize bytes, returning existing path",
+        );
         return tempPath;
       }
 
-      // Load asset as byte data
-      final byteData = await rootBundle.load(assetPath);
-      print("Asset loaded successfully, size: ${byteData.lengthInBytes} bytes");
+      // Check if asset exists before loading
+      bool assetExists = false;
+      ByteData? byteData;
+
+      // Use platform-specific streaming extraction for better performance on Android
+      if (Platform.isAndroid) {
+        print("Using Android streaming asset extraction");
+
+        final result = await LlamaMobile().extractAssetAsync(
+          assetPath: assetPath,
+          localPath: tempPath,
+        );
+
+        if (result == null || !result!.success) {
+          print("Error: Failed to extract asset: ${result?.errorMessage}");
+          return null;
+        }
+
+        print("Asset extracted successfully using streaming");
+        return tempPath;
+      }
+
+      // Fallback to Flutter's asset loading for non-Android platforms
+      print("Using Flutter asset loading (non-Android platform)");
+
+      try {
+        byteData = await rootBundle.load(assetPath);
+        assetExists = true;
+      } catch (e) {
+        print("Asset does not exist: $assetPath");
+        assetExists = false;
+      }
+
+      if (!assetExists || byteData == null) {
+        print("Error: Asset does not exist: $assetPath");
+        return null;
+      }
+
+      final totalBytes = byteData!.lengthInBytes;
+      print("Asset loaded successfully, size: ${formatBytes(totalBytes)}");
 
       // Validate byte data length
-      if (byteData.lengthInBytes <= 0) {
+      if (totalBytes <= 0) {
         print("Error: Asset has zero or negative length");
         return null;
       }
 
-      // Write to temporary file using proper byte data conversion
-      await tempFile.writeAsBytes(
-        byteData.buffer.asUint8List(0, byteData.lengthInBytes),
-      );
-      print("Asset copied to temp file successfully");
+      // Write to temporary file in chunks for better performance and memory usage
+      const chunkSize = 1024 * 1024; // 1MB chunks
+      final raf = await tempFile.open(mode: FileMode.write);
+
+      try {
+        int offset = 0;
+        while (offset < totalBytes) {
+          final end = (offset + chunkSize < totalBytes)
+              ? offset + chunkSize
+              : totalBytes;
+          final chunk = byteData!.buffer.asUint8List(offset, end - offset);
+          await raf.writeFrom(chunk);
+          offset = end;
+
+          // Report progress
+          final progress = offset / totalBytes;
+          if (onProgress != null && offset % (chunkSize * 10) == 0) {
+            onProgress(progress);
+          }
+
+          // Yield to event loop every 10MB to keep UI responsive
+          if (offset % (chunkSize * 10) == 0) {
+            await Future.delayed(Duration.zero);
+          }
+        }
+
+        await raf.close();
+        print(
+          "Asset copied to temp file successfully (${formatBytes(totalBytes)})",
+        );
+
+        if (onProgress != null) {
+          onProgress(1.0);
+        }
+      } catch (e) {
+        await raf.close();
+        // Clean up partial file on error
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+        throw e;
+      }
 
       return tempPath;
     } catch (e) {
@@ -1346,18 +1461,17 @@ class AppState extends ChangeNotifier {
     print("Starting download: $repoID to $localPath");
 
     try {
-      _progressSubscription = LlamaMobile().onProgressStream
-          .listen(
-            (progress) {
-              downloadProgress = progress;
-              downloadStatus =
-                  "Downloading... ${(downloadProgress * 100).toInt()}%";
-              notifyListeners();
-            },
-            onError: (error) {
-              print("Progress stream error: $error");
-            },
-          );
+      _progressSubscription = LlamaMobile().onProgressStream.listen(
+        (progress) {
+          downloadProgress = progress;
+          downloadStatus =
+              "Downloading... ${(downloadProgress * 100).toInt()}%";
+          notifyListeners();
+        },
+        onError: (error) {
+          print("Progress stream error: $error");
+        },
+      );
 
       late DownloadResult? result;
       if (isHuggingFace) {

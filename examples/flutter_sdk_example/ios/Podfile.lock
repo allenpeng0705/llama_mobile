@@ -34,7 +34,7 @@ SPEC CHECKSUMS:
   audioplayers_darwin: 4027b33a8f471d996c13f71cb77f0b1583b5d923
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   image_picker_ios: 4f2f91b01abdb52842a8e277617df877e40f905b
-  llama_mobile_flutter_sdk: ffb2c1aab8cba6c7e5b1d85f0813dad22e2fe41a
+  llama_mobile_flutter_sdk: 786f2215ed917cf551ac46591b68dba65719086e
   path_provider_foundation: 0b743cbb62d8e47eab856f09262bb8c1ddcfe6ba
 
 PODFILE CHECKSUM: 3c63482e143d1b91d2d2560aee9fb04ecc74ac7e

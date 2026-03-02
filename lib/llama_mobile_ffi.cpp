@@ -1,9 +1,9 @@
 #include "llama_mobile_ffi.h"
 #include "llama_mobile.h"
-#include "llama_cpp/common.h"
-#include "llama_cpp/llama.h"
-#include "llama_cpp/nlohmann/json.hpp"
-#include "llama_cpp/download.h"
+#include "llama.cpp-master/common/common.h"
+#include "llama.cpp-master/include/llama.h"
+#include "llama.cpp-master/vendor/nlohmann/json.hpp"
+#include "llama.cpp-master/common/download.h"
 
 #include <string>
 #include <vector>
@@ -96,7 +96,7 @@ llama_mobile_context_handle_t llama_mobile_init_context_c(const llama_mobile_ini
         cpp_params.embedding = params->embedding;
         cpp_params.pooling_type = static_cast<enum llama_pooling_type>(params->pooling_type);
         cpp_params.embd_normalize = params->embd_normalize;
-        context->params.enable_chat_template = params->enable_chat_template;
+        context->enable_chat_template = params->enable_chat_template;
         cpp_params.image_min_tokens = params->image_min_tokens;
 
         if (params->cache_type_k) {
@@ -195,26 +195,31 @@ int llama_mobile_completion_c(
              context->params.sampling.grammar = params->grammar;
         }
         
-        // Advanced parameters for Jinja template engine
-        context->params.json_schema = params->json_schema ? params->json_schema : "";
-        context->params.tools = params->tools ? params->tools : "";
-        context->params.parallel_tool_calls = params->parallel_tool_calls;
-        context->params.tool_choice = params->tool_choice ? params->tool_choice : "";
+        // Advanced parameters for Jinja template engine (stored in context)
+        context->json_schema = params->json_schema ? params->json_schema : "";
+        context->tools = params->tools ? params->tools : "";
+        context->parallel_tool_calls = params->parallel_tool_calls;
+        context->tool_choice = params->tool_choice ? params->tool_choice : "";
 
-        // Handle chat messages if provided
-        context->params.chat_messages.clear();
+        // Handle chat messages if provided (stored in context)
+        context->chat_messages.clear();
         if (params->chat_messages && params->chat_message_count > 0) {
             for (int i = 0; i < params->chat_message_count; ++i) {
                 const auto& msg = params->chat_messages[i];
                 if (msg.role && msg.content) {
-                    llama_chat_message chat_msg = {msg.role, msg.content, msg.reasoning_content, msg.tool_name, msg.tool_call_id};
-                    context->params.chat_messages.push_back(chat_msg);
+                    common_chat_msg chat_msg;
+                    chat_msg.role = msg.role;
+                    chat_msg.content = msg.content;
+                    chat_msg.reasoning_content = msg.reasoning_content ? msg.reasoning_content : "";
+                    chat_msg.tool_name = msg.tool_name ? msg.tool_name : "";
+                    chat_msg.tool_call_id = msg.tool_call_id ? msg.tool_call_id : "";
+                    context->chat_messages.push_back(chat_msg);
                 }
             }
         }
         
-        // Set JSON response flag
-        context->params.use_json_response = params->use_json_response;
+        // Set JSON response flag (stored in context)
+        context->use_json_response = params->use_json_response;
 
         if (!context->initSampling()) {
             return -2;
@@ -242,7 +247,7 @@ int llama_mobile_completion_c(
 
         // Set results with optional JSON wrapping
         std::string final_text = context->generated_text;
-        if (context->params.use_json_response) {
+        if (context->use_json_response) {
             // Create OpenAI-like JSON response
             std::stringstream json_stream;
             json_stream << "{";
@@ -373,20 +378,25 @@ int llama_mobile_multimodal_completion_c(
             context->params.sampling.grammar = params->grammar;
         }
         
-        // Handle chat messages if provided
-        context->params.chat_messages.clear();
+        // Handle chat messages if provided (stored in context)
+        context->chat_messages.clear();
         if (params->chat_messages && params->chat_message_count > 0) {
             for (int i = 0; i < params->chat_message_count; ++i) {
                 const auto& msg = params->chat_messages[i];
                 if (msg.role && msg.content) {
-                    llama_chat_message chat_msg = {msg.role, msg.content, msg.reasoning_content, msg.tool_name, msg.tool_call_id};
-                    context->params.chat_messages.push_back(chat_msg);
+                    common_chat_msg chat_msg;
+                    chat_msg.role = msg.role;
+                    chat_msg.content = msg.content;
+                    chat_msg.reasoning_content = msg.reasoning_content ? msg.reasoning_content : "";
+                    chat_msg.tool_name = msg.tool_name ? msg.tool_name : "";
+                    chat_msg.tool_call_id = msg.tool_call_id ? msg.tool_call_id : "";
+                    context->chat_messages.push_back(chat_msg);
                 }
             }
         }
         
-        // Set JSON response flag
-        context->params.use_json_response = params->use_json_response;
+        // Set JSON response flag (stored in context)
+        context->use_json_response = params->use_json_response;
 
         // Initialize sampling
         if (!context->initSampling()) {
@@ -430,7 +440,7 @@ int llama_mobile_multimodal_completion_c(
 
         // Set results with optional JSON wrapping
         std::string final_text = context->generated_text;
-        if (context->params.use_json_response) {
+        if (context->use_json_response) {
             // Create OpenAI-like JSON response
             std::stringstream json_stream;
             json_stream << "{";
@@ -590,19 +600,13 @@ llama_mobile_float_array_c_t llama_mobile_embedding_c(llama_mobile_context_handl
     }
 
     try {
-        context->rewind();
-        context->params.prompt = text;
-        context->params.n_predict = 0;
+        // Set up embedding parameters with the text
+        common_params embd_params;
+        embd_params.prompt = text;
+        embd_params.embd_normalize = context->params.embd_normalize;
 
-        if (!context->initSampling()) { return result; }
-        context->beginCompletion();
-        context->loadPrompt();
-        context->doCompletion();
-
-        common_params dummy_embd_params;
-        dummy_embd_params.embd_normalize = context->params.embd_normalize;
-
-        std::vector<float> embedding_vec = context->getEmbedding(dummy_embd_params);
+        // Generate embedding directly - getEmbedding handles tokenization and decoding
+        std::vector<float> embedding_vec = context->getEmbedding(embd_params);
 
         if (!embedding_vec.empty()) {
             result.count = embedding_vec.size();
@@ -613,16 +617,13 @@ llama_mobile_float_array_c_t llama_mobile_embedding_c(llama_mobile_context_handl
                 result.count = 0;
             }
         }
-        context->is_predicting = false;
         return result;
 
     } catch (const std::exception& e) {
         std::cerr << "Error during embedding generation: " << e.what() << std::endl;
-        context->is_predicting = false;
         return {nullptr, 0};
     } catch (...) {
         std::cerr << "Unknown error during embedding generation." << std::endl;
-        context->is_predicting = false;
         return {nullptr, 0};
     }
 }
@@ -1654,8 +1655,8 @@ llama_mobile_download_result_c_t llama_mobile_download_model_c(const llama_mobil
         
         model_params.path = destination_path + "/" + filename;
         
-        // Pass progress callback to core download function
-        bool success = common_download_model(model_params, bearer_token, params->offline, params->progress_callback, params->progress_callback_user_data);
+        // Call download function (new API doesn't support progress callback directly)
+        bool success = common_download_model(model_params, bearer_token, params->offline);
         
         if (success) {
             result.success = true;
@@ -1696,8 +1697,8 @@ llama_mobile_download_result_c_t llama_mobile_download_hf_file_c(const char* rep
         model_params.url = "https://huggingface.co/" + repo_id_str + "/resolve/main/" + filename_str;
         model_params.path = destination_path_str + "/" + filename_str;
         
-        // Pass progress callback to core download function
-        bool success = common_download_model(model_params, token, offline, progress_callback, progress_callback_user_data);
+        // Call download function (new API doesn't support progress callback directly)
+        bool success = common_download_model(model_params, token, offline);
         
         if (success) {
             result.success = true;

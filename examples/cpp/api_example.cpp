@@ -65,7 +65,7 @@ void print_embeddings(const llama_mobile_float_array_t& embeddings) {
 
 int main(int argc, char** argv) {
     std::string model_path;
-    const std::string models_dir = "../../models";
+    const std::string models_dir = "../../../models";
     
     if (argc < 2) {
         // List available models in top-level models directory (excluding embedding folder)
@@ -222,7 +222,7 @@ int main(int argc, char** argv) {
     printf("Assistant: ");
     
     llama_mobile_conversation_result_t conv_result;
-    status = llama_mobile_generate_response(ctx, "What is the capital of France?", 100, nullptr, &conv_result);
+    status = llama_mobile_generate_response(ctx, "What is the capital of France?", 100, nullptr, nullptr, &conv_result);
     if (status == 0) {
         printf("%s\n", conv_result.text);
         printf("Time to first token: %lld ms\n", conv_result.time_to_first_token);
@@ -237,7 +237,7 @@ int main(int argc, char** argv) {
     printf("User: What language is spoken there?\n");
     printf("Assistant: ");
     
-    status = llama_mobile_generate_response(ctx, "What language is spoken there?", 100, nullptr, &conv_result);
+    status = llama_mobile_generate_response(ctx, "What language is spoken there?", 100, nullptr, nullptr, &conv_result);
     if (status == 0) {
         printf("%s\n", conv_result.text);
         printf("Time to first token: %lld ms\n", conv_result.time_to_first_token);

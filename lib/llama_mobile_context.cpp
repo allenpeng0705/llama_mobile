@@ -1,7 +1,7 @@
 #include "llama_mobile.h"
-#include "llama_cpp/common.h"
-#include "llama_cpp/nlohmann/json.hpp"
-#include "llama_cpp/llama-sampling.h"
+#include "llama.cpp-master/common/common.h"
+#include "llama.cpp-master/vendor/nlohmann/json.hpp"
+#include "llama.cpp-master/common/sampling.h"
 #include <regex>
 
 using json = nlohmann::ordered_json;
@@ -465,7 +465,7 @@ std::vector<float> llama_mobile_context::decodeAudioTokens(const std::vector<lla
         return std::vector<float>();
     }
 
-    const int n_embd = llama_model_n_embd(vocoder_wrapper->model);
+    const int n_embd = llama_model_n_embd_out(vocoder_wrapper->model);
     const float * embd = llama_get_embeddings(vocoder_wrapper->ctx);
 
     // Convert embeddings to audio using the same function as main

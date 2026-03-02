@@ -1,6 +1,6 @@
 #include "llama_mobile.h"
-#include "llama_cpp/common.h"
-#include "llama_cpp/llama.h"
+#include "llama.cpp-master/common/common.h"
+#include "llama.cpp-master/include/llama.h"
 #include <vector>
 #include <string>
 

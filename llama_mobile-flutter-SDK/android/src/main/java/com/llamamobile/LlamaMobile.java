@@ -1790,6 +1790,20 @@ public class LlamaMobile {
         return downloadModel(params, params.getProgressCallback());
     }
 
+    /**
+     * Gets GPU backend information for debugging
+     *
+     * @return String containing information about available GPU backends
+     */
+    public static native String getGpuBackendInfo();
+
+    /**
+     * Sets verbose logging for debugging GPU issues
+     *
+     * @param enabled true to enable verbose logging, false to disable
+     */
+    public static native void setVerboseLogging(boolean enabled);
+
     // Private constructor to prevent instantiation
     private LlamaMobile() {
     }

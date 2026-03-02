@@ -14,7 +14,7 @@
 #endif
 
 #include "../llama_mobile_api.h"
-#include "../llama_cpp/nlohmann/json.hpp"
+#include "../llama.cpp-master/vendor/nlohmann/json.hpp"
 
 using json = nlohmann::json;
 

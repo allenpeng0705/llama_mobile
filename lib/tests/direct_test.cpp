@@ -1,4 +1,4 @@
-#include "llama_cpp/common.h"
+#include "llama.cpp-master/common/common.h"
 #include <iostream>
 
 int main(int argc, char** argv) {
@@ -6,7 +6,7 @@ int main(int argc, char** argv) {
         std::cout << "Starting direct test...\n";
         
         common_params params;
-    params.model.path = "../../models/SmolLM-360M-Instruct.Q6_K.gguf"; // Relative path from build/output to top-level models
+    params.model.path = "../../../models/SmolLM-360M-Instruct.Q6_K.gguf"; // Relative path from tests/build to top-level models
         params.n_ctx = 2048;
         params.n_batch = 512;
         params.n_gpu_layers = 20; // Enable GPU with Metal
