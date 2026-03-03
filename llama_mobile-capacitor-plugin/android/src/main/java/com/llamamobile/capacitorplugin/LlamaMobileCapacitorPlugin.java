@@ -19,7 +19,9 @@ import org.json.JSONObject;
 
 import android.os.Environment;
 import android.util.Log;
+import android.content.res.AssetManager;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -144,6 +146,18 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             return modelPath;
         }
 
+        // Check if this is an asset path (starts with "public/models/" or "models/")
+        if (modelPath.startsWith("public/models/") || modelPath.startsWith("models/")) {
+            System.out.println("Model path appears to be an asset path: " + modelPath);
+            // Copy asset to cache directory and return the file path
+            try {
+                return copyAssetToCache(modelPath);
+            } catch (IOException e) {
+                System.out.println("Failed to copy asset to cache: " + e.getMessage());
+                // Continue with file system search
+            }
+        }
+
         // Log the external files directory path
         String externalFilesDir = getContext().getExternalFilesDir(null).getAbsolutePath();
         System.out.println("External files directory: " + externalFilesDir);
@@ -183,9 +197,52 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             }
         }
 
+        // If not found in file system, try to find in assets
+        String fileName = modelPath.contains("/") ? modelPath.substring(modelPath.lastIndexOf("/") + 1) : modelPath;
+        String[] assetPaths = {"public/models/" + fileName, "models/" + fileName};
+        for (String assetPath : assetPaths) {
+            try {
+                getContext().getAssets().open(assetPath).close();
+                System.out.println("Found model in assets: " + assetPath);
+                return copyAssetToCache(assetPath);
+            } catch (IOException e) {
+                // Asset doesn't exist, continue
+            }
+        }
+
         // If not found, return the original path (will likely fail, but let the error propagate)
         System.out.println("Model not found in any search directory, returning original path: " + modelPath);
         return modelPath;
+    }
+
+    // Helper method to copy asset to cache directory
+    private String copyAssetToCache(String assetPath) throws IOException {
+        String fileName = assetPath.contains("/") ? assetPath.substring(assetPath.lastIndexOf("/") + 1) : assetPath;
+        File cacheDir = new File(getContext().getCacheDir(), "models");
+        if (!cacheDir.exists()) {
+            cacheDir.mkdirs();
+        }
+        File cachedFile = new File(cacheDir, fileName);
+        
+        // Check if file already exists in cache
+        if (cachedFile.exists()) {
+            System.out.println("Model already cached at: " + cachedFile.getAbsolutePath());
+            return cachedFile.getAbsolutePath();
+        }
+        
+        // Copy asset to cache
+        java.io.InputStream is = getContext().getAssets().open(assetPath);
+        java.io.FileOutputStream fos = new java.io.FileOutputStream(cachedFile);
+        byte[] buffer = new byte[8192];
+        int read;
+        while ((read = is.read(buffer)) != -1) {
+            fos.write(buffer, 0, read);
+        }
+        fos.close();
+        is.close();
+        
+        System.out.println("Copied asset to cache: " + cachedFile.getAbsolutePath());
+        return cachedFile.getAbsolutePath();
     }
 
     // Helper method to recursively search for a model file
@@ -263,10 +320,12 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
     private static class ModelInfo {
         String name;
         String path;
+        String source;
 
-        ModelInfo(String name, String path) {
+        ModelInfo(String name, String path, String source) {
             this.name = name;
             this.path = path;
+            this.source = source;
         }
     }
 
@@ -275,6 +334,31 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         executor.execute(() -> {
             try {
                 List<ModelInfo> models = new ArrayList<>();
+
+                // First, scan assets for bundled models
+                try {
+                    AssetManager assetManager = getContext().getAssets();
+                    String[] assetsPaths = new String[]{"public/models", "models"};
+                    for (String assetsPath : assetsPaths) {
+                        try {
+                            String[] assetFiles = assetManager.list(assetsPath);
+                            if (assetFiles != null) {
+                                for (String fileName : assetFiles) {
+                                    if (fileName.toLowerCase().endsWith(".gguf") || 
+                                        fileName.toLowerCase().endsWith(".safetensors") ||
+                                        fileName.toLowerCase().endsWith(".bin")) {
+                                        String assetPath = assetsPath + "/" + fileName;
+                                        models.add(new ModelInfo(fileName, assetPath, "asset"));
+                                    }
+                                }
+                            }
+                        } catch (IOException e) {
+                            // Directory doesn't exist, continue
+                        }
+                    }
+                } catch (Exception e) {
+                    // Failed to scan assets, continue with file system
+                }
 
                 // List of common directories to search for models
                 List<String> modelDirectories = new ArrayList<>();
@@ -308,15 +392,15 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                     }
                 }
 
-                // Remove duplicates by file name
-                Set<String> seenFileNames = new HashSet<>();
-                List<ModelInfo> uniqueModels = new ArrayList<>();
+                // Remove duplicates by file name, prioritizing assets first
+                Map<String, ModelInfo> uniqueModelsMap = new HashMap<>();
                 for (ModelInfo model : models) {
-                    if (!seenFileNames.contains(model.name)) {
-                        seenFileNames.add(model.name);
-                        uniqueModels.add(model);
+                    ModelInfo existing = uniqueModelsMap.get(model.name);
+                    if (existing == null || (model.source.equals("asset") && !existing.source.equals("asset"))) {
+                        uniqueModelsMap.put(model.name, model);
                     }
                 }
+                List<ModelInfo> uniqueModels = new ArrayList<>(uniqueModelsMap.values());
 
                 // Convert to the expected format
                 List<Map<String, String>> modelArray = new ArrayList<>();
@@ -324,6 +408,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                     Map<String, String> modelMap = new HashMap<>();
                     modelMap.put("name", model.name);
                     modelMap.put("path", model.path);
+                    modelMap.put("source", model.source);
                     modelArray.add(modelMap);
                 }
 
@@ -349,7 +434,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                     String fileName = file.getName().toLowerCase();
                     for (String ext : modelExtensions) {
                         if (fileName.endsWith("." + ext)) {
-                            models.add(new ModelInfo(file.getName(), file.getAbsolutePath()));
+                            models.add(new ModelInfo(file.getName(), file.getAbsolutePath(), "file"));
                             break;
                         }
                     }

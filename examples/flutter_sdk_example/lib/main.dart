@@ -207,9 +207,14 @@ class AppState extends ChangeNotifier {
         // List all model files in assets/models directory
         // These are the models you copied to the assets folder
         List<String> localModelFiles = [
+          "fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf",
+          "SmolLM-360M-Instruct.Q6_K.gguf",
+          "mmproj-SmolVLM-256M-Instruct-Q8_0.gguf",
+          "SmolVLM-256M-Instruct-Q8_0.gguf",
+          "WavTokenizer-Large-75-F16.gguf",
           "OuteTTS-0.2-500M-Q6_K.gguf",
           "Qwen3-Embedding-0.6B-Q8_0.gguf",
-          "WavTokenizer-Large-75-F16.gguf",
+          "Qwen3-1.7B-Q4_K_M.gguf",
         ];
 
         for (String modelName in localModelFiles) {
@@ -284,9 +289,14 @@ class AppState extends ChangeNotifier {
         print("Error loading AssetManifest.json: $e");
         // Fallback: Add common model files
         List<String> commonModelFiles = [
+          "fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf",
+          "SmolLM-360M-Instruct.Q6_K.gguf",
+          "mmproj-SmolVLM-256M-Instruct-Q8_0.gguf",
+          "SmolVLM-256M-Instruct-Q8_0.gguf",
+          "WavTokenizer-Large-75-F16.gguf",
           "OuteTTS-0.2-500M-Q6_K.gguf",
           "Qwen3-Embedding-0.6B-Q8_0.gguf",
-          "WavTokenizer-Large-75-F16.gguf",
+          "Qwen3-1.7B-Q4_K_M.gguf",
         ];
 
         print("Adding common model files as fallback");
@@ -3479,11 +3489,51 @@ class _LoRATestViewState extends State<LoRATestView> {
   double scale = 1.0;
   bool isProcessing = false;
   bool loraApplied = false;
+  List<Map<String, dynamic>> loadedAdapters = [];
+  String loraInfo = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _updateLoraInfo();
+  }
+
+  void _updateLoraInfo() {
+    final path = widget.appState.loraModelPath;
+    final name = path.isNotEmpty ? path.split('/').last : "Not selected";
+    setState(() {
+      loraInfo =
+          """
+Selected LoRA Adapter:
+  Name: $name
+  Full Path: ${path.isNotEmpty ? path : "N/A"}
+  Scale: $scale
+""";
+    });
+  }
+
+  Future<void> _refreshLoadedAdapters() async {
+    try {
+      final adapters = await widget.appState.llamaContext
+          ?.getLoadedLoraAdapters();
+      setState(() {
+        loadedAdapters = adapters ?? [];
+      });
+    } catch (e) {
+      print("Error getting loaded LoRA adapters: $e");
+    }
+  }
 
   void applyLoRA() async {
     if (widget.appState.loraModelPath.isEmpty ||
         !widget.appState.isModelLoaded ||
         isProcessing) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a LoRA model in Settings first'),
+          backgroundColor: Colors.orange,
+        ),
+      );
       return;
     }
 
@@ -3500,6 +3550,7 @@ class _LoRATestViewState extends State<LoRATestView> {
           false;
 
       if (success) {
+        await _refreshLoadedAdapters();
         setState(() {
           loraApplied = true;
         });
@@ -3508,7 +3559,10 @@ class _LoRATestViewState extends State<LoRATestView> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to apply LoRA adapter')),
+          const SnackBar(
+            content: Text('Failed to apply LoRA adapter'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } catch (e) {
@@ -3534,6 +3588,7 @@ class _LoRATestViewState extends State<LoRATestView> {
 
     try {
       await widget.appState.llamaContext?.freeLoraAdapterAsync();
+      await _refreshLoadedAdapters();
       setState(() {
         loraApplied = false;
       });
@@ -3542,6 +3597,36 @@ class _LoRATestViewState extends State<LoRATestView> {
       );
     } catch (e) {
       widget.appState.errorMessage = "Error removing LoRA adapter: $e";
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      setState(() {
+        isProcessing = false;
+      });
+    }
+  }
+
+  void removeAllLoRA() async {
+    if (!widget.appState.isModelLoaded || isProcessing) {
+      return;
+    }
+
+    setState(() {
+      isProcessing = true;
+    });
+
+    try {
+      await widget.appState.llamaContext?.removeLoraAdaptersAsync();
+      await _refreshLoadedAdapters();
+      setState(() {
+        loraApplied = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All LoRA adapters removed successfully')),
+      );
+    } catch (e) {
+      widget.appState.errorMessage = "Error removing all LoRA adapters: $e";
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -3596,6 +3681,7 @@ class _LoRATestViewState extends State<LoRATestView> {
                             setState(() {
                               scale = parsedScale;
                             });
+                            _updateLoraInfo();
                           }
                         },
                         keyboardType: const TextInputType.numberWithOptions(
@@ -3677,6 +3763,77 @@ class _LoRATestViewState extends State<LoRATestView> {
                 ),
               ),
 
+              const SizedBox(height: 12),
+
+              // Remove All LoRA Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: !widget.appState.isModelLoaded || isProcessing
+                      ? null
+                      : removeAllLoRA,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: Text(
+                    isProcessing ? "Removing All..." : "Remove All LoRA",
+                    style: const TextStyle(fontSize: 16, color: Colors.white),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // LoRA Information
+              const SectionHeader(title: "LoRA Information"),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[200]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        loraInfo,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Divider(),
+                      const SizedBox(height: 12),
+                      Text(
+                        "Available LoRA Models: ${widget.appState.availableLoRAModels.length - 1}",
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ...widget.appState.availableLoRAModels
+                          .where((m) => m["path"]!.isNotEmpty)
+                          .map(
+                            (model) => Padding(
+                              padding: const EdgeInsets.only(left: 16, top: 4),
+                              child: Text(
+                                "• ${model["name"]}",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                            ),
+                          ),
+                    ],
+                  ),
+                ),
+              ),
+
               const SizedBox(height: 20),
 
               // LoRA Status
@@ -3688,22 +3845,53 @@ class _LoRATestViewState extends State<LoRATestView> {
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        loraApplied ? Icons.check_circle : Icons.error,
-                        color: loraApplied ? Colors.green : Colors.red,
+                      Row(
+                        children: [
+                          Icon(
+                            loraApplied ? Icons.check_circle : Icons.error,
+                            color: loraApplied ? Colors.green : Colors.red,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            loraApplied
+                                ? "LoRA adapter applied successfully"
+                                : "No LoRA adapter applied",
+                            style: TextStyle(
+                              color: loraApplied ? Colors.green : Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Text(
-                        loraApplied
-                            ? "LoRA adapter applied successfully"
-                            : "No LoRA adapter applied",
-                        style: TextStyle(
-                          color: loraApplied ? Colors.green : Colors.red,
-                          fontWeight: FontWeight.bold,
+                      if (loadedAdapters.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        const Divider(),
+                        const SizedBox(height: 12),
+                        const Text(
+                          "Loaded Adapters:",
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 8),
+                        ...loadedAdapters.map(
+                          (adapter) => Padding(
+                            padding: const EdgeInsets.only(left: 16, top: 4),
+                            child: Text(
+                              "• Path: ${adapter['path']?.toString().split('/').last ?? 'Unknown'}\n  Scale: ${adapter['scale'] ?? 'N/A'}",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[700],
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

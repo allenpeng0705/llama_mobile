@@ -774,40 +774,44 @@ function App() {
         
         if (result.models && result.models.length > 0) {
           console.log('Found models via listModels:', result.models.length);
-          mainModels = result.models.map((model: any) => ({
-            name: model.name || model.path.split('/').pop(),
-            path: model.path
-          }));
+          console.log('Model details:', JSON.stringify(result.models, null, 2));
+          
+          // Filter to show only bundled assets first
+          const bundledModels = result.models.filter((model: any) => model.source === 'asset');
+          console.log('Bundled models:', bundledModels.length);
+          
+          if (bundledModels.length > 0) {
+            mainModels = bundledModels.map((model: any) => ({
+              name: model.name || model.path.split('/').pop(),
+              path: model.path
+            }));
+          } else {
+            // Fallback to all models if no bundled ones
+            mainModels = result.models.map((model: any) => ({
+              name: model.name || model.path.split('/').pop(),
+              path: model.path
+            }));
+          }
         } else {
           console.log('listModels returned no models, using default models');
-          // Fallback to default models
+          // Fallback to default models (matching actual files in public/models)
           const defaultModels: ModelInfo[] = [
             { name: 'SmolVLM-256M-Instruct-Q8_0.gguf', path: 'SmolVLM-256M-Instruct-Q8_0.gguf' },
             { name: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf', path: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf' },
             { name: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf', path: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf' },
-            { name: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf', path: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf' },
-            { name: 'Qwen3-4B-Q4_K_M.gguf', path: 'Qwen3-4B-Q4_K_M.gguf' },
-            { name: 'Qwen3-4B-Q5_K_M.gguf', path: 'Qwen3-4B-Q5_K_M.gguf' },
-            { name: 'OuteTTS-0.2-500M-Q6_K.gguf', path: 'OuteTTS-0.2-500M-Q6_K.gguf' },
             { name: 'SmolLM-360M-Instruct.Q6_K.gguf', path: 'SmolLM-360M-Instruct.Q6_K.gguf' },
-            { name: 'WavTokenizer-Large-75-F16.gguf', path: 'WavTokenizer-Large-75-F16.gguf' },
             { name: 'Qwen3-Embedding-0.6B-Q8_0.gguf', path: 'Qwen3-Embedding-0.6B-Q8_0.gguf' }
           ];
           mainModels = defaultModels;
         }
       } catch (error) {
         console.log('listModels method not available, using default models:', error);
-        // Fallback to default models
+        // Fallback to default models (matching actual files in public/models)
         const defaultModels: ModelInfo[] = [
           { name: 'SmolVLM-256M-Instruct-Q8_0.gguf', path: 'SmolVLM-256M-Instruct-Q8_0.gguf' },
           { name: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf', path: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf' },
           { name: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf', path: 'fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf' },
-          { name: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf', path: 'Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf' },
-          { name: 'Qwen3-4B-Q4_K_M.gguf', path: 'Qwen3-4B-Q4_K_M.gguf' },
-          { name: 'Qwen3-4B-Q5_K_M.gguf', path: 'Qwen3-4B-Q5_K_M.gguf' },
-          { name: 'OuteTTS-0.2-500M-Q6_K.gguf', path: 'OuteTTS-0.2-500M-Q6_K.gguf' },
           { name: 'SmolLM-360M-Instruct.Q6_K.gguf', path: 'SmolLM-360M-Instruct.Q6_K.gguf' },
-          { name: 'WavTokenizer-Large-75-F16.gguf', path: 'WavTokenizer-Large-75-F16.gguf' },
           { name: 'Qwen3-Embedding-0.6B-Q8_0.gguf', path: 'Qwen3-Embedding-0.6B-Q8_0.gguf' }
         ];
         mainModels = defaultModels;

@@ -344,6 +344,46 @@ const More: React.FC<MoreProps> = ({
       {/* LoRA Configuration Section */}
       <div className="setting-section">
         <h3>LoRA Configuration</h3>
+        
+        {/* LoRA Information */}
+        <div className="setting-item">
+          <label>Selected LoRA Adapter:</label>
+          <div className="info-box" style={{ 
+            padding: '10px', 
+            backgroundColor: '#f5f5f5', 
+            borderRadius: '4px',
+            fontFamily: 'monospace',
+            fontSize: '12px',
+            marginBottom: '10px'
+          }}>
+            <div><strong>Name:</strong> {loraPath ? loraPath.split('/').pop() || 'Unknown' : 'Not selected'}</div>
+            <div><strong>Full Path:</strong> {loraPath || 'N/A'}</div>
+            <div><strong>Scale:</strong> {loraScale}</div>
+          </div>
+        </div>
+        
+        {/* Available LoRA Models */}
+        <div className="setting-item">
+          <label>Available LoRA Models ({availableLoraModels.filter(m => m.path).length}):</label>
+          <div style={{ 
+            maxHeight: '100px', 
+            overflowY: 'auto',
+            padding: '8px',
+            backgroundColor: '#fafafa',
+            borderRadius: '4px',
+            fontSize: '12px'
+          }}>
+            {availableLoraModels.filter(m => m.path).map((model) => (
+              <div key={model.path} style={{ padding: '2px 0' }}>
+                • {model.name}
+              </div>
+            ))}
+            {availableLoraModels.filter(m => m.path).length === 0 && (
+              <div style={{ color: '#999' }}>No LoRA models available</div>
+            )}
+          </div>
+        </div>
+        
         <div className="setting-item">
           <label>LoRA Scale:</label>
           <input 

@@ -14,10 +14,50 @@ include_directories(
 # Define path to pre-built llama_mobile library
 set(LLAMA_MOBILE_LIB_PATH "${CMAKE_SOURCE_DIR}/../../../libs")
 
-# Add pre-built llama_mobile library
-add_library(llama_mobile STATIC IMPORTED)
-set_target_properties(llama_mobile PROPERTIES
+# Add pre-built static libraries
+add_library(llama_mobile_core STATIC IMPORTED)
+set_target_properties(llama_mobile_core PROPERTIES
     IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libllama_mobile_core.a
+)
+
+add_library(llama STATIC IMPORTED)
+set_target_properties(llama PROPERTIES
+    IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libllama.a
+)
+
+add_library(ggml STATIC IMPORTED)
+set_target_properties(ggml PROPERTIES
+    IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libggml.a
+)
+
+add_library(ggml-base STATIC IMPORTED)
+set_target_properties(ggml-base PROPERTIES
+    IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libggml-base.a
+)
+
+add_library(ggml-cpu STATIC IMPORTED)
+set_target_properties(ggml-cpu PROPERTIES
+    IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libggml-cpu.a
+)
+
+add_library(common STATIC IMPORTED)
+set_target_properties(common PROPERTIES
+    IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libcommon.a
+)
+
+add_library(mtmd STATIC IMPORTED)
+set_target_properties(mtmd PROPERTIES
+    IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libmtmd.a
+)
+
+add_library(ggml-vulkan STATIC IMPORTED)
+set_target_properties(ggml-vulkan PROPERTIES
+    IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libggml-vulkan.a
+)
+
+add_library(cpp-httplib STATIC IMPORTED)
+set_target_properties(cpp-httplib PROPERTIES
+    IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libcpp-httplib.a
 )
 
 # Add the JNI implementation library
@@ -42,12 +82,19 @@ target_link_options(llama_mobile_jni PRIVATE
 )
 
 # Link the libraries
-# Order matters: llama_mobile must come before system libraries
-# Use --whole-archive to ensure all symbols from static library are included
-# Link vulkan for GPU support (system library on Android)
+# Order matters: dependencies must come after dependents
+# Use --whole-archive to ensure all symbols from static libraries are included
 target_link_libraries(llama_mobile_jni
     -Wl,--whole-archive
-    llama_mobile
+    llama_mobile_core
+    llama
+    ggml
+    ggml-cpu
+    ggml-base
+    common
+    mtmd
+    ggml-vulkan
+    cpp-httplib
     -Wl,--no-whole-archive
     ${log-lib}
     ${android-lib}

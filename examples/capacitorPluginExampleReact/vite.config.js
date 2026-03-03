@@ -16,5 +16,10 @@ export default defineConfig({
         manualChunks: undefined
       }
     }
+  },
+  resolve: {
+    alias: {
+      '@capacitor/core': resolve(__dirname, 'node_modules/@capacitor/core/dist/index.js')
+    }
   }
 })
