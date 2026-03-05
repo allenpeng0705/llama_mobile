@@ -458,25 +458,25 @@ public class LlamaMobile {
      * Initialization parameters for creating a llama context
      */
     public static class InitParams {
-        private final String modelPath;
-        private final int nCtx;
-        private final String chatTemplate;
-        private final String systemPrompt;
-        private final int nBatch;
-        private final int nUBatch;
-        private final int nGpuLayers;
-        private final int nThreads;
-        private final boolean useMmap;
-        private final boolean useMlock;
-        private final boolean embedding;
-        private final int poolingType;
-        private final int embdNormalize;
-        private final boolean flashAttention;
-        private final String cacheTypeK;
-        private final String cacheTypeV;
-        private final boolean enableChatTemplate;
-        private final ProgressCallback progressCallback;
-        private final int imageMinTokens;
+        public final String modelPath;
+        public final int nCtx;
+        public final String chatTemplate;
+        public final String systemPrompt;
+        public final int nBatch;
+        public final int nUBatch;
+        public final int nGpuLayers;
+        public final int nThreads;
+        public final boolean useMmap;
+        public final boolean useMlock;
+        public final boolean embedding;
+        public final int poolingType;
+        public final int embdNormalize;
+        public final boolean flashAttention;
+        public final String cacheTypeK;
+        public final String cacheTypeV;
+        public final boolean enableChatTemplate;
+        public final ProgressCallback progressCallback;
+        public final int imageMinTokens;
 
         public InitParams(String modelPath) {
             this(modelPath, 2048, null, null, 512, 512, 0, 4, true, false, false, 0, 0, false, null, null, true, null, -1);
