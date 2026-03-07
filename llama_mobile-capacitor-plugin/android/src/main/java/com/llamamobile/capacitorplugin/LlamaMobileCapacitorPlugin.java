@@ -488,7 +488,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         String grammar = params.optString("grammar", null);
         
         List<String> stopSequences = new ArrayList<>();
-        JSArray stopArray = params.optJSONArray("stopSequences");
+        org.json.JSONArray stopArray = params.optJSONArray("stopSequences");
         if (stopArray != null) {
             for (int i = 0; i < stopArray.length(); i++) {
                 try {
@@ -498,7 +498,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         }
 
         final List<String> mediaPaths = new ArrayList<>();
-        JSArray mediaArray = params.optJSONArray("mediaPaths");
+        org.json.JSONArray mediaArray = params.optJSONArray("mediaPaths");
         if (mediaArray != null) {
             for (int i = 0; i < mediaArray.length(); i++) {
                 try {
@@ -1503,7 +1503,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                     return;
                 }
 
-                LlamaMobile.ConversationResult result = LlamaMobile.generateResponse(
+                LlamaMobile.ConversationResult result = LlamaMobile.generateResponseWithCallback(
                     nativeContextHandle, userMessage, maxTokens,
                     new LlamaMobile.TokenCallback() {
                         @Override
@@ -1513,9 +1513,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                             notifyListeners("token", tokenData);
                             return true;
                         }
-                    },
-                    finalSystemPrompt,
-                    finalHistory
+                    }
                 );
 
                 JSObject ret = new JSObject();

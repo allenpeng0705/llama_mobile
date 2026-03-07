@@ -441,6 +441,21 @@ class MockLlamaMobileFlutterSdkPlatform
   }
 
   @override
+  Future<Map<String, dynamic>?> extractAsset(Map<String, dynamic> params) async {
+    return {'success': true, 'localPath': params['localPath'] ?? ''};
+  }
+
+  @override
+  Future<String?> getGpuBackendInfo() async {
+    return 'Metal GPU backend available';
+  }
+
+  @override
+  Future<void> setVerboseLogging(bool enabled) async {
+    return;
+  }
+
+  @override
   Future<List<int>?> tokenize(int contextHandle, String text) async {
     return [1, 2, 3, 4, 5];
   }

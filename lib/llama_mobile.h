@@ -212,7 +212,17 @@ struct llama_mobile_context {
     bool isConversationActive() const;
 };
 
+} // namespace llama_mobile
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 extern bool llama_mobile_verbose;
+#ifdef __cplusplus
+}
+#endif
+
+namespace llama_mobile {
 
 #if LLAMA_MOBILE_VERBOSE != 1
 #define LOG_VERBOSE(MSG, ...)

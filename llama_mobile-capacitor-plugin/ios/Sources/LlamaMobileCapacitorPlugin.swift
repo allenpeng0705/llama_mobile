@@ -66,6 +66,10 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "downloadModel", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "downloadHfFile", returnType: CAPPluginReturnPromise),
         
+        // Diagnostics
+        CAPPluginMethod(name: "getGpuBackendInfo", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setVerboseLogging", returnType: CAPPluginReturnPromise),
+        
     ]
     
     private var contexts: [Int: LlamaMobile] = [:]

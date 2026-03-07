@@ -356,6 +356,7 @@ build_library() {
         -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY="" \
         -DLLAMA_USE_CURL=OFF \
         -DLLAMA_USE_HTTPLIB=OFF \
+        -DGGML_METAL=ON \
         -DGGML_OPENMP=OFF
     
     if [[ $? -ne 0 ]]; then
@@ -448,6 +449,7 @@ build_shared_framework() {
         -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED="NO" \
         -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY="" \
         -DGGML_OPENMP=OFF \
+        -DGGML_METAL=ON \
         -DBUILD_SHARED_LIBS=OFF
     
     if [[ $? -ne 0 ]]; then

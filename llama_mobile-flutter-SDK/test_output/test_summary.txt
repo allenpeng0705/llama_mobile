@@ -1,8 +1,8 @@
 Flutter SDK Test Summary
 =======================
 Build Type: Debug
-Timestamp: Thu Mar  5 16:19:50 CST 2026
-Total Tests: 5
-Passed: 2
-Failed: 1
+Timestamp: Sat Mar  7 16:44:52 CST 2026
+Total Tests: 92
+Passed: 85
+Failed: 0
 Test Results: /Users/shileipeng/Documents/mygithub/llama_mobile/llama_mobile-flutter-SDK/test_output/test_results.json

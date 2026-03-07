@@ -47,6 +47,14 @@ extern "C" {
 
 llama_mobile_context_handle_t llama_mobile_init_context_c(const llama_mobile_init_params_c_t* params) {
     std::cout << "[FFI] llama_mobile_init_context_c called with params: " << params << std::endl;
+
+    // Explicitly initialize the llama backend once
+    static bool backend_initialized = false;
+    if (!backend_initialized) {
+        std::cout << "[FFI] Initializing llama backend..." << std::endl;
+        llama_backend_init();
+        backend_initialized = true;
+    }
     
     if (!params) {
         std::cerr << "[FFI] Error: params is null" << std::endl;
@@ -1745,3 +1753,45 @@ LLAMA_MOBILE_FFI_EXPORT void llama_mobile_free_conversation_result_members_c(lla
 }
 
 } // extern "C"
+
+LLAMA_MOBILE_FFI_EXPORT char* llama_mobile_get_gpu_backend_info_c(void) {
+    std::string info = "GPU Backend Information:\n";
+    
+    bool gpu_supported = false;
+#if defined(GGML_USE_METAL)
+    info += "- Metal: Compiled support detected.\n";
+    gpu_supported = true;
+#endif
+#if defined(GGML_USE_CUDA)
+    info += "- CUDA: Compiled support detected.\n";
+    gpu_supported = true;
+#endif
+#if defined(GGML_USE_VULKAN)
+    info += "- Vulkan: Compiled support detected.\n";
+    gpu_supported = true;
+#endif
+#if defined(GGML_USE_OPENCL)
+    info += "- OpenCL: Compiled support detected.\n";
+    gpu_supported = true;
+#endif
+    
+    // Check runtime status using llama.cpp API
+    if (gpu_supported) {
+        if (llama_supports_gpu_offload()) {
+            info += "- Runtime GPU Offload: ACTIVE (llama_supports_gpu_offload() == true)\n";
+        } else {
+            info += "- Runtime GPU Offload: INACTIVE (llama_supports_gpu_offload() == false)\n";
+        }
+    } else {
+        info += "- No hardware acceleration compiled.\n";
+    }
+    
+    return safe_strdup(info);
+}
+    
+    return safe_strdup(info);
+}
+
+LLAMA_MOBILE_FFI_EXPORT void llama_mobile_set_verbose_logging_c(bool enabled) {
+    llama_mobile_verbose = enabled;
+}

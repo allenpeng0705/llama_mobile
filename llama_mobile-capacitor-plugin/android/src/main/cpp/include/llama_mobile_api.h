@@ -80,6 +80,20 @@ extern "C" {
 extern bool llama_mobile_verbose;
 
 /**
+ * @brief Get information about the GPU backend.
+ * 
+ * @return String containing GPU backend information. Must be freed with llama_mobile_free_string().
+ */
+LLAMA_MOBILE_API char* llama_mobile_get_gpu_backend_info(void);
+
+/**
+ * @brief Set verbose logging.
+ * 
+ * @param enabled True to enable verbose logging, false to disable.
+ */
+LLAMA_MOBILE_API void llama_mobile_set_verbose_logging(bool enabled);
+
+/**
  * @brief Opaque handle to the llama_mobile context.
  * 
  * This handle encapsulates the model state, configuration, and all necessary 

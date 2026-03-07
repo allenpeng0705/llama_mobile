@@ -12,10 +12,20 @@ bool llama_mobile_context::loadModel(common_params &params_) {
     
     llama_init = common_init_from_params(params);
     LOG_INFO("common_init_from_params returned: %p", llama_init.get());
-    
+
     if (llama_init == nullptr) {
-        LOG_ERROR("unable to initialize model context: %s", params.model.path.c_str());
+        LOG_ERROR("unable to initialize model context: %s. Check if Metal shaders or CUDA kernels are properly configured.", params.model.path.c_str());
         return false;
+    }
+    
+    // Check if GPU offloading is actually happening
+    if (params.n_gpu_layers > 0) {
+        LOG_INFO("Requested %d GPU layers offloading", params.n_gpu_layers);
+        if (llama_supports_gpu_offload()) {
+            LOG_INFO("GPU offload is supported by the current runtime backend.");
+        } else {
+            LOG_WARNING("GPU offload was requested but the current runtime backend does NOT support it!");
+        }
     }
     
     model = llama_init->model();

@@ -397,6 +397,10 @@ LLAMA_MOBILE_FFI_EXPORT void llama_mobile_free_lora_adapters_c(llama_mobile_lora
 LLAMA_MOBILE_FFI_EXPORT void llama_mobile_free_chat_result_members_c(llama_mobile_chat_result_c_t* result);
 LLAMA_MOBILE_FFI_EXPORT void llama_mobile_free_conversation_result_members_c(llama_mobile_conversation_result_c_t* result);
 
+// **DIAGNOSTICS**
+LLAMA_MOBILE_FFI_EXPORT char* llama_mobile_get_gpu_backend_info_c(void);
+LLAMA_MOBILE_FFI_EXPORT void llama_mobile_set_verbose_logging_c(bool enabled);
+
 #ifdef __cplusplus
 }
 #endif

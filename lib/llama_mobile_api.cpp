@@ -455,6 +455,14 @@ void llama_mobile_free_download_result(llama_mobile_download_result_t* result) {
     }
 }
 
+char* llama_mobile_get_gpu_backend_info(void) {
+    return llama_mobile_get_gpu_backend_info_c();
+}
+
+void llama_mobile_set_verbose_logging(bool enabled) {
+    llama_mobile_set_verbose_logging_c(enabled);
+}
+
 #ifdef __cplusplus
 }
 #endif

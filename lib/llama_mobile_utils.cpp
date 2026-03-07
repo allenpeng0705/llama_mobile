@@ -9,7 +9,9 @@
 #include <string.h>
 #include <sstream>
 
+extern "C" {
 bool llama_mobile_verbose = true;
+}
 
 namespace llama_mobile {
 

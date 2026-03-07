@@ -138,6 +138,10 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
       handleIsVocoderEnabled(call, result: result)
     case "getTTSType":
       handleGetTTSType(call, result: result)
+    case "getGpuBackendInfo":
+      handleGetGpuBackendInfo(call, result: result)
+    case "setVerboseLogging":
+      handleSetVerboseLogging(call, result: result)
     case "getPlatformVersion":
       result("iOS " + UIDevice.current.systemVersion)
     default:
@@ -1051,6 +1055,23 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin, FlutterStream
     DispatchQueue.main.async {
       result(grammar)
     }
+  }
+
+  // MARK: - GPU Diagnostic Methods
+  private func handleGetGpuBackendInfo(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let info = LlamaMobile.getGpuBackendInfo()
+    result(info)
+  }
+
+  private func handleSetVerboseLogging(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard let args = call.arguments as? [String: Any],
+          let enabled = args["enabled"] as? Bool else {
+        result(FlutterError(code: "INVALID_ARGS", message: "Missing enabled parameter", details: nil))
+        return
+    }
+
+    LlamaMobile.setVerboseLogging(enabled)
+    result(nil)
   }
 
   // MARK: - Embedding Methods

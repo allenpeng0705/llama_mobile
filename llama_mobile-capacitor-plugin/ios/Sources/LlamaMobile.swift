@@ -2685,19 +2685,21 @@ public class LlamaMobile: NSObject {
         
         return llama_mobile_get_model_params_c(context)
     }
-    
-    // MARK: - Diagnostics
-    
-    /// Gets GPU backend information for debugging
-    /// - Returns: String containing information about available GPU backends
-    public static func getGpuBackendInfo() -> String {
-        guard let info = llama_mobile_get_gpu_backend_info_c() else {
-            return "Unknown"
+
+    /// Get GPU backend information for debugging
+    /// - Returns: String containing GPU backend information
+    public static func getGpuBackendInfo() -> String? {
+        let cString = llama_mobile_get_gpu_backend_info_c()
+        
+        guard let cStrings = cString else {
+            return nil
         }
-        return String(cString: info)
+        
+        defer { llama_mobile_free_string_c(cStrings) }
+        return String(cString: cStrings)
     }
-    
-    /// Sets verbose logging for debugging GPU issues
+
+    /// Set verbose logging for debugging GPU issues
     /// - Parameter enabled: true to enable verbose logging, false to disable
     public static func setVerboseLogging(_ enabled: Bool) {
         llama_mobile_set_verbose_logging_c(enabled)
