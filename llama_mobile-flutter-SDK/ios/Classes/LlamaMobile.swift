@@ -156,11 +156,21 @@ public class LlamaMobile: NSObject {
     
     /// Configure Metal paths before model initialization
     private func configureMetalPaths() {
-        let frameworkBundle = Bundle(for: type(of: self))
-        let frameworkPath = frameworkBundle.bundlePath
-        
-        log("Framework bundle path: \(frameworkPath)", level: .debug)
-        log("Framework bundle resources path: \(frameworkBundle.resourcePath ?? "nil")", level: .debug)
+        // llama.cpp metal backend looks for ggml-llama.metallib
+        // It first checks the main bundle resources
+        if let path = Bundle.main.path(forResource: "ggml-llama", ofType: "metallib") {
+            log("Found ggml-llama.metallib in main bundle: \(path)", level: .info)
+            setenv("GGML_METAL_PATH_RESOURCES", path, 1)
+        } else {
+            // Also check the current framework bundle (where LlamaMobile is)
+            let frameworkBundle = Bundle(for: type(of: self))
+            if let path = frameworkBundle.path(forResource: "ggml-llama", ofType: "metallib") {
+                log("Found ggml-llama.metallib in framework bundle: \(path)", level: .info)
+                setenv("GGML_METAL_PATH_RESOURCES", path, 1)
+            } else {
+                log("Warning: ggml-llama.metallib NOT found in main or framework bundle. GPU acceleration might fail.", level: .warning)
+            }
+        }
     }
     
     /// Text-to-Speech model types

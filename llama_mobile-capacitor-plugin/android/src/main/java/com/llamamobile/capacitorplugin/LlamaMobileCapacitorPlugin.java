@@ -1860,6 +1860,23 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         });
     }
 
+    @PluginMethod
+    public void getGpuBackendInfo(PluginCall call) {
+        executor.execute(() -> {
+            String info = LlamaMobile.getGpuBackendInfo();
+            JSObject ret = new JSObject();
+            ret.put("info", info);
+            call.resolve(ret);
+        });
+    }
+
+    @PluginMethod
+    public void setVerboseLogging(PluginCall call) {
+        boolean enabled = call.getBoolean("enabled", false);
+        LlamaMobile.setVerboseLogging(enabled);
+        call.resolve();
+    }
+
     // MARK: - Download
 
     @PluginMethod

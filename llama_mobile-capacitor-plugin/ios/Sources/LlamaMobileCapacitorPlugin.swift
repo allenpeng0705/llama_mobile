@@ -1147,6 +1147,21 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
     
+    @objc func getGpuBackendInfo(_ call: CAPPluginCall) {
+        Task {
+            let info = await Task.detached {
+                return LlamaMobile.getGpuBackendInfo()
+            }.value
+            call.resolve(["info": info])
+        }
+    }
+    
+    @objc func setVerboseLogging(_ call: CAPPluginCall) {
+        let enabled = call.getBool("enabled") ?? false
+        LlamaMobile.setVerboseLogging(enabled)
+        call.resolve()
+    }
+    
     @objc func listFiles(_ call: CAPPluginCall) {
         guard let directory = call.getString("directory") else {
             call.reject("directory is required")
