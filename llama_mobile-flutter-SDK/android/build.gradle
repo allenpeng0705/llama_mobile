@@ -1,5 +1,5 @@
 group = "com.llamamobile"
-version = "1.2.0"
+version = "1.2.3"
 
 buildscript {
     ext.kotlin_version = "1.0.0"
@@ -49,6 +49,13 @@ android {
             abiFilters 'arm64-v8a', 'x86_64'
             stl "c++_shared"
             version "29.0.14206865"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 

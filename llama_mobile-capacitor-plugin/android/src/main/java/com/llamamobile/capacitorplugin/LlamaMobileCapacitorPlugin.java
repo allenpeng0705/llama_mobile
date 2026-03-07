@@ -78,61 +78,46 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void initContext(PluginCall call) {
-        // Log the entire call object
-        Log.d("LlamaMobilePlugin", "initContext called with call: " + call);
-        Log.d("LlamaMobilePlugin", "initContext: All parameters: " + call.getData());
-        
         String modelPath = call.getString("modelPath");
         int nCtx = call.getInt("nCtx", 2048);
         int nGpuLayers = call.getInt("nGpuLayers", 0);
         int nThreads = call.getInt("nThreads", 4);
+        int nBatch = call.getInt("nBatch", 512);
+        int nUBatch = call.getInt("nUBatch", 512);
+        boolean useMmap = call.getBoolean("useMmap", true);
+        boolean useMlock = call.getBoolean("useMlock", false);
         boolean embedding = call.getBoolean("embedding", false);
         int poolingType = call.getInt("poolingType", 0);
         int embdNormalize = call.getInt("embdNormalize", 1);
+        boolean flashAttention = call.getBoolean("flashAttention", false);
+        String cacheTypeK = call.getString("cacheTypeK", null);
+        String cacheTypeV = call.getString("cacheTypeV", null);
         int imageMinTokens = call.getInt("imageMinTokens", -1);
 
         if (modelPath == null) {
-            Log.d("LlamaMobilePlugin", "initContext: modelPath is null, rejecting call");
             call.reject("modelPath is required");
             return;
         }
 
-        // Log the received model path
-        Log.d("LlamaMobilePlugin", "Received model path: " + modelPath);
-        
-        // Resolve model path if it's just a filename
         String resolvedModelPath = resolveModelPath(modelPath);
-        
-        // Log the resolved model path
-        Log.d("LlamaMobilePlugin", "Resolved model path: " + resolvedModelPath);
 
         executor.execute(() -> {
             try {
-                Log.d("LlamaMobilePlugin", "initContext: Creating InitParams with modelPath: " + resolvedModelPath);
                 LlamaMobile.InitParams params = new LlamaMobile.InitParams(
-                    resolvedModelPath, nCtx, null, null, 512, 512, nGpuLayers, nThreads, 
-                    true, false, embedding, poolingType, embdNormalize, false, 
-                    null, null, false, null, imageMinTokens
+                    resolvedModelPath, nCtx, null, null, nBatch, nUBatch, nGpuLayers, nThreads, 
+                    useMmap, useMlock, embedding, poolingType, embdNormalize, flashAttention, 
+                    cacheTypeK, cacheTypeV, true, null, imageMinTokens
                 );
                 
-                Log.d("LlamaMobilePlugin", "initContext: Calling LlamaMobile.initContext");
                 long nativeContextHandle = LlamaMobile.initContext(params);
-                Log.d("LlamaMobilePlugin", "initContext: Native context handle returned: " + nativeContextHandle);
-
                 long handle = getNextContextHandle();
-                Log.d("LlamaMobilePlugin", "initContext: Generated handle: " + handle + " for native handle: " + nativeContextHandle);
-                
                 contextHandles.put(handle, nativeContextHandle);
-                Log.d("LlamaMobilePlugin", "initContext: Stored context handle mapping: " + handle + " -> " + nativeContextHandle);
-                Log.d("LlamaMobilePlugin", "initContext: Current contextHandles size: " + contextHandles.size());
 
                 JSObject ret = new JSObject();
                 ret.put("contextHandle", handle);
-                Log.d("LlamaMobilePlugin", "initContext: Resolving call with handle: " + handle);
                 call.resolve(ret);
             } catch (Exception e) {
-                Log.d("LlamaMobilePlugin", "initContext: Exception occurred: " + e.getMessage());
-                e.printStackTrace();
+                Log.e("LlamaMobilePlugin", "initContext: Exception occurred", e);
                 call.reject("Failed to initialize context: " + e.getMessage());
             }
         });
@@ -199,7 +184,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
         // If not found in file system, try to find in assets
         String fileName = modelPath.contains("/") ? modelPath.substring(modelPath.lastIndexOf("/") + 1) : modelPath;
-        String[] assetPaths = {"public/models/" + fileName, "models/" + fileName};
+        String[] assetPaths = {"public/models/" + fileName, "models/" + fileName, fileName};
         for (String assetPath : assetPaths) {
             try {
                 getContext().getAssets().open(assetPath).close();
@@ -338,7 +323,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 // First, scan assets for bundled models
                 try {
                     AssetManager assetManager = getContext().getAssets();
-                    String[] assetsPaths = new String[]{"public/models", "models"};
+                    String[] assetsPaths = new String[]{"public/models", "models", ""};
                     for (String assetsPath : assetsPaths) {
                         try {
                             String[] assetFiles = assetManager.list(assetsPath);
@@ -421,6 +406,45 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         });
     }
 
+    @PluginMethod
+    public void listFiles(PluginCall call) {
+        String path = call.getString("path");
+        if (path == null) {
+            call.reject("path is required");
+            return;
+        }
+
+        executor.execute(() -> {
+            try {
+                File directory = new File(path);
+                if (!directory.exists() || !directory.isDirectory()) {
+                    call.reject("Directory does not exist: " + path);
+                    return;
+                }
+
+                File[] files = directory.listFiles();
+                JSArray filesArray = new JSArray();
+                if (files != null) {
+                    for (File file : files) {
+                        JSObject fileObj = new JSObject();
+                        fileObj.put("name", file.getName());
+                        fileObj.put("path", file.getAbsolutePath());
+                        fileObj.put("isDirectory", file.isDirectory());
+                        fileObj.put("size", file.length());
+                        fileObj.put("lastModified", file.lastModified());
+                        filesArray.put(fileObj);
+                    }
+                }
+
+                JSObject ret = new JSObject();
+                ret.put("files", filesArray);
+                call.resolve(ret);
+            } catch (Exception e) {
+                call.reject("Failed to list files: " + e.getMessage());
+            }
+        });
+    }
+
     // Helper method to scan a directory for model files
     private void scanDirectoryForModels(File directory, List<String> modelExtensions, List<ModelInfo> models) {
         File[] files = directory.listFiles();
@@ -447,15 +471,53 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void generateCompletion(PluginCall call) {
-        // Retrieve contextHandle using helper function
         long contextHandle = getContextHandle(call);
         JSObject params = call.getObject("params");
-        String prompt = params != null ? params.optString("prompt", null) : null;
-        int maxTokens = params != null ? params.optInt("maxTokens", 128) : 128;
-        double temperature = params != null ? params.optDouble("temperature", 0.8) : 0.8;
+        if (params == null) {
+            call.reject("params are required");
+            return;
+        }
 
-        if (contextHandle == -1 || prompt == null) {
-            call.reject("contextHandle and params.prompt are required");
+        String prompt = params.optString("prompt", "");
+        int maxTokens = params.optInt("maxTokens", 128);
+        double temperature = params.optDouble("temperature", 0.8);
+        double topP = params.optDouble("topP", 0.95);
+        int topK = params.optInt("topK", 40);
+        int nThreads = params.optInt("nThreads", 4);
+        int seed = params.optInt("seed", -1);
+        String grammar = params.optString("grammar", null);
+        
+        List<String> stopSequences = new ArrayList<>();
+        JSArray stopArray = params.optJSONArray("stopSequences");
+        if (stopArray != null) {
+            for (int i = 0; i < stopArray.length(); i++) {
+                try {
+                    stopSequences.add(stopArray.getString(i));
+                } catch (Exception e) {}
+            }
+        }
+
+        final List<String> mediaPaths = new ArrayList<>();
+        JSArray mediaArray = params.optJSONArray("mediaPaths");
+        if (mediaArray != null) {
+            for (int i = 0; i < mediaArray.length(); i++) {
+                try {
+                    String media = mediaArray.getString(i);
+                    if (media.startsWith("data:image")) {
+                        // Handle base64 image
+                        String path = saveBase64Image(media);
+                        if (path != null) {
+                            mediaPaths.add(path);
+                        }
+                    } else {
+                        mediaPaths.add(media);
+                    }
+                } catch (Exception e) {}
+            }
+        }
+
+        if (contextHandle == -1) {
+            call.reject("contextHandle is required");
             return;
         }
 
@@ -469,8 +531,11 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 }
 
                 LlamaMobile.CompletionParams completionParams = new LlamaMobile.CompletionParams(
-                    prompt, (float) temperature, maxTokens
+                    prompt, (float) temperature, maxTokens, nThreads, seed, topK, topP, 
+                    0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, 
+                    grammar, stopSequences, mediaPaths, null
                 );
+                
                 LlamaMobile.CompletionResult result = LlamaMobile.generateCompletion(
                     nativeContextHandle, completionParams
                 );
@@ -483,11 +548,37 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 ret.put("stoppedEos", result.isStoppedEos());
                 ret.put("stoppedWord", result.isStoppedWord());
                 ret.put("stoppedLimit", result.isStoppedLimit());
+                if (result.getStoppingWord() != null) {
+                    ret.put("stoppingWord", result.getStoppingWord());
+                }
                 call.resolve(ret);
             } catch (Exception e) {
                 call.reject("Failed to generate completion: " + e.getMessage());
+            } finally {
+                // Cleanup temporary media files
+                for (String path : mediaPaths) {
+                    if (path.contains("/temp_image_")) {
+                        new File(path).delete();
+                    }
+                }
             }
         });
+    }
+
+    private String saveBase64Image(String base64Data) {
+        try {
+            String pureBase64 = base64Data.substring(base64Data.indexOf(",") + 1);
+            byte[] decodedBytes = android.util.Base64.decode(pureBase64, android.util.Base64.DEFAULT);
+            File cacheDir = getContext().getCacheDir();
+            File tempFile = File.createTempFile("temp_image_", ".jpg", cacheDir);
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(tempFile);
+            fos.write(decodedBytes);
+            fos.close();
+            return tempFile.getAbsolutePath();
+        } catch (Exception e) {
+            Log.e("LlamaMobilePlugin", "Failed to save base64 image", e);
+            return null;
+        }
     }
 
     @PluginMethod
@@ -1378,16 +1469,31 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
     @PluginMethod
     public void generateResponse(PluginCall call) {
-        // Retrieve contextHandle using helper function
         long contextHandle = getContextHandle(call);
         String userMessage = call.getString("userMessage");
         int maxTokens = call.getInt("maxTokens", 128);
+        String systemPrompt = call.getString("systemPrompt");
+        
+        List<LlamaMobile.ChatMessage> history = new ArrayList<>();
+        JSArray historyArray = call.getArray("history");
+        if (historyArray != null) {
+            for (int i = 0; i < historyArray.length(); i++) {
+                try {
+                    JSONObject msg = historyArray.getJSONObject(i);
+                    String role = msg.getString("role");
+                    String content = msg.getString("content");
+                    history.add(new LlamaMobile.ChatMessage(role, content));
+                } catch (Exception e) {}
+            }
+        }
 
         if (contextHandle == -1 || userMessage == null) {
             call.reject("contextHandle and userMessage are required");
             return;
         }
 
+        final String finalSystemPrompt = systemPrompt;
+        final List<LlamaMobile.ChatMessage> finalHistory = history;
         final long finalContextHandle = contextHandle;
         executor.execute(() -> {
             try {
@@ -1402,10 +1508,14 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                     new LlamaMobile.TokenCallback() {
                         @Override
                         public boolean onToken(String token) {
-                            notifyListeners("token", new JSObject().put("token", token));
+                            JSObject tokenData = new JSObject();
+                            tokenData.put("token", token);
+                            notifyListeners("token", tokenData);
                             return true;
                         }
-                    }
+                    },
+                    finalSystemPrompt,
+                    finalHistory
                 );
 
                 JSObject ret = new JSObject();
@@ -1769,7 +1879,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 LlamaMobile.DownloadResult result = LlamaMobile.downloadModel(params, (progress, status, downloadedBytes, totalBytes) -> {
                     JSObject progressData = new JSObject();
                     progressData.put("progress", progress);
-                    notifyListeners("downloadProgress", progressData);
+                    notifyListeners("progress", progressData);
                 });
 
                 JSObject ret = new JSObject();
@@ -1787,22 +1897,26 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
     public void downloadHfFile(PluginCall call) {
         String repoId = call.getString("repoId");
         String filename = call.getString("filename");
-        String localPath = call.getString("localPath");
+        String destinationPath = call.getString("destinationPath");
+        if (destinationPath == null) {
+            destinationPath = call.getString("localPath"); // Backward compatibility
+        }
         String bearerToken = call.getString("bearerToken");
         boolean offline = call.getBoolean("offline", false);
 
-        if (repoId == null || filename == null || localPath == null) {
-            call.reject("repoId, filename, and localPath are required");
+        if (repoId == null || filename == null || destinationPath == null) {
+            call.reject("repoId, filename, and destinationPath are required");
             return;
         }
 
+        final String finalPath = destinationPath;
         executor.execute(() -> {
             try {
                 LlamaMobile.DownloadResult result = LlamaMobile.downloadHfFile(
-                    repoId, filename, localPath, bearerToken, offline, (progress, status, downloadedBytes, totalBytes) -> {
+                    repoId, filename, finalPath, bearerToken, offline, (progress, status, downloadedBytes, totalBytes) -> {
                         JSObject progressData = new JSObject();
                         progressData.put("progress", progress);
-                        notifyListeners("downloadProgress", progressData);
+                        notifyListeners("progress", progressData);
                     }
                 );
 

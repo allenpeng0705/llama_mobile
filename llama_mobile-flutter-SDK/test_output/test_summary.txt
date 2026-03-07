@@ -1,7 +1,7 @@
 Flutter SDK Test Summary
 =======================
-Build Type: Release
-Timestamp: Thu Mar  5 13:21:25 CST 2026
+Build Type: Debug
+Timestamp: Thu Mar  5 16:19:50 CST 2026
 Total Tests: 5
 Passed: 2
 Failed: 1

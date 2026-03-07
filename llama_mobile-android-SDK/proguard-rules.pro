@@ -9,6 +9,6 @@
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
 # Keep all public classes and methods in the SDK
-dontwarn com.llamamobile.**
+-dontwarn com.llamamobile.**
 -keep class com.llamamobile.** { *; }
 

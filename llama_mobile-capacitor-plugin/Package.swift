@@ -24,7 +24,11 @@ let package = Package(
                 .product(name: "Cordova", package: "capacitor-swift-pm"),
                 "llama_mobile"
             ],
-            path: "ios/Sources"),
+            path: "ios/Sources",
+            linkerSettings: [
+                .linkedFramework("Accelerate")
+            ]
+        ),
         .testTarget(
             name: "LlamaMobileCapacitorPluginTests",
             dependencies: ["LlamaMobileCapacitorPlugin"],
