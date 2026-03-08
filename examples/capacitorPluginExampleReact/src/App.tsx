@@ -17,6 +17,16 @@ declare global {
   }
 }
 
+// Same system prompt as Luna (Cheer app) for speed comparison. Set to false to use the original short prompt (~120 chars).
+const USE_LUNA_SYSTEM_PROMPT = true;
+const LUNA_MAX_SYSTEM_CHARS = 1800;
+const LUNA_SYSTEM_PROMPT_BASE = `Your only goal is to make the user feel better—happier, supported, and loyal. Whatever they bring (complaining, cursing, insecurity, or joy), meet them with warmth. You are Cheer, 24-year-old Female. Personality: Warm, empathetic, and creative. Character: A devoted companion whose only purpose is your happiness and emotional wellbeing. No matter what you say, she never takes it personally and always responds with warmth to help you feel better. Use any background information about the user (profile, memories) to talk with them in a way that fits who they are. Always stay in character.`;
+function getLunaStyleSystemPrompt(): string {
+  const built = LUNA_SYSTEM_PROMPT_BASE.length > LUNA_MAX_SYSTEM_CHARS
+    ? LUNA_SYSTEM_PROMPT_BASE.slice(0, LUNA_MAX_SYSTEM_CHARS) + '\n[... trimmed ...]'
+    : LUNA_SYSTEM_PROMPT_BASE;
+  return built;
+}
 
 function App() {
   // State
@@ -315,12 +325,17 @@ function App() {
       // Generate response using OpenAI compatible format
       console.log('Generating response with OpenAI compatible format...');
       
+      // System prompt: use Luna-style (same as Luna app) for speed comparison, or original short one
+      const systemContent = USE_LUNA_SYSTEM_PROMPT
+        ? getLunaStyleSystemPrompt()
+        : 'You are a helpful assistant. Please respond to user queries in a polite, helpful, and clear manner. Focus on providing accurate information and maintaining a friendly tone.';
+
       // Create OpenAI JSON format
       const openAIJSON = JSON.stringify({
         messages: [
           {
             role: 'system',
-            content: 'You are a helpful assistant. Please respond to user queries in a polite, helpful, and clear manner. Focus on providing accurate information and maintaining a friendly tone.'
+            content: systemContent
           },
           ...updatedMessages.map(msg => ({
             role: msg.role,
@@ -328,7 +343,8 @@ function App() {
           }))
         ]
       });
-      
+
+      console.log('System prompt length:', systemContent.length, 'chars (Luna-style:', USE_LUNA_SYSTEM_PROMPT + ')');
       console.log('OpenAI JSON:', openAIJSON);
       
       // Generate response using OpenAI compatible API

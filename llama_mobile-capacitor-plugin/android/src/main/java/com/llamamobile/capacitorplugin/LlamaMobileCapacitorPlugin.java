@@ -92,6 +92,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         boolean flashAttention = call.getBoolean("flashAttention", false);
         String cacheTypeK = call.getString("cacheTypeK", null);
         String cacheTypeV = call.getString("cacheTypeV", null);
+        boolean enableChatTemplate = call.getBoolean("enableChatTemplate", true);
         int imageMinTokens = call.getInt("imageMinTokens", -1);
 
         if (modelPath == null) {
@@ -106,7 +107,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 LlamaMobile.InitParams params = new LlamaMobile.InitParams(
                     resolvedModelPath, nCtx, null, null, nBatch, nUBatch, nGpuLayers, nThreads, 
                     useMmap, useMlock, embedding, poolingType, embdNormalize, flashAttention, 
-                    cacheTypeK, cacheTypeV, true, null, imageMinTokens
+                    cacheTypeK, cacheTypeV, enableChatTemplate, null, imageMinTokens
                 );
                 
                 long nativeContextHandle = LlamaMobile.initContext(params);
@@ -486,6 +487,24 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         int nThreads = params.optInt("nThreads", 4);
         int seed = params.optInt("seed", -1);
         String grammar = params.optString("grammar", null);
+        boolean useJsonResponse = params.optBoolean("useJsonResponse", true);
+        int nProbs = params.optInt("nProbs", 0);
+        String jsonSchema = params.optString("jsonSchema", null);
+        String tools = params.optString("tools", null);
+        boolean parallelToolCalls = params.optBoolean("parallelToolCalls", false);
+        String toolChoice = params.optString("toolChoice", null);
+        
+        // Additional sampling parameters (matching iOS)
+        double minP = params.optDouble("minP", 0.05);
+        double typicalP = params.optDouble("typicalP", 1.0);
+        int penaltyLastN = params.optInt("penaltyLastN", 64);
+        double penaltyRepeat = params.optDouble("penaltyRepeat", 1.1);
+        double penaltyFreq = params.optDouble("penaltyFreq", 0.0);
+        double penaltyPresent = params.optDouble("penaltyPresent", 0.0);
+        int mirostat = params.optInt("mirostat", 0);
+        double mirostatTau = params.optDouble("mirostatTau", 5.0);
+        double mirostatEta = params.optDouble("mirostatEta", 0.1);
+        boolean ignoreEos = params.optBoolean("ignoreEos", false);
         
         List<String> stopSequences = new ArrayList<>();
         org.json.JSONArray stopArray = params.optJSONArray("stopSequences");
@@ -516,6 +535,8 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             }
         }
 
+        final List<LlamaMobile.ChatMessage> chatMessages = parseChatMessages(params.optJSONArray("chatMessages"));
+
         if (contextHandle == -1) {
             call.reject("contextHandle is required");
             return;
@@ -532,8 +553,10 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
                 LlamaMobile.CompletionParams completionParams = new LlamaMobile.CompletionParams(
                     prompt, (float) temperature, maxTokens, nThreads, seed, topK, topP, 
-                    0.05, 1.0, 64, 1.1, 0.0, 0.0, 0, 5.0, 0.1, false, 0, 
-                    grammar, stopSequences, mediaPaths, null
+                    minP, typicalP, penaltyLastN, penaltyRepeat, penaltyFreq, penaltyPresent, 
+                    mirostat, mirostatTau, mirostatEta, ignoreEos, nProbs, 
+                    grammar, stopSequences, mediaPaths, null, chatMessages, useJsonResponse, jsonSchema, 
+                    tools, parallelToolCalls, toolChoice
                 );
                 
                 LlamaMobile.CompletionResult result = LlamaMobile.generateCompletion(
@@ -563,6 +586,39 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
                 }
             }
         });
+    }
+
+    private List<LlamaMobile.ChatMessage> parseChatMessages(org.json.JSONArray jsonArray) {
+        List<LlamaMobile.ChatMessage> chatMessages = new ArrayList<>();
+        if (jsonArray == null) {
+            return chatMessages;
+        }
+        
+        for (int i = 0; i < jsonArray.length(); i++) {
+            try {
+                org.json.JSONObject messageObj = jsonArray.getJSONObject(i);
+                String role = messageObj.optString("role");
+                String content = messageObj.optString("content");
+                String reasoningContent = messageObj.optString("reasoning_content", null);
+                if (reasoningContent != null && reasoningContent.isEmpty()) {
+                    reasoningContent = null;
+                }
+                String toolName = messageObj.optString("tool_name", null);
+                if (toolName != null && toolName.isEmpty()) {
+                    toolName = null;
+                }
+                String toolCallId = messageObj.optString("tool_call_id", null);
+                if (toolCallId != null && toolCallId.isEmpty()) {
+                    toolCallId = null;
+                }
+                
+                chatMessages.add(new LlamaMobile.ChatMessage(role, content, reasoningContent, toolName, toolCallId));
+            } catch (Exception e) {
+                Log.e("LlamaMobilePlugin", "Failed to parse chat message", e);
+            }
+        }
+        
+        return chatMessages;
     }
 
     private String saveBase64Image(String base64Data) {

@@ -23,8 +23,10 @@ static llama_mobile_init_params_c_t convert_init_params(const llama_mobile_init_
         ffi_params.embd_normalize = api_params->embd_normalize;
         ffi_params.flash_attn = api_params->flash_attn;
         ffi_params.progress_callback = api_params->progress_callback;
+        ffi_params.progress_callback_user_data = api_params->progress_callback_user_data;
         ffi_params.cache_type_k = api_params->cache_type_k;
         ffi_params.cache_type_v = api_params->cache_type_v;
+        ffi_params.enable_chat_template = api_params->enable_chat_template;
         ffi_params.image_min_tokens = api_params->image_min_tokens;
     }
     

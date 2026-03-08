@@ -115,42 +115,37 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         // Resolve model path if it's just a filename
         let resolvedModelPath = resolveModelPath(modelPath)
         
-        Task {
-            do {
-                let contextHandle = try await Task.detached {
-                    var initParams = LlamaMobile.InitParams(modelPath: resolvedModelPath)
-                    initParams.nCtx = Int32(nCtx)
-                    initParams.nGpuLayers = Int32(nGpuLayers)
-                    initParams.nThreads = Int32(nThreads)
-                    initParams.nBatch = Int32(nBatch)
-                    initParams.nUBatch = Int32(nUBatch)
-                    initParams.useMmap = useMmap
-                    initParams.useMlock = useMlock
-                    initParams.embedding = embedding
-                    initParams.poolingType = Int32(poolingType)
-                    initParams.embdNormalize = Int32(embdNormalize)
-                    initParams.flashAttention = flashAttention
-                    initParams.chatTemplate = chatTemplate
-                    initParams.systemPrompt = systemPrompt
-                    initParams.cacheTypeK = cacheTypeK
-                    initParams.cacheTypeV = cacheTypeV
-                    initParams.enableChatTemplate = enableChatTemplate
-                    initParams.imageMinTokens = Int32(imageMinTokens)
-                    
-                    guard let llamaMobile = LlamaMobile(with: initParams) else {
-                        throw NSError(domain: "LlamaMobile", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to initialize LlamaMobile context"])
-                    }
-                    
-                    return await MainActor.run {
-                        let handle = self.getNextContextHandle()
-                        self.contexts[handle] = llamaMobile
-                        return handle
-                    }
-                }.value
-                
-                call.resolve(["contextHandle": contextHandle])
-            } catch {
-                call.reject("Failed to initialize context: \(error.localizedDescription)")
+        DispatchQueue.global(qos: .userInitiated).async {
+            var initParams = LlamaMobile.InitParams(modelPath: resolvedModelPath)
+            initParams.nCtx = Int32(nCtx)
+            initParams.nGpuLayers = Int32(nGpuLayers)
+            initParams.nThreads = Int32(nThreads)
+            initParams.nBatch = Int32(nBatch)
+            initParams.nUBatch = Int32(nUBatch)
+            initParams.useMmap = useMmap
+            initParams.useMlock = useMlock
+            initParams.embedding = embedding
+            initParams.poolingType = Int32(poolingType)
+            initParams.embdNormalize = Int32(embdNormalize)
+            initParams.flashAttention = flashAttention
+            initParams.chatTemplate = chatTemplate
+            initParams.systemPrompt = systemPrompt
+            initParams.cacheTypeK = cacheTypeK
+            initParams.cacheTypeV = cacheTypeV
+            initParams.enableChatTemplate = enableChatTemplate
+            initParams.imageMinTokens = Int32(imageMinTokens)
+            
+            guard let llamaMobile = LlamaMobile(with: initParams) else {
+                DispatchQueue.main.async {
+                    call.reject("Failed to initialize LlamaMobile context")
+                }
+                return
+            }
+            
+            DispatchQueue.main.async {
+                let handle = self.getNextContextHandle()
+                self.contexts[handle] = llamaMobile
+                call.resolve(["contextHandle": handle])
             }
         }
     }
@@ -200,13 +195,13 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            await Task.detached {
-                llamaMobile.releaseContext()
-            }.value
+        DispatchQueue.global(qos: .userInitiated).async {
+            llamaMobile.releaseContext()
             
-            self.contexts.removeValue(forKey: contextHandle)
-            call.resolve()
+            DispatchQueue.main.async {
+                self.contexts.removeValue(forKey: contextHandle)
+                call.resolve()
+            }
         }
     }
     
@@ -247,67 +242,73 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         let parallelToolCalls = (params["parallelToolCalls"] as? Bool) ?? false
         let toolChoice = (params["toolChoice"] as? String)
         
-        Task {
+        let chatMessages = parseChatMessages(params["chatMessages"] as? [[String: Any]])
+        
+        DispatchQueue.global(qos: .userInitiated).async {
             do {
-                let result = try await Task.detached {
-                    var processedMediaPaths: [String] = []
-                    for mediaPath in mediaPaths {
-                        if mediaPath.hasPrefix("data:image/") {
-                            if let tempFilePath = self.saveBase64ImageToTempFile(mediaPath) {
-                                processedMediaPaths.append(tempFilePath)
-                            }
-                        } else {
-                            processedMediaPaths.append(mediaPath)
+                var processedMediaPaths: [String] = []
+                for mediaPath in mediaPaths {
+                    if mediaPath.hasPrefix("data:image/") {
+                        if let tempFilePath = self.saveBase64ImageToTempFile(mediaPath) {
+                            processedMediaPaths.append(tempFilePath)
                         }
+                    } else {
+                        processedMediaPaths.append(mediaPath)
                     }
-                    
-                    let completionParams = LlamaMobile.CompletionParams(
-                        prompt: prompt,
-                        maxTokens: Int32(maxTokens),
-                        nThreads: nThreads.map { Int32($0) },
-                        seed: Int32(seed),
-                        temperature: temperature,
-                        topK: Int32(topK),
-                        topP: topP,
-                        minP: minP,
-                        typicalP: typicalP,
-                        penaltyLastN: Int32(penaltyLastN),
-                        penaltyRepeat: penaltyRepeat,
-                        penaltyFreq: penaltyFreq,
-                        penaltyPresent: penaltyPresent,
-                        mirostat: Int32(mirostat),
-                        mirostatTau: mirostatTau,
-                        mirostatEta: mirostatEta,
-                        ignoreEos: ignoreEos,
-                        stopSequences: stopSequences,
-                        grammar: grammar,
-                        mediaPaths: processedMediaPaths,
-                        chatMessages: [],
-                        useJsonResponse: useJsonResponse,
-                        nProbs: Int32(nProbs),
-                        jsonSchema: jsonSchema,
-                        tools: tools,
-                        parallelToolCalls: parallelToolCalls,
-                        toolChoice: toolChoice
-                    )
-                    
-                    guard let genResult = llamaMobile.generateCompletion(with: completionParams) else {
-                        throw NSError(domain: "LlamaMobile", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to generate completion"])
-                    }
-                    return genResult
-                }.value
+                }
                 
-                call.resolve([
-                    "text": result.text,
-                    "tokensGenerated": result.tokensGenerated,
-                    "tokensEvaluated": result.tokensEvaluated,
-                    "truncated": result.truncated,
-                    "stoppedEos": result.stoppedEos,
-                    "stoppedWord": result.stoppedWord,
-                    "stoppedLimit": result.stoppedLimit
-                ])
+                let completionParams = LlamaMobile.CompletionParams(
+                    prompt: prompt,
+                    maxTokens: Int32(maxTokens),
+                    nThreads: nThreads.map { Int32($0) },
+                    seed: Int32(seed),
+                    temperature: temperature,
+                    topK: Int32(topK),
+                    topP: topP,
+                    minP: minP,
+                    typicalP: typicalP,
+                    penaltyLastN: Int32(penaltyLastN),
+                    penaltyRepeat: penaltyRepeat,
+                    penaltyFreq: penaltyFreq,
+                    penaltyPresent: penaltyPresent,
+                    mirostat: Int32(mirostat),
+                    mirostatTau: mirostatTau,
+                    mirostatEta: mirostatEta,
+                    ignoreEos: ignoreEos,
+                    stopSequences: stopSequences,
+                    grammar: grammar,
+                    mediaPaths: processedMediaPaths,
+                    chatMessages: chatMessages,
+                    useJsonResponse: useJsonResponse,
+                    nProbs: Int32(nProbs),
+                    jsonSchema: jsonSchema,
+                    tools: tools,
+                    parallelToolCalls: parallelToolCalls,
+                    toolChoice: toolChoice
+                )
+                
+                guard let genResult = llamaMobile.generateCompletion(with: completionParams) else {
+                    DispatchQueue.main.async {
+                        call.reject("Failed to generate completion")
+                    }
+                    return
+                }
+                
+                DispatchQueue.main.async {
+                    call.resolve([
+                        "text": genResult.text,
+                        "tokensGenerated": genResult.tokensGenerated,
+                        "tokensEvaluated": genResult.tokensEvaluated,
+                        "truncated": genResult.truncated,
+                        "stoppedEos": genResult.stoppedEos,
+                        "stoppedWord": genResult.stoppedWord,
+                        "stoppedLimit": genResult.stoppedLimit
+                    ])
+                }
             } catch {
-                call.reject(error.localizedDescription)
+                DispatchQueue.main.async {
+                    call.reject(error.localizedDescription)
+                }
             }
         }
     }
@@ -320,26 +321,24 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            do {
-                let result = try await Task.detached {
-                    guard let genResult = llamaMobile.generateOpenAICompletion(with: openAIJSON) else {
-                        throw NSError(domain: "LlamaMobile", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to generate OpenAI completion"])
-                    }
-                    return genResult
-                }.value
-                
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let genResult = llamaMobile.generateOpenAICompletion(with: openAIJSON) else {
+                DispatchQueue.main.async {
+                    call.reject("Failed to generate OpenAI completion")
+                }
+                return
+            }
+            
+            DispatchQueue.main.async {
                 call.resolve([
-                    "text": result.text,
-                    "tokensGenerated": result.tokensGenerated,
-                    "tokensEvaluated": result.tokensEvaluated,
-                    "truncated": result.truncated,
-                    "stoppedEos": result.stoppedEos,
-                    "stoppedWord": result.stoppedWord,
-                    "stoppedLimit": result.stoppedLimit
+                    "text": genResult.text,
+                    "tokensGenerated": genResult.tokensGenerated,
+                    "tokensEvaluated": genResult.tokensEvaluated,
+                    "truncated": genResult.truncated,
+                    "stoppedEos": genResult.stoppedEos,
+                    "stoppedWord": genResult.stoppedWord,
+                    "stoppedLimit": genResult.stoppedLimit
                 ])
-            } catch {
-                call.reject(error.localizedDescription)
             }
         }
     }
@@ -363,15 +362,15 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let grammar = await Task.detached {
-                return llamaMobile.loadGrammar(from: filePath)
-            }.value
+        DispatchQueue.global(qos: .userInitiated).async {
+            let grammar = llamaMobile.loadGrammar(from: filePath)
             
-            if let grammar = grammar {
-                call.resolve(["grammar": grammar])
-            } else {
-                call.reject("Failed to load grammar file")
+            DispatchQueue.main.async {
+                if let grammar = grammar {
+                    call.resolve(["grammar": grammar])
+                } else {
+                    call.reject("Failed to load grammar file")
+                }
             }
         }
     }
@@ -386,12 +385,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let success = await Task.detached {
-                return llamaMobile.initVocoder(vocoderModelPath: vocoderModelPath)
-            }.value
+        DispatchQueue.global(qos: .userInitiated).async {
+            let success = llamaMobile.initVocoder(vocoderModelPath: vocoderModelPath)
             
-            call.resolve(["success": success])
+            DispatchQueue.main.async {
+                call.resolve(["success": success])
+            }
         }
     }
     
@@ -402,11 +401,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            await Task.detached {
-                llamaMobile.releaseVocoder()
-            }.value
-            call.resolve()
+        DispatchQueue.global(qos: .userInitiated).async {
+            llamaMobile.releaseVocoder()
+            
+            DispatchQueue.main.async {
+                call.resolve()
+            }
         }
     }
     
@@ -417,11 +417,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let enabled = await Task.detached {
-                return llamaMobile.isVocoderEnabled()
-            }.value
-            call.resolve(["enabled": enabled])
+        DispatchQueue.global(qos: .userInitiated).async {
+            let enabled = llamaMobile.isVocoderEnabled()
+            
+            DispatchQueue.main.async {
+                call.resolve(["enabled": enabled])
+            }
         }
     }
     
@@ -432,11 +433,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let type = await Task.detached {
-                return llamaMobile.getTTSType()
-            }.value
-            call.resolve(["type": type.rawValue])
+        DispatchQueue.global(qos: .userInitiated).async {
+            let type = llamaMobile.getTTSType()
+            
+            DispatchQueue.main.async {
+                call.resolve(["type": type.rawValue])
+            }
         }
     }
     
@@ -453,53 +455,52 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         var options = LlamaMobile.TTSOptions()
         options.sampleRate = sampleRate
         
-        Task {
-            let result = await llamaMobile.generateSpeechAsync(
-                text: text,
-                options: options
-            )
-            
-            switch result {
-            case .success(let speechResult):
-                // Generate temporary file path
-                let tempFileName = "temp_audio_\(UUID().uuidString).wav"
+        DispatchQueue.global(qos: .userInitiated).async {
+            Task {
+                let result = await llamaMobile.generateSpeechAsync(
+                    text: text,
+                    options: options
+                )
                 
-                // Convert Int16 audio samples to Float by normalizing to [-1.0, 1.0]
-                let floatAudioData = speechResult.audioSamples.map { Float($0) / Float(Int16.max) }
-                
-                // Use existing saveAudioToWav method internally
-                let saveSuccess = await Task.detached {
-                    return self.saveAudioToWavInternal(
+                switch result {
+                case .success(let speechResult):
+                    let tempFileName = "temp_audio_\(UUID().uuidString).wav"
+                    
+                    let floatAudioData = speechResult.audioSamples.map { Float($0) / Float(Int16.max) }
+                    
+                    let saveSuccess = self.saveAudioToWavInternal(
                         contextHandle: contextHandle,
                         llamaMobile: llamaMobile,
                         filePath: tempFileName,
                         audioData: floatAudioData,
                         sampleRate: speechResult.sampleRate
                     )
-                }.value
-                
-                if saveSuccess {
-                    // Resolve with the file path
-                    let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                    let tempFilePath = documentsDir.appendingPathComponent(tempFileName).path
                     
-                    // Convert TTSMethod to string for JSON serialization
-                    let methodUsedString = speechResult.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
-                    
-                    // Round duration to 2 decimal places for better JSON serialization
-                    let roundedDuration = Double(round(speechResult.duration * 100) / 100)
-                    
-                    call.resolve([
-                        "audioPath": tempFilePath,
-                        "sampleRate": speechResult.sampleRate,
-                        "duration": roundedDuration,
-                        "methodUsed": methodUsedString
-                    ])
-                } else {
-                    call.reject("Failed to save audio to file")
+                    if saveSuccess {
+                        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                        let tempFilePath = documentsDir.appendingPathComponent(tempFileName).path
+                        
+                        let methodUsedString = speechResult.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
+                        let roundedDuration = Double(round(speechResult.duration * 100) / 100)
+                        
+                        DispatchQueue.main.async {
+                            call.resolve([
+                                "audioPath": tempFilePath,
+                                "sampleRate": speechResult.sampleRate,
+                                "duration": roundedDuration,
+                                "methodUsed": methodUsedString
+                            ])
+                        }
+                    } else {
+                        DispatchQueue.main.async {
+                            call.reject("Failed to save audio to file")
+                        }
+                    }
+                case .failure(let error):
+                    DispatchQueue.main.async {
+                        call.reject("Failed to generate speech: \(error.localizedDescription)")
+                    }
                 }
-            case .failure(let error):
-                call.reject("Failed to generate speech: \(error.localizedDescription)")
             }
         }
     }
@@ -517,55 +518,50 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         var options = LlamaMobile.TTSOptions()
         options.sampleRate = sampleRate
         
-        Task {
-            let result = await Task.detached {
-                return llamaMobile.generateSpeech(
-                    text: text,
-                    options: options
-                )
-            }.value
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = llamaMobile.generateSpeech(
+                text: text,
+                options: options
+            )
             
             switch result {
             case .success(let speechResult):
-                // Generate temporary file path
                 let tempFileName = "temp_audio_\(UUID().uuidString).wav"
                 
-                // Convert Int16 audio samples to Float by normalizing to [-1.0, 1.0]
                 let floatAudioData = speechResult.audioSamples.map { Float($0) / Float(Int16.max) }
                 
-                // Use existing saveAudioToWav method internally
-                let saveSuccess = await Task.detached {
-                    return self.saveAudioToWavInternal(
-                        contextHandle: contextHandle,
-                        llamaMobile: llamaMobile,
-                        filePath: tempFileName,
-                        audioData: floatAudioData,
-                        sampleRate: speechResult.sampleRate
-                    )
-                }.value
+                let saveSuccess = self.saveAudioToWavInternal(
+                    contextHandle: contextHandle,
+                    llamaMobile: llamaMobile,
+                    filePath: tempFileName,
+                    audioData: floatAudioData,
+                    sampleRate: speechResult.sampleRate
+                )
                 
                 if saveSuccess {
-                    // Resolve with the file path
                     let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
                     let tempFilePath = documentsDir.appendingPathComponent(tempFileName).path
                     
-                    // Convert TTSMethod to string for JSON serialization
                     let methodUsedString = speechResult.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
-                    
-                    // Round duration to 2 decimal places for better JSON serialization
                     let roundedDuration = Double(round(speechResult.duration * 100) / 100)
                     
-                    call.resolve([
-                        "audioPath": tempFilePath,
-                        "sampleRate": speechResult.sampleRate,
-                        "duration": roundedDuration,
-                        "methodUsed": methodUsedString
-                    ])
+                    DispatchQueue.main.async {
+                        call.resolve([
+                            "audioPath": tempFilePath,
+                            "sampleRate": speechResult.sampleRate,
+                            "duration": roundedDuration,
+                            "methodUsed": methodUsedString
+                        ])
+                    }
                 } else {
-                    call.reject("Failed to save audio to file")
+                    DispatchQueue.main.async {
+                        call.reject("Failed to save audio to file")
+                    }
                 }
             case .failure(let error):
-                call.reject("Failed to generate speech sync: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    call.reject("Failed to generate speech sync: \(error.localizedDescription)")
+                }
             }
         }
     }
@@ -611,30 +607,36 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         var ttsOptions = LlamaMobile.TTSOptions()
         ttsOptions.sampleRate = sampleRate
         
-        Task {
-            let result = await llamaMobile.generateSpeechStreamForLongTextAsync(
-                text: text,
-                options: ttsOptions,
-                progressHandler: { progress in
-                    self.notifyListeners("progress", data: ["progress": progress])
-                },
-                audioChunkHandler: { audioChunk in
-                    self.notifyListeners("audioChunk", data: ["audio": audioChunk])
-                }
-            )
-            
-            switch result {
-            case .success(let metadata):
-                let methodUsedString = metadata.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
-                let roundedDuration = Double(round(metadata.duration * 100) / 100)
+        DispatchQueue.global(qos: .userInitiated).async {
+            Task {
+                let result = await llamaMobile.generateSpeechStreamForLongTextAsync(
+                    text: text,
+                    options: ttsOptions,
+                    progressHandler: { progress in
+                        self.notifyListeners("progress", data: ["progress": progress])
+                    },
+                    audioChunkHandler: { audioChunk in
+                        self.notifyListeners("audioChunk", data: ["audio": audioChunk])
+                    }
+                )
                 
-                call.resolve([
-                    "sampleRate": metadata.sampleRate,
-                    "duration": roundedDuration,
-                    "methodUsed": methodUsedString
-                ])
-            case .failure(let error):
-                call.reject("Failed to generate speech stream: \(error.localizedDescription)")
+                switch result {
+                case .success(let metadata):
+                    let methodUsedString = metadata.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
+                    let roundedDuration = Double(round(metadata.duration * 100) / 100)
+                    
+                    DispatchQueue.main.async {
+                        call.resolve([
+                            "sampleRate": metadata.sampleRate,
+                            "duration": roundedDuration,
+                            "methodUsed": methodUsedString
+                        ])
+                    }
+                case .failure(let error):
+                    DispatchQueue.main.async {
+                        call.reject("Failed to generate speech stream: \(error.localizedDescription)")
+                    }
+                }
             }
         }
     }
@@ -650,18 +652,18 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         
         let sampleRate = call.getInt("sampleRate") ?? 24000
         
-        Task {
-            let success = await Task.detached {
-                return self.saveAudioToWavInternal(
-                    contextHandle: contextHandle,
-                    llamaMobile: llamaMobile,
-                    filePath: filePath,
-                    audioData: audioData,
-                    sampleRate: sampleRate
-                )
-            }.value
+        DispatchQueue.global(qos: .userInitiated).async {
+            let success = self.saveAudioToWavInternal(
+                contextHandle: contextHandle,
+                llamaMobile: llamaMobile,
+                filePath: filePath,
+                audioData: audioData,
+                sampleRate: sampleRate
+            )
             
-            call.resolve(["success": success])
+            DispatchQueue.main.async {
+                call.resolve(["success": success])
+            }
         }
     }
     
@@ -673,12 +675,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         
         let sampleRate = call.getInt("sampleRate") ?? 24000
         
-        Task {
-            let success = await Task.detached {
-                return self.playAudioSamples(audioData: audioData, sampleRate: Int32(sampleRate))
-            }.value
+        DispatchQueue.global(qos: .userInitiated).async {
+            let success = self.playAudioSamples(audioData: audioData, sampleRate: Int32(sampleRate))
             
-            call.resolve(["success": success])
+            DispatchQueue.main.async {
+                call.resolve(["success": success])
+            }
         }
     }
     
@@ -758,12 +760,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let success = await Task.detached {
-                return self.playAudioFromFilePath(filePath: filePath)
-            }.value
+        DispatchQueue.global(qos: .userInitiated).async {
+            let success = self.playAudioFromFilePath(filePath: filePath)
             
-            call.resolve(["success": success])
+            DispatchQueue.main.async {
+                call.resolve(["success": success])
+            }
         }
     }
     
@@ -821,12 +823,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         
         let useGpu = call.getBool("useGpu") ?? true
         
-        Task {
-            let success = await Task.detached {
-                return llamaMobile.initMultimodal(mmprojPath: mmprojPath, useGpu: useGpu)
-            }.value
+        DispatchQueue.global(qos: .userInitiated).async {
+            let success = llamaMobile.initMultimodal(mmprojPath: mmprojPath, useGpu: useGpu)
             
-            call.resolve(["success": success])
+            DispatchQueue.main.async {
+                call.resolve(["success": success])
+            }
         }
     }
     
@@ -837,11 +839,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            await Task.detached {
-                llamaMobile.releaseMultimodal()
-            }.value
-            call.resolve()
+        DispatchQueue.global(qos: .userInitiated).async {
+            llamaMobile.releaseMultimodal()
+            
+            DispatchQueue.main.async {
+                call.resolve()
+            }
         }
     }
     
@@ -852,11 +855,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let enabled = await Task.detached {
-                return llamaMobile.isMultimodalEnabled()
-            }.value
-            call.resolve(["enabled": enabled])
+        DispatchQueue.global(qos: .userInitiated).async {
+            let enabled = llamaMobile.isMultimodalEnabled()
+            
+            DispatchQueue.main.async {
+                call.resolve(["enabled": enabled])
+            }
         }
     }
     
@@ -867,11 +871,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let supported = await Task.detached {
-                return llamaMobile.supportsVision()
-            }.value
-            call.resolve(["supported": supported])
+        DispatchQueue.global(qos: .userInitiated).async {
+            let supported = llamaMobile.supportsVision()
+            
+            DispatchQueue.main.async {
+                call.resolve(["supported": supported])
+            }
         }
     }
     
@@ -882,11 +887,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let supported = await Task.detached {
-                return llamaMobile.supportsAudio()
-            }.value
-            call.resolve(["supported": supported])
+        DispatchQueue.global(qos: .userInitiated).async {
+            let supported = llamaMobile.supportsAudio()
+            
+            DispatchQueue.main.async {
+                call.resolve(["supported": supported])
+            }
         }
     }
     
@@ -900,20 +906,20 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let success = await Task.detached {
-                var loraAdapters: [LlamaMobile.LoraAdapter] = []
-                for adapter in adapters {
-                    if let path = adapter["path"] as? String {
-                        let scale = (adapter["scale"] as? Double) ?? 1.0
-                        loraAdapters.append(LlamaMobile.LoraAdapter(path: path, scale: Float(scale)))
-                    }
+        DispatchQueue.global(qos: .userInitiated).async {
+            var loraAdapters: [LlamaMobile.LoraAdapter] = []
+            for adapter in adapters {
+                if let path = adapter["path"] as? String {
+                    let scale = (adapter["scale"] as? Double) ?? 1.0
+                    loraAdapters.append(LlamaMobile.LoraAdapter(path: path, scale: Float(scale)))
                 }
-                
-                return llamaMobile.applyLoraAdapters(loraAdapters)
-            }.value
+            }
             
-            call.resolve(["success": success])
+            let success = llamaMobile.applyLoraAdapters(loraAdapters)
+            
+            DispatchQueue.main.async {
+                call.resolve(["success": success])
+            }
         }
     }
     
@@ -924,11 +930,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            await Task.detached {
-                llamaMobile.removeLoraAdapters()
-            }.value
-            call.resolve()
+        DispatchQueue.global(qos: .userInitiated).async {
+            llamaMobile.removeLoraAdapters()
+            
+            DispatchQueue.main.async {
+                call.resolve()
+            }
         }
     }
     
@@ -939,15 +946,15 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let adapterDicts = await Task.detached {
-                let adapters = llamaMobile.getLoadedLoraAdapters()
-                return adapters?.map { adapter -> [String: Any] in
-                    return ["path": adapter.path, "scale": adapter.scale]
-                } ?? []
-            }.value
+        DispatchQueue.global(qos: .userInitiated).async {
+            let adapters = llamaMobile.getLoadedLoraAdapters()
+            let adapterDicts = adapters?.map { adapter -> [String: Any] in
+                return ["path": adapter.path, "scale": adapter.scale]
+            } ?? []
             
-            call.resolve(["adapters": adapterDicts])
+            DispatchQueue.main.async {
+                call.resolve(["adapters": adapterDicts])
+            }
         }
     }
     
@@ -964,25 +971,25 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         let maxTokens = call.getInt("maxTokens") ?? 128
         let enableStreaming = call.getBool("enableStreaming") ?? false
         
-        Task {
-            let result = await Task.detached {
-                return llamaMobile.generateResponse(
-                    userMessage: userMessage,
-                    maxTokens: Int32(maxTokens),
-                    tokenCallback: enableStreaming ? { token in
-                        self.notifyListeners("token", data: ["token": token])
-                        return true
-                    } : nil
-                )
-            }.value
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = llamaMobile.generateResponse(
+                userMessage: userMessage,
+                maxTokens: Int32(maxTokens),
+                tokenCallback: enableStreaming ? { token in
+                    self.notifyListeners("token", data: ["token": token])
+                    return true
+                } : nil
+            )
             
-            if let result = result {
-                call.resolve([
-                    "text": result.text,
-                    "tokensGenerated": result.tokensGenerated
-                ])
-            } else {
-                call.reject("Failed to generate response")
+            DispatchQueue.main.async {
+                if let result = result {
+                    call.resolve([
+                        "text": result.text,
+                        "tokensGenerated": result.tokensGenerated
+                    ])
+                } else {
+                    call.reject("Failed to generate response")
+                }
             }
         }
     }
@@ -1005,11 +1012,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let active = await Task.detached {
-                return llamaMobile.isConversationActive()
-            }.value
-            call.resolve(["active": active])
+        DispatchQueue.global(qos: .userInitiated).async {
+            let active = llamaMobile.isConversationActive()
+            
+            DispatchQueue.main.async {
+                call.resolve(["active": active])
+            }
         }
     }
     
@@ -1023,15 +1031,15 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let embeddings = await Task.detached {
-                return llamaMobile.generateEmbeddings(for: text)
-            }.value
+        DispatchQueue.global(qos: .userInitiated).async {
+            let embeddings = llamaMobile.generateEmbeddings(for: text)
             
-            if let embeddings = embeddings {
-                call.resolve(["embedding": embeddings])
-            } else {
-                call.reject("Failed to generate embeddings")
+            DispatchQueue.main.async {
+                if let embeddings = embeddings {
+                    call.resolve(["embedding": embeddings])
+                } else {
+                    call.reject("Failed to generate embeddings")
+                }
             }
         }
     }
@@ -1046,13 +1054,13 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let tokens = await Task.detached {
-                return llamaMobile.tokenize(text: text)
-            }.value
-            
+        DispatchQueue.global(qos: .userInitiated).async {
+            let tokens = llamaMobile.tokenize(text: text)
             let tokenInts = tokens?.map { Int($0) } ?? []
-            call.resolve(["tokens": tokenInts])
+            
+            DispatchQueue.main.async {
+                call.resolve(["tokens": tokenInts])
+            }
         }
     }
     
@@ -1064,13 +1072,13 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let text = await Task.detached {
-                let tokenInt32s = tokens.map { Int32($0) }
-                return llamaMobile.detokenize(tokens: tokenInt32s)
-            }.value
+        DispatchQueue.global(qos: .userInitiated).async {
+            let tokenInt32s = tokens.map { Int32($0) }
+            let text = llamaMobile.detokenize(tokens: tokenInt32s)
             
-            call.resolve(["text": text ?? ""])
+            DispatchQueue.main.async {
+                call.resolve(["text": text ?? ""])
+            }
         }
     }
     
@@ -1083,11 +1091,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let size = await Task.detached {
-                return llamaMobile.getContextWindowSize()
-            }.value
-            call.resolve(["size": Int(size)])
+        DispatchQueue.global(qos: .userInitiated).async {
+            let size = llamaMobile.getContextWindowSize()
+            
+            DispatchQueue.main.async {
+                call.resolve(["size": Int(size)])
+            }
         }
     }
     
@@ -1098,11 +1107,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let dimension = await Task.detached {
-                return llamaMobile.getEmbeddingDimension()
-            }.value
-            call.resolve(["dimension": Int(dimension)])
+        DispatchQueue.global(qos: .userInitiated).async {
+            let dimension = llamaMobile.getEmbeddingDimension()
+            
+            DispatchQueue.main.async {
+                call.resolve(["dimension": Int(dimension)])
+            }
         }
     }
     
@@ -1113,11 +1123,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let description = await Task.detached {
-                return llamaMobile.getModelDescription()
-            }.value
-            call.resolve(["description": description ?? ""])
+        DispatchQueue.global(qos: .userInitiated).async {
+            let description = llamaMobile.getModelDescription()
+            
+            DispatchQueue.main.async {
+                call.resolve(["description": description ?? ""])
+            }
         }
     }
     
@@ -1128,11 +1139,12 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let size = await Task.detached {
-                return llamaMobile.getModelSize()
-            }.value
-            call.resolve(["size": size])
+        DispatchQueue.global(qos: .userInitiated).async {
+            let size = llamaMobile.getModelSize()
+            
+            DispatchQueue.main.async {
+                call.resolve(["size": size])
+            }
         }
     }
     
@@ -1143,20 +1155,22 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let count = await Task.detached {
-                return llamaMobile.getModelParametersCount()
-            }.value
-            call.resolve(["count": count])
+        DispatchQueue.global(qos: .userInitiated).async {
+            let count = llamaMobile.getModelParametersCount()
+            
+            DispatchQueue.main.async {
+                call.resolve(["count": count])
+            }
         }
     }
     
     @objc func getGpuBackendInfo(_ call: CAPPluginCall) {
-        Task {
-            let info = await Task.detached {
-                return LlamaMobile.getGpuBackendInfo()
-            }.value
-            call.resolve(["info": info])
+        DispatchQueue.global(qos: .userInitiated).async {
+            let info = LlamaMobile.getGpuBackendInfo()
+            
+            DispatchQueue.main.async {
+                call.resolve(["info": info])
+            }
         }
     }
     
@@ -1172,86 +1186,84 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         
-        Task {
-            let files = await Task.detached {
-                var files: [String] = []
-                let fileManager = FileManager.default
-                
-                if fileManager.fileExists(atPath: directory), 
-                   let enumerator = fileManager.enumerator(atPath: directory) {
-                    while let file = enumerator.nextObject() as? String {
-                        files.append(file)
-                    }
-                }
-                return files
-            }.value
+        DispatchQueue.global(qos: .userInitiated).async {
+            var files: [String] = []
+            let fileManager = FileManager.default
             
-            call.resolve(["files": files])
+            if fileManager.fileExists(atPath: directory), 
+               let enumerator = fileManager.enumerator(atPath: directory) {
+                while let file = enumerator.nextObject() as? String {
+                    files.append(file)
+                }
+            }
+            
+            DispatchQueue.main.async {
+                call.resolve(["files": files])
+            }
         }
     }
     
     @objc func listModels(_ call: CAPPluginCall) {
-        Task {
-            let modelArray = await Task.detached {
-                // Define model info struct
-                struct ModelInfo {
-                    let name: String
-                    let path: String
-                }
-                
-                var models: [ModelInfo] = []
-                let fileManager = FileManager.default
-                
-                // Get documents directory
-                let documentsDirectory = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
-                
-                // Directories to scan
-                var modelDirectories = [
-                    documentsDirectory,
-                    documentsDirectory + "/models",
-                    documentsDirectory + "/Downloads",
-                    documentsDirectory + "/Downloads/models"
-                ]
-                
-                // Add app bundle directories for bundled models
-                let bundlePath = Bundle.main.bundlePath
-                let bundleModelDirectories = [
-                    bundlePath + "/public/models",
-                    bundlePath + "/models",
-                    bundlePath
-                ]
-                modelDirectories.append(contentsOf: bundleModelDirectories)
-                
-                // Model file extensions to look for
-                let modelExtensions = ["gguf", "safetensors", "bin"]
-                
-                for directory in modelDirectories {
-                    if fileManager.fileExists(atPath: directory), 
-                       let enumerator = fileManager.enumerator(atPath: directory) {
-                        while let file = enumerator.nextObject() as? String {
-                            let fullPath = directory + (directory.hasSuffix("/") ? "" : "/") + file
-                            let lowercasedFile = file.lowercased()
-                            
-                            // Check if file has a model extension
-                            for ext in modelExtensions {
-                                if lowercasedFile.hasSuffix("." + ext) {
-                                    models.append(ModelInfo(name: file, path: fullPath))
-                                    break
-                                }
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Define model info struct
+            struct ModelInfo {
+                let name: String
+                let path: String
+            }
+            
+            var models: [ModelInfo] = []
+            let fileManager = FileManager.default
+            
+            // Get documents directory
+            let documentsDirectory = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
+            
+            // Directories to scan
+            var modelDirectories = [
+                documentsDirectory,
+                documentsDirectory + "/models",
+                documentsDirectory + "/Downloads",
+                documentsDirectory + "/Downloads/models"
+            ]
+            
+            // Add app bundle directories for bundled models
+            let bundlePath = Bundle.main.bundlePath
+            let bundleModelDirectories = [
+                bundlePath + "/public/models",
+                bundlePath + "/models",
+                bundlePath
+            ]
+            modelDirectories.append(contentsOf: bundleModelDirectories)
+            
+            // Model file extensions to look for
+            let modelExtensions = ["gguf", "safetensors", "bin"]
+            
+            for directory in modelDirectories {
+                if fileManager.fileExists(atPath: directory), 
+                   let enumerator = fileManager.enumerator(atPath: directory) {
+                    while let file = enumerator.nextObject() as? String {
+                        let fullPath = directory + (directory.hasSuffix("/") ? "" : "/") + file
+                        let lowercasedFile = file.lowercased()
+                        
+                        // Check if file has a model extension
+                        for ext in modelExtensions {
+                            if lowercasedFile.hasSuffix("." + ext) {
+                                models.append(ModelInfo(name: file, path: fullPath))
+                                break
                             }
                         }
                     }
                 }
-                
-                // Convert to the expected format
-                var modelsResult: [[String: String]] = []
-                for model in models {
-                    modelsResult.append(["name": model.name, "path": model.path])
-                }
-                return modelsResult
-            }.value
+            }
             
-            call.resolve(["models": modelArray])
+            // Convert to the expected format
+            var modelsResult: [[String: String]] = []
+            for model in models {
+                modelsResult.append(["name": model.name, "path": model.path])
+            }
+            
+            DispatchQueue.main.async {
+                call.resolve(["models": modelsResult])
+            }
         }
     }
     
@@ -1324,6 +1336,29 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
     
     
     // MARK: - Helper Methods
+    
+    private func parseChatMessages(_ messages: [[String: Any]]?) -> [LlamaMobile.ChatMessage] {
+        guard let messages = messages else { return [] }
+        
+        return messages.compactMap { messageDict -> LlamaMobile.ChatMessage? in
+            guard let role = messageDict["role"] as? String,
+                  let content = messageDict["content"] as? String else {
+                return nil
+            }
+            
+            let reasoningContent = messageDict["reasoning_content"] as? String
+            let toolName = messageDict["tool_name"] as? String
+            let toolCallId = messageDict["tool_call_id"] as? String
+            
+            return LlamaMobile.ChatMessage(
+                role: role,
+                content: content,
+                reasoningContent: reasoningContent,
+                toolName: toolName,
+                toolCallId: toolCallId
+            )
+        }
+    }
     
     private func saveBase64ImageToTempFile(_ base64Data: String) -> String? {
         guard base64Data.hasPrefix("data:image/") else {
