@@ -92,33 +92,35 @@ The SDK includes test files that validate functionality, but full test execution
 
 ### How to Run Tests
 
-1. **Open the SDK in Xcode**
+1. **Run from the package root** (Xcode auto-schemes Swift packages; no
+   `generate-xcodeproj` needed):
    ```bash
-   # Generate Xcode project (optional)
    cd llama_mobile-ios-SDK
-   swift package generate-xcodeproj
-   
-   # Open in Xcode
-   open LlamaMobile.xcodeproj
+   xcodebuild test -scheme LlamaMobile \
+     -destination 'platform=iOS Simulator,name=iPhone 16 Pro'
    ```
 
 2. **Configure Test Environment**
-   - Ensure you have an iOS simulator set up
-   - Update model paths in `Tests/LlamaMobileTests/LlamaMobileTests.swift` to point to actual model files
-   - `LlamaEngineTests.swift` (v2 §8 conformance: sync/async/stream/abort) uses
-     the same model paths and skips with `XCTSkip` when a model is missing; you
-     can override the model with the `LLAMA_MOBILE_TEST_MODEL` environment
-     variable (or scheme argument) to point at a GGUF on your device.
+   - `LlamaEngineTests` (v2 §8 conformance: sync/async/stream/abort, plus
+     tokenize/detokenize round-trip, `modelInfo` fields, embeddings on the
+     Qwen3-Embedding fixture) reads model paths from
+     `Tests/LlamaMobileTests/LlamaEngineTests.swift`. Set
+     `LLAMA_MOBILE_TEST_MODEL` to a GGUF to override the chat fixture.
+     Model-backed tests `XCTSkip` when no model is reachable.
+   - The multimodal vision test is device-only (the mtmd projector loads on the
+     GPU and simulator Metal crashes) — it is skipped on simulators and runs on
+     a real iPhone.
 
 3. **Run Tests**
-   - Select an iOS simulator as the run destination
-   - Press `Command+U` to run all tests, or run specific tests from the Test Navigator
+   - Or open the package in Xcode, pick an iOS simulator, and press
+     `Command+U`.
 
 ### Test Requirements
 
 - **Xcode 14.0+** with iOS simulator support
 - **iOS 15.0+** simulator
-- **Model files** at paths specified in test files
+- **Model files** at paths specified in test files (chat model; optional
+  embedding model and vision fixtures for the embedding/vision tests)
 - **Proper iOS sandbox permissions**
 
 ## Integration Options
@@ -261,6 +263,9 @@ git tag keeps the old line available.
 
 For detailed API documentation, please refer to the comments in the
 `LlamaEngine.swift` file and the frozen `lib/llama_mobile_v2.h` header.
+Also available on `LlamaEngine`: `modelInfo()`, `tokenize(_:)`/`detokenize(_:)`,
+batch `embed(_:)`, and `initMultimodal(mmprojPath:)` / `releaseMultimodal()`
+(attach an mmproj, then include `LlamaMedia` in requests for vision).
 
 
 ## Troubleshooting

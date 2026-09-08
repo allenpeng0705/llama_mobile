@@ -1,2030 +1,346 @@
-import 'llama_mobile_flutter_sdk_platform_interface.dart';
-import 'package:flutter/foundation.dart';
+// llama_mobile_flutter_sdk.dart — llama_mobile v2 Flutter wrapper (M6)
+//
+// Threading contract (docs/api-contract-v2.md §8): Dart is async-first, so the
+// API below never blocks the UI isolate; every call is a Future. The native
+// side enforces one active generation per engine (single-flight); a second
+// concurrent generate throws LlamaException.alreadyRunning. `abort()` is
+// thread-safe on the platform side and stops the running generation
+// (result.stopReason == LlamaStopReason.aborted).
+//
+// The v1 Dart surface was removed with the rest of the v1 API on the v2 branch
+// (see docs/v1-purge-workplan.md). This file talks to the platform plugins over
+// the method channel `llama_mobile_flutter_sdk/v2`.
 
-/// Log levels for the SDK
-enum LogLevel {
-  debug(0),
-  info(1),
-  warning(2),
-  error(3),
-  none(4);
+import 'package:flutter/services.dart';
 
-  final int value;
-  const LogLevel(this.value);
+/// v2 status codes (mirrors llama_mobile_status_t).
+enum LlamaStatus {
+  ok(0),
+  invalidArgument(-1),
+  samplerInit(-2),
+  generation(-3),
+  modelLoad(-4),
+  modelNotFound(-5),
+  io(-6),
+  unsupported(-7),
+  outOfMemory(-8),
+  contextFull(-9),
+  aborted(-10),
+  notInitialized(-11),
+  network(-12),
+  checksum(-13),
+  alreadyRunning(-14);
 
-  int get rawValue => value;
+  final int code;
+  const LlamaStatus(this.code);
 
-  factory LogLevel.fromRawValue(int value) {
-    switch (value) {
-      case 0:
-        return debug;
-      case 1:
-        return info;
-      case 2:
-        return warning;
-      case 3:
-        return error;
-      case 4:
-        return none;
-      default:
-        return info;
+  static LlamaStatus fromCode(int code) {
+    for (final s in LlamaStatus.values) {
+      if (s.code == code) return s;
     }
+    return LlamaStatus.generation;
   }
 }
 
-/// Method used for TTS generation
-enum TTSMethod {
-  builtIn,
-  customWorkflow;
+class LlamaException implements Exception {
+  final LlamaStatus status;
+  final String message;
+  LlamaException(this.status, this.message);
 
-  int get rawValue {
-    switch (this) {
-      case builtIn:
-        return 0;
-      case customWorkflow:
-        return 1;
-    }
-  }
+  factory LlamaException.fromNative(int code, String context) =>
+      LlamaException(LlamaStatus.fromCode(code), '$context (status $code)');
 
-  factory TTSMethod.fromRawValue(int value) {
-    switch (value) {
-      case 0:
-        return builtIn;
-      case 1:
-        return customWorkflow;
-      default:
-        return builtIn;
-    }
-  }
+  @override
+  String toString() => 'LlamaException(${status.name}): $message';
 }
 
-/// Error types for TTS operations
-enum TTSError {
-  noModelLoaded,
-  noVocoderEnabled,
-  invalidText,
-  generationFailed,
-  formattingFailed,
-  tokenizationFailed,
-  audioDecodingFailed,
-  fileSaveFailed,
-  unknownError;
+/// Sampling options (defaults match llama_mobile_sampling_init).
+class LlamaSampling {
+  int seed = -1;
+  double temperature = 0.8;
+  int topK = 40;
+  double topP = 0.95;
+  double minP = 0.05;
+  double typicalP = 1.0;
+  double penaltyRepeat = 1.1;
+  int penaltyLastN = 64;
+  double penaltyFreq = 0;
+  double penaltyPresent = 0;
+  int mirostat = 0;
+  double mirostatTau = 5.0;
+  double mirostatEta = 0.1;
+  bool ignoreEos = false;
 
-  String get message {
-    switch (this) {
-      case noModelLoaded:
-        return 'No model loaded';
-      case noVocoderEnabled:
-        return 'No vocoder enabled';
-      case invalidText:
-        return 'Invalid text';
-      case generationFailed:
-        return 'Generation failed';
-      case formattingFailed:
-        return 'Formatting failed';
-      case tokenizationFailed:
-        return 'Tokenization failed';
-      case audioDecodingFailed:
-        return 'Audio decoding failed';
-      case fileSaveFailed:
-        return 'File save failed';
-      case unknownError:
-        return 'Unknown error';
-    }
-  }
+  Map<String, dynamic> toJson() => {
+        'seed': seed,
+        'temperature': temperature,
+        'topK': topK,
+        'topP': topP,
+        'minP': minP,
+        'typicalP': typicalP,
+        'penaltyRepeat': penaltyRepeat,
+        'penaltyLastN': penaltyLastN,
+        'penaltyFreq': penaltyFreq,
+        'penaltyPresent': penaltyPresent,
+        'mirostat': mirostat,
+        'mirostatTau': mirostatTau,
+        'mirostatEta': mirostatEta,
+        'ignoreEos': ignoreEos,
+      };
 }
 
-/// Parameters for initializing a LlamaMobile context
-class InitParams {
-  final String modelPath;
-  final String? chatTemplate;
-  final String? systemPrompt;
-  final int nCtx;
-  final int nBatch;
-  final int nUBatch;
-  final int nGpuLayers;
-  final int nThreads;
-  final bool useMmap;
-  final bool useMlock;
-  final bool embedding;
-  final int poolingType;
-  final int embdNormalize;
-  final bool flashAttention;
-  final String? cacheTypeK;
-  final String? cacheTypeV;
-  final bool enableChatTemplate;
-  final int imageMinTokens;
-
-  InitParams({
-    required this.modelPath,
-    this.chatTemplate,
-    this.systemPrompt,
-    this.nCtx = 2048,
-    this.nBatch = 512,
-    this.nUBatch = 512,
-    this.nGpuLayers = 0,
-    this.nThreads = 4,
-    this.useMmap = true,
-    this.useMlock = false,
-    this.embedding = false,
-    this.poolingType = 0,
-    this.embdNormalize = 0,
-    this.flashAttention = false,
-    this.cacheTypeK,
-    this.cacheTypeV,
-    this.enableChatTemplate = true,
-    this.imageMinTokens = -1,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'modelPath': modelPath,
-      'chatTemplate': chatTemplate,
-      'systemPrompt': systemPrompt,
-      'nCtx': nCtx,
-      'nBatch': nBatch,
-      'nUBatch': nUBatch,
-      'nGpuLayers': nGpuLayers,
-      'nThreads': nThreads,
-      'useMmap': useMmap,
-      'useMlock': useMlock,
-      'embedding': embedding,
-      'poolingType': poolingType,
-      'embdNormalize': embdNormalize,
-      'flashAttention': flashAttention,
-      'cacheTypeK': cacheTypeK,
-      'cacheTypeV': cacheTypeV,
-      'enableChatTemplate': enableChatTemplate,
-      'imageMinTokens': imageMinTokens,
-    };
-  }
-}
-
-/// Parameters for text completion
-class CompletionParams {
-  final String prompt;
-  final int maxTokens;
-  final int nThreads;
-  final int seed;
-  final double temperature;
-  final int topK;
-  final double topP;
-  final double minP;
-  final double typicalP;
-  final int penaltyLastN;
-  final double penaltyRepeat;
-  final double penaltyFreq;
-  final double penaltyPresent;
-  final int mirostat;
-  final double mirostatTau;
-  final double mirostatEta;
-  final bool ignoreEos;
-  final List<String> stopSequences;
-  final String? grammar;
-  final bool useJsonResponse;
-  final int nProbs;
-  final String? jsonSchema;
-  final String? tools;
-  final bool parallelToolCalls;
-  final String? toolChoice;
-  final List<String> mediaPaths;
-  final List<ChatMessage> chatMessages;
-
-  CompletionParams({
-    required this.prompt,
-    this.maxTokens = 1024,
-    this.nThreads = 4,
-    this.seed = -1,
-    this.temperature = 0.8,
-    this.topK = 40,
-    this.topP = 0.95,
-    this.minP = 0.05,
-    this.typicalP = 1.0,
-    this.penaltyLastN = 64,
-    this.penaltyRepeat = 1.1,
-    this.penaltyFreq = 0.0,
-    this.penaltyPresent = 0.0,
-    this.mirostat = 0,
-    this.mirostatTau = 5.0,
-    this.mirostatEta = 0.1,
-    this.ignoreEos = false,
-    this.stopSequences = const [],
-    this.grammar,
-    this.useJsonResponse = true,
-    this.nProbs = 0,
-    this.jsonSchema,
-    this.tools,
-    this.parallelToolCalls = false,
-    this.toolChoice,
-    this.mediaPaths = const [],
-    this.chatMessages = const [],
-  });
-
-  CompletionParams.forChat({
-    required this.chatMessages,
-    this.maxTokens = 1024,
-    this.nThreads = 4,
-    this.seed = -1,
-    this.temperature = 0.7,
-    this.topK = 40,
-    this.topP = 0.95,
-    this.minP = 0.05,
-    this.typicalP = 1.0,
-    this.penaltyLastN = 64,
-    this.penaltyRepeat = 1.1,
-    this.penaltyFreq = 0.0,
-    this.penaltyPresent = 0.0,
-    this.mirostat = 0,
-    this.mirostatTau = 5.0,
-    this.mirostatEta = 0.1,
-    this.ignoreEos = false,
-    this.stopSequences = const [],
-    this.grammar,
-    this.useJsonResponse = true,
-    this.nProbs = 0,
-    this.jsonSchema,
-    this.tools,
-    this.parallelToolCalls = false,
-    this.toolChoice,
-    this.mediaPaths = const [],
-  }) : prompt = '';
-
-  Map<String, dynamic> toMap() {
-    return {
-      'prompt': prompt,
-      'maxTokens': maxTokens,
-      'nThreads': nThreads,
-      'seed': seed,
-      'temperature': temperature,
-      'topK': topK,
-      'topP': topP,
-      'minP': minP,
-      'typicalP': typicalP,
-      'penaltyLastN': penaltyLastN,
-      'penaltyRepeat': penaltyRepeat,
-      'penaltyFreq': penaltyFreq,
-      'penaltyPresent': penaltyPresent,
-      'mirostat': mirostat,
-      'mirostatTau': mirostatTau,
-      'mirostatEta': mirostatEta,
-      'ignoreEos': ignoreEos,
-      'stopSequences': stopSequences,
-      'grammar': grammar,
-      'useJsonResponse': useJsonResponse,
-      'nProbs': nProbs,
-      'jsonSchema': jsonSchema,
-      'tools': tools,
-      'parallelToolCalls': parallelToolCalls,
-      'toolChoice': toolChoice,
-      'mediaPaths': mediaPaths,
-      'chatMessages': chatMessages.map((m) => m.toMap()).toList(),
-    };
-  }
-
-  factory CompletionParams.fromPrompt(String prompt) {
-    return CompletionParams(prompt: prompt, nThreads: 4);
-  }
-
-  factory CompletionParams.fromChatMessages(List<ChatMessage> chatMessages) {
-    return CompletionParams(
-      prompt: '',
-      chatMessages: chatMessages,
-      maxTokens: 1024,
-      temperature: 0.7,
-      topP: 0.95,
-      topK: 40,
-      penaltyRepeat: 1.2,
-      nThreads: 4,
-    );
-  }
-
-  factory CompletionParams.fromCreativePrompt(
-    String creativePrompt, {
-    int maxTokens = 1024,
-  }) {
-    return CompletionParams(
-      prompt: creativePrompt,
-      maxTokens: maxTokens,
-      temperature: 1.0,
-      topP: 0.98,
-      topK: 100,
-      nThreads: 4,
-    );
-  }
-
-  factory CompletionParams.fromFactualPrompt(String factualPrompt) {
-    return CompletionParams(
-      prompt: factualPrompt,
-      temperature: 0.1,
-      topP: 0.9,
-      topK: 20,
-      nThreads: 4,
-    );
-  }
-
-  factory CompletionParams.fromChatPrompt(
-    String chatPrompt, {
-    int maxTokens = 1024,
-  }) {
-    return CompletionParams(
-      prompt: chatPrompt,
-      maxTokens: maxTokens,
-      temperature: 0.7,
-      topP: 0.95,
-      topK: 40,
-      penaltyRepeat: 1.2,
-      nThreads: 4,
-    );
-  }
-
-  factory CompletionParams.fromMultimodalPrompt(
-    String multimodalPrompt,
-    List<String> mediaPaths, {
-    int maxTokens = 1024,
-  }) {
-    return CompletionParams(
-      prompt: multimodalPrompt,
-      maxTokens: maxTokens,
-      mediaPaths: mediaPaths,
-      nThreads: 4,
-    );
-  }
-}
-
-/// Parameters for downloading files
-class DownloadParams {
-  final String url;
-  final String localPath;
-  final String? username;
-  final String? password;
-  final Map<String, String>? headers;
-
-  DownloadParams({
-    required this.url,
-    required this.localPath,
-    this.username,
-    this.password,
-    this.headers,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'url': url,
-      'localPath': localPath,
-      'username': username,
-      'password': password,
-      'headers': headers,
-    };
-  }
-}
-
-/// Parameters for downloading Hugging Face files
-class HuggingFaceDownloadParams {
-  final String repoId;
-  final String filename;
-  final String localPath;
-  final String? bearerToken;
-  final bool offline;
-
-  HuggingFaceDownloadParams({
-    required this.repoId,
-    required this.filename,
-    required this.localPath,
-    this.bearerToken,
-    this.offline = false,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'repoId': repoId,
-      'filename': filename,
-      'localPath': localPath,
-      'bearerToken': bearerToken,
-      'offline': offline,
-    };
-  }
-}
-
-/// Options for TTS generation
-class TTSOptions {
-  final int sampleRate;
-  final String? voice;
-  final double speed;
-  final bool saveToFile;
-  final String? outputFilePath;
-
-  TTSOptions({
-    this.sampleRate = 24000,
-    this.voice,
-    this.speed = 1.0,
-    this.saveToFile = false,
-    this.outputFilePath,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'sampleRate': sampleRate,
-      'voice': voice,
-      'speed': speed,
-      'saveToFile': saveToFile,
-      'outputFilePath': outputFilePath,
-    };
-  }
-}
-
-/// Result of TTS speech generation
-class SpeechResult {
-  final List<int> audioSamples;
-  final int sampleRate;
-  final double duration;
-  final String? outputFilePath;
-  final TTSMethod methodUsed;
-
-  SpeechResult({
-    required this.audioSamples,
-    required this.sampleRate,
-    required this.duration,
-    this.outputFilePath,
-    required this.methodUsed,
-  });
-
-  factory SpeechResult.fromMap(Map<String, dynamic> map) {
-    return SpeechResult(
-      audioSamples: List<int>.from(map['audioSamples'] as List),
-      sampleRate: map['sampleRate'] as int,
-      duration: map['duration'] as double,
-      outputFilePath: map['outputFilePath'] as String?,
-      methodUsed: TTSMethod.fromRawValue(map['methodUsed'] as int),
-    );
-  }
-}
-
-/// Metadata for streaming TTS generation
-class SpeechMetadata {
-  final int sampleRate;
-  final double duration;
-  final TTSMethod methodUsed;
-  final String? outputFilePath;
-
-  SpeechMetadata({
-    required this.sampleRate,
-    required this.duration,
-    required this.methodUsed,
-    this.outputFilePath,
-  });
-
-  factory SpeechMetadata.fromMap(Map<String, dynamic> map) {
-    return SpeechMetadata(
-      sampleRate: map['sampleRate'] as int,
-      duration: map['duration'] as double,
-      methodUsed: TTSMethod.fromRawValue(map['methodUsed'] as int),
-      outputFilePath: map['outputFilePath'] as String?,
-    );
-  }
-}
-
-/// LoRA adapter configuration
-class LoraAdapter {
-  final String adapterPath;
-  final double scale;
-
-  LoraAdapter({required this.adapterPath, required this.scale});
-
-  Map<String, dynamic> toMap() {
-    return {'adapterPath': adapterPath, 'scale': scale};
-  }
-
-  factory LoraAdapter.fromMap(Map<String, dynamic> map) {
-    return LoraAdapter(
-      adapterPath: map['adapterPath'] as String,
-      scale: map['scale'] as double,
-    );
-  }
-}
-
-/// Main entry point for the LlamaMobile Flutter SDK.
-///
-/// This class provides methods to initialize contexts, download models, and interact with
-/// the LlamaMobile platform implementation.
-class LlamaMobile {
-  /// Sets the log level for the SDK.
-  ///
-  /// Parameters:
-  /// - [level]: Log level to set (0 = debug, 1 = info, 2 = warning, 3 = error).
-  static Future<void> setLogLevel(LogLevel level) async {
-    await LlamaMobileFlutterSdkPlatform.instance.setLogLevel(level.rawValue);
-  }
-
-  /// Sets the log level for the SDK using raw integer value.
-  ///
-  /// Parameters:
-  /// - [level]: Log level to set (0 = debug, 1 = info, 2 = warning, 3 = error).
-  static Future<void> setLogLevelRaw(int level) async {
-    await LlamaMobileFlutterSdkPlatform.instance.setLogLevel(level);
-  }
-
-  /// Gets GPU backend information for debugging.
-  ///
-  /// Returns a string containing information about available GPU backends,
-  /// including OpenCL and Vulkan support status.
-  static Future<String?> getGpuBackendInfo() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.getGpuBackendInfo();
-  }
-
-  /// Sets verbose logging for debugging GPU issues.
-  ///
-  /// Parameters:
-  /// - [enabled]: true to enable verbose logging, false to disable.
-  static Future<void> setVerboseLogging(bool enabled) async {
-    await LlamaMobileFlutterSdkPlatform.instance.setVerboseLogging(enabled);
-  }
-
-  /// Initializes a new LlamaMobile context with the specified model.
-  ///
-  /// Parameters:
-  /// - [params]: Initialization parameters.
-  Future<LlamaContext?> initContextWithParams(InitParams params) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance.initContext(
-      params.toMap(),
-    );
-    if (result != null && result.containsKey('contextHandle')) {
-      final contextHandle = result['contextHandle'] as int;
-      return LlamaContext._internal(contextHandle);
-    }
-    return null;
-  }
-
-  /// Initializes a new LlamaMobile context with specified parameters asynchronously.
-  ///
-  /// Parameters:
-  /// - [params]: InitParams object containing all initialization parameters.
-  Future<LlamaContext?> initContextWithParamsAsync(InitParams params) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .initContextAsync(params.toMap());
-    if (result != null && result.containsKey('contextHandle')) {
-      final contextHandle = result['contextHandle'] as int;
-      return LlamaContext._internal(contextHandle);
-    }
-    return null;
-  }
-
-  /// Initializes a new LlamaMobile context with the specified model.
-  ///
-  /// Parameters:
-  /// - [modelPath]: Path to the GGUF model file.
-  /// - [chatTemplate]: Custom chat template for formatting conversations.
-  /// - [systemPrompt]: System prompt to guide the model's behavior.
-  /// - [nCtx]: Context window size (maximum tokens to process in one pass).
-  /// - [nBatch]: Batch size for processing prompts.
-  /// - [nUBatch]: Micro-batch size for processing.
-  /// - [nGpuLayers]: Number of layers to offload to GPU.
-  /// - [nThreads]: Number of CPU threads to use.
-  /// - [useMmap]: Whether to use memory mapping for the model.
-  /// - [useMlock]: Whether to lock model memory in RAM.
-  /// - [embedding]: Whether to enable embedding generation.
-  /// - [poolingType]: Embedding pooling type (0 = no pooling, 1 = mean, 2 = max, 3 = last token).
-  /// - [embdNormalize]: Whether to normalize embeddings.
-  /// - [flashAttention]: Whether to use flash attention optimization.
-  /// - [cacheTypeK]: Cache type for key tensors.
-  /// - [cacheTypeV]: Cache type for value tensors.
-  /// - [enableChatTemplate]: Whether to enable chat template processing.
-  Future<LlamaContext?> initContext({
-    required String modelPath,
-    String? chatTemplate,
-    String? systemPrompt,
-    int nCtx = 2048,
-    int nBatch = 512,
-    int nUBatch = 512,
-    int nGpuLayers = 0,
-    int nThreads = 4,
-    bool useMmap = true,
-    bool useMlock = false,
-    bool embedding = false,
-    int poolingType = 0,
-    int embdNormalize = 0,
-    bool flashAttention = false,
-    String? cacheTypeK,
-    String? cacheTypeV,
-    bool enableChatTemplate = true,
-  }) async {
-    final params = InitParams(
-      modelPath: modelPath,
-      chatTemplate: chatTemplate,
-      systemPrompt: systemPrompt,
-      nCtx: nCtx,
-      nBatch: nBatch,
-      nUBatch: nUBatch,
-      nGpuLayers: nGpuLayers,
-      nThreads: nThreads,
-      useMmap: useMmap,
-      useMlock: useMlock,
-      embedding: embedding,
-      poolingType: poolingType,
-      embdNormalize: embdNormalize,
-      flashAttention: flashAttention,
-      cacheTypeK: cacheTypeK,
-      cacheTypeV: cacheTypeV,
-      enableChatTemplate: enableChatTemplate,
-    );
-    return initContextWithParams(params);
-  }
-
-  /// Downloads a model from a URL
-  Future<DownloadResult?> downloadModel({
-    required String url,
-    required String localPath,
-    String? username,
-    String? password,
-    Map<String, String>? headers,
-  }) async {
-    final params = DownloadParams(
-      url: url,
-      localPath: localPath,
-      username: username,
-      password: password,
-      headers: headers,
-    );
-    return downloadModelWithParams(params);
-  }
-
-  /// Downloads a model from a URL using DownloadParams.
-  ///
-  /// Parameters:
-  /// - [params]: Download parameters.
-  Future<DownloadResult?> downloadModelWithParams(DownloadParams params) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance.downloadModel(
-      params.toMap(),
-    );
-    if (result != null) {
-      return DownloadResult(
-        success: result['success'] as bool,
-        localPath: result['localPath'] as String,
-        errorMessage: result['errorMessage'] as String?,
-      );
-    }
-    return null;
-  }
-
-  /// Downloads a file from Hugging Face
-  Future<DownloadResult?> downloadHfFile({
-    required String repoId,
-    required String filename,
-    required String localPath,
-    String? bearerToken,
-    bool? offline,
-  }) async {
-    final params = HuggingFaceDownloadParams(
-      repoId: repoId,
-      filename: filename,
-      localPath: localPath,
-      bearerToken: bearerToken,
-      offline: offline ?? false,
-    );
-    return downloadHfFileWithParams(params);
-  }
-
-  /// Downloads a file from Hugging Face using HuggingFaceDownloadParams.
-  ///
-  /// Parameters:
-  /// - [params]: Hugging Face download parameters.
-  Future<DownloadResult?> downloadHfFileWithParams(
-    HuggingFaceDownloadParams params,
-  ) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance.downloadHfFile(
-      params.toMap(),
-    );
-    if (result != null) {
-      return DownloadResult(
-        success: result['success'] as bool,
-        localPath: result['localPath'] as String,
-        errorMessage: result['errorMessage'] as String?,
-      );
-    }
-    return null;
-  }
-
-  /// Initializes a context asynchronously (runs in background thread)
-  Future<LlamaContext?> initContextAsync({
-    required String modelPath,
-    String? chatTemplate,
-    String? systemPrompt,
-    int nCtx = 2048,
-    int nBatch = 512,
-    int nUBatch = 512,
-    int nGpuLayers = 0,
-    int nThreads = 4,
-    bool useMmap = true,
-    bool useMlock = false,
-    bool embedding = false,
-    int poolingType = 0,
-    int embdNormalize = 0,
-    bool flashAttention = false,
-    String? cacheTypeK,
-    String? cacheTypeV,
-    bool enableChatTemplate = true,
-  }) async {
-    final params = InitParams(
-      modelPath: modelPath,
-      chatTemplate: chatTemplate,
-      systemPrompt: systemPrompt,
-      nCtx: nCtx,
-      nBatch: nBatch,
-      nUBatch: nUBatch,
-      nGpuLayers: nGpuLayers,
-      nThreads: nThreads,
-      useMmap: useMmap,
-      useMlock: useMlock,
-      embedding: embedding,
-      poolingType: poolingType,
-      embdNormalize: embdNormalize,
-      flashAttention: flashAttention,
-      cacheTypeK: cacheTypeK,
-      cacheTypeV: cacheTypeV,
-      enableChatTemplate: enableChatTemplate,
-    );
-    return initContextWithParamsAsync(params);
-  }
-
-  /// Downloads a model from a URL asynchronously
-  Future<DownloadResult?> downloadModelAsync({
-    required String url,
-    required String localPath,
-    String? username,
-    String? password,
-    Map<String, String>? headers,
-  }) async {
-    final params = DownloadParams(
-      url: url,
-      localPath: localPath,
-      username: username,
-      password: password,
-      headers: headers,
-    );
-    return downloadModelWithParamsAsync(params);
-  }
-
-  /// Downloads a model from a URL using DownloadParams asynchronously.
-  ///
-  /// Parameters:
-  /// - [params]: Download parameters.
-  Future<DownloadResult?> downloadModelWithParamsAsync(
-    DownloadParams params,
-  ) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .downloadModelAsync(params.toMap());
-    if (result != null) {
-      return DownloadResult(
-        success: result['success'] as bool,
-        localPath: result['localPath'] as String,
-        errorMessage: result['errorMessage'] as String?,
-      );
-    }
-    return null;
-  }
-
-  /// Downloads a file from Hugging Face asynchronously
-  Future<DownloadResult?> downloadHfFileAsync({
-    required String repoId,
-    required String filename,
-    required String localPath,
-    String? bearerToken,
-    bool? offline,
-  }) async {
-    final params = HuggingFaceDownloadParams(
-      repoId: repoId,
-      filename: filename,
-      localPath: localPath,
-      bearerToken: bearerToken,
-      offline: offline ?? false,
-    );
-    return downloadHfFileWithParamsAsync(params);
-  }
-
-  /// Downloads a file from Hugging Face using HuggingFaceDownloadParams asynchronously.
-  ///
-  /// Parameters:
-  /// - [params]: Hugging Face download parameters.
-  Future<DownloadResult?> downloadHfFileWithParamsAsync(
-    HuggingFaceDownloadParams params,
-  ) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .downloadHfFileAsync(params.toMap());
-    if (result != null) {
-      return DownloadResult(
-        success: result['success'] as bool,
-        localPath: result['localPath'] as String,
-        errorMessage: result['errorMessage'] as String?,
-      );
-    }
-    return null;
-  }
-
-  /// Stream of progress values during downloads
-  Stream<double> get onProgressStream {
-    return LlamaMobileFlutterSdkPlatform.instance.onProgressStream;
-  }
-
-  /// Extracts an asset file to a local path using streaming for better performance
-  ///
-  /// This method uses Android's AssetManager for streaming extraction, which is much
-  /// faster than Flutter's rootBundle.load() for large files.
-  ///
-  /// Parameters:
-  /// - [assetPath]: The path to the asset file (e.g., "assets/models/model.gguf")
-  /// - [localPath]: The destination path for the extracted file
-  ///
-  /// Returns a [DownloadResult] indicating success or failure.
-  Future<DownloadResult?> extractAssetAsync({
-    required String assetPath,
-    required String localPath,
-  }) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance.extractAsset({
-      'assetPath': assetPath,
-      'localPath': localPath,
-    });
-    if (result != null) {
-      return DownloadResult(
-        success: result['success'] as bool,
-        localPath: result['localPath'] as String,
-        errorMessage: result['errorMessage'] as String?,
-      );
-    }
-    return null;
-  }
-}
-
-/// Represents a LlamaMobile context
-class LlamaContext {
-  final int _contextHandle;
-
-  LlamaContext._internal(this._contextHandle);
-
-  /// Gets the context handle
-  int get handle => _contextHandle;
-
-  /// Stream of tokens as they are generated
-  Stream<String> get onTokenStream {
-    return LlamaMobileFlutterSdkPlatform.instance.onTokenStream;
-  }
-
-  /// Stream of progress values during generation
-  Stream<double> get onProgressStream {
-    return LlamaMobileFlutterSdkPlatform.instance.onProgressStream;
-  }
-
-  /// Frees the context
-  Future<bool> free() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.freeContext(
-      _contextHandle,
-    );
-  }
-
-  /// Frees the context asynchronously
-  Future<bool> freeAsync() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.freeContextAsync(
-      _contextHandle,
-    );
-  }
-
-  /// Generates a completion using OpenAI-compatible JSON format
-  Future<CompletionResult?> generateOpenAICompletion({
-    required String openAIJSON,
-    String? grammar,
-  }) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateOpenAICompletion(_contextHandle, openAIJSON, grammar);
-    if (result != null) {
-      return CompletionResult(
-        text: result['text'] as String,
-        tokensGenerated: result['tokensGenerated'] as int,
-        tokensEvaluated: result['tokensEvaluated'] as int,
-        truncated: result['truncated'] as bool,
-        stoppedEos: result['stoppedEos'] as bool,
-        stoppedWord: result['stoppedWord'] as bool,
-        stoppedLimit: result['stoppedLimit'] as bool,
-        stoppingWord: result['stoppingWord'] as String?,
-      );
-    }
-    return null;
-  }
-
-  /// Generates a completion using OpenAI-compatible JSON format asynchronously
-  Future<CompletionResult?> generateOpenAICompletionAsync({
-    required String openAIJSON,
-    String? grammar,
-  }) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateOpenAICompletionAsync(_contextHandle, openAIJSON, grammar);
-    if (result != null) {
-      return CompletionResult(
-        text: result['text'] as String,
-        tokensGenerated: result['tokensGenerated'] as int,
-        tokensEvaluated: result['tokensEvaluated'] as int,
-        truncated: result['truncated'] as bool,
-        stoppedEos: result['stoppedEos'] as bool,
-        stoppedWord: result['stoppedWord'] as bool,
-        stoppedLimit: result['stoppedLimit'] as bool,
-        stoppingWord: result['stoppingWord'] as String?,
-      );
-    }
-    return null;
-  }
-
-  /// Generates a streaming completion from the given prompt.
-  Future<CompletionResult?> generateStreamingCompletion({
-    required String prompt,
-    int maxTokens = 1024,
-    int nThreads = 4,
-    int seed = -1,
-    double temperature = 0.8,
-    int topK = 40,
-    double topP = 0.95,
-    double minP = 0.05,
-    double typicalP = 1.0,
-    int penaltyLastN = 64,
-    double penaltyRepeat = 1.1,
-    double penaltyFreq = 0.0,
-    double penaltyPresent = 0.0,
-    int mirostat = 0,
-    double mirostatTau = 5.0,
-    double mirostatEta = 0.1,
-    bool ignoreEos = false,
-    List<String> stopSequences = const [],
-    String? grammar,
-    bool useJsonResponse = true,
-  }) async {
-    final params = CompletionParams(
-      prompt: prompt,
-      maxTokens: maxTokens,
-      nThreads: nThreads,
-      seed: seed,
-      temperature: temperature,
-      topK: topK,
-      topP: topP,
-      minP: minP,
-      typicalP: typicalP,
-      penaltyLastN: penaltyLastN,
-      penaltyRepeat: penaltyRepeat,
-      penaltyFreq: penaltyFreq,
-      penaltyPresent: penaltyPresent,
-      mirostat: mirostat,
-      mirostatTau: mirostatTau,
-      mirostatEta: mirostatEta,
-      ignoreEos: ignoreEos,
-      stopSequences: stopSequences,
-      grammar: grammar,
-      useJsonResponse: useJsonResponse,
-    );
-    return generateStreamingCompletionWithParams(params);
-  }
-
-  /// Generates a streaming completion using CompletionParams.
-  ///
-  /// Parameters:
-  /// - [params]: Completion parameters.
-  Future<CompletionResult?> generateStreamingCompletionWithParams(
-    CompletionParams params,
-  ) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateStreamingCompletion(_contextHandle, params.toMap());
-    if (result != null) {
-      return CompletionResult.fromMap(result);
-    }
-    return null;
-  }
-
-  /// Stops the current completion generation
-  Future<bool> stopCompletion() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.stopCompletion(
-      _contextHandle,
-    );
-  }
-
-  /// Gets the list of loaded LoRA adapters
-  Future<List<Map<String, dynamic>>?> getLoadedLoraAdapters() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.getLoadedLoraAdapters(
-      _contextHandle,
-    );
-  }
-
-  /// Gets the context window size
-  Future<int?> getContextWindowSize() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.getContextWindowSize(
-      _contextHandle,
-    );
-  }
-
-  /// Gets the embedding dimension
-  Future<int?> getEmbeddingDimension() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.getEmbeddingDimension(
-      _contextHandle,
-    );
-  }
-
-  /// Gets the model description
-  Future<String?> getModelDescription() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.getModelDescription(
-      _contextHandle,
-    );
-  }
-
-  /// Gets the model size in bytes
-  Future<int?> getModelSize() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.getModelSize(
-      _contextHandle,
-    );
-  }
-
-  /// Gets the model parameters count
-  Future<int?> getModelParametersCount() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.getModelParametersCount(
-      _contextHandle,
-    );
-  }
-
-  /// Downloads a file from Hugging Face
-  Future<DownloadResult?> downloadHfFile({
-    required String repoId,
-    required String filename,
-    required String localPath,
-    String? bearerToken,
-    bool? offline,
-  }) async {
-    final params = {
-      'repoId': repoId,
-      'filename': filename,
-      'localPath': localPath,
-      'bearerToken': bearerToken,
-      'offline': offline,
-    };
-
-    final result = await LlamaMobileFlutterSdkPlatform.instance.downloadHfFile(
-      params,
-    );
-    if (result != null) {
-      return DownloadResult(
-        success: result['success'] as bool,
-        localPath: result['localPath'] as String,
-        errorMessage: result['errorMessage'] as String?,
-      );
-    }
-    return null;
-  }
-
-  /// Checks if multimodal is enabled
-  Future<bool> isMultimodalEnabled() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.isMultimodalEnabled(
-      _contextHandle,
-    );
-  }
-
-  /// Checks if vision is supported
-  Future<bool> supportsVision() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.supportsVision(
-      _contextHandle,
-    );
-  }
-
-  /// Checks if audio is supported
-  Future<bool> supportsAudio() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.supportsAudio(
-      _contextHandle,
-    );
-  }
-
-  /// Checks if vocoder is enabled
-  Future<bool> isVocoderEnabled() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.isVocoderEnabled(
-      _contextHandle,
-    );
-  }
-
-  /// Gets the TTS type
-  Future<TTSModelType> getTTSType() async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance.getTTSType(
-      _contextHandle,
-    );
-    return TTSModelType.fromRawValue(result ?? -1);
-  }
-
-  /// Generates a text completion from the given prompt.
-  ///
-  /// Parameters:
-  /// - [prompt]: Input text to generate completion from.
-  /// - [maxTokens]: Maximum number of tokens to generate.
-  /// - [nThreads]: Number of CPU threads to use (overrides context setting).
-  /// - [seed]: Random seed for generation (-1 = random).
-  /// - [temperature]: Sampling temperature (higher = more creative, lower = more deterministic).
-  /// - [topK]: Top-k sampling parameter (consider only top k tokens).
-  /// - [topP]: Top-p sampling parameter (consider only top tokens with cumulative probability p).
-  /// - [minP]: Minimum probability for top-p filtering.
-  /// - [typicalP]: Typical sampling parameter for locally typical sampling.
-  /// - [penaltyLastN]: Number of last tokens to consider for repetition penalty.
-  /// - [penaltyRepeat]: Penalty for repeated tokens (higher = more penalty).
-  /// - [penaltyFreq]: Frequency penalty (higher = penalize frequent tokens more).
-  /// - [penaltyPresent]: Penalty for tokens present in the prompt.
-  /// - [mirostat]: Mirostat sampling method (0 = disabled, 1 = v1, 2 = v2).
-  /// - [mirostatTau]: Mirostat target entropy.
-  /// - [mirostatEta]: Mirostat learning rate.
-  /// - [ignoreEos]: Whether to ignore end-of-sequence tokens.
-  /// - [stopSequences]: List of sequences to stop generation at.
-  /// - [grammar]: Grammar string to constrain output to a specific format.
-  /// - [useJsonResponse]: Whether to format response as JSON.
-  Future<CompletionResult?> generateCompletion({
-    required String prompt,
-    int maxTokens = 1024,
-    int nThreads = 4,
-    int seed = -1,
-    double temperature = 0.8,
-    int topK = 40,
-    double topP = 0.95,
-    double minP = 0.05,
-    double typicalP = 1.0,
-    int penaltyLastN = 64,
-    double penaltyRepeat = 1.1,
-    double penaltyFreq = 0.0,
-    double penaltyPresent = 0.0,
-    int mirostat = 0,
-    double mirostatTau = 5.0,
-    double mirostatEta = 0.1,
-    bool ignoreEos = false,
-    List<String> stopSequences = const [],
-    String? grammar,
-    bool useJsonResponse = true,
-  }) async {
-    final params = CompletionParams(
-      prompt: prompt,
-      maxTokens: maxTokens,
-      nThreads: nThreads,
-      seed: seed,
-      temperature: temperature,
-      topK: topK,
-      topP: topP,
-      minP: minP,
-      typicalP: typicalP,
-      penaltyLastN: penaltyLastN,
-      penaltyRepeat: penaltyRepeat,
-      penaltyFreq: penaltyFreq,
-      penaltyPresent: penaltyPresent,
-      mirostat: mirostat,
-      mirostatTau: mirostatTau,
-      mirostatEta: mirostatEta,
-      ignoreEos: ignoreEos,
-      stopSequences: stopSequences,
-      grammar: grammar,
-      useJsonResponse: useJsonResponse,
-    );
-    return generateCompletionWithParams(params);
-  }
-
-  /// Generates a text completion using CompletionParams.
-  ///
-  /// Parameters:
-  /// - [params]: Completion parameters.
-  Future<CompletionResult?> generateCompletionWithParams(
-    CompletionParams params,
-  ) async {
-    Map<String, dynamic>? result;
-    if (params.mediaPaths.isNotEmpty) {
-      // Use multimodal completion for media
-      result = await LlamaMobileFlutterSdkPlatform.instance
-          .generateMultimodalCompletion(
-            _contextHandle,
-            params.toMap(),
-            params.mediaPaths,
-          );
-    } else {
-      // Use regular completion
-      result = await LlamaMobileFlutterSdkPlatform.instance.generateCompletion(
-        _contextHandle,
-        params.toMap(),
-      );
-    }
-    if (result != null) {
-      return CompletionResult.fromMap(result);
-    }
-    return null;
-  }
-
-  /// Generates a multimodal completion
-  Future<CompletionResult?> generateMultimodalCompletion({
-    required String prompt,
-    required List<String> mediaPaths,
-    int maxTokens = 1024,
-    int nThreads = 4,
-    int seed = -1,
-    double temperature = 0.8,
-    int topK = 40,
-    double topP = 0.95,
-    double minP = 0.05,
-    double typicalP = 1.0,
-    int penaltyLastN = 64,
-    double penaltyRepeat = 1.1,
-    double penaltyFreq = 0.0,
-    double penaltyPresent = 0.0,
-    int mirostat = 0,
-    double mirostatTau = 5.0,
-    double mirostatEta = 0.1,
-    bool ignoreEos = false,
-    List<String> stopSequences = const [],
-    String? grammar,
-    bool useJsonResponse = true,
-    String? chatTemplate,
-  }) async {
-    final params = CompletionParams(
-      prompt: prompt,
-      maxTokens: maxTokens,
-      nThreads: nThreads,
-      seed: seed,
-      temperature: temperature,
-      topK: topK,
-      topP: topP,
-      minP: minP,
-      typicalP: typicalP,
-      penaltyLastN: penaltyLastN,
-      penaltyRepeat: penaltyRepeat,
-      penaltyFreq: penaltyFreq,
-      penaltyPresent: penaltyPresent,
-      mirostat: mirostat,
-      mirostatTau: mirostatTau,
-      mirostatEta: mirostatEta,
-      ignoreEos: ignoreEos,
-      stopSequences: stopSequences,
-      grammar: grammar,
-      useJsonResponse: useJsonResponse,
-    );
-    return generateMultimodalCompletionWithParams(params, mediaPaths);
-  }
-
-  /// Generates a multimodal completion using CompletionParams.
-  ///
-  /// Parameters:
-  /// - [params]: Completion parameters.
-  /// - [mediaPaths]: Paths to media files for multimodal generation (images/audio).
-  Future<CompletionResult?> generateMultimodalCompletionWithParams(
-    CompletionParams params,
-    List<String> mediaPaths,
-  ) async {
-    final paramsWithMedia = CompletionParams(
-      prompt: params.prompt,
-      maxTokens: params.maxTokens,
-      nThreads: params.nThreads,
-      seed: params.seed,
-      temperature: params.temperature,
-      topK: params.topK,
-      topP: params.topP,
-      minP: params.minP,
-      typicalP: params.typicalP,
-      penaltyLastN: params.penaltyLastN,
-      penaltyRepeat: params.penaltyRepeat,
-      penaltyFreq: params.penaltyFreq,
-      penaltyPresent: params.penaltyPresent,
-      mirostat: params.mirostat,
-      mirostatTau: params.mirostatTau,
-      mirostatEta: params.mirostatEta,
-      ignoreEos: params.ignoreEos,
-      stopSequences: params.stopSequences,
-      grammar: params.grammar,
-      useJsonResponse: params.useJsonResponse,
-      nProbs: params.nProbs,
-      jsonSchema: params.jsonSchema,
-      tools: params.tools,
-      parallelToolCalls: params.parallelToolCalls,
-      toolChoice: params.toolChoice,
-      mediaPaths: mediaPaths,
-      chatMessages: params.chatMessages,
-    );
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateMultimodalCompletion(
-          _contextHandle,
-          paramsWithMedia.toMap(),
-          mediaPaths,
-        );
-    if (result != null) {
-      return CompletionResult.fromMap(result);
-    }
-    return null;
-  }
-
-  /// Formats chat messages using the chat template
-  Future<String?> formatChatMessages(
-    List<ChatMessage> messages,
-    String? chatTemplate,
-  ) async {
-    final messagesJson = messages.map((msg) => msg.toMap()).toList();
-    return await LlamaMobileFlutterSdkPlatform.instance.formatChatMessages(
-      _contextHandle,
-      messagesJson,
-      chatTemplate,
-    );
-  }
-
-  /// Loads a grammar from a file path.
-  ///
-  /// Parameters:
-  /// - [grammarPath]: Path to the grammar file.
-  ///
-  /// Returns:
-  /// The loaded grammar string, or null if loading failed.
-  Future<String?> loadGrammar(String grammarPath) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.loadGrammar(
-      _contextHandle,
-      grammarPath,
-    );
-  }
-
-  /// Generates a vector embedding for the given text.
-  ///
-  /// Note: The context must have been initialized with `embedding: true`.
-  ///
-  /// Parameters:
-  /// - [text]: Input text to generate embedding for.
-  ///
-  /// Returns:
-  /// A list of doubles representing the embedding vector, or null if generation failed.
-  Future<List<double>?> generateEmbedding(String text) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.generateEmbedding(
-      _contextHandle,
-      text,
-      {},
-    );
-  }
-
-  /// Generates a vector embedding for the given text asynchronously (runs in background thread).
-  ///
-  /// Note: The context must have been initialized with `embedding: true`.
-  ///
-  /// Parameters:
-  /// - [text]: Input text to generate embedding for.
-  ///
-  /// Returns:
-  /// A list of doubles representing the embedding vector, or null if generation failed.
-  Future<List<double>?> generateEmbeddingAsync(String text) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.generateEmbeddingAsync(
-      _contextHandle,
-      text,
-      {},
-    );
-  }
-
-  /// Tokenizes a text string into token IDs.
-  ///
-  /// Parameters:
-  /// - [text]: Text string to tokenize.
-  ///
-  /// Returns:
-  /// A list of integers representing token IDs, or null if tokenization failed.
-  Future<List<int>?> tokenize(String text) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.tokenize(
-      _contextHandle,
-      text,
-    );
-  }
-
-  /// Detokenizes an array of token IDs back to a text string.
-  ///
-  /// Parameters:
-  /// - [tokens]: Array of token IDs to detokenize.
-  ///
-  /// Returns:
-  /// Detokenized text string, or null if detokenization failed.
-  Future<String?> detokenize(List<int> tokens) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.detokenize(
-      _contextHandle,
-      tokens,
-    );
-  }
-
-  /// Loads a LoRA adapter
-  Future<bool> loadLoraAdapter(String adapterPath, double scale) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.loadLoraAdapter(
-      _contextHandle,
-      adapterPath,
-      scale,
-    );
-  }
-
-  /// Frees the LoRA adapter
-  Future<bool> freeLoraAdapter() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.freeLoraAdapter(
-      _contextHandle,
-    );
-  }
-
-  /// Loads a Text-to-Speech (TTS) model.
-  ///
-  /// Parameters:
-  /// - [modelPath]: Path to the TTS model file.
-  /// - [modelType]: Type of TTS model to load (e.g., `TTSModelType.outETTSv02`).
-  ///
-  /// Returns:
-  /// `true` if the model was loaded successfully, `false` otherwise.
-  Future<bool> loadTTSModel(String modelPath, TTSModelType modelType) async {
-    final params = {'modelType': modelType.rawValue};
-    final result = await LlamaMobileFlutterSdkPlatform.instance.loadTTSModel(
-      _contextHandle,
-      modelPath,
-      params,
-    );
-    return result?['success'] ?? false;
-  }
-
-  /// Generates audio from text using the loaded TTS model.
-  ///
-  /// Parameters:
-  /// - [text]: Text to convert to speech.
-  /// - [speed]: Speech speed (0.5 = half speed, 2.0 = double speed).
-  /// - [pitch]: Speech pitch (0.5 = lower pitch, 2.0 = higher pitch).
-  /// - [volume]: Speech volume (0.0 = silent, 2.0 = double volume).
-  /// - [sampleRate]: Output audio sample rate (default: 24000 Hz).
-  /// Frees the TTS model
-  Future<bool> freeTTSModel() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.freeTTSModel(
-      _contextHandle,
-    );
-  }
-
-  /// Save audio samples to WAV file
-  /// - Parameters:
-  ///   - filePath: Path to save the WAV file
-  ///   - audioData: Array of 16-bit integer audio samples
-  ///   - sampleRate: Sample rate for the audio (default: 24000 Hz)
-  /// - Returns: Boolean indicating whether the audio was saved successfully
-  Future<bool> saveAudioToWav(
-    String filePath,
-    List<int> audioData,
-    int sampleRate,
-  ) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.saveAudioToWav(
-      _contextHandle,
-      filePath,
-      audioData,
-      sampleRate,
-    );
-  }
-
-  /// Save audio samples to WAV file asynchronously (runs in background thread)
-  /// - Parameters:
-  ///   - filePath: Path to save the WAV file
-  ///   - audioData: Array of 16-bit integer audio samples
-  ///   - sampleRate: Sample rate for the audio (default: 24000 Hz)
-  /// - Returns: Boolean indicating whether the audio was saved successfully
-  Future<bool> saveAudioToWavAsync(
-    String filePath,
-    List<int> audioData,
-    int sampleRate,
-  ) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.saveAudioToWavAsync(
-      _contextHandle,
-      filePath,
-      audioData,
-      sampleRate,
-    );
-  }
-
-  /// Initializes multimodal support with the specified mmproj model
-  ///
-  /// Parameters:
-  /// - [mmprojPath]: Path to the multimodal projection file
-  /// - [useGpu]: Whether to use GPU acceleration for multimodal processing
-  ///
-  /// Returns:
-  /// `true` if multimodal support was initialized successfully, `false` otherwise
-  Future<bool> initMultimodal(String mmprojPath, bool useGpu) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.initMultimodal(
-      _contextHandle,
-      mmprojPath,
-      useGpu,
-    );
-  }
-
-  /// Releases multimodal resources
-  Future<void> releaseMultimodal() async {
-    await LlamaMobileFlutterSdkPlatform.instance.releaseMultimodal(
-      _contextHandle,
-    );
-  }
-
-  /// Initializes the vocoder for text-to-speech functionality
-  ///
-  /// Parameters:
-  /// - [vocoderModelPath]: Path to the vocoder model file
-  ///
-  /// Returns:
-  /// `true` if vocoder was initialized successfully, `false` otherwise
-  Future<bool> initVocoder(String vocoderModelPath) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.initVocoder(
-      _contextHandle,
-      vocoderModelPath,
-    );
-  }
-
-  /// Releases vocoder resources
-  Future<void> releaseVocoder() async {
-    await LlamaMobileFlutterSdkPlatform.instance.releaseVocoder(_contextHandle);
-  }
-
-  /// Clears the conversation history
-  Future<void> clearConversation() async {
-    await LlamaMobileFlutterSdkPlatform.instance.clearConversation(
-      _contextHandle,
-    );
-  }
-
-  /// Checks if a conversation is currently active
-  ///
-  /// Returns:
-  /// `true` if a conversation is active, `false` otherwise
-  Future<bool> isConversationActive() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.isConversationActive(
-      _contextHandle,
-    );
-  }
-
-  /// Removes all loaded LoRA adapters
-  Future<void> removeLoraAdapters() async {
-    await LlamaMobileFlutterSdkPlatform.instance.removeLoraAdapters(
-      _contextHandle,
-    );
-  }
-
-  /// Generates audio from text using the loaded TTS model.
-  ///
-  /// Parameters:
-  /// Generates speech synchronously from text.
-  ///
-  /// Parameters:
-  /// - [text]: Text to convert to speech.
-  /// - [options]: Optional TTS options (sampleRate, voice, speed, saveToFile, outputFilePath).
-  ///
-  /// Generates speech asynchronously from text.
-  ///
-  /// Parameters:
-  /// - [text]: Text to convert to speech.
-  /// - [options]: Optional TTS options (sampleRate, voice, speed, saveToFile, outputFilePath).
-  ///
-  /// Returns:
-  /// A map containing audio data and metadata, or null if an error occurred.
-  Future<Map<String, dynamic>?> generateSpeech(
-    String text, {
-    Map<String, dynamic>? options,
-  }) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.generateSpeech(
-      _contextHandle,
-      text,
-      options,
-    );
-  }
-
-  /// Generates speech as a stream from text.
-  ///
-  /// Parameters:
-  /// - [text]: Text to convert to speech.
-  /// - [options]: Optional TTS options (sampleRate, voice, speed, saveToFile, outputFilePath).
-  ///
-  /// Generates speech as a stream for long text.
-  ///
-  /// Parameters:
-  /// - [text]: Text to convert to speech.
-  /// - [options]: Optional TTS options (sampleRate, voice, speed, saveToFile, outputFilePath).
-  ///
-  /// Returns:
-  /// A map containing stream metadata, or null if an error occurred.
-  Future<Map<String, dynamic>?> generateSpeechStreamForLongText(
-    String text, {
-    Map<String, dynamic>? options,
-  }) async {
-    return await LlamaMobileFlutterSdkPlatform.instance
-        .generateSpeechStreamForLongText(_contextHandle, text, options);
-  }
-
-  /// Generates a completion asynchronously (runs in background thread)
-  Future<CompletionResult?> generateCompletionAsync({
-    required String prompt,
-    int maxTokens = 1024,
-    int nThreads = 4,
-    int seed = -1,
-    double temperature = 0.8,
-    int topK = 40,
-    double topP = 0.95,
-    double minP = 0.05,
-    double typicalP = 1.0,
-    int penaltyLastN = 64,
-    double penaltyRepeat = 1.1,
-    double penaltyFreq = 0.0,
-    double penaltyPresent = 0.0,
-    int mirostat = 0,
-    double mirostatTau = 5.0,
-    double mirostatEta = 0.1,
-    bool ignoreEos = false,
-    List<String> stopSequences = const [],
-    String? grammar,
-    bool useJsonResponse = true,
-    List<String>? mediaPaths,
-  }) async {
-    final params = CompletionParams(
-      prompt: prompt,
-      maxTokens: maxTokens,
-      nThreads: nThreads,
-      seed: seed,
-      temperature: temperature,
-      topK: topK,
-      topP: topP,
-      minP: minP,
-      typicalP: typicalP,
-      penaltyLastN: penaltyLastN,
-      penaltyRepeat: penaltyRepeat,
-      penaltyFreq: penaltyFreq,
-      penaltyPresent: penaltyPresent,
-      mirostat: mirostat,
-      mirostatTau: mirostatTau,
-      mirostatEta: mirostatEta,
-      ignoreEos: ignoreEos,
-      stopSequences: stopSequences,
-      grammar: grammar,
-      useJsonResponse: useJsonResponse,
-      mediaPaths: mediaPaths ?? [],
-    );
-    return generateCompletionWithParamsAsync(params);
-  }
-
-  /// Generates a completion with CompletionParams asynchronously
-  Future<CompletionResult?> generateCompletionWithParamsAsync(
-    CompletionParams params,
-  ) async {
-    debugPrint("[DEBUG] Dart SDK: generateCompletionWithParamsAsync called");
-    debugPrint(
-      "[DEBUG] Dart SDK: mediaPaths count: ${params.mediaPaths.length}",
-    );
-    debugPrint("[DEBUG] Dart SDK: mediaPaths: ${params.mediaPaths}");
-    debugPrint("[DEBUG] Dart SDK: prompt: ${params.prompt}");
-    debugPrint("[DEBUG] Dart SDK: maxTokens: ${params.maxTokens}");
-
-    Map<String, dynamic>? result;
-    if (params.mediaPaths.isNotEmpty) {
-      // Use multimodal completion for media
-      debugPrint("[DEBUG] Dart SDK: Calling generateMultimodalCompletionAsync");
-      result = await LlamaMobileFlutterSdkPlatform.instance
-          .generateMultimodalCompletionAsync(
-            _contextHandle,
-            params.toMap(),
-            params.mediaPaths,
-          );
-    } else {
-      // Use regular completion
-      debugPrint("[DEBUG] Dart SDK: Calling generateCompletionAsync");
-      result = await LlamaMobileFlutterSdkPlatform.instance
-          .generateCompletionAsync(_contextHandle, params.toMap());
-    }
-
-    debugPrint(
-      "[DEBUG] Dart SDK: Result received: ${result != null ? 'Success' : 'Null'}",
-    );
-
-    if (result != null) {
-      return CompletionResult(
-        text: result['text'] as String,
-        tokensGenerated: result['tokensGenerated'] as int,
-        tokensEvaluated: result['tokensEvaluated'] as int,
-        truncated: result['truncated'] as bool,
-        stoppedEos: result['stoppedEos'] as bool,
-        stoppedWord: result['stoppedWord'] as bool,
-        stoppedLimit: result['stoppedLimit'] as bool,
-        stoppingWord: result['stoppingWord'] as String?,
-      );
-    }
-    return null;
-  }
-
-  /// Generates a multimodal completion asynchronously (runs in background thread)
-  Future<CompletionResult?> generateMultimodalCompletionAsync({
-    required String prompt,
-    required List<String> mediaPaths,
-    int maxTokens = 1024,
-    int nThreads = 4,
-    int seed = -1,
-    double temperature = 0.8,
-    int topK = 40,
-    double topP = 0.95,
-    double minP = 0.05,
-    double typicalP = 1.0,
-    int penaltyLastN = 64,
-    double penaltyRepeat = 1.1,
-    double penaltyFreq = 0.0,
-    double penaltyPresent = 0.0,
-    int mirostat = 0,
-    double mirostatTau = 5.0,
-    double mirostatEta = 0.1,
-    bool ignoreEos = false,
-    String? grammar,
-    List<String>? stopSequences,
-  }) async {
-    final params = CompletionParams(
-      prompt: prompt,
-      maxTokens: maxTokens,
-      nThreads: nThreads,
-      seed: seed,
-      temperature: temperature,
-      topK: topK,
-      topP: topP,
-      minP: minP,
-      typicalP: typicalP,
-      penaltyLastN: penaltyLastN,
-      penaltyRepeat: penaltyRepeat,
-      penaltyFreq: penaltyFreq,
-      penaltyPresent: penaltyPresent,
-      mirostat: mirostat,
-      mirostatTau: mirostatTau,
-      mirostatEta: mirostatEta,
-      ignoreEos: ignoreEos,
-      grammar: grammar,
-      stopSequences: stopSequences ?? [],
-      mediaPaths: mediaPaths,
-    );
-    return generateMultimodalCompletionWithParamsAsync(params);
-  }
-
-  /// Generates a multimodal completion with CompletionParams asynchronously
-  Future<CompletionResult?> generateMultimodalCompletionWithParamsAsync(
-    CompletionParams params,
-  ) async {
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .generateMultimodalCompletionAsync(
-          _contextHandle,
-          params.toMap(),
-          params.mediaPaths,
-        );
-    if (result != null) {
-      return CompletionResult(
-        text: result['text'] as String,
-        tokensGenerated: result['tokensGenerated'] as int,
-        tokensEvaluated: result['tokensEvaluated'] as int,
-        truncated: result['truncated'] as bool,
-        stoppedEos: result['stoppedEos'] as bool,
-        stoppedWord: result['stoppedWord'] as bool,
-        stoppedLimit: result['stoppedLimit'] as bool,
-        stoppingWord: result['stoppingWord'] as String?,
-      );
-    }
-    return null;
-  }
-
-  /// Formats chat messages asynchronously (runs in background thread)
-  Future<String?> formatChatMessagesAsync(
-    List<ChatMessage> messages,
-    String? chatTemplate,
-  ) async {
-    final messagesMap = messages.map((msg) => msg.toMap()).toList();
-    return await LlamaMobileFlutterSdkPlatform.instance.formatChatMessagesAsync(
-      _contextHandle,
-      messagesMap,
-      chatTemplate,
-    );
-  }
-
-  /// Loads a TTS model asynchronously (runs in background thread)
-  Future<bool> loadTTSModelAsync(
-    String modelPath,
-    TTSModelType modelType,
-  ) async {
-    final params = <String, dynamic>{
-      'modelPath': modelPath,
-      'modelType': modelType.rawValue,
-    };
-    final result = await LlamaMobileFlutterSdkPlatform.instance
-        .loadTTSModelAsync(_contextHandle, modelPath, params);
-    return result?['success'] as bool? ?? false;
-  }
-
-  /// Frees the TTS model asynchronously (runs in background thread)
-  Future<bool> freeTTSModelAsync() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.freeTTSModelAsync(
-      _contextHandle,
-    );
-  }
-
-  /// Loads a LoRA adapter asynchronously (runs in background thread)
-  Future<bool> loadLoraAdapterAsync(String adapterPath, double scale) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.loadLoraAdapterAsync(
-      _contextHandle,
-      adapterPath,
-      scale,
-    );
-  }
-
-  /// Frees a LoRA adapter asynchronously (runs in background thread)
-  Future<bool> freeLoraAdapterAsync() async {
-    return await LlamaMobileFlutterSdkPlatform.instance.freeLoraAdapterAsync(
-      _contextHandle,
-    );
-  }
-
-  /// Removes all LoRA adapters asynchronously (runs in background thread)
-  Future<void> removeLoraAdaptersAsync() async {
-    await LlamaMobileFlutterSdkPlatform.instance.removeLoraAdaptersAsync(
-      _contextHandle,
-    );
-  }
-
-  /// Initializes multimodal asynchronously (runs in background thread)
-  Future<bool> initMultimodalAsync(String mmprojPath, bool useGpu) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.initMultimodalAsync(
-      _contextHandle,
-      mmprojPath,
-      useGpu,
-    );
-  }
-
-  /// Releases multimodal asynchronously (runs in background thread)
-  Future<void> releaseMultimodalAsync() async {
-    await LlamaMobileFlutterSdkPlatform.instance.releaseMultimodalAsync(
-      _contextHandle,
-    );
-  }
-
-  /// Initializes vocoder asynchronously (runs in background thread)
-  Future<bool> initVocoderAsync(String vocoderModelPath) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.initVocoderAsync(
-      _contextHandle,
-      vocoderModelPath,
-    );
-  }
-
-  /// Releases vocoder asynchronously (runs in background thread)
-  Future<void> releaseVocoderAsync() async {
-    await LlamaMobileFlutterSdkPlatform.instance.releaseVocoderAsync(
-      _contextHandle,
-    );
-  }
-
-  /// Generates speech asynchronously (runs in background thread)
-  Future<Map<String, dynamic>?> generateSpeechAsync(
-    String text, {
-    Map<String, dynamic>? options,
-  }) async {
-    return await LlamaMobileFlutterSdkPlatform.instance.generateSpeechAsync(
-      _contextHandle,
-      text,
-      options,
-    );
-  }
-
-  /// Generates speech as a stream for long text asynchronously (runs in background thread)
-  Future<Map<String, dynamic>?> generateSpeechStreamForLongTextAsync(
-    String text, {
-    Map<String, dynamic>? options,
-  }) async {
-    return await LlamaMobileFlutterSdkPlatform.instance
-        .generateSpeechStreamForLongTextAsync(_contextHandle, text, options);
-  }
-}
-
-/// Represents a chat message
-class ChatMessage {
+class LlamaChatMessage {
   final String role;
   final String content;
-  final String? reasoningContent;
-  final String? toolName;
-  final String? toolCallId;
-
-  ChatMessage({
-    required this.role,
-    required this.content,
-    this.reasoningContent,
-    this.toolName,
-    this.toolCallId,
-  });
-
-  /// Converts to a map for platform channel communication
-  Map<String, String?> toMap() {
-    return {
-      'role': role,
-      'content': content,
-      'reasoning_content': reasoningContent,
-      'tool_name': toolName,
-      'tool_call_id': toolCallId,
-    };
-  }
-
-  /// Converts from a map
-  factory ChatMessage.fromMap(Map<String, dynamic> map) {
-    return ChatMessage(
-      role: map['role'] as String,
-      content: map['content'] as String,
-      reasoningContent: map['reasoning_content'] as String?,
-      toolName: map['tool_name'] as String?,
-      toolCallId: map['tool_call_id'] as String?,
-    );
-  }
+  const LlamaChatMessage(this.role, this.content);
 }
 
-/// TTS model types
-enum TTSModelType {
-  unknown,
-  outETTSv02,
-  outETTSv03;
+/// One generation request: exactly one of [prompt] or [messages] is used.
+class LlamaGenerationRequest {
+  String? prompt;
+  List<LlamaChatMessage> messages;
+  List<String> mediaPaths;
+  LlamaSampling sampling;
+  int maxTokens;
+  List<String> stopSequences;
+  String? grammar;
+  String? jsonSchema;
 
-  int get rawValue {
-    switch (this) {
-      case unknown:
-        return -1;
-      case outETTSv02:
-        return 1;
-      case outETTSv03:
-        return 2;
+  LlamaGenerationRequest({
+    this.prompt,
+    List<LlamaChatMessage>? messages,
+    List<String>? mediaPaths,
+    LlamaSampling? sampling,
+    this.maxTokens = 128,
+    List<String>? stopSequences,
+    this.grammar,
+    this.jsonSchema,
+  })  : messages = messages ?? const [],
+        mediaPaths = mediaPaths ?? const [],
+        sampling = sampling ?? LlamaSampling(),
+        stopSequences = stopSequences ?? const [];
+
+  Map<String, dynamic> toJson() => {
+        'prompt': prompt,
+        'roles': messages.map((m) => m.role).toList(),
+        'contents': messages.map((m) => m.content).toList(),
+        'mediaPaths': mediaPaths,
+        'sampling': sampling.toJson(),
+        'maxTokens': maxTokens,
+        'stopSequences': stopSequences,
+        'grammar': grammar,
+        'jsonSchema': jsonSchema,
+      };
+}
+
+/// stopReason values mirror llama_mobile_stop_reason_t.
+enum LlamaStopReason {
+  eos(0),
+  word(1),
+  length(2),
+  aborted(3),
+  error(4);
+
+  final int value;
+  const LlamaStopReason(this.value);
+}
+
+LlamaStopReason _stopFrom(int v) {
+  for (final r in LlamaStopReason.values) {
+    if (r.value == v) return r;
+  }
+  return LlamaStopReason.error;
+}
+
+class LlamaUsage {
+  final int promptTokens;
+  final int generatedTokens;
+  final int timeToFirstTokenMs;
+  final int totalMs;
+  const LlamaUsage(this.promptTokens, this.generatedTokens,
+      this.timeToFirstTokenMs, this.totalMs);
+}
+
+class LlamaGenerationResult {
+  final String text;
+  final LlamaStopReason stopReason;
+  final LlamaUsage usage;
+  const LlamaGenerationResult(this.text, this.stopReason, this.usage);
+}
+
+class LlamaModelInfo {
+  final int nCtx;
+  final int nEmbd;
+  final int modelSizeBytes;
+  final int nParams;
+  final String description;
+  const LlamaModelInfo(this.nCtx, this.nEmbd, this.modelSizeBytes, this.nParams,
+      this.description);
+}
+
+/// Configuration for [LlamaEngine.open] / [LlamaEngine.openAsync].
+class LlamaEngineConfig {
+  String modelPath;
+  int engine = 0; // 0=AUTO 1=CPU 2=METAL 3=VULKAN 4=OPENCL
+  int nGpuLayers = 0;
+  int nCtx = 2048;
+  int nBatch = 512;
+  int nUBatch = 512;
+  int nThreads = 0;
+  bool useMmap = true;
+  bool useMlock = false;
+  bool embedding = false;
+  bool flashAttention = false;
+  bool chat = true;
+  String? kvCacheTypeK;
+  String? kvCacheTypeV;
+  String? chatTemplate;
+  String? systemPrompt;
+
+  LlamaEngineConfig({required this.modelPath});
+
+  Map<String, dynamic> toJson() => {
+        'modelPath': modelPath,
+        'engine': engine,
+        'nGpuLayers': nGpuLayers,
+        'nCtx': nCtx,
+        'nBatch': nBatch,
+        'nUBatch': nUBatch,
+        'nThreads': nThreads,
+        'useMmap': useMmap,
+        'useMlock': useMlock,
+        'embedding': embedding,
+        'flashAttention': flashAttention,
+        'chat': chat,
+        'kvCacheTypeK': kvCacheTypeK,
+        'kvCacheTypeV': kvCacheTypeV,
+        'chatTemplate': chatTemplate,
+        'systemPrompt': systemPrompt,
+      };
+}
+
+/// v2 engine: one native context (one model). Generation is single-flight.
+class LlamaEngine {
+  final int _handle;
+  LlamaEngine._(this._handle);
+
+
+  static const MethodChannel _channel =
+      MethodChannel('llama_mobile_flutter_sdk/v2');
+
+  static Future<dynamic> _invoke(String method, [Object? args]) async {
+    try {
+      return await _channel.invokeMethod<dynamic>(method, args);
+    } on PlatformException catch (e) {
+      throw LlamaException.fromNative(int.tryParse(e.code) ?? -3,
+          e.message ?? method);
     }
   }
 
-  factory TTSModelType.fromRawValue(int value) {
-    switch (value) {
-      case 1:
-        return outETTSv02;
-      case 2:
-        return outETTSv03;
-      default:
-        return unknown;
+  /// Library version reported by the native side.
+  static Future<String> libraryVersion() async {
+    final String? v = await _channel.invokeMethod<String>('version');
+    return v ?? '';
+  }
+
+  /// Opens (loads) a model context. This is an async platform call and never
+  /// blocks the UI isolate, but model loading can take seconds.
+  static Future<LlamaEngine> open(LlamaEngineConfig config) async {
+    final handle = await _invoke('open', config.toJson()) as int?;
+    if (handle == null || handle == 0) {
+      throw LlamaException(LlamaStatus.modelLoad, 'model load failed');
     }
+    return LlamaEngine._(handle);
   }
-}
 
-/// Result of a text completion
-class CompletionResult {
-  final String text;
-  final int tokensGenerated;
-  final int tokensEvaluated;
-  final bool truncated;
-  final bool stoppedEos;
-  final bool stoppedWord;
-  final bool stoppedLimit;
-  final String? stoppingWord;
+  /// Sync-style alias kept for parity with the other wrappers: on Dart this is
+  /// the same async call (Dart is async-only per §8).
+  static Future<LlamaEngine> openAsync(LlamaEngineConfig config) => open(config);
 
-  CompletionResult({
-    required this.text,
-    required this.tokensGenerated,
-    required this.tokensEvaluated,
-    required this.truncated,
-    required this.stoppedEos,
-    required this.stoppedWord,
-    required this.stoppedLimit,
-    this.stoppingWord,
-  });
-
-  /// Creates from a map
-  factory CompletionResult.fromMap(Map<String, dynamic> map) {
-    return CompletionResult(
-      text: map['text'] as String,
-      tokensGenerated: map['tokensGenerated'] as int,
-      tokensEvaluated: map['tokensEvaluated'] as int,
-      truncated: map['truncated'] as bool,
-      stoppedEos: map['stoppedEos'] as bool,
-      stoppedWord: map['stoppedWord'] as bool,
-      stoppedLimit: map['stoppedLimit'] as bool,
-      stoppingWord: map['stoppingWord'] as String?,
+  /// One generation. Never blocks the UI isolate. Throws
+  /// [LlamaException.alreadyRunning] if another generation is active.
+  Future<LlamaGenerationResult> generate(LlamaGenerationRequest request) async {
+    final res = (await _invoke('generate', {
+      'handle': _handle,
+      'request': request.toJson(),
+    })) as Map<dynamic, dynamic>?;
+    if (res == null) {
+      throw LlamaException(LlamaStatus.generation, 'generate failed');
+    }
+    return LlamaGenerationResult(
+      (res['text'] as String?) ?? '',
+      _stopFrom((res['stopReason'] as num?)?.toInt() ?? 4),
+      LlamaUsage(
+        (res['promptTokens'] as num?)?.toInt() ?? 0,
+        (res['generatedTokens'] as num?)?.toInt() ?? 0,
+        0,
+        0,
+      ),
     );
   }
-}
 
-/// Result of a conversation
-class ConversationResult {
-  final String text;
-  final int timeToFirstToken;
-  final int totalTime;
-  final int tokensGenerated;
+  /// Tokenizes text with the model's vocabulary (no special tokens).
+  Future<List<int>> tokenize(String text) async {
+    final raw = (await _invoke('tokenize', {
+      'handle': _handle,
+      'text': text,
+    })) as List?;
+    return raw?.map((e) => (e as num).toInt()).toList() ?? const [];
+  }
 
-  ConversationResult({
-    required this.text,
-    required this.timeToFirstToken,
-    required this.totalTime,
-    required this.tokensGenerated,
-  });
+  /// Decodes token ids back to text.
+  Future<String> detokenize(List<int> tokens) async =>
+      (await _invoke('detokenize', {
+        'handle': _handle,
+        'tokens': tokens,
+      })) as String? ?? '';
 
-  /// Creates from a map
-  factory ConversationResult.fromMap(Map<String, dynamic> map) {
-    return ConversationResult(
-      text: map['text'] as String,
-      timeToFirstToken: map['timeToFirstToken'] as int,
-      totalTime: map['totalTime'] as int,
-      tokensGenerated: map['tokensGenerated'] as int,
+  /// Batch embeddings (one row per text). Requires opening the context with
+  /// `embedding = true`.
+  Future<List<List<double>>> embed(List<String> texts) async {
+    final raw = (await _invoke('embed', {
+      'handle': _handle,
+      'texts': texts,
+    })) as List?;
+    return raw?.map((row) => (row as List)
+            .map((v) => (v as num).toDouble())
+            .toList())
+        .toList() ??
+        const [];
+  }
+
+  /// Attaches a multimodal projector (mmproj) so later generations can include
+  /// image paths in `LlamaGenerationRequest.mediaPaths`.
+  Future<bool> initMultimodal(String mmprojPath) async {
+    final ok = await _invoke('initMultimodal', {
+      'handle': _handle,
+      'mmprojPath': mmprojPath,
+    }) as bool?;
+    return ok == true;
+  }
+
+  /// Thread-safe: stops the currently running generation on the native side.
+  Future<bool> abort() async {
+    final bool? ok = await _channel.invokeMethod<bool>('abort', {'handle': _handle});
+    return ok == true;
+  }
+
+  Future<LlamaModelInfo> modelInfo() async {
+    final res = (await _invoke('modelInfo', {'handle': _handle}))
+        as Map<dynamic, dynamic>?;
+    if (res == null) {
+      throw LlamaException(LlamaStatus.notInitialized, 'modelInfo failed');
+    }
+    return LlamaModelInfo(
+      (res['nCtx'] as num?)?.toInt() ?? 0,
+      (res['nEmbd'] as num?)?.toInt() ?? 0,
+      (res['modelSizeBytes'] as num?)?.toInt() ?? 0,
+      (res['nParams'] as num?)?.toInt() ?? 0,
+      (res['description'] as String?) ?? '',
     );
   }
-}
 
-/// Result of a download operation
-class DownloadResult {
-  final bool success;
-  final String localPath;
-  final String? errorMessage;
-
-  DownloadResult({
-    required this.success,
-    required this.localPath,
-    this.errorMessage,
-  });
-}
-
-/// Result of an audio generation operation
-class AudioResult {
-  final List<int> audioData;
-
-  AudioResult({required this.audioData});
+  Future<void> close() async {
+    await _channel.invokeMethod<void>('close', {'handle': _handle});
+  }
 }

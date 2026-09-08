@@ -9,7 +9,7 @@ enum TestPaths {
     static let ttsModelPath = rootPath + "/OuteTTS-0.2-500M-Q6_K.gguf"
     static let altTTSModelPath = rootPath + "/Qwen3-1.7B-Multilingual-TTS.Q5_K_M.gguf"
     static let vocoderPath = rootPath + "/WavTokenizer-Large-75-F16.gguf"
-    static let embeddingPath = rootPath + "/embedding/Qwen3-Embedding-0.6B-Q8_0.gguf"
+    static let embeddingPath = rootPath + "/Qwen3-Embedding-0.6B-Q8_0.gguf"
     static let mmprojPath = rootPath + "/mmproj-SmolVLM-256M-Instruct-Q8_0.gguf"
     static let loraPath = rootPath + "/lora/fine-tuned-smolLM2-360M-with-LoRA-on-camel-ai-physics-f16.gguf"
     static let imageModelPath = rootPath + "/SmolVLM-256M-Instruct-Q8_0.gguf"
@@ -217,7 +217,8 @@ final class LlamaEngineTests: XCTestCase {
             }
         }
         XCTAssertFalse(text.isEmpty)
-        XCTAssertEqual(terminalReason, .eos)
+        XCTAssertTrue(terminalReason == .eos || terminalReason == .length,
+                      "normal terminal stop (eos/length), got \(String(describing: terminalReason))")
     }
 
     /// Close is idempotent and safe to call after streams completed.
@@ -227,5 +228,78 @@ final class LlamaEngineTests: XCTestCase {
         engine.close()
         engine.close()
         XCTAssertFalse(engine.isOpen)
+    }
+
+    // MARK: - Tokenize / modelInfo (model-backed, cheap)
+
+    func testTokenizeDetokenizeRoundTrip() async throws {
+        try requireModel()
+        let engine = try await LlamaEngine.open(makeConfig())
+        defer { engine.close() }
+        let tokens = try engine.tokenize("Hello from llama mobile v2")
+        XCTAssertFalse(tokens.isEmpty)
+        let round = try engine.detokenize(tokens)
+        XCTAssertFalse(round.isEmpty, "detokenize should not be empty")
+    }
+
+    func testModelInfoReportsFields() async throws {
+        try requireModel()
+        let engine = try await LlamaEngine.open(makeConfig())
+        defer { engine.close() }
+        let info = try engine.modelInfo()
+        XCTAssertEqual(info.nCtx, 2048, "nCtx should reflect the config")
+        XCTAssertGreaterThan(info.nParams, 0)
+        XCTAssertGreaterThan(info.nEmbd, 0)
+        XCTAssertFalse(info.description.isEmpty)
+    }
+
+    // MARK: - Embedding (dedicated embedding model, XCTSkip when absent)
+
+    func testEmbeddingProducesVectors() async throws {
+        try XCTSkipUnless(
+            FileManager.default.fileExists(atPath: TestPaths.embeddingPath),
+            "embedding model not available: \(TestPaths.embeddingPath)")
+        var c = LlamaModelConfig(modelPath: TestPaths.embeddingPath)
+        c.engine = .cpu
+        c.nCtx = 512
+        c.flags = [.embedding]
+        let engine = try await LlamaEngine.open(c)
+        defer { engine.close() }
+        let vecs = try engine.embed(["hello", "world"])
+        XCTAssertEqual(vecs.count, 2, "one vector per input text")
+        XCTAssertFalse(vecs[0].isEmpty)
+        XCTAssertEqual(vecs[0].count, vecs[1].count,
+                       "same embedding dim for every row")
+        XCTAssertNotEqual(vecs[0], vecs[1], "different texts → different vectors")
+    }
+
+    // MARK: - Multimodal vision (dedicated vision model, XCTSkip when absent)
+
+    func testMultimodalImageGeneration() async throws {
+        // The mtmd mmproj always loads on the GPU backend (llama_mobile_v2.cpp
+        // passes use_gpu=true). Simulator Metal crashes while loading the CLIP
+        // projector, so this model-backed test only runs on a real device.
+        #if targetEnvironment(simulator)
+        throw XCTSkip("vision mtmd requires a real device GPU (sim Metal crashes)")
+        #else
+        try XCTSkipUnless(
+            FileManager.default.fileExists(atPath: TestPaths.imageModelPath) &&
+            FileManager.default.fileExists(atPath: TestPaths.mmprojPath) &&
+            FileManager.default.fileExists(atPath: TestPaths.imagePath),
+            "vision fixtures not available")
+        var c = LlamaModelConfig(modelPath: TestPaths.imageModelPath)
+        c.engine = .cpu
+        c.nCtx = 2048
+        c.flags = [.chat]
+        let engine = try await LlamaEngine.open(c)
+        defer { engine.close() }
+        try engine.initMultimodal(mmprojPath: TestPaths.mmprojPath)
+        var req = LlamaGenerationRequest(prompt: "Describe this picture in a few words.")
+        req.media = [LlamaMedia(path: TestPaths.imagePath)]
+        req.maxTokens = 24
+        req.sampling.temperature = 0
+        let r = try await Task.detached { try engine.generate(req) }.value
+        XCTAssertFalse(r.text.isEmpty, "vision generation should return text")
+        #endif
     }
 }

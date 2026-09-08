@@ -1,16 +1,24 @@
-# flutter_sdk_example
+# flutter_sdk_example — llama_mobile v2 (LlamaEngine)
 
-A new Flutter project.
+Flutter example migrated to the v2 Flutter SDK wrapper (`LlamaEngine`,
+async-only). The old v1 `LlamaMobile` facade demo was removed on the v2 branch.
 
-## Getting Started
+Four tabs matching the v2 wrapper surface:
 
-This project is a starting point for a Flutter application.
+- **Chat** — load a chat GGUF, single-shot `generate`, `abort` a running call.
+- **Embed** — opens its own engine with `embedding = true`, batch-embeds one
+  text, shows dimension/statistics, then releases the engine.
+- **Vision** — load a vision model + `initMultimodal(mmproj)`, then generate a
+  caption for an image via `mediaPaths`.
+- **Model** — `modelInfo` + `tokenize`/`detokenize` round-trip.
 
-A few resources to get you started if this is your first Flutter project:
+TTS and LoRA are not yet exposed by the v2 Flutter wrapper (they live at the
+core/iOS/Android level in v2.0).
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+Run:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter run          # device with a GGUF path entered in the UI
+flutter analyze      # clean
+flutter test         # widget smoke (tabs render)
+```

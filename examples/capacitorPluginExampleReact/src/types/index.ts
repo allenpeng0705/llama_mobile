@@ -1,16 +1,10 @@
-// Shared types for the application
-
-// Message type for chat
-interface Message {
-  role: 'user' | 'assistant';
+// Shared types for the v2 (LlamaEngine) Capacitor example app.
+export interface Message {
+  role: string; // 'user' | 'assistant'
   content: string;
 }
 
-// Model information type
-interface ModelInfo {
-  name: string;
-  path: string;
+export interface LogEntry {
+  role: 'q' | 'a' | 'sys' | 'err';
+  text: string;
 }
-
-// Export all types
-export type { Message, ModelInfo };

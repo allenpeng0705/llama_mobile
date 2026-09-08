@@ -1,418 +1,96 @@
-#include <stdio.h>
-#include <stdlib.h>
+// api_example.cpp — llama_mobile v2 API tour (C API).
+//
+// Walks the v2 surface that needs no/little model setup: version/capabilities,
+// status table, logging, model registry, plus an optional one-shot chat when a
+// model path is supplied. Mirror of the API docs in lib/llama_mobile_v2.h.
+//
+// Usage: ./llama_mobile_api_example [chat.gguf]
+#include <cstdio>
 #include <string>
-#include <vector>
-#include <iostream>
-#include <dirent.h>
-#include <cstring>
-#include <algorithm>
 
-#ifdef __APPLE__
-#include <mach-o/dyld.h>
-#endif
+#include "llama_mobile_v2.h"
+#include "utils.h"
 
-#include "../../lib/llama_mobile_api.h"
+int main(int argc, char ** argv) {
+    const std::string dir = lmex::find_model_dir();
 
-// Function to list available GGUF models in top-level models directory (excluding embedding folder)
-std::vector<std::string> list_available_models(const std::string& models_dir) {
-    std::vector<std::string> models;
-    DIR* dir;
-    struct dirent* entry;
+    // 1) Identity ------------------------------------------------------------
+    const llama_mobile_version_info_t * ver = llama_mobile_version();
+    std::printf("llama_mobile %s  (api v%d)\n", ver->string, ver->api_version);
 
-    if ((dir = opendir(models_dir.c_str())) != NULL) {
-        while ((entry = readdir(dir)) != NULL) {
-            if (entry->d_type == DT_REG) { // Regular file
-                std::string filename = entry->d_name;
-                if (filename.size() >= 5 && filename.substr(filename.size() - 5) == ".gguf") {
-                    models.push_back(filename);
-                }
+    // 2) Status strings ------------------------------------------------------
+    const llama_mobile_status_t codes[] = {
+        LLAMA_MOBILE_OK, LLAMA_MOBILE_ERR_INVALID_ARGUMENT, LLAMA_MOBILE_ERR_GENERATION,
+        LLAMA_MOBILE_ERR_MODEL_NOT_FOUND, LLAMA_MOBILE_ERR_ALREADY_RUNNING,
+        LLAMA_MOBILE_ERR_ABORTED, LLAMA_MOBILE_ERR_NOT_INITIALIZED,
+    };
+    std::printf("status names:");
+    for (auto c : codes) std::printf(" %s", llama_mobile_status_string(c));
+    std::printf("\n");
+
+    // 3) Capabilities --------------------------------------------------------
+    llama_mobile_capabilities_t caps;
+    if (llama_mobile_capabilities(&caps) == LLAMA_MOBILE_OK) {
+        std::printf("caps: vision=%d tts=%d embeddings=%d lora=%d default_n_ctx=%u\n",
+                    caps.supports_vision, caps.supports_tts, caps.supports_embeddings,
+                    caps.supports_lora, caps.default_n_ctx);
+        if (caps.device_name) std::printf("device: %s\n", caps.device_name);
+    }
+
+    // 4) Logging -------------------------------------------------------------
+    llama_mobile_log_set_level(LLAMA_MOBILE_LOG_WARN);
+
+    // 5) Model registry (may be empty on a fresh host) -----------------------
+    llama_mobile_model_entry_t * entries = nullptr;
+    size_t count = 0;
+    if (llama_mobile_models_list(&entries, &count) == LLAMA_MOBILE_OK) {
+        std::printf("registry: %zu model(s)\n", count);
+        for (size_t i = 0; i < count; ++i) {
+            std::printf("  %s (%lld bytes) %s\n", entries[i].name,
+                        (long long) entries[i].size_bytes, entries[i].path);
+        }
+        llama_mobile_models_list_free(entries, count);
+    }
+
+    // 6) Optional one-shot chat ----------------------------------------------
+    const std::string model = lmex::arg_or(
+        argc, argv, 1, dir.empty() ? "" : dir + "/SmolLM-360M-Instruct.Q6_K.gguf");
+    if (!model.empty() && lmex::file_exists(model)) {
+        llama_mobile_context_config_t cfg;
+        llama_mobile_context_config_init(&cfg);
+        cfg.model_path = model.c_str();
+        cfg.n_ctx = 1024;
+        cfg.engine = LLAMA_MOBILE_ENGINE_CPU;
+        cfg.flags = LLAMA_MOBILE_CTX_MMAP | LLAMA_MOBILE_CTX_CHAT;
+        llama_mobile_context_t ctx = nullptr;
+        llama_mobile_status_t st = llama_mobile_context_create(&cfg, &ctx);
+        if (st == LLAMA_MOBILE_OK) {
+            llama_mobile_model_info_t info;
+            if (llama_mobile_model_info(ctx, &info) == LLAMA_MOBILE_OK) {
+                std::printf("model: %s\n", info.description);
             }
-        }
-        closedir(dir);
-    }
-
-    // Sort models alphabetically
-    std::sort(models.begin(), models.end());
-    return models;
-}
-
-// Simple token callback for streaming output
-bool token_callback(const char* token, void* user_data) {
-    printf("%s", token);
-    fflush(stdout);
-    return true; // Continue generation
-}
-
-// Progress callback for model loading
-void progress_callback(float progress, void* user_data) {
-    printf("Model loading progress: %.1f%%\r", progress * 100.0f);
-    fflush(stdout);
-}
-
-// Helper function to print embeddings (first 10 values)
-void print_embeddings(const llama_mobile_float_array_t& embeddings) {
-    printf("Embedding dimensions: %d\n", embeddings.count);
-    printf("First 10 embedding values: ");
-    int print_count = std::min(10, embeddings.count);
-    for (int i = 0; i < print_count; ++i) {
-        printf("%.6f", embeddings.values[i]);
-        if (i < print_count - 1) {
-            printf(", ");
-        }
-    }
-    printf("\n\n");
-}
-
-int main(int argc, char** argv) {
-    std::string model_path;
-    const std::string models_dir = "../../../models";
-    
-    if (argc < 2) {
-        // List available models in top-level models directory (excluding embedding folder)
-        printf("=== Available Models ===\n");
-        std::vector<std::string> models = list_available_models(models_dir);
-        
-        if (models.empty()) {
-            fprintf(stderr, "No GGUF models found in %s\n", models_dir.c_str());
-            fprintf(stderr, "Usage: %s <model_path>\n", argv[0]);
-            return 1;
-        }
-        
-        // Display available models
-        for (size_t i = 0; i < models.size(); ++i) {
-            printf("%zu. %s\n", i + 1, models[i].c_str());
-        }
-        
-        // Get user selection
-        printf("\nSelect a model by number: ");
-        int selection;
-        scanf("%d", &selection);
-        
-        if (selection < 1 || selection > static_cast<int>(models.size())) {
-            fprintf(stderr, "Invalid selection\n");
-            return 1;
-        }
-        
-        // Construct the full path
-        model_path = models_dir + "/" + models[selection - 1];
-    } else {
-        // Use provided model path
-        model_path = argv[1];
-    }
-    
-    printf("\n=== llama_mobile API Example ===\n");
-    printf("Model path: %s\n\n", model_path.c_str());
-
-    // Step 1: Initialize the context
-    llama_mobile_init_params_t init_params = {0};  // Initialize all fields to zero
-    init_params.model_path = model_path.c_str();
-    init_params.n_ctx = 2048;
-    init_params.n_batch = 512;
-    init_params.n_gpu_layers = 0;  // CPU-only for basic testing
-    init_params.n_threads = 4;
-    init_params.use_mmap = true;
-    init_params.embedding = false;  // Disable global embedding mode (we'll test embedding separately)
-    init_params.progress_callback = progress_callback;
-    init_params.progress_callback_user_data = nullptr;
-
-    printf("1. Testing context initialization...\n");
-    llama_mobile_context_t ctx = llama_mobile_init(&init_params);
-    if (!ctx) {
-        fprintf(stderr, "Failed to initialize context\n");
-        return 1;
-    }
-    printf("Context initialized successfully!\n\n");
-
-    // Step 2: Test tokenization and detokenization
-    printf("2. Testing tokenization and detokenization...\n");
-    const char* test_text = "Hello, world! This is a test.";
-    
-    llama_mobile_token_array_t tokens = llama_mobile_tokenize(ctx, test_text);
-    printf("Original text: %s\n", test_text);
-    printf("Token count: %d\n", tokens.count);
-    printf("Tokens: ");
-    for (int i = 0; i < tokens.count; ++i) {
-        printf("%d ", tokens.tokens[i]);
-    }
-    printf("\n");
-    
-    char* detokenized = llama_mobile_detokenize(ctx, tokens.tokens, tokens.count);
-    printf("Detokenized text: %s\n\n", detokenized);
-    
-    // Free resources
-    llama_mobile_free_token_array(tokens);
-    llama_mobile_free_string(detokenized);
-
-    // Step 3: Test embedding generation (requires separate context with embedding enabled)
-    printf("3. Testing embedding generation...\n");
-    printf("Creating separate context with embedding mode enabled...\n");
-    
-    llama_mobile_init_params_t embed_params = {0};
-    embed_params.model_path = model_path.c_str();
-    embed_params.n_ctx = 2048;
-    embed_params.n_batch = 512;
-    embed_params.n_gpu_layers = 0;  // CPU-only for embedding
-    embed_params.n_threads = 4;
-    embed_params.use_mmap = true;
-    embed_params.embedding = true;  // Enable embedding mode specifically for this context
-    embed_params.progress_callback = progress_callback;
-    embed_params.progress_callback_user_data = nullptr;
-    
-    llama_mobile_context_t embed_ctx = llama_mobile_init(&embed_params);
-    if (embed_ctx != nullptr) {
-        llama_mobile_float_array_t embeddings = llama_mobile_embedding(embed_ctx, "Test sentence for embedding.");
-        if (embeddings.values != NULL && embeddings.count > 0) {
-            print_embeddings(embeddings);
+            llama_mobile_message_t msgs[] = {
+                {"user", "Say 'API tour complete' in 5 words or fewer.", nullptr, nullptr, nullptr},
+            };
+            llama_mobile_generate_params_t p;
+            llama_mobile_generate_params_init(&p);
+            p.messages = msgs;
+            p.n_messages = 1;
+            p.max_tokens = 24;
+            p.sampling.temperature = 0;
+            llama_mobile_generate_result_t r;
+            uint64_t rid = 0;
+            st = llama_mobile_generate(ctx, &p, nullptr, nullptr, &rid, &r);
+            if (st == LLAMA_MOBILE_OK) {
+                std::printf("chat: %s\n", r.text);
+                llama_mobile_generate_result_free(&r);
+            }
+            llama_mobile_context_destroy(&ctx);
         } else {
-            printf("Failed to generate embeddings\n\n");
+            std::printf("model open failed: %s\n", llama_mobile_status_string(st));
         }
-        llama_mobile_free_float_array(embeddings);
-        llama_mobile_free(embed_ctx);
-        printf("Embedding context freed successfully\n\n");
     } else {
-        printf("Failed to create embedding context\n\n");
+        std::printf("(no model arg — pass one to also run the chat tour)\n");
     }
-
-    // Step 4: Test simple completion
-    printf("4. Testing simple completion...\n");
-    const char* prompt = "Hello, how are you?";
-    const char* stop_sequence = "\n";
-    
-    llama_mobile_completion_params_t completion_params = {
-        .prompt = prompt,
-        .n_predict = 100,
-        .temperature = 0.7,
-        .top_k = 40,
-        .top_p = 0.95,
-        .min_p = 0.05,
-        .penalty_repeat = 1.1,
-        .stop_sequences = &stop_sequence,
-        .stop_sequence_count = 1,
-        .token_callback = token_callback,
-        .token_callback_user_data = nullptr,
-    };
-
-    printf("Prompt: %s\n", prompt);
-    printf("Response: ");
-    
-    llama_mobile_completion_result_t result;
-    int status = llama_mobile_completion(ctx, &completion_params, &result);
-    
-    if (status != 0) {
-        fprintf(stderr, "\nCompletion failed with status: %d\n", status);
-        llama_mobile_free(ctx);
-        return 1;
-    }
-    
-    printf("\n\nGeneration completed!\n");
-    printf("Tokens generated: %d\n", result.tokens_generated);
-    printf("Tokens evaluated: %d\n", result.tokens_evaluated);
-    printf("Stopped due to: %s\n\n", 
-           result.stopped_eos ? "EOS token" : 
-           result.stopped_word ? "stop sequence" : 
-           result.stopped_limit ? "token limit" : "unknown");
-    
-    llama_mobile_free_completion_result(&result);
-
-    // Step 5: Test conversation management
-    printf("5. Testing conversation management...\n");
-    
-    // First message
-    printf("User: What is the capital of France?\n");
-    printf("Assistant: ");
-    
-    llama_mobile_conversation_result_t conv_result;
-    status = llama_mobile_generate_response(ctx, "What is the capital of France?", 100, nullptr, nullptr, &conv_result);
-    if (status == 0) {
-        printf("%s\n", conv_result.text);
-        printf("Time to first token: %lld ms\n", conv_result.time_to_first_token);
-        printf("Total time: %lld ms\n", conv_result.total_time);
-        printf("Tokens generated: %d\n\n", conv_result.tokens_generated);
-        llama_mobile_free_conversation_result(&conv_result);
-    } else {
-        fprintf(stderr, "Conversation generation failed\n\n");
-    }
-    
-    // Second message (context-aware)
-    printf("User: What language is spoken there?\n");
-    printf("Assistant: ");
-    
-    status = llama_mobile_generate_response(ctx, "What language is spoken there?", 100, nullptr, nullptr, &conv_result);
-    if (status == 0) {
-        printf("%s\n", conv_result.text);
-        printf("Time to first token: %lld ms\n", conv_result.time_to_first_token);
-        printf("Total time: %lld ms\n", conv_result.total_time);
-        printf("Tokens generated: %d\n\n", conv_result.tokens_generated);
-        llama_mobile_free_conversation_result(&conv_result);
-    } else {
-        fprintf(stderr, "Conversation generation failed\n\n");
-    }
-    
-    // Clear conversation
-    llama_mobile_clear_conversation(ctx);
-    printf("Conversation cleared successfully!\n\n");
-
-    // Step 6: Test LoRA adapter support (demonstration only)
-    printf("6. Testing LoRA adapter support...\n");
-    
-    // Note: This is a demonstration - actual LoRA adapter would be needed
-    printf("Note: This is a demonstration of the API. No actual LoRA adapter is applied.\n");
-    printf("To test with a real LoRA adapter, provide a valid adapter path.\n\n");
-    
-    // Example: How to apply a LoRA adapter
-    // llama_mobile_lora_adapter_t adapters[] = {
-    //     {"/path/to/lora/adapter", 1.0f}
-    // };
-    // int lora_status = llama_mobile_apply_lora_adapters(ctx, adapters, 1);
-    // if (lora_status == 0) {
-    //     printf("LoRA adapter applied successfully!\n");
-    //     llama_mobile_remove_lora_adapters(ctx);
-    //     printf("LoRA adapter removed successfully!\n");
-    // }
-    
-    printf("LoRA API demonstration completed\n\n");
-
-    // Step 7: Test grammar-based completion (JSON)
-    printf("7. Testing grammar-based completion (JSON)...\n");
-    
-    // Get path to json.gbnf grammar file
-    char exe_path[2048];
-    #ifdef __APPLE__
-    uint32_t size = sizeof(exe_path);
-    _NSGetExecutablePath(exe_path, &size);
-    #elif __linux__
-    readlink("/proc/self/exe", exe_path, sizeof(exe_path));
-    #else
-    strcpy(exe_path, argv[0]);
-    #endif
-    
-    std::string grammar_path = std::string(exe_path);
-    size_t last_slash = grammar_path.find_last_of("/");
-    if (last_slash != std::string::npos) {
-        grammar_path = grammar_path.substr(0, last_slash);
-    }
-    grammar_path += "/../../lib/grammars/json.gbnf";
-    
-    const char* json_prompt = "Generate a JSON object with name, age, and city fields: ";
-    const char* json_stop_sequence = "}\n";
-    
-    llama_mobile_completion_params_t json_params = {
-        .prompt = json_prompt,
-        .n_predict = 100,
-        .temperature = 0.7,
-        .top_k = 40,
-        .top_p = 0.95,
-        .min_p = 0.05,
-        .penalty_repeat = 1.1,
-        .stop_sequences = &json_stop_sequence,
-        .stop_sequence_count = 1,
-        .grammar = grammar_path.c_str(),
-        .token_callback = token_callback,
-        .token_callback_user_data = nullptr,
-    };
-
-    printf("Prompt: %s\n", json_prompt);
-    printf("Response: ");
-    
-    llama_mobile_completion_result_t json_result;
-    status = llama_mobile_completion(ctx, &json_params, &json_result);
-    
-    if (status != 0) {
-        fprintf(stderr, "\nJSON completion failed with status: %d\n", status);
-    } else {
-        printf("}\n"); // Add closing brace (JSON grammar might not include it)
-        printf("\nJSON generation completed!\n");
-        printf("Tokens generated: %d\n", json_result.tokens_generated);
-        printf("JSON output follows grammar constraints\n\n");
-    }
-    
-    llama_mobile_free_completion_result(&json_result);
-
-    // Step 8: Test TTS API (Text-to-Speech)
-    printf("8. Testing TTS API (Text-to-Speech)...\n");
-    
-    // Note: Full TTS functionality requires specific TTS models
-    // These examples show how to use the API functions
-    
-    // Check TTS type (will be 0 if model doesn't support TTS)
-    int tts_type = llama_mobile_get_tts_type(ctx);
-    printf("  TTS Type: %d\n", tts_type);
-    
-    // Check if vocoder is enabled (initially disabled)
-    bool vocoder_enabled = llama_mobile_is_vocoder_enabled(ctx);
-    printf("  Vocoder Enabled: %s\n", vocoder_enabled ? "true" : "false");
-    
-    // Example: How to initialize a vocoder with a model path
-    printf("  Note: Vocoder initialization requires a valid vocoder model path\n");
-    printf("  Example: llama_mobile_init_vocoder(ctx, \"path/to/vocoder.gguf\");\n");
-    
-    // Example: How to get audio guide tokens and decode audio
-    printf("  Example TTS workflow:\n");
-    printf("    1. Initialize vocoder\n");
-    printf("    2. Generate text completion with audio tokens\n");
-    printf("    3. Extract audio tokens from completion\n");
-    printf("    4. Decode audio tokens: llama_mobile_decode_audio_tokens(ctx, tokens, count)\n");
-    printf("    5. Release vocoder: llama_mobile_release_vocoder(ctx)\n");
-    
-    printf("TTS API demonstration completed\n\n");
-    
-    // Step 9: Test Download API
-    printf("9. Testing Download API...\n");
-    
-    // Progress callback function for downloads
-    auto download_progress = [](float progress, const char* status, int64_t downloaded_bytes, int64_t total_bytes, void* user_data) {
-        printf("  Download progress: %.1f%% - %s\n", progress * 100.0f, status ? status : "");
-        if (total_bytes > 0) {
-            printf("  Downloaded: %.2f MB / %.2f MB\n", 
-                   downloaded_bytes / (1024.0f * 1024.0f), 
-                   total_bytes / (1024.0f * 1024.0f));
-        }
-    };
-    
-    // Example: How to download a model
-    printf("  Example: How to download a model from Hugging Face\n");
-    
-    // Download parameters
-    llama_mobile_download_params_t download_params = {0};
-    download_params.repo_id = "jartine/TinyLlama-1.1B-Chat-v0.4-GGUF";
-    download_params.filename = "tinyllama-1.1b-chat-v0.4.Q2_K.gguf";
-    download_params.destination_path = ".";
-    download_params.bearer_token = nullptr;
-    download_params.offline = false;
-    download_params.progress_callback = download_progress;
-    download_params.progress_callback_user_data = nullptr;
-    
-    printf("  Example: llama_mobile_download_model(&download_params);\n");
-    printf("  Note: Actual download is commented out to avoid unintended downloads\n");
-    
-    // Uncomment this to perform an actual download:
-    /*
-    llama_mobile_download_result_t download_result = llama_mobile_download_model(&download_params);
-    if (download_result.success) {
-        printf("  Download successful!\n");
-        printf("  Local path: %s\n", download_result.local_path);
-        printf("  File size: %lld bytes\n", download_result.file_size);
-    } else {
-        printf("  Download failed!\n");
-        printf("  Error: %s\n", download_result.error_message);
-    }
-    llama_mobile_free_download_result(&download_result);
-    */
-    
-    // Example: How to download a single Hugging Face file
-    printf("  Example: How to download a single Hugging Face file\n");
-    printf("  Example: llama_mobile_download_hf_file(\"repo_id\", \"filename\", \"dest_path\", nullptr, false, download_progress);\n");
-    
-    printf("Download API demonstration completed\n\n");
-    
-    // Step 10: Free resources
-    printf("10. Cleaning up resources...\n");
-    llama_mobile_free(ctx);
-    
-    printf("\n=== All API tests completed successfully! ===\n");
-    printf("Tested interfaces: initialization, tokenization, detokenization,\n");
-    printf("embeddings, completion, conversation management, LoRA support,\n");
-    printf("TTS (Text-to-Speech), and Download functionality.\n");
-    
     return 0;
 }

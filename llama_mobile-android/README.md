@@ -1,8 +1,8 @@
-# LlamaMobile Android Library
+# llama_mobile Android Native Library (v2)
 
 ## Overview
 
-The `llama_mobile-android` directory contains the core **pre-built Android native libraries** (`libllama_mobile.so`) and **API headers** for the LlamaMobile library. This provides direct access to the native C++ implementation of Llama models, but **does not include any JNI layer, Kotlin wrapper, or Java wrapper**.
+The `llama_mobile-android` directory contains the core **pre-built Android native libraries** and **API headers** for llama_mobile v2. This provides direct access to the native C implementation (`lib/llama_mobile_v2.h`), but **does not include the JNI layer / Kotlin wrapper** — those live in `llama_mobile-android-SDK` (class `com.llamamobile.LlamaEngine`). The v1 public API (`llama_mobile_api.h` / `llama_mobile_ffi.h`) was removed on the v2 branch (see `docs/v1-purge-workplan.md`); the shipped header is `llama_mobile_v2.h`.
 
 ## Directory Structure
 
@@ -22,8 +22,7 @@ llama_mobile-android/
 │       └── x86_64/           # x86_64 architecture
 │           └── libllama_mobile.a      # Main static library
 ├── include/                   # API headers
-│   ├── llama_mobile_api.h    # Main API header
-│   ├── llama_mobile_ffi.h    # FFI interface
+│   ├── llama_mobile_v2.h    # v2 API header (llama_mobile_v2.h)
 │   └── llama_cpp/            # Complete llama_cpp headers
 └── CMakeLists.txt            # CMake build configuration
 ```

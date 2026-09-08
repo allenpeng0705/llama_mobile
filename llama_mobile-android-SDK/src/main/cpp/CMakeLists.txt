@@ -28,8 +28,13 @@ set(STATIC_LIBS
     vendor-hash
     mtmd
     cpp-httplib
-    ggml-vulkan
 )
+
+# ggml-vulkan is only present when the native libs were built with Vulkan
+# enabled (GGML_VULKAN=ON); link it conditionally.
+if(EXISTS "${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libggml-vulkan.a")
+    list(APPEND STATIC_LIBS ggml-vulkan)
+endif()
 
 foreach(LIB_NAME ${STATIC_LIBS})
     add_library(${LIB_NAME} STATIC IMPORTED)

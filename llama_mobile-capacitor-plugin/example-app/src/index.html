@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="en" dir="ltr" class="hydrated">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
-    <title>LlamaMobile Capacitor Plugin Test</title>
+    <title>LlamaEngine v2 — Capacitor Demo</title>
     <meta
       name="viewport"
       content="viewport-fit=cover, width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no"
@@ -14,30 +14,17 @@
         padding: 20px;
         margin: 0;
       }
-      .container {
-        max-width: 600px;
-        margin: 0 auto;
-      }
-      h1 {
-        font-size: 24px;
-        margin-bottom: 20px;
-      }
+      .container { max-width: 600px; margin: 0 auto; }
+      h1 { font-size: 24px; margin-bottom: 4px; }
+      .subtitle { color: #666; margin-top: 0; font-size: 13px; }
       .section {
         margin-bottom: 30px;
         padding: 15px;
         border: 1px solid #ddd;
         border-radius: 8px;
       }
-      .section h2 {
-        font-size: 18px;
-        margin-top: 0;
-        margin-bottom: 15px;
-      }
-      label {
-        display: block;
-        margin-bottom: 5px;
-        font-weight: 500;
-      }
+      .section h2 { font-size: 18px; margin-top: 0; margin-bottom: 15px; }
+      label { display: block; margin-bottom: 5px; font-weight: 500; }
       input[type="text"], textarea {
         width: 100%;
         padding: 8px;
@@ -46,10 +33,7 @@
         border-radius: 4px;
         box-sizing: border-box;
       }
-      textarea {
-        min-height: 100px;
-        resize: vertical;
-      }
+      textarea { min-height: 80px; resize: vertical; }
       button {
         background-color: #007AFF;
         color: white;
@@ -61,11 +45,8 @@
         margin-right: 10px;
         margin-bottom: 10px;
       }
-      button:disabled {
-        background-color: #ccc;
-        cursor: not-allowed;
-      }
-      .result {
+      button:disabled { background-color: #ccc; cursor: not-allowed; }
+      .log {
         margin-top: 15px;
         padding: 10px;
         background-color: #f5f5f5;
@@ -74,6 +55,9 @@
         font-size: 12px;
         white-space: pre-wrap;
         word-break: break-all;
+        min-height: 120px;
+        max-height: 320px;
+        overflow-y: auto;
       }
       .status {
         margin-top: 10px;
@@ -81,18 +65,9 @@
         border-radius: 4px;
         font-weight: 500;
       }
-      .status.success {
-        background-color: #d4edda;
-        color: #155724;
-      }
-      .status.error {
-        background-color: #f8d7da;
-        color: #721c24;
-      }
-      .status.info {
-        background-color: #d1ecf1;
-        color: #0c5460;
-      }
+      .status.success { background-color: #d4edda; color: #155724; }
+      .status.error { background-color: #f8d7da; color: #721c24; }
+      .status.info { background-color: #d1ecf1; color: #0c5460; }
       select {
         width: 100%;
         padding: 8px;
@@ -105,23 +80,34 @@
   </head>
   <body>
     <div class="container">
-      <h1>LlamaMobile Capacitor Plugin Test</h1>
-      
+      <h1>LlamaEngine v2 — Capacitor Demo</h1>
+      <p class="subtitle">llama_mobile v2 — async-only wrapper. Chat is a
+        single-shot generate (Stop aborts the running generation).</p>
+
       <div class="section">
         <h2>Model Selection</h2>
-        <label for="modelSelect">Select Model:</label>
+        <label for="modelSelect">Select Chat Model:</label>
         <select id="modelSelect"></select>
-        <button onclick="loadModel()">Load Model</button>
+        <button id="loadBtn">Load Model</button>
         <div id="loadStatus" class="status" style="display: none;"></div>
       </div>
-      
+
+      <div class="section">
+        <h2>Chat</h2>
+        <div id="chatLog" class="log">No model loaded yet.</div>
+        <textarea id="promptInput" placeholder="Message…"></textarea>
+        <button id="sendBtn" disabled>Send</button>
+        <button id="stopBtn" disabled>Stop</button>
+        <div id="chatStatus" class="status" style="display: none;"></div>
+      </div>
+
       <div class="section">
         <h2>Embedding Test</h2>
-        <label for="embeddingText">Text to Embed:</label>
+        <label for="embeddingText">Text to Embed (Qwen3-Embedding model):</label>
         <textarea id="embeddingText">Hello, this is a test for embedding generation.</textarea>
-        <button onclick="generateEmbedding()" id="embeddingBtn" disabled>Generate Embedding</button>
+        <button id="embedBtn" disabled>Generate Embedding</button>
         <div id="embeddingStatus" class="status" style="display: none;"></div>
-        <div id="embeddingResult" class="result" style="display: none;"></div>
+        <div id="embeddingResult" class="log" style="display: none;"></div>
       </div>
     </div>
 

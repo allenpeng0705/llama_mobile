@@ -1,2025 +1,334 @@
+// LlamaMobileCapacitorPlugin.java — Capacitor Android plugin (v2, M7)
+//
+// Implements the `LlamaMobile` bridge used by the v2 TypeScript wrapper:
+// libraryVersion / open / generate / abort / modelInfo / close. Heavy work runs
+// on a background executor; results resolve on the main thread (§8). The
+// native core keeps one active generation per engine and `abort` is
+// thread-safe. Registered plugin name: "LlamaMobile".
+
 package com.llamamobile.capacitorplugin;
 
-import com.getcapacitor.JSArray;
+import android.os.Handler;
+import android.os.Looper;
+
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
-import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.getcapacitor.PluginMethod;
-import com.llamamobile.LlamaMobile;
-import com.llamamobile.LlamaMobile.TTSOptions;
-import com.llamamobile.LlamaMobile.SpeechResult;
-import com.llamamobile.LlamaMobile.SpeechMetadata;
-import com.llamamobile.LlamaMobile.TTSError;
-import com.llamamobile.LlamaMobile.Result;
-import com.llamamobile.LlamaMobile.ProgressCallback;
-import com.llamamobile.LlamaMobile.AudioChunkCallback;
+
+import org.json.JSONArray;
 import org.json.JSONObject;
 
-import android.os.Environment;
-import android.util.Log;
-import android.content.res.AssetManager;
-import java.io.File;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
+import com.llamamobile.LlamaEngine;
+import com.llamamobile.LlamaException;
+import com.llamamobile.LlamaChatMessage;
+import com.llamamobile.LlamaGenerationRequest;
+import com.llamamobile.LlamaSampling;
+
 import java.util.Map;
-import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
-@CapacitorPlugin(name = "LlamaMobileCapacitorPlugin")
+@CapacitorPlugin(name = "LlamaMobile")
 public class LlamaMobileCapacitorPlugin extends Plugin {
 
-    private final ExecutorService executor = Executors.newCachedThreadPool();
-    private final Map<Long, Long> contextHandles = new HashMap<>();
-    private long nextContextHandle = 1;
-
-    private synchronized long getNextContextHandle() {
-        return nextContextHandle++;
-    }
-
-    private long getContextHandle(PluginCall call) {
-        long contextHandle = -1L;
-        Object contextHandleObj = call.getData().opt("contextHandle");
-        if (contextHandleObj != null) {
-            if (contextHandleObj instanceof Integer) {
-                contextHandle = ((Integer) contextHandleObj).longValue();
-            } else if (contextHandleObj instanceof Long) {
-                contextHandle = ((Long) contextHandleObj).longValue();
-            } else if (contextHandleObj instanceof Number) {
-                contextHandle = ((Number) contextHandleObj).longValue();
-            }
-        }
-        return contextHandle;
-    }
-
-    private Long getNativeContextHandle(long contextHandle) {
-        Long nativeHandle = contextHandles.get(contextHandle);
-        Log.d("LlamaMobilePlugin", "getNativeContextHandle: Called with handle: " + contextHandle);
-        Log.d("LlamaMobilePlugin", "getNativeContextHandle: Returning native handle: " + nativeHandle);
-        Log.d("LlamaMobilePlugin", "getNativeContextHandle: Current contextHandles: " + contextHandles);
-        return nativeHandle;
-    }
+    private final Map<Integer, LlamaEngine> engines = new ConcurrentHashMap<>();
+    private final AtomicInteger nextHandle = new AtomicInteger(1);
+    private final ExecutorService bg = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "llama-engine-v2");
+        t.setDaemon(true);
+        return t;
+    });
+    private final Handler main = new Handler(Looper.getMainLooper());
 
     @Override
     protected void handleOnDestroy() {
-        executor.shutdown();
-        for (Long contextHandle : contextHandles.values()) {
-            LlamaMobile.releaseContext(contextHandle);
-        }
-        contextHandles.clear();
+        engines.values().forEach(LlamaEngine::close);
+        engines.clear();
+        bg.shutdownNow();
     }
 
-    // MARK: - Initialization
+    // ------------------------------------------------------------- helpers
 
-    @PluginMethod
-    public void initContext(PluginCall call) {
-        String modelPath = call.getString("modelPath");
-        int nCtx = call.getInt("nCtx", 2048);
-        int nGpuLayers = call.getInt("nGpuLayers", 0);
-        int nThreads = call.getInt("nThreads", 4);
-        int nBatch = call.getInt("nBatch", 512);
-        int nUBatch = call.getInt("nUBatch", 512);
-        boolean useMmap = call.getBoolean("useMmap", true);
-        boolean useMlock = call.getBoolean("useMlock", false);
-        boolean embedding = call.getBoolean("embedding", false);
-        int poolingType = call.getInt("poolingType", 0);
-        int embdNormalize = call.getInt("embdNormalize", 1);
-        boolean flashAttention = call.getBoolean("flashAttention", false);
-        String cacheTypeK = call.getString("cacheTypeK", null);
-        String cacheTypeV = call.getString("cacheTypeV", null);
-        boolean enableChatTemplate = call.getBoolean("enableChatTemplate", true);
-        int imageMinTokens = call.getInt("imageMinTokens", -1);
-
-        if (modelPath == null) {
-            call.reject("modelPath is required");
-            return;
-        }
-
-        String resolvedModelPath = resolveModelPath(modelPath);
-
-        executor.execute(() -> {
-            try {
-                LlamaMobile.InitParams params = new LlamaMobile.InitParams(
-                    resolvedModelPath, nCtx, null, null, nBatch, nUBatch, nGpuLayers, nThreads, 
-                    useMmap, useMlock, embedding, poolingType, embdNormalize, flashAttention, 
-                    cacheTypeK, cacheTypeV, enableChatTemplate, null, imageMinTokens
-                );
-                
-                long nativeContextHandle = LlamaMobile.initContext(params);
-                long handle = getNextContextHandle();
-                contextHandles.put(handle, nativeContextHandle);
-
-                JSObject ret = new JSObject();
-                ret.put("contextHandle", handle);
-                call.resolve(ret);
-            } catch (Exception e) {
-                Log.e("LlamaMobilePlugin", "initContext: Exception occurred", e);
-                call.reject("Failed to initialize context: " + e.getMessage());
-            }
-        });
+    private void runBg(Runnable task) {
+        bg.execute(task);
     }
 
-    // Helper method to resolve model paths
-    private String resolveModelPath(String modelPath) {
-        // If the path is already absolute, return it as-is
-        if (modelPath.startsWith("/")) {
-            System.out.println("Model path is already absolute: " + modelPath);
-            return modelPath;
-        }
-
-        // Check if this is an asset path (starts with "public/models/" or "models/")
-        if (modelPath.startsWith("public/models/") || modelPath.startsWith("models/")) {
-            System.out.println("Model path appears to be an asset path: " + modelPath);
-            // Copy asset to cache directory and return the file path
-            try {
-                return copyAssetToCache(modelPath);
-            } catch (IOException e) {
-                System.out.println("Failed to copy asset to cache: " + e.getMessage());
-                // Continue with file system search
-            }
-        }
-
-        // Log the external files directory path
-        String externalFilesDir = getContext().getExternalFilesDir(null).getAbsolutePath();
-        System.out.println("External files directory: " + externalFilesDir);
-
-        // List of common directories to search for models
-        String[] searchDirs = {
-            // App's internal files directory
-            getContext().getFilesDir().getAbsolutePath(),
-            getContext().getFilesDir().getAbsolutePath() + File.separator + "models",
-            getContext().getFilesDir().getAbsolutePath() + File.separator + "Downloads",
-            getContext().getFilesDir().getAbsolutePath() + File.separator + "Downloads" + File.separator + "models",
-            // App's external files directory
-            externalFilesDir,
-            externalFilesDir + File.separator + "models",
-            externalFilesDir + File.separator + "Downloads",
-            externalFilesDir + File.separator + "Downloads" + File.separator + "models",
-            // Legacy LlamaMobile/models directory (from Android SDK example)
-            getContext().getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS).getAbsolutePath() + File.separator + "LlamaMobile" + File.separator + "models"
-        };
-
-        // Log all search directories
-        System.out.println("Searching for model " + modelPath + " in directories:");
-        for (String dir : searchDirs) {
-            File directory = new File(dir);
-            System.out.println("- " + dir + " (exists: " + directory.exists() + ")");
-        }
-
-        // Search for the model file in common directories and their subdirectories
-        for (String dir : searchDirs) {
-            File directory = new File(dir);
-            if (directory.exists() && directory.isDirectory()) {
-                String foundPath = searchForModelRecursive(directory, modelPath);
-                if (foundPath != null) {
-                    System.out.println("Found model at: " + foundPath);
-                    return foundPath;
-                }
-            }
-        }
-
-        // If not found in file system, try to find in assets
-        String fileName = modelPath.contains("/") ? modelPath.substring(modelPath.lastIndexOf("/") + 1) : modelPath;
-        String[] assetPaths = {"public/models/" + fileName, "models/" + fileName, fileName};
-        for (String assetPath : assetPaths) {
-            try {
-                getContext().getAssets().open(assetPath).close();
-                System.out.println("Found model in assets: " + assetPath);
-                return copyAssetToCache(assetPath);
-            } catch (IOException e) {
-                // Asset doesn't exist, continue
-            }
-        }
-
-        // If not found, return the original path (will likely fail, but let the error propagate)
-        System.out.println("Model not found in any search directory, returning original path: " + modelPath);
-        return modelPath;
-    }
-
-    // Helper method to copy asset to cache directory
-    private String copyAssetToCache(String assetPath) throws IOException {
-        String fileName = assetPath.contains("/") ? assetPath.substring(assetPath.lastIndexOf("/") + 1) : assetPath;
-        File cacheDir = new File(getContext().getCacheDir(), "models");
-        if (!cacheDir.exists()) {
-            cacheDir.mkdirs();
-        }
-        File cachedFile = new File(cacheDir, fileName);
-        
-        // Check if file already exists in cache
-        if (cachedFile.exists()) {
-            System.out.println("Model already cached at: " + cachedFile.getAbsolutePath());
-            return cachedFile.getAbsolutePath();
-        }
-        
-        // Copy asset to cache
-        java.io.InputStream is = getContext().getAssets().open(assetPath);
-        java.io.FileOutputStream fos = new java.io.FileOutputStream(cachedFile);
-        byte[] buffer = new byte[8192];
-        int read;
-        while ((read = is.read(buffer)) != -1) {
-            fos.write(buffer, 0, read);
-        }
-        fos.close();
-        is.close();
-        
-        System.out.println("Copied asset to cache: " + cachedFile.getAbsolutePath());
-        return cachedFile.getAbsolutePath();
-    }
-
-    // Helper method to recursively search for a model file
-    private String searchForModelRecursive(File directory, String modelFileName) {
-        File[] files = directory.listFiles();
-        if (files != null) {
-            System.out.println("Scanning directory: " + directory.getAbsolutePath());
-            System.out.println("Found " + files.length + " files/directories");
-            for (File file : files) {
-                if (file.isDirectory()) {
-                    // Recursively search subdirectories
-                    System.out.println("Entering subdirectory: " + file.getName());
-                    String foundPath = searchForModelRecursive(file, modelFileName);
-                    if (foundPath != null) {
-                        return foundPath;
-                    }
-                } else {
-                    // Check if this file matches the model name
-                    System.out.println("Checking file: " + file.getName());
-                    if (file.getName().equals(modelFileName)) {
-                        System.out.println("Found matching file: " + file.getAbsolutePath());
-                        return file.getAbsolutePath();
-                    }
-                }
-            }
+    private void runMain(Runnable task) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            task.run();
         } else {
-            System.out.println("No files found in directory: " + directory.getAbsolutePath());
+            main.post(task);
         }
-        return null;
     }
 
-    @PluginMethod
-    public void releaseContext(PluginCall call) {
-        // Log the entire call object to see what's being received
-        Log.d("LlamaMobilePlugin", "releaseContext called with call: " + call);
-        
-        // Log all parameters in the call
-        Log.d("LlamaMobilePlugin", "releaseContext: All parameters: " + call.getData());
-        
-        // Retrieve contextHandle - handle both Integer and Long types
-        long contextHandle = -1L;
-        Object contextHandleObj = call.getData().opt("contextHandle");
-        if (contextHandleObj != null) {
-            if (contextHandleObj instanceof Integer) {
-                contextHandle = ((Integer) contextHandleObj).longValue();
-            } else if (contextHandleObj instanceof Long) {
-                contextHandle = ((Long) contextHandleObj).longValue();
-            } else if (contextHandleObj instanceof Number) {
-                contextHandle = ((Number) contextHandleObj).longValue();
-            }
-        }
-        Log.d("LlamaMobilePlugin", "releaseContext: Retrieved contextHandle: " + contextHandle);
+    private void fail(PluginCall call, int statusCode, String message) {
+        runMain(() -> call.reject(message, String.valueOf(statusCode)));
+    }
 
-        if (contextHandle == -1) {
-            Log.d("LlamaMobilePlugin", "releaseContext: contextHandle is -1, rejecting call");
-            call.reject("contextHandle is required");
-            return;
-        }
+    private void fail(PluginCall call, LlamaException e) {
+        fail(call, e.getCode(), e.getMessage() == null ? e.toString() : e.getMessage());
+    }
 
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
+    private static String optString(JSObject o, String key, String def) {
+        String v = o.optString(key, def);
+        return "null".equals(v) ? def : v;
+    }
+
+    // ------------------------------------------------------------- methods
+
+    public void libraryVersion(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("value", LlamaEngine.libraryVersion());
+        call.resolve(ret);
+    }
+
+    public void open(PluginCall call) {
+        LlamaEngine.Config config = new LlamaEngine.Config();
+        config.setModelPath(call.getString("modelPath") == null ? "" : call.getString("modelPath"));
+        config.setEngine(call.getInt("engine", 0));
+        config.setNGpuLayers(call.getInt("nGpuLayers", 0));
+        config.setNCtx(call.getInt("nCtx", 2048));
+        config.setNBatch(call.getInt("nBatch", 512));
+        config.setNUBatch(call.getInt("nUBatch", 512));
+        config.setNThreads(call.getInt("nThreads", 0));
+        config.setUseMmap(call.getBoolean("useMmap", true));
+        config.setUseMlock(call.getBoolean("useMlock", false));
+        config.setEmbedding(call.getBoolean("embedding", false));
+        config.setFlashAttention(call.getBoolean("flashAttention", false));
+        config.setChat(call.getBoolean("chat", true));
+        config.setKvCacheTypeK(call.getString("kvCacheTypeK"));
+        config.setKvCacheTypeV(call.getString("kvCacheTypeV"));
+        config.setChatTemplate(call.getString("chatTemplate"));
+        config.setSystemPrompt(call.getString("systemPrompt"));
+
+        runBg(() -> {
             try {
-                Long nativeContextHandle = contextHandles.remove(finalContextHandle);
-                if (nativeContextHandle != null) {
-                    LlamaMobile.releaseContext(nativeContextHandle);
-                }
-                call.resolve();
-            } catch (Exception e) {
-                call.reject("Failed to release context: " + e.getMessage());
-            }
-        });
-    }
-
-    // Model info class for listModels method
-    private static class ModelInfo {
-        String name;
-        String path;
-        String source;
-
-        ModelInfo(String name, String path, String source) {
-            this.name = name;
-            this.path = path;
-            this.source = source;
-        }
-    }
-
-    @PluginMethod
-    public void listModels(PluginCall call) {
-        executor.execute(() -> {
-            try {
-                List<ModelInfo> models = new ArrayList<>();
-
-                // First, scan assets for bundled models
-                try {
-                    AssetManager assetManager = getContext().getAssets();
-                    String[] assetsPaths = new String[]{"public/models", "models", ""};
-                    for (String assetsPath : assetsPaths) {
-                        try {
-                            String[] assetFiles = assetManager.list(assetsPath);
-                            if (assetFiles != null) {
-                                for (String fileName : assetFiles) {
-                                    if (fileName.toLowerCase().endsWith(".gguf") || 
-                                        fileName.toLowerCase().endsWith(".safetensors") ||
-                                        fileName.toLowerCase().endsWith(".bin")) {
-                                        String assetPath = assetsPath + "/" + fileName;
-                                        models.add(new ModelInfo(fileName, assetPath, "asset"));
-                                    }
-                                }
-                            }
-                        } catch (IOException e) {
-                            // Directory doesn't exist, continue
-                        }
-                    }
-                } catch (Exception e) {
-                    // Failed to scan assets, continue with file system
-                }
-
-                // List of common directories to search for models
-                List<String> modelDirectories = new ArrayList<>();
-
-                // Get documents directory
-                String documentsDir = getContext().getFilesDir().getAbsolutePath();
-                modelDirectories.add(documentsDir);
-                modelDirectories.add(documentsDir + File.separator + "models");
-                modelDirectories.add(documentsDir + File.separator + "Downloads");
-                modelDirectories.add(documentsDir + File.separator + "Downloads" + File.separator + "models");
-
-                // Add app's external files directory
-                String externalFilesDir = getContext().getExternalFilesDir(null).getAbsolutePath();
-                modelDirectories.add(externalFilesDir);
-                modelDirectories.add(externalFilesDir + File.separator + "models");
-                modelDirectories.add(externalFilesDir + File.separator + "Downloads");
-                modelDirectories.add(externalFilesDir + File.separator + "Downloads" + File.separator + "models");
-
-                // Add legacy LlamaMobile/models directory
-                String legacyExternalDir = getContext().getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS).getAbsolutePath() + File.separator + "LlamaMobile" + File.separator + "models";
-                modelDirectories.add(legacyExternalDir);
-
-                // Model file extensions to look for
-                List<String> modelExtensions = List.of("gguf", "safetensors", "bin");
-
-                // Scan directories for model files
-                for (String directory : modelDirectories) {
-                    File dir = new File(directory);
-                    if (dir.exists() && dir.isDirectory()) {
-                        scanDirectoryForModels(dir, modelExtensions, models);
-                    }
-                }
-
-                // Remove duplicates by file name, prioritizing assets first
-                Map<String, ModelInfo> uniqueModelsMap = new HashMap<>();
-                for (ModelInfo model : models) {
-                    ModelInfo existing = uniqueModelsMap.get(model.name);
-                    if (existing == null || (model.source.equals("asset") && !existing.source.equals("asset"))) {
-                        uniqueModelsMap.put(model.name, model);
-                    }
-                }
-                List<ModelInfo> uniqueModels = new ArrayList<>(uniqueModelsMap.values());
-
-                // Convert to the expected format
-                List<Map<String, String>> modelArray = new ArrayList<>();
-                for (ModelInfo model : uniqueModels) {
-                    Map<String, String> modelMap = new HashMap<>();
-                    modelMap.put("name", model.name);
-                    modelMap.put("path", model.path);
-                    modelMap.put("source", model.source);
-                    modelArray.add(modelMap);
-                }
-
+                LlamaEngine engine = LlamaEngine.open(config);
+                int handle = nextHandle.getAndIncrement();
+                engines.put(handle, engine);
                 JSObject ret = new JSObject();
-                ret.put("models", modelArray);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to list models: " + e.getMessage());
+                ret.put("value", handle);
+                runMain(() -> call.resolve(ret));
+            } catch (Throwable t) {
+                if (t instanceof LlamaException) fail(call, (LlamaException) t);
+                else fail(call, -4, String.valueOf(t.getMessage()));
             }
         });
     }
 
-    @PluginMethod
-    public void listFiles(PluginCall call) {
-        String path = call.getString("path");
-        if (path == null) {
-            call.reject("path is required");
+    public void generate(PluginCall call) {
+        Integer handle = call.getInt("handle");
+        LlamaEngine engine = handle == null ? null : engines.get(handle);
+        if (engine == null) {
+            fail(call, -11, "no engine for handle " + handle);
             return;
         }
-
-        executor.execute(() -> {
+        JSObject rq = call.getObject("request");
+        if (rq == null) {
+            fail(call, -1, "request required");
+            return;
+        }
+        LlamaGenerationRequest request = parseRequest(rq);
+        runBg(() -> {
             try {
-                File directory = new File(path);
-                if (!directory.exists() || !directory.isDirectory()) {
-                    call.reject("Directory does not exist: " + path);
-                    return;
-                }
-
-                File[] files = directory.listFiles();
-                JSArray filesArray = new JSArray();
-                if (files != null) {
-                    for (File file : files) {
-                        JSObject fileObj = new JSObject();
-                        fileObj.put("name", file.getName());
-                        fileObj.put("path", file.getAbsolutePath());
-                        fileObj.put("isDirectory", file.isDirectory());
-                        fileObj.put("size", file.length());
-                        fileObj.put("lastModified", file.lastModified());
-                        filesArray.put(fileObj);
-                    }
-                }
-
+                com.llamamobile.LlamaGenerationResult res = engine.generate(request, null);
                 JSObject ret = new JSObject();
-                ret.put("files", filesArray);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to list files: " + e.getMessage());
+                ret.put("text", res.getText());
+                ret.put("stopReason", res.getStopReason().getValue());
+                ret.put("promptTokens", res.getUsage().getPromptTokens());
+                ret.put("generatedTokens", res.getUsage().getGeneratedTokens());
+                runMain(() -> call.resolve(ret));
+            } catch (Throwable t) {
+                if (t instanceof LlamaException) fail(call, (LlamaException) t);
+                else fail(call, -3, String.valueOf(t.getMessage()));
             }
         });
     }
 
-    // Helper method to scan a directory for model files
-    private void scanDirectoryForModels(File directory, List<String> modelExtensions, List<ModelInfo> models) {
-        File[] files = directory.listFiles();
-        if (files != null) {
-            for (File file : files) {
-                if (file.isDirectory()) {
-                    // Recursively scan subdirectories
-                    scanDirectoryForModels(file, modelExtensions, models);
-                } else {
-                    // Check if file has a model extension
-                    String fileName = file.getName().toLowerCase();
-                    for (String ext : modelExtensions) {
-                        if (fileName.endsWith("." + ext)) {
-                            models.add(new ModelInfo(file.getName(), file.getAbsolutePath(), "file"));
-                            break;
-                        }
-                    }
-                }
-            }
+    public void abort(PluginCall call) {
+        Integer handle = call.getInt("handle");
+        LlamaEngine engine = handle == null ? null : engines.get(handle);
+        if (engine == null) {
+            fail(call, -11, "no engine for handle " + handle);
+            return;
         }
+        runBg(() -> {
+            boolean ok = engine.abort();
+            JSObject ret = new JSObject();
+            ret.put("value", ok);
+            runMain(() -> call.resolve(ret));
+        });
     }
 
-    // MARK: - Completion
-
-    @PluginMethod
-    public void generateCompletion(PluginCall call) {
-        long contextHandle = getContextHandle(call);
-        JSObject params = call.getObject("params");
-        if (params == null) {
-            call.reject("params are required");
+    public void modelInfo(PluginCall call) {
+        Integer handle = call.getInt("handle");
+        LlamaEngine engine = handle == null ? null : engines.get(handle);
+        if (engine == null) {
+            fail(call, -11, "no engine for handle " + handle);
             return;
         }
-
-        String prompt = params.optString("prompt", "");
-        int maxTokens = params.optInt("maxTokens", 128);
-        double temperature = params.optDouble("temperature", 0.8);
-        double topP = params.optDouble("topP", 0.95);
-        int topK = params.optInt("topK", 40);
-        int nThreads = params.optInt("nThreads", 4);
-        int seed = params.optInt("seed", -1);
-        String grammar = params.optString("grammar", null);
-        boolean useJsonResponse = params.optBoolean("useJsonResponse", true);
-        int nProbs = params.optInt("nProbs", 0);
-        String jsonSchema = params.optString("jsonSchema", null);
-        String tools = params.optString("tools", null);
-        boolean parallelToolCalls = params.optBoolean("parallelToolCalls", false);
-        String toolChoice = params.optString("toolChoice", null);
-        
-        // Additional sampling parameters (matching iOS)
-        double minP = params.optDouble("minP", 0.05);
-        double typicalP = params.optDouble("typicalP", 1.0);
-        int penaltyLastN = params.optInt("penaltyLastN", 64);
-        double penaltyRepeat = params.optDouble("penaltyRepeat", 1.1);
-        double penaltyFreq = params.optDouble("penaltyFreq", 0.0);
-        double penaltyPresent = params.optDouble("penaltyPresent", 0.0);
-        int mirostat = params.optInt("mirostat", 0);
-        double mirostatTau = params.optDouble("mirostatTau", 5.0);
-        double mirostatEta = params.optDouble("mirostatEta", 0.1);
-        boolean ignoreEos = params.optBoolean("ignoreEos", false);
-        
-        List<String> stopSequences = new ArrayList<>();
-        org.json.JSONArray stopArray = params.optJSONArray("stopSequences");
-        if (stopArray != null) {
-            for (int i = 0; i < stopArray.length(); i++) {
-                try {
-                    stopSequences.add(stopArray.getString(i));
-                } catch (Exception e) {}
-            }
-        }
-
-        final List<String> mediaPaths = new ArrayList<>();
-        org.json.JSONArray mediaArray = params.optJSONArray("mediaPaths");
-        if (mediaArray != null) {
-            for (int i = 0; i < mediaArray.length(); i++) {
-                try {
-                    String media = mediaArray.getString(i);
-                    if (media.startsWith("data:image")) {
-                        // Handle base64 image
-                        String path = saveBase64Image(media);
-                        if (path != null) {
-                            mediaPaths.add(path);
-                        }
-                    } else {
-                        mediaPaths.add(media);
-                    }
-                } catch (Exception e) {}
-            }
-        }
-
-        final List<LlamaMobile.ChatMessage> chatMessages = parseChatMessages(params.optJSONArray("chatMessages"));
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
+        runBg(() -> {
             try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                LlamaMobile.CompletionParams completionParams = new LlamaMobile.CompletionParams(
-                    prompt, (float) temperature, maxTokens, nThreads, seed, topK, topP, 
-                    minP, typicalP, penaltyLastN, penaltyRepeat, penaltyFreq, penaltyPresent, 
-                    mirostat, mirostatTau, mirostatEta, ignoreEos, nProbs, 
-                    grammar, stopSequences, mediaPaths, null, chatMessages, useJsonResponse, jsonSchema, 
-                    tools, parallelToolCalls, toolChoice
-                );
-                
-                LlamaMobile.CompletionResult result = LlamaMobile.generateCompletion(
-                    nativeContextHandle, completionParams
-                );
-
+                com.llamamobile.LlamaModelInfo info = engine.modelInfo();
                 JSObject ret = new JSObject();
-                ret.put("text", result.getText());
-                ret.put("tokensGenerated", result.getTokensGenerated());
-                ret.put("tokensEvaluated", result.getTokensEvaluated());
-                ret.put("truncated", result.isTruncated());
-                ret.put("stoppedEos", result.isStoppedEos());
-                ret.put("stoppedWord", result.isStoppedWord());
-                ret.put("stoppedLimit", result.isStoppedLimit());
-                if (result.getStoppingWord() != null) {
-                    ret.put("stoppingWord", result.getStoppingWord());
-                }
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to generate completion: " + e.getMessage());
-            } finally {
-                // Cleanup temporary media files
-                for (String path : mediaPaths) {
-                    if (path.contains("/temp_image_")) {
-                        new File(path).delete();
-                    }
-                }
+                ret.put("nCtx", info.getNCtx());
+                ret.put("nEmbd", info.getNEmbd());
+                ret.put("modelSizeBytes", info.getModelSizeBytes());
+                ret.put("nParams", info.getNParams());
+                ret.put("description", info.getDescription());
+                runMain(() -> call.resolve(ret));
+            } catch (Throwable t) {
+                fail(call, -11, String.valueOf(t.getMessage()));
             }
         });
     }
 
-    private List<LlamaMobile.ChatMessage> parseChatMessages(org.json.JSONArray jsonArray) {
-        List<LlamaMobile.ChatMessage> chatMessages = new ArrayList<>();
-        if (jsonArray == null) {
-            return chatMessages;
+    public void close(PluginCall call) {
+        Integer handle = call.getInt("handle");
+        LlamaEngine engine = handle == null ? null : engines.remove(handle);
+        if (engine == null) {
+            call.resolve();
+            return;
         }
-        
-        for (int i = 0; i < jsonArray.length(); i++) {
-            try {
-                org.json.JSONObject messageObj = jsonArray.getJSONObject(i);
-                String role = messageObj.optString("role");
-                String content = messageObj.optString("content");
-                String reasoningContent = messageObj.optString("reasoning_content", null);
-                if (reasoningContent != null && reasoningContent.isEmpty()) {
-                    reasoningContent = null;
-                }
-                String toolName = messageObj.optString("tool_name", null);
-                if (toolName != null && toolName.isEmpty()) {
-                    toolName = null;
-                }
-                String toolCallId = messageObj.optString("tool_call_id", null);
-                if (toolCallId != null && toolCallId.isEmpty()) {
-                    toolCallId = null;
-                }
-                
-                chatMessages.add(new LlamaMobile.ChatMessage(role, content, reasoningContent, toolName, toolCallId));
-            } catch (Exception e) {
-                Log.e("LlamaMobilePlugin", "Failed to parse chat message", e);
-            }
-        }
-        
-        return chatMessages;
+        runBg(() -> {
+            engine.close();
+            runMain(() -> call.resolve());
+        });
     }
 
-    private String saveBase64Image(String base64Data) {
-        try {
-            String pureBase64 = base64Data.substring(base64Data.indexOf(",") + 1);
-            byte[] decodedBytes = android.util.Base64.decode(pureBase64, android.util.Base64.DEFAULT);
-            File cacheDir = getContext().getCacheDir();
-            File tempFile = File.createTempFile("temp_image_", ".jpg", cacheDir);
-            java.io.FileOutputStream fos = new java.io.FileOutputStream(tempFile);
-            fos.write(decodedBytes);
-            fos.close();
-            return tempFile.getAbsolutePath();
-        } catch (Exception e) {
-            Log.e("LlamaMobilePlugin", "Failed to save base64 image", e);
+    // ------------------------------------------------------------- request
+
+
+    private LlamaEngine engineFor(PluginCall call, int errCode) {
+        Integer handle = call.getInt("handle");
+        LlamaEngine engine = handle == null ? null : engines.get(handle);
+        if (engine == null) {
+            fail(call, errCode, "no engine for handle " + handle);
             return null;
         }
+        return engine;
     }
 
-    @PluginMethod
-    public void generateOpenAICompletion(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-        String openAIJSON = call.getString("openAIJSON");
-
-        if (contextHandle == -1 || openAIJSON == null) {
-            call.reject("contextHandle and openAIJSON are required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                LlamaMobile.CompletionResult result = LlamaMobile.generateOpenAICompletion(
-                    nativeContextHandle, openAIJSON
-                );
-
-                JSObject ret = new JSObject();
-                ret.put("text", result.getText());
-                ret.put("tokensGenerated", result.getTokensGenerated());
-                ret.put("tokensEvaluated", result.getTokensEvaluated());
-                ret.put("truncated", result.isTruncated());
-                ret.put("stoppedEos", result.isStoppedEos());
-                ret.put("stoppedWord", result.isStoppedWord());
-                ret.put("stoppedLimit", result.isStoppedLimit());
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to generate OpenAI completion: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void stopCompletion(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle != null) {
-                    LlamaMobile.stopCompletion(nativeContextHandle);
-                }
-                call.resolve();
-            } catch (Exception e) {
-                call.reject("Failed to stop completion: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void loadGrammar(PluginCall call) {
-        String filePath = call.getString("filePath");
-
-        if (filePath == null) {
-            call.reject("filePath is required");
-            return;
-        }
-
-        executor.execute(() -> {
-            try {
-                String grammar = LlamaMobile.loadGrammar(filePath);
-                JSObject ret = new JSObject();
-                ret.put("grammar", grammar);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to load grammar: " + e.getMessage());
-            }
-        });
-    }
-
-    // MARK: - TTS
-
-    @PluginMethod
-    public void initVocoder(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-        String vocoderModelPath = call.getString("vocoderModelPath");
-
-        if (contextHandle == -1 || vocoderModelPath == null) {
-            call.reject("contextHandle and vocoderModelPath are required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                boolean success = LlamaMobile.initVocoder(
-                    nativeContextHandle, vocoderModelPath
-                );
-
-                JSObject ret = new JSObject();
-                ret.put("success", success);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to initialize vocoder: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void releaseVocoder(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle != null) {
-                    LlamaMobile.releaseVocoder(nativeContextHandle);
-                }
-                call.resolve();
-            } catch (Exception e) {
-                call.reject("Failed to release vocoder: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void isVocoderEnabled(PluginCall call) {
-        // Log the entire call object to see what's being received
-        Log.d("LlamaMobilePlugin", "isVocoderEnabled called with call: " + call);
-        
-        // Log all parameters in the call
-        Log.d("LlamaMobilePlugin", "isVocoderEnabled: All parameters: " + call.getData());
-        
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-        Log.d("LlamaMobilePlugin", "isVocoderEnabled: Retrieved contextHandle: " + contextHandle);
-
-        if (contextHandle == -1) {
-            Log.d("LlamaMobilePlugin", "isVocoderEnabled: contextHandle is -1, rejecting call");
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                boolean enabled = LlamaMobile.isVocoderEnabled(nativeContextHandle);
-                JSObject ret = new JSObject();
-                ret.put("enabled", enabled);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to check vocoder status: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void getTTSType(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                LlamaMobile.TTSModelType type = LlamaMobile.getTTSType(nativeContextHandle);
-                JSObject ret = new JSObject();
-                ret.put("type", type.name());
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to get TTS type: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void generateSpeechAsync(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-        String text = call.getString("text");
-
-        if (contextHandle == -1 || text == null) {
-            call.reject("contextHandle and text are required");
-            return;
-        }
-
-        int sampleRate = call.getInt("sampleRate", 24000);
-        String method = call.getString("method", "best");
-        String speakerJson = call.getString("speakerJson", "{\"speaker\": \"default\"}");
-
-        TTSOptions.Builder optionsBuilder = new TTSOptions.Builder();
-        optionsBuilder.sampleRate(sampleRate);
-
-        switch (method.toLowerCase()) {
-            case "custom":
-                // optionsBuilder.method(LlamaMobile.TTSMethod.CUSTOM_WORKFLOW);
-                break;
-            case "builtin":
-                // optionsBuilder.method(LlamaMobile.TTSMethod.BUILT_IN);
-                break;
-            default:
-                // optionsBuilder.method(LlamaMobile.TTSMethod.BUILT_IN);
-                break;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                Result<SpeechResult, TTSError> result = LlamaMobile.generateSpeech(
-                    nativeContextHandle, text, optionsBuilder.build()
-                );
-
-                if (result.isSuccess()) {
-                    SpeechResult speechResult = result.getValue();
-                    
-                    // Generate temporary file path
-                    String tempFileName = "temp_audio_" + System.currentTimeMillis() + ".wav";
-                    
-                    // Save audio to temporary file
-                    boolean saveSuccess = saveAudioToWavInternal(
-                        nativeContextHandle, tempFileName, 
-                        speechResult.getAudioSamples(), speechResult.getSampleRate()
-                    );
-
-                    if (saveSuccess) {
-                        // Resolve with the file path
-                        String tempFilePath = getContext().getFilesDir().getAbsolutePath() + "/" + tempFileName;
-                        
-                        JSObject ret = new JSObject();
-                        ret.put("audioPath", tempFilePath);
-                        ret.put("sampleRate", speechResult.getSampleRate());
-                        ret.put("duration", speechResult.getDuration());
-                        ret.put("methodUsed", speechResult.getMethodUsed().toString());
-                        call.resolve(ret);
-                    } else {
-                        call.reject("Failed to save audio to file");
-                    }
-                } else {
-                    TTSError error = result.getError();
-                    call.reject("Failed to generate speech: " + error.getMessage());
-                }
-            } catch (Exception e) {
-                call.reject("Failed to generate speech: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void generateSpeech(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-        String text = call.getString("text");
-
-        if (contextHandle == -1 || text == null) {
-            call.reject("contextHandle and text are required");
-            return;
-        }
-
-        int sampleRate = call.getInt("sampleRate", 24000);
-        String method = call.getString("method", "best");
-
-        TTSOptions.Builder optionsBuilder = new TTSOptions.Builder();
-        optionsBuilder.sampleRate(sampleRate);
-
-        switch (method.toLowerCase()) {
-            case "custom":
-                // optionsBuilder.method(LlamaMobile.TTSMethod.CUSTOM_WORKFLOW);
-                break;
-            case "builtin":
-                // optionsBuilder.method(LlamaMobile.TTSMethod.BUILT_IN);
-                break;
-            default:
-                // optionsBuilder.method(LlamaMobile.TTSMethod.BUILT_IN);
-                break;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                Result<SpeechResult, TTSError> result = LlamaMobile.generateSpeech(
-                    nativeContextHandle, text, optionsBuilder.build()
-                );
-
-                if (result.isSuccess()) {
-                    SpeechResult speechResult = result.getValue();
-                    
-                    // Generate temporary file path
-                    String tempFileName = "temp_audio_" + System.currentTimeMillis() + ".wav";
-                    
-                    // Save audio to temporary file
-                    boolean saveSuccess = saveAudioToWavInternal(
-                        nativeContextHandle, tempFileName, 
-                        speechResult.getAudioSamples(), speechResult.getSampleRate()
-                    );
-
-                    if (saveSuccess) {
-                        // Resolve with the file path
-                        String tempFilePath = getContext().getFilesDir().getAbsolutePath() + "/" + tempFileName;
-                        
-                        JSObject ret = new JSObject();
-                        ret.put("audioPath", tempFilePath);
-                        ret.put("sampleRate", speechResult.getSampleRate());
-                        ret.put("duration", speechResult.getDuration());
-                        ret.put("methodUsed", speechResult.getMethodUsed().toString());
-                        call.resolve(ret);
-                    } else {
-                        call.reject("Failed to save audio to file");
-                    }
-                } else {
-                    TTSError error = result.getError();
-                    call.reject("Failed to generate speech sync: " + error.getMessage());
-                }
-            } catch (Exception e) {
-                call.reject("Failed to generate speech sync: " + e.getMessage());
-            }
-        });
-    }
-    
-    // Internal method to save audio to WAV using existing logic
-    private boolean saveAudioToWavInternal(long nativeContextHandle, String filePath, short[] audioData, int sampleRate) {
-        try {
-            // Handle relative file paths by using app's files directory
-            String finalFilePath = filePath;
-            if (!filePath.startsWith("/")) {
-                // Use app's internal files directory for relative paths
-                java.io.File filesDir = getContext().getFilesDir();
-                finalFilePath = filesDir.getAbsolutePath() + "/" + filePath;
-            }
-
-            // Convert short[] to float[] for saveAudioToWav
-            float[] floatAudioData = new float[audioData.length];
-            for (int i = 0; i < audioData.length; i++) {
-                // Convert 16-bit short to float in range [-1, 1]
-                floatAudioData[i] = audioData[i] / (float) Short.MAX_VALUE;
-            }
-
-            return LlamaMobile.saveAudioToWav(
-                nativeContextHandle, finalFilePath, floatAudioData, sampleRate
-            );
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
-
-    @PluginMethod
-    public void generateSpeechStreamForLongTextAsync(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-        String text = call.getString("text");
-
-        if (contextHandle == -1 || text == null) {
-            call.reject("contextHandle and text are required");
-            return;
-        }
-
-        int sampleRate = call.getInt("sampleRate", 24000);
-        String method = call.getString("method", "best");
-
-        TTSOptions.Builder optionsBuilder = new TTSOptions.Builder();
-        optionsBuilder.sampleRate(sampleRate);
-
-        switch (method.toLowerCase()) {
-            case "custom":
-                // optionsBuilder.method(LlamaMobile.TTSMethod.CUSTOM_WORKFLOW);
-                break;
-            case "builtin":
-                // optionsBuilder.method(LlamaMobile.TTSMethod.BUILT_IN);
-                break;
-            default:
-                // optionsBuilder.method(LlamaMobile.TTSMethod.BUILT_IN);
-                break;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                LlamaMobile.generateSpeechStreamForLongTextAsync(
-                    nativeContextHandle, text, optionsBuilder.build(),
-                    new ProgressCallback() {
-                        @Override
-                        public void onProgress(float progress) {
-                            notifyListeners("progress", new JSObject().put("progress", progress));
-                        }
-                    },
-                    new AudioChunkCallback() {
-                        @Override
-                        public void onAudioChunk(short[] audioChunk) {
-                            JSArray audioArray = new JSArray();
-                            for (short sample : audioChunk) {
-                                audioArray.put(sample);
-                            }
-                            notifyListeners("audioChunk", new JSObject().put("audio", audioArray));
-                        }
-                    },
-                    new LlamaMobile.SpeechMetadataCallback() {
-                        @Override
-                        public void onResult(Result<SpeechMetadata, TTSError> result) {
-                            if (result.isSuccess()) {
-                                SpeechMetadata metadata = result.getValue();
-                                JSObject ret = new JSObject();
-                                ret.put("sampleRate", metadata.getSampleRate());
-                                ret.put("duration", metadata.getDuration());
-                                ret.put("methodUsed", metadata.getMethodUsed().toString());
-                                call.resolve(ret);
-                            } else {
-                                TTSError error = result.getError();
-                                call.reject("Failed to generate speech stream: " + error.getMessage());
-                            }
-                        }
-                    }
-                );
-            } catch (Exception e) {
-                call.reject("Failed to generate speech stream: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void saveAudioToWav(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-        String filePath = call.getString("filePath");
-        JSArray audioDataArray = call.getArray("audioData");
-
-        if (contextHandle == -1 || filePath == null || audioDataArray == null) {
-            call.reject("contextHandle, filePath, and audioData are required");
-            return;
-        }
-
-        int sampleRate = call.getInt("sampleRate", 24000);
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                // Handle relative file paths by using app's files directory
-                String finalFilePath = filePath;
-                if (!filePath.startsWith("/")) {
-                    // Use app's internal files directory for relative paths
-                    java.io.File filesDir = getContext().getFilesDir();
-                    finalFilePath = filesDir.getAbsolutePath() + "/" + filePath;
-                }
-
-                float[] audioData = new float[(int) audioDataArray.length()];
-                for (int i = 0; i < audioDataArray.length(); i++) {
-                    audioData[i] = (float) audioDataArray.getDouble(i);
-                }
-
-                boolean success = LlamaMobile.saveAudioToWav(
-                    nativeContextHandle, finalFilePath, audioData, sampleRate
-                );
-
-                JSObject ret = new JSObject();
-                ret.put("success", success);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to save audio to WAV: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void playAudio(PluginCall call) {
-        JSArray audioDataArray = call.getArray("audioData");
-        int sampleRate = call.getInt("sampleRate", 24000);
-
-        if (audioDataArray == null) {
-            call.reject("audioData is required");
-            return;
-        }
-
-        executor.execute(() -> {
-            try {
-                // Convert JSArray to float array
-                float[] audioData = new float[(int) audioDataArray.length()];
-                for (int i = 0; i < audioDataArray.length(); i++) {
-                    audioData[i] = (float) audioDataArray.getDouble(i);
-                }
-
-                // Convert float samples to 16-bit PCM
-                short[] pcmData = new short[audioData.length];
-                for (int i = 0; i < audioData.length; i++) {
-                    // Clamp values to [-1, 1] and convert to 16-bit PCM
-                    float sample = Math.max(-1.0f, Math.min(1.0f, audioData[i]));
-                    pcmData[i] = (short) (sample * Short.MAX_VALUE);
-                }
-
-                // Create AudioTrack
-                int channelConfig = android.media.AudioFormat.CHANNEL_OUT_MONO;
-                int audioFormat = android.media.AudioFormat.ENCODING_PCM_16BIT;
-                int bufferSize = android.media.AudioTrack.getMinBufferSize(
-                    sampleRate, channelConfig, audioFormat
-                );
-
-                android.media.AudioTrack audioTrack = new android.media.AudioTrack(
-                    android.media.AudioManager.STREAM_MUSIC,
-                    sampleRate,
-                    channelConfig,
-                    audioFormat,
-                    bufferSize,
-                    android.media.AudioTrack.MODE_STATIC
-                );
-
-                // Write audio data
-                audioTrack.write(pcmData, 0, pcmData.length);
-
-                // Play audio
-                audioTrack.play();
-
-                // Wait for playback to complete
-                try {
-                    Thread.sleep((long) (pcmData.length * 1000.0 / sampleRate) + 100);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-
-                // Release resources
-                audioTrack.release();
-
-                JSObject ret = new JSObject();
-                ret.put("success", true);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to play audio: " + e.getMessage());
-            }
-        });
-    }
-    
-    @PluginMethod
-    public void playAudioFromFile(PluginCall call) {
-        String filePath = call.getString("filePath");
-
-        if (filePath == null) {
-            call.reject("filePath is required");
-            return;
-        }
-
-        executor.execute(() -> {
-            try {
-                // Handle relative file paths by using app's files directory
-                String finalFilePath = filePath;
-                if (!filePath.startsWith("/")) {
-                    // Use app's internal files directory for relative paths
-                    java.io.File filesDir = getContext().getFilesDir();
-                    finalFilePath = filesDir.getAbsolutePath() + "/" + filePath;
-                }
-
-                // Create MediaPlayer
-                android.media.MediaPlayer mediaPlayer = new android.media.MediaPlayer();
-                mediaPlayer.setDataSource(finalFilePath);
-                mediaPlayer.prepare();
-                mediaPlayer.start();
-
-                // Wait for playback to complete
-                while (mediaPlayer.isPlaying()) {
-                    Thread.sleep(100);
-                }
-
-                // Release resources
-                mediaPlayer.release();
-
-                JSObject ret = new JSObject();
-                ret.put("success", true);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to play audio from file: " + e.getMessage());
-            }
-        });
-    }
-
-    // MARK: - Multimodal
-
-    @PluginMethod
     public void initMultimodal(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-        String mmprojPath = call.getString("mmprojPath");
-        boolean useGpu = call.getBoolean("useGpu", true);
-
-        if (contextHandle == -1 || mmprojPath == null) {
-            call.reject("contextHandle and mmprojPath are required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                boolean success = LlamaMobile.initMultimodal(
-                    nativeContextHandle, mmprojPath, useGpu
-                );
-
-                JSObject ret = new JSObject();
-                ret.put("success", success);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to initialize multimodal: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void releaseMultimodal(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle != null) {
-                    LlamaMobile.releaseMultimodal(nativeContextHandle);
-                }
-                call.resolve();
-            } catch (Exception e) {
-                call.reject("Failed to release multimodal: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void isMultimodalEnabled(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                boolean enabled = LlamaMobile.isMultimodalEnabled(nativeContextHandle);
-                JSObject ret = new JSObject();
-                ret.put("enabled", enabled);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to check multimodal status: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void supportsVision(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                boolean supported = LlamaMobile.supportsVision(nativeContextHandle);
-                JSObject ret = new JSObject();
-                ret.put("supported", supported);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to check vision support: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void supportsAudio(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                boolean supported = LlamaMobile.supportsAudio(nativeContextHandle);
-                JSObject ret = new JSObject();
-                ret.put("supported", supported);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to check audio support: " + e.getMessage());
-            }
-        });
-    }
-
-    // MARK: - LoRA
-
-    @PluginMethod
-    public void applyLoraAdapters(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-        JSArray adaptersArray = call.getArray("adapters");
-
-        if (contextHandle == -1 || adaptersArray == null) {
-            call.reject("contextHandle and adapters are required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                LlamaMobile.LoraAdapter[] adapters = new LlamaMobile.LoraAdapter[(int) adaptersArray.length()];
-                for (int i = 0; i < adaptersArray.length(); i++) {
-                    JSONObject adapterObj = adaptersArray.getJSONObject(i);
-                    String path = adapterObj.getString("path");
-                    // Resolve LoRA adapter path like we do for model paths
-                    String resolvedPath = resolveModelPath(path);
-                    double scale = adapterObj.has("scale") ? adapterObj.getDouble("scale") : 1.0;
-                    adapters[i] = new LlamaMobile.LoraAdapter(resolvedPath, (float) scale);
-                }
-
-                boolean success = LlamaMobile.applyLoraAdapters(
-                    nativeContextHandle, adapters
-                );
-
-                JSObject ret = new JSObject();
-                ret.put("success", success);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to apply LoRA adapters: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void removeLoraAdapters(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle != null) {
-                    LlamaMobile.removeLoraAdapters(nativeContextHandle);
-                }
-                call.resolve();
-            } catch (Exception e) {
-                call.reject("Failed to remove LoRA adapters: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void getLoadedLoraAdapters(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                LlamaMobile.LoraAdapter[] adapters = LlamaMobile.getLoadedLoraAdapters(
-                    nativeContextHandle
-                );
-
-                JSArray adaptersArray = new JSArray();
-                for (LlamaMobile.LoraAdapter adapter : adapters) {
-                    JSObject adapterObj = new JSObject();
-                    adapterObj.put("path", adapter.getPath());
-                    adapterObj.put("scale", adapter.getScale());
-                    adaptersArray.put(adapterObj);
-                }
-
-                JSObject ret = new JSObject();
-                ret.put("adapters", adaptersArray);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to get loaded LoRA adapters: " + e.getMessage());
-            }
-        });
-    }
-
-    // MARK: - Conversation
-
-    @PluginMethod
-    public void generateResponse(PluginCall call) {
-        long contextHandle = getContextHandle(call);
-        String userMessage = call.getString("userMessage");
-        int maxTokens = call.getInt("maxTokens", 128);
-        String systemPrompt = call.getString("systemPrompt");
-        
-        List<LlamaMobile.ChatMessage> history = new ArrayList<>();
-        JSArray historyArray = call.getArray("history");
-        if (historyArray != null) {
-            for (int i = 0; i < historyArray.length(); i++) {
-                try {
-                    JSONObject msg = historyArray.getJSONObject(i);
-                    String role = msg.getString("role");
-                    String content = msg.getString("content");
-                    history.add(new LlamaMobile.ChatMessage(role, content));
-                } catch (Exception e) {}
-            }
-        }
-
-        if (contextHandle == -1 || userMessage == null) {
-            call.reject("contextHandle and userMessage are required");
-            return;
-        }
-
-        final String finalSystemPrompt = systemPrompt;
-        final List<LlamaMobile.ChatMessage> finalHistory = history;
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                LlamaMobile.ConversationResult result = LlamaMobile.generateResponseWithCallback(
-                    nativeContextHandle, userMessage, maxTokens,
-                    new LlamaMobile.TokenCallback() {
-                        @Override
-                        public boolean onToken(String token) {
-                            JSObject tokenData = new JSObject();
-                            tokenData.put("token", token);
-                            notifyListeners("token", tokenData);
-                            return true;
-                        }
-                    }
-                );
-
-                JSObject ret = new JSObject();
-                ret.put("text", result.getText());
-                ret.put("tokensGenerated", result.getTokensGenerated());
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to generate response: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void clearConversation(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle != null) {
-                    LlamaMobile.clearConversation(nativeContextHandle);
-                }
-                call.resolve();
-            } catch (Exception e) {
-                call.reject("Failed to clear conversation: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void isConversationActive(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                boolean active = LlamaMobile.isConversationActive(nativeContextHandle);
-                JSObject ret = new JSObject();
-                ret.put("active", active);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to check conversation status: " + e.getMessage());
-            }
-        });
-    }
-
-    // MARK: - Embeddings
-
-    @PluginMethod
-    public void generateEmbeddings(PluginCall call) {
-        // Log the entire call object
-        Log.d("LlamaMobilePlugin", "generateEmbeddings called with call: " + call);
-        Log.d("LlamaMobilePlugin", "generateEmbeddings: All parameters: " + call.getData());
-        
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-        Log.d("LlamaMobilePlugin", "generateEmbeddings: Final contextHandle: " + contextHandle);
-        
-        String text = call.getString("text");
-        Log.d("LlamaMobilePlugin", "generateEmbeddings: Retrieved text: " + text);
-
-        if (contextHandle == -1 || text == null) {
-            Log.d("LlamaMobilePlugin", "generateEmbeddings: Rejecting call - contextHandle: " + contextHandle + ", text: " + text);
-            call.reject("contextHandle and text are required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                float[] embedding = LlamaMobile.generateEmbeddings(
-                    nativeContextHandle, text
-                );
-
-                JSArray embeddingArray = new JSArray();
-                for (float value : embedding) {
-                    embeddingArray.put(value);
-                }
-
-                JSObject ret = new JSObject();
-                ret.put("embedding", embeddingArray);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to generate embeddings: " + e.getMessage());
-            }
-        });
-    }
-
-    // MARK: - Tokenization
-
-    @PluginMethod
-    public void tokenize(PluginCall call) {
-        // Retrieve contextHandle - handle both Integer and Long types
-        long contextHandle = -1L;
-        Object contextHandleObj = call.getData().opt("contextHandle");
-        if (contextHandleObj != null) {
-            if (contextHandleObj instanceof Integer) {
-                contextHandle = ((Integer) contextHandleObj).longValue();
-            } else if (contextHandleObj instanceof Long) {
-                contextHandle = ((Long) contextHandleObj).longValue();
-            } else if (contextHandleObj instanceof Number) {
-                contextHandle = ((Number) contextHandleObj).longValue();
-            }
-        }
-        String text = call.getString("text");
-
-        if (contextHandle == -1 || text == null) {
-            call.reject("contextHandle and text are required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                int[] tokens = LlamaMobile.tokenize(nativeContextHandle, text);
-
-                JSArray tokensArray = new JSArray();
-                for (int token : tokens) {
-                    tokensArray.put(token);
-                }
-
-                JSObject ret = new JSObject();
-                ret.put("tokens", tokensArray);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to tokenize: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void detokenize(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-        JSArray tokensArray = call.getArray("tokens");
-
-        if (contextHandle == -1 || tokensArray == null) {
-            call.reject("contextHandle and tokens are required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                int[] tokens = new int[(int) tokensArray.length()];
-                for (int i = 0; i < tokensArray.length(); i++) {
-                    tokens[i] = tokensArray.getInt(i);
-                }
-
-                String text = LlamaMobile.detokenize(nativeContextHandle, tokens);
-
-                JSObject ret = new JSObject();
-                ret.put("text", text);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to detokenize: " + e.getMessage());
-            }
-        });
-    }
-
-    // MARK: - Model Info
-
-    @PluginMethod
-    public void getContextWindowSize(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                int size = LlamaMobile.getContextWindowSize(nativeContextHandle);
-                JSObject ret = new JSObject();
-                ret.put("size", size);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to get context window size: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void getEmbeddingDimension(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                int dimension = LlamaMobile.getEmbeddingDimension(nativeContextHandle);
-                JSObject ret = new JSObject();
-                ret.put("dimension", dimension);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to get embedding dimension: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void getModelDescription(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                String description = LlamaMobile.getModelDescription(nativeContextHandle);
-                JSObject ret = new JSObject();
-                ret.put("description", description);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to get model description: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void getModelSize(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                long size = LlamaMobile.getModelSize(nativeContextHandle);
-                JSObject ret = new JSObject();
-                ret.put("size", size);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to get model size: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void getModelParametersCount(PluginCall call) {
-        // Retrieve contextHandle using helper function
-        long contextHandle = getContextHandle(call);
-
-        if (contextHandle == -1) {
-            call.reject("contextHandle is required");
-            return;
-        }
-
-        final long finalContextHandle = contextHandle;
-        executor.execute(() -> {
-            try {
-                Long nativeContextHandle = getNativeContextHandle(finalContextHandle);
-                if (nativeContextHandle == null) {
-                    call.reject("Invalid context handle");
-                    return;
-                }
-
-                long count = LlamaMobile.getModelParametersCount(nativeContextHandle);
-                JSObject ret = new JSObject();
-                ret.put("count", count);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to get model parameters count: " + e.getMessage());
-            }
-        });
-    }
-
-    @PluginMethod
-    public void getGpuBackendInfo(PluginCall call) {
-        executor.execute(() -> {
-            String info = LlamaMobile.getGpuBackendInfo();
+        LlamaEngine engine = engineFor(call, -11);
+        if (engine == null) return;
+        String mmproj = call.getString("mmprojPath");
+        if (mmproj == null) { fail(call, -1, "mmprojPath required"); return; }
+        runBg(() -> {
+            boolean ok = engine.initMultimodal(mmproj);
             JSObject ret = new JSObject();
-            ret.put("info", info);
-            call.resolve(ret);
+            ret.put("value", ok);
+            runMain(() -> call.resolve(ret));
         });
     }
 
-    @PluginMethod
-    public void setVerboseLogging(PluginCall call) {
-        boolean enabled = call.getBoolean("enabled", false);
-        LlamaMobile.setVerboseLogging(enabled);
-        call.resolve();
+    public void tokenize(PluginCall call) {
+        LlamaEngine engine = engineFor(call, -11);
+        if (engine == null) return;
+        String text = call.getString("text");
+        if (text == null) { fail(call, -1, "text required"); return; }
+        runBg(() -> {
+            int[] tokens = engine.tokenize(text);
+            JSObject ret = new JSObject();
+            ret.put("value", intsToJS(tokens));
+            runMain(() -> call.resolve(ret));
+        });
     }
 
-    // MARK: - Download
+    public void detokenize(PluginCall call) {
+        LlamaEngine engine = engineFor(call, -11);
+        if (engine == null) return;
+        com.getcapacitor.JSArray tokens = call.getArray("tokens");
+        if (tokens == null) { fail(call, -1, "tokens required"); return; }
+        runBg(() -> {
+            int[] arr = new int[tokens.length()];
+            for (int i = 0; i < arr.length; i++) arr[i] = tokens.optInt(i);
+            String text = engine.detokenize(arr);
+            JSObject ret = new JSObject();
+            ret.put("value", text);
+            runMain(() -> call.resolve(ret));
+        });
+    }
 
-    @PluginMethod
-    public void downloadModel(PluginCall call) {
-        String url = call.getString("url");
-        String localPath = call.getString("localPath");
+    public void embed(PluginCall call) {
+        LlamaEngine engine = engineFor(call, -11);
+        if (engine == null) return;
+        com.getcapacitor.JSArray texts = call.getArray("texts");
+        if (texts == null) { fail(call, -1, "texts required"); return; }
+        runBg(() -> {
+            java.util.List<String> list = new java.util.ArrayList<>();
+            for (int i = 0; i < texts.length(); i++) list.add(texts.optString(i));
+            java.util.List<float[]> rows = engine.embed(list);
+            JSObject ret = new JSObject();
+            ret.put("value", floatRowsToJS(rows));
+            runMain(() -> call.resolve(ret));
+        });
+    }
 
-        if (url == null || localPath == null) {
-            call.reject("url and localPath are required");
-            return;
-        }
 
-        executor.execute(() -> {
-            try {
-                LlamaMobile.DownloadParams.Builder paramsBuilder = new LlamaMobile.DownloadParams.Builder(url, "", localPath);
-                LlamaMobile.DownloadParams params = paramsBuilder.build();
-                LlamaMobile.DownloadResult result = LlamaMobile.downloadModel(params, (progress, status, downloadedBytes, totalBytes) -> {
-                    JSObject progressData = new JSObject();
-                    progressData.put("progress", progress);
-                    notifyListeners("progress", progressData);
-                });
+    private static com.getcapacitor.JSArray intsToJS(int[] values) {
+        com.getcapacitor.JSArray arr = new com.getcapacitor.JSArray();
+        for (int v : values) arr.put(v);
+        return arr;
+    }
 
-                JSObject ret = new JSObject();
-                ret.put("success", result.isSuccess());
-                ret.put("localPath", result.getLocalPath());
-                ret.put("errorMessage", result.getErrorMessage());
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to download model: " + e.getMessage());
+    private static com.getcapacitor.JSArray floatRowsToJS(java.util.List<float[]> rows) {
+        com.getcapacitor.JSArray out = new com.getcapacitor.JSArray();
+        try {
+            for (float[] row : rows) {
+                com.getcapacitor.JSArray r = new com.getcapacitor.JSArray();
+                for (float v : row) r.put(v);
+                out.put(r);
             }
-        });
+        } catch (org.json.JSONException ignored) {
+        }
+        return out;
     }
 
-    @PluginMethod
-    public void downloadHfFile(PluginCall call) {
-        String repoId = call.getString("repoId");
-        String filename = call.getString("filename");
-        String destinationPath = call.getString("destinationPath");
-        if (destinationPath == null) {
-            destinationPath = call.getString("localPath"); // Backward compatibility
+    private LlamaGenerationRequest parseRequest(JSObject rq) {
+        JSONObject sampling = rq.optJSONObject("sampling");
+        LlamaSampling s = new LlamaSampling();
+        if (sampling != null) {
+            s.setSeed(sampling.optLong("seed", -1));
+            s.setTemperature((float) sampling.optDouble("temperature", 0.8));
+            s.setTopK(sampling.optInt("topK", 40));
+            s.setTopP((float) sampling.optDouble("topP", 0.95));
+            s.setMinP((float) sampling.optDouble("minP", 0.05));
+            s.setTypicalP((float) sampling.optDouble("typicalP", 1.0));
+            s.setPenaltyRepeat((float) sampling.optDouble("penaltyRepeat", 1.1));
+            s.setPenaltyLastN(sampling.optInt("penaltyLastN", 64));
+            s.setPenaltyFreq((float) sampling.optDouble("penaltyFreq", 0));
+            s.setPenaltyPresent((float) sampling.optDouble("penaltyPresent", 0));
+            s.setMirostat(sampling.optInt("mirostat", 0));
+            s.setMirostatTau((float) sampling.optDouble("mirostatTau", 5.0));
+            s.setMirostatEta((float) sampling.optDouble("mirostatEta", 0.1));
+            s.setIgnoreEos(sampling.optBoolean("ignoreEos", false));
         }
-        String bearerToken = call.getString("bearerToken");
-        boolean offline = call.getBoolean("offline", false);
-
-        if (repoId == null || filename == null || destinationPath == null) {
-            call.reject("repoId, filename, and destinationPath are required");
-            return;
-        }
-
-        final String finalPath = destinationPath;
-        executor.execute(() -> {
-            try {
-                LlamaMobile.DownloadResult result = LlamaMobile.downloadHfFile(
-                    repoId, filename, finalPath, bearerToken, offline, (progress, status, downloadedBytes, totalBytes) -> {
-                        JSObject progressData = new JSObject();
-                        progressData.put("progress", progress);
-                        notifyListeners("progress", progressData);
-                    }
-                );
-
-                JSObject ret = new JSObject();
-                ret.put("success", result.isSuccess());
-                ret.put("localPath", result.getLocalPath());
-                ret.put("errorMessage", result.getErrorMessage());
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to download HuggingFace file: " + e.getMessage());
+        LlamaGenerationRequest request = new LlamaGenerationRequest();
+        String prompt = optString(rq, "prompt", null);
+        if (prompt != null) request.setPrompt(prompt);
+        request.setSampling(s);
+        request.setMaxTokens(rq.optInt("maxTokens", 128));
+        request.setGrammar(rq.optString("grammar", null));
+        request.setJsonSchema(rq.optString("jsonSchema", null));
+        JSONArray rolesArr = rq.optJSONArray("roles");
+        JSONArray contentsArr = rq.optJSONArray("contents");
+        if (rolesArr != null && contentsArr != null) {
+            java.util.List<LlamaChatMessage> msgs = new java.util.ArrayList<>();
+            for (int i = 0; i < rolesArr.length() && i < contentsArr.length(); i++) {
+                msgs.add(new LlamaChatMessage(rolesArr.optString(i), contentsArr.optString(i)));
             }
-        });
-    }
-
-    // MARK: - Chat
-
-    @PluginMethod
-    public void setChatTemplate(PluginCall call) {
-        call.resolve();
-    }
-
-    @PluginMethod
-    public void getModelChatTemplate(PluginCall call) {
-        JSObject ret = new JSObject();
-        ret.put("template", "");
-        call.resolve(ret);
-    }
-
-    @PluginMethod
-    public void formatChatMessages(PluginCall call) {
-        JSObject ret = new JSObject();
-        ret.put("formattedPrompt", "");
-        call.resolve(ret);
+            request.setMessages(msgs);
+        }
+        JSONArray stops = rq.optJSONArray("stopSequences");
+        if (stops != null) {
+            java.util.List<String> list = new java.util.ArrayList<>();
+            for (int i = 0; i < stops.length(); i++) list.add(stops.optString(i));
+            request.setStopSequences(list);
+        }
+        return request;
     }
 }

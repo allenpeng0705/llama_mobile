@@ -477,7 +477,7 @@ try {
 - Model size and parameter information
 
 
-## Standard API Documentation (llama_mobile_api.h)
+## API Documentation (v1 — historical; v2 = llama_mobile_v2.h)
 
 The `llama_mobile_api.h` header provides a comprehensive API for integrating LLaMA models into mobile and embedded applications. This API is designed for compatibility with various backends and provides C++, C, and FFI interfaces for cross-platform usage.
 

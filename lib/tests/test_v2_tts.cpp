@@ -48,16 +48,39 @@ int main(int argc, char ** argv) {
 
     CHECK(llama_mobile_tts_is_enabled(ctx), "tts enabled after init");
 
-    // Full-text speak is deferred by design (docs/tts-current-workflow.md).
+    // Full-text speak (signed-off contract in docs/TTS-v2-review.md): text ->
+    // 16-bit PCM at the requested sample rate.
     llama_mobile_tts_params_t tp;
     llama_mobile_tts_params_init(&tp);
-    tp.text = "hi";
+    tp.text = "Hello there.";
+    tp.sample_rate = 16000;
     int16_t * pcm = nullptr;
     size_t pcm_len = 0;
     llama_mobile_usage_t usage;
-    CHECK(llama_mobile_tts_speak(ctx, &tp, &usage, &pcm, &pcm_len) == LLAMA_MOBILE_ERR_UNSUPPORTED,
-          "tts_speak deferred -> UNSUPPORTED");
-    CHECK(pcm == nullptr, "no pcm returned by deferred tts_speak");
+    llama_mobile_status_t sp = llama_mobile_tts_speak(ctx, &tp, &usage, &pcm, &pcm_len);
+    CHECK(sp == LLAMA_MOBILE_OK, "tts_speak OK");
+    CHECK(pcm != nullptr && pcm_len > 0, "tts_speak returns PCM samples");
+    if (sp == LLAMA_MOBILE_OK) {
+        CHECK(usage.generated_tokens > 0, "tts_speak usage reports generated tokens");
+        std::printf("note: pcm_len=%zu prompt_tokens=%d generated_tokens=%d\n",
+                    pcm_len, usage.prompt_tokens, usage.generated_tokens);
+        llama_mobile_tts_pcm_free(pcm);
+    }
+
+    // Resample + speed path (sample_rate != 24000 or speed != 1).
+    {
+        llama_mobile_tts_params_t tp2;
+        llama_mobile_tts_params_init(&tp2);
+        tp2.text = "Hello.";
+        tp2.sample_rate = 48000;
+        tp2.speed = 2.0f;
+        int16_t * pcm2 = nullptr;
+        size_t pcm2_len = 0;
+        llama_mobile_status_t sp2 = llama_mobile_tts_speak(ctx, &tp2, nullptr, &pcm2, &pcm2_len);
+        CHECK(sp2 == LLAMA_MOBILE_OK && pcm2 && pcm2_len > 0,
+              "tts_speak honors sample_rate + speed");
+        if (sp2 == LLAMA_MOBILE_OK && pcm2) llama_mobile_tts_pcm_free(pcm2);
+    }
 
     CHECK(llama_mobile_tts_release(ctx) == LLAMA_MOBILE_OK, "tts_release OK");
     CHECK(!llama_mobile_tts_is_enabled(ctx), "tts disabled after release");

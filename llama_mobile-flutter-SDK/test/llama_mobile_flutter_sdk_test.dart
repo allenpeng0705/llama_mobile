@@ -1,2066 +1,238 @@
+// Pure-Dart unit tests for the v2 API surface.
+//
+// Two layers:
+//  * Pure model tests (enums, serialization) — no platform channel.
+//  * Channel-mock tests — the v2 method channel
+//    `llama_mobile_flutter_sdk/v2` is faked with a
+//    TestDefaultBinaryMessenger handler, so the wrapper's decode paths
+//    (open/generate/tokenize/detokenize/embed/modelInfo/abort/close) and its
+//    PlatformException → LlamaException mapping are exercised without a device.
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
-import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk_platform_interface.dart';
-import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk_method_channel.dart';
-import 'package:plugin_platform_interface/plugin_platform_interface.dart';
-
-class MockLlamaMobileFlutterSdkPlatform
-    with MockPlatformInterfaceMixin
-    implements LlamaMobileFlutterSdkPlatform {
-  @override
-  Future<String?> getPlatformVersion() => Future.value('42');
-
-  @override
-  Future<Map<String, dynamic>?> initContext(Map<String, dynamic> params) async {
-    return {'contextHandle': 1, 'success': true};
-  }
-
-  @override
-  Future<Map<String, dynamic>?> initContextAsync(
-    Map<String, dynamic> params,
-  ) async {
-    return {'contextHandle': 1, 'success': true};
-  }
-
-  @override
-  Future<bool> freeContext(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<bool> freeContextAsync(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<Map<String, dynamic>?> generateCompletion(
-    int contextHandle,
-    Map<String, dynamic> params,
-  ) async {
-    return {
-      'text': 'Generated completion text',
-      'tokensGenerated': 42,
-      'tokensEvaluated': 10,
-      'truncated': false,
-      'stoppedEos': true,
-      'stoppedWord': false,
-      'stoppedLimit': false,
-      'stoppingWord': null,
-    };
-  }
-
-  @override
-  Future<Map<String, dynamic>?> generateCompletionAsync(
-    int contextHandle,
-    Map<String, dynamic> params,
-  ) async {
-    return {
-      'text': 'Generated completion text',
-      'tokensGenerated': 42,
-      'tokensEvaluated': 10,
-      'truncated': false,
-      'stoppedEos': true,
-      'stoppedWord': false,
-      'stoppedLimit': false,
-      'stoppingWord': null,
-    };
-  }
-
-  @override
-  Future<Map<String, dynamic>?> generateMultimodalCompletion(
-    int contextHandle,
-    Map<String, dynamic> params,
-    List<String> mediaPaths,
-  ) async {
-    return {
-      'text': 'Multimodal completion text',
-      'tokensGenerated': 56,
-      'tokensEvaluated': 15,
-      'truncated': false,
-      'stoppedEos': true,
-      'stoppedWord': false,
-      'stoppedLimit': false,
-      'stoppingWord': null,
-    };
-  }
-
-  @override
-  Future<Map<String, dynamic>?> generateMultimodalCompletionAsync(
-    int contextHandle,
-    Map<String, dynamic> params,
-    List<String> mediaPaths,
-  ) async {
-    return {
-      'text': 'Multimodal completion text',
-      'tokensGenerated': 56,
-      'tokensEvaluated': 15,
-      'truncated': false,
-      'stoppedEos': true,
-      'stoppedWord': false,
-      'stoppedLimit': false,
-      'stoppingWord': null,
-    };
-  }
-
-  @override
-  Future<String?> formatChatMessages(
-    int contextHandle,
-    List<Map<String, String?>> messages,
-    String? chatTemplate,
-  ) async {
-    return 'Formatted chat messages';
-  }
-
-  @override
-  Future<String?> formatChatMessagesAsync(
-    int contextHandle,
-    List<Map<String, String?>> messages,
-    String? chatTemplate,
-  ) async {
-    return 'Formatted chat messages';
-  }
-
-  @override
-  Future<Map<String, dynamic>?> loadTTSModel(
-    int contextHandle,
-    String modelPath,
-    Map<String, dynamic> params,
-  ) async {
-    return {'ttsModelLoaded': true, 'success': true};
-  }
-
-  @override
-  Future<Map<String, dynamic>?> loadTTSModelAsync(
-    int contextHandle,
-    String modelPath,
-    Map<String, dynamic> params,
-  ) async {
-    return {'ttsModelLoaded': true, 'success': true};
-  }
-
-  @override
-  Future<bool> freeTTSModel(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<bool> freeTTSModelAsync(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<List<double>?> generateEmbedding(
-    int contextHandle,
-    String text,
-    Map<String, dynamic> params,
-  ) async {
-    return [0.1, 0.2, 0.3, 0.4, 0.5];
-  }
-
-  @override
-  Future<List<double>?> generateEmbeddingAsync(
-    int contextHandle,
-    String text,
-    Map<String, dynamic> params,
-  ) async {
-    return [0.1, 0.2, 0.3, 0.4, 0.5];
-  }
-
-  @override
-  Future<bool> saveAudioToWavAsync(
-    int contextHandle,
-    String filePath,
-    List<int> audioData,
-    int sampleRate,
-  ) async {
-    return true;
-  }
-
-  @override
-  Future<bool> loadLoraAdapter(
-    int contextHandle,
-    String adapterPath,
-    double scale,
-  ) async {
-    return true;
-  }
-
-  @override
-  Future<bool> loadLoraAdapterAsync(
-    int contextHandle,
-    String adapterPath,
-    double scale,
-  ) async {
-    return true;
-  }
-
-  @override
-  Future<bool> freeLoraAdapter(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<bool> freeLoraAdapterAsync(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<String?> loadGrammar(int contextHandle, String grammarName) async {
-    return '{grammar content}';
-  }
-
-  @override
-  Future<Map<String, dynamic>?> downloadModel(
-    Map<String, dynamic> params,
-  ) async {
-    return {
-      'success': true,
-      'localPath': params['localPath'] ?? '',
-      'errorMessage': null,
-    };
-  }
-
-  @override
-  Future<Map<String, dynamic>?> downloadModelAsync(
-    Map<String, dynamic> params,
-  ) async {
-    return {
-      'success': true,
-      'localPath': params['localPath'] ?? '',
-      'errorMessage': null,
-    };
-  }
-
-  @override
-  Future<Map<String, dynamic>?> downloadHfFile(
-    Map<String, dynamic> params,
-  ) async {
-    return {
-      'success': true,
-      'localPath': params['localPath'] ?? '',
-      'errorMessage': null,
-    };
-  }
-
-  @override
-  Future<Map<String, dynamic>?> downloadHfFileAsync(
-    Map<String, dynamic> params,
-  ) async {
-    return {
-      'success': true,
-      'localPath': params['localPath'] ?? '',
-      'errorMessage': null,
-    };
-  }
-
-  @override
-  Future<Map<String, dynamic>?> generateStreamingCompletion(
-    int contextHandle,
-    Map<String, dynamic> params,
-  ) async {
-    return {
-      'text': 'Streaming completion text',
-      'tokensGenerated': 42,
-      'tokensEvaluated': 10,
-      'truncated': false,
-      'stoppedEos': true,
-      'stoppedWord': false,
-      'stoppedLimit': false,
-      'stoppingWord': null,
-    };
-  }
-
-  @override
-  Future<bool> stopCompletion(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<List<Map<String, dynamic>>?> getLoadedLoraAdapters(
-    int contextHandle,
-  ) async {
-    return [
-      {'adapterPath': 'test/adapter1.gguf', 'scale': 1.0},
-      {'adapterPath': 'test/adapter2.gguf', 'scale': 0.5},
-    ];
-  }
-
-  @override
-  Future<int?> getContextWindowSize(int contextHandle) async {
-    return 2048;
-  }
-
-  @override
-  Future<int?> getEmbeddingDimension(int contextHandle) async {
-    return 4096;
-  }
-
-  @override
-  Future<String?> getModelDescription(int contextHandle) async {
-    return 'Test Model Description';
-  }
-
-  @override
-  Future<int?> getModelSize(int contextHandle) async {
-    return 1000000;
-  }
-
-  @override
-  Future<int?> getModelParametersCount(int contextHandle) async {
-    return 1000000000;
-  }
-
-  @override
-  Future<bool> isMultimodalEnabled(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<bool> supportsVision(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<bool> supportsAudio(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<bool> isVocoderEnabled(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<int?> getTTSType(int contextHandle) async {
-    return 1;
-  }
-
-  @override
-  Future<bool> initVocoder(int contextHandle, String vocoderPath) async {
-    return true;
-  }
-
-  @override
-  Future<bool> initVocoderAsync(
-    int contextHandle,
-    String vocoderModelPath,
-  ) async {
-    return true;
-  }
-
-  @override
-  Future<bool> releaseVocoder(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<void> releaseVocoderAsync(int contextHandle) async {
-    return;
-  }
-
-  @override
-  Future<bool> releaseMultimodal(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<void> releaseMultimodalAsync(int contextHandle) async {
-    return;
-  }
-
-  @override
-  Future<bool> clearConversation(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<bool> isConversationActive(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<bool> removeLoraAdapters(int contextHandle) async {
-    return true;
-  }
-
-  @override
-  Future<void> removeLoraAdaptersAsync(int contextHandle) async {
-    return;
-  }
-
-  @override
-  Future<void> setLogLevel(int level) async {
-    return;
-  }
-
-  @override
-  Future<Map<String, dynamic>?> generateOpenAICompletion(
-    int contextHandle,
-    String openAIJSON,
-    String? grammar,
-  ) async {
-    return {
-      'text': 'OpenAI completion text',
-      'tokensGenerated': 42,
-      'tokensEvaluated': 10,
-      'truncated': false,
-      'stoppedEos': true,
-      'stoppedWord': false,
-      'stoppedLimit': false,
-      'stoppingWord': null,
-    };
-  }
-
-  @override
-  Future<Map<String, dynamic>?> generateOpenAICompletionAsync(
-    int contextHandle,
-    String openAIJSON,
-    String? grammar,
-  ) async {
-    return {
-      'text': 'OpenAI completion text',
-      'tokensGenerated': 42,
-      'tokensEvaluated': 10,
-      'truncated': false,
-      'stoppedEos': true,
-      'stoppedWord': false,
-      'stoppedLimit': false,
-      'stoppingWord': null,
-    };
-  }
-
-  @override
-  Stream<String> get onTokenStream => const Stream.empty();
-
-  @override
-  Stream<double> get onProgressStream => const Stream.empty();
-
-  @override
-  Future<String?> detokenize(int contextHandle, List<int> tokens) async {
-    return 'Detokenized text';
-  }
-
-  @override
-  Future<Map<String, dynamic>?> extractAsset(Map<String, dynamic> params) async {
-    return {'success': true, 'localPath': params['localPath'] ?? ''};
-  }
-
-  @override
-  Future<String?> getGpuBackendInfo() async {
-    return 'Metal GPU backend available';
-  }
-
-  @override
-  Future<void> setVerboseLogging(bool enabled) async {
-    return;
-  }
-
-  @override
-  Future<List<int>?> tokenize(int contextHandle, String text) async {
-    return [1, 2, 3, 4, 5];
-  }
-
-  @override
-  Future<bool> initMultimodal(
-    int contextHandle,
-    String mmprojPath,
-    bool useGpu,
-  ) async {
-    return true;
-  }
-
-  @override
-  Future<bool> initMultimodalAsync(
-    int contextHandle,
-    String mmprojPath,
-    bool useGpu,
-  ) async {
-    return true;
-  }
-
-  @override
-  Future<bool> saveAudioToWav(
-    int contextHandle,
-    String filePath,
-    List<int> audioData,
-    int sampleRate,
-  ) async {
-    return true;
-  }
-
-  @override
-  Future<Map<String, dynamic>?> generateSpeech(
-    int contextHandle,
-    String text,
-    Map<String, dynamic>? options,
-  ) async {
-    return {
-      'audioSamples': List<int>.filled(100, 0),
-      'sampleRate': 24000,
-      'duration': 1.0,
-      'outputFilePath': null,
-      'methodUsed': 0,
-    };
-  }
-
-  @override
-  Future<Map<String, dynamic>?> generateSpeechAsync(
-    int contextHandle,
-    String text,
-    Map<String, dynamic>? options,
-  ) async {
-    return {
-      'audioSamples': List<int>.filled(100, 0),
-      'sampleRate': 24000,
-      'duration': 1.0,
-      'outputFilePath': null,
-      'methodUsed': 0,
-    };
-  }
-
-  @override
-  Future<Map<String, dynamic>?> generateSpeechStreamForLongText(
-    int contextHandle,
-    String text,
-    Map<String, dynamic>? options,
-  ) async {
-    return {
-      'sampleRate': 24000,
-      'duration': 1.0,
-      'outputFilePath': null,
-      'methodUsed': 0,
-    };
-  }
-
-  @override
-  Future<Map<String, dynamic>?> generateSpeechStreamForLongTextAsync(
-    int contextHandle,
-    String text,
-    Map<String, dynamic>? options,
-  ) async {
-    return {
-      'sampleRate': 24000,
-      'duration': 1.0,
-      'outputFilePath': null,
-      'methodUsed': 0,
-    };
-  }
-}
 
 void main() {
-  final LlamaMobileFlutterSdkPlatform initialPlatform =
-      LlamaMobileFlutterSdkPlatform.instance;
+  TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('$MethodChannelLlamaMobileFlutterSdk is the default instance', () {
-    expect(initialPlatform, isInstanceOf<MethodChannelLlamaMobileFlutterSdk>());
+  const channel = MethodChannel('llama_mobile_flutter_sdk/v2');
+
+  // ---------- pure model tests (no channel) ----------
+
+  test('status codes mirror v2 IDL', () {
+    expect(LlamaStatus.ok.code, 0);
+    expect(LlamaStatus.alreadyRunning.code, -14);
+    expect(LlamaStatus.fromCode(-14), LlamaStatus.alreadyRunning);
+    expect(LlamaStatus.fromCode(12345), LlamaStatus.generation);
   });
 
-  group('Context Management', () {
-    test('initContext creates a new context', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/model.gguf',
-      );
-
-      expect(context, isNotNull);
-      expect(context?.handle, isNotNull);
-    });
-
-    test('free releases a context', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/model.gguf',
-      );
-
-      bool result = await context?.free() ?? false;
-      expect(result, isTrue);
-    });
+  test('request serializes messages + sampling', () {
+    final req = LlamaGenerationRequest(
+      messages: const [
+        LlamaChatMessage('user', 'What is 2+2?'),
+      ],
+      maxTokens: 32,
+    );
+    final json = req.toJson();
+    expect(json['maxTokens'], 32);
+    expect((json['roles'] as List).first, 'user');
+    expect((json['contents'] as List).first, 'What is 2+2?');
+    expect((json['sampling'] as Map)['temperature'], 0.8);
   });
 
-  group('Completion Methods', () {
-    test('generateCompletion creates completion text', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/model.gguf',
-      );
-
-      CompletionResult? result = await context?.generateCompletion(
-        prompt: 'Hello',
-      );
-
-      expect(result, isNotNull);
-      expect(result?.text, isNotNull);
-      expect(result?.tokensGenerated, isNotNull);
-    });
-
-    test('generateMultimodalCompletion processes text and images', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/multimodal_model.gguf',
-      );
-
-      CompletionResult? result = await context?.generateMultimodalCompletion(
-        prompt: 'Describe this image',
-        mediaPaths: ['test/image.jpg'],
-      );
-
-      expect(result, isNotNull);
-      expect(result?.text, isNotNull);
-      expect(result?.tokensGenerated, isNotNull);
-    });
+  test('config serializes context flags', () {
+    final c = LlamaEngineConfig(modelPath: '/tmp/m.gguf')
+      ..nCtx = 4096
+      ..embedding = true;
+    final json = c.toJson();
+    expect(json['modelPath'], '/tmp/m.gguf');
+    expect(json['nCtx'], 4096);
+    expect(json['embedding'], true);
   });
 
-  group('Embedding Methods', () {
-    test('generateEmbedding creates embeddings', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/embedding_model.gguf',
-        embedding: true,
-      );
-
-      List<double>? embedding = await context?.generateEmbedding(
-        'Text to embed',
-      );
-
-      expect(embedding, isNotNull);
-      expect(embedding?.length, greaterThan(0));
-    });
+  test('request serializes mediaPaths + jsonSchema + stopSequences', () {
+    final req = LlamaGenerationRequest(
+      prompt: 'look',
+      mediaPaths: const ['/a.jpg'],
+      stopSequences: const ['\n'],
+      jsonSchema: '{"type":"object"}',
+      maxTokens: 8,
+    );
+    final json = req.toJson();
+    expect(json['mediaPaths'], ['/a.jpg']);
+    expect(json['stopSequences'], ['\n']);
+    expect(json['jsonSchema'], '{"type":"object"}');
   });
 
-  group('LoRA Adapter Methods', () {
-    test('loadLoraAdapter loads a LoRA adapter', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
+  // ---------- channel-mock tests ----------
 
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/base_model.gguf',
-      );
+  void mockChannel(Future<Object?> Function(MethodCall call) handler) {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, handler);
+  }
 
-      bool? result = await context?.loadLoraAdapter(
-        'test/lora_adapter.gguf',
-        0.75,
-      );
-
-      expect(result, isTrue);
-    });
-
-    test('freeLoraAdapter frees a LoRA adapter', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/base_model.gguf',
-      );
-
-      await context?.loadLoraAdapter('test/lora_adapter.gguf', 0.75);
-
-      bool? result = await context?.freeLoraAdapter();
-
-      expect(result, isTrue);
-    });
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
   });
 
-  group('TTS Methods', () {
-    test('loadTTSModel loads a TTS model', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/chat_model.gguf',
-      );
-
-      bool? result = await context?.loadTTSModel(
-        'test/tts_model.gguf',
-        TTSModelType.outETTSv02,
-      );
-
-      expect(result, isTrue);
+  test('libraryVersion reads the native version string', () async {
+    mockChannel((call) async {
+      expect(call.method, 'version');
+      return '2.0.0';
     });
+    expect(await LlamaEngine.libraryVersion(), '2.0.0');
+  });
 
-    // generateAudio test removed as this method is now private
-    // Use generateSpeechSync or generateSpeech instead
-
-    test('freeTTSModel frees a TTS model', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/chat_model.gguf',
-      );
-
-      await context?.loadTTSModel(
-        'test/tts_model.gguf',
-        TTSModelType.outETTSv02,
-      );
-
-      bool result = await context?.freeTTSModel() ?? false;
-
-      expect(result, isTrue);
+  test('open decodes the handle; generate decodes result + stopReason',
+      () async {
+    mockChannel((call) async {
+      switch (call.method) {
+        case 'open':
+          return 42;
+        case 'generate':
+          return {
+            'text': 'hello',
+            'stopReason': 0, // eos
+            'promptTokens': 3,
+            'generatedTokens': 5,
+          };
+        default:
+          return null;
+      }
     });
+    final engine = await LlamaEngine.open(
+      LlamaEngineConfig(modelPath: '/tmp/m.gguf'),
+    );
+    final r = await engine.generate(LlamaGenerationRequest(prompt: 'hi'));
+    expect(r.text, 'hello');
+    expect(r.stopReason, LlamaStopReason.eos);
+    expect(r.usage.generatedTokens, 5);
+  });
 
-    test('generateSpeech generates speech asynchronously', () async {
-      LlamaMobile llamaMobile = LlamaMobile();
-      MockLlamaMobileFlutterSdkPlatform fakePlatform =
-          MockLlamaMobileFlutterSdkPlatform();
-      LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-      LlamaContext? context = await llamaMobile.initContext(
-        modelPath: 'test/chat_model.gguf',
-      );
-
-      Map<String, dynamic>? result = await context?.generateSpeech(
-        'Hello, this is a test.',
-      );
-
-      expect(result, isNotNull);
-      expect(result?['audioSamples'], isNotNull);
-      expect(result?['sampleRate'], 24000);
-      expect(result?['duration'], 1.0);
-      expect(result?['methodUsed'], 0);
+  test('open failure maps PlatformException code to LlamaException', () async {
+    mockChannel((call) async {
+      if (call.method == 'open') {
+        throw PlatformException(code: '-4', message: 'model load failed');
+      }
+      return null;
     });
+    await expectLater(
+      LlamaEngine.open(LlamaEngineConfig(modelPath: '/tmp/m.gguf')),
+      throwsA(isA<LlamaException>()
+          .having((e) => e.status, 'status', LlamaStatus.modelLoad)),
+    );
+  });
 
-    group('Download Methods', () {
-      test('downloadModel downloads model file', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        DownloadResult? result = await llamaMobile.downloadModel(
-          url: 'https://example.com/model.gguf',
-          localPath: '/tmp/model.gguf',
-        );
-
-        expect(result, isNotNull);
-        expect(result?.success, isTrue);
-        expect(result?.localPath, isNotNull);
-        expect(result?.errorMessage, isNull);
-      });
+  test('generate failure maps alreadyRunning (-14)', () async {
+    mockChannel((call) async {
+      if (call.method == 'open') return 7;
+      if (call.method == 'generate') {
+        throw PlatformException(code: '-14', message: 'busy');
+      }
+      return null;
     });
+    final engine =
+        await LlamaEngine.open(LlamaEngineConfig(modelPath: '/tmp/m.gguf'));
+    await expectLater(
+      engine.generate(LlamaGenerationRequest(prompt: 'hi')),
+      throwsA(isA<LlamaException>()
+          .having((e) => e.status, 'status', LlamaStatus.alreadyRunning)),
+    );
+  });
 
-    group('LogLevel Enum', () {
-      test('LogLevel enum has correct values', () {
-        expect(LogLevel.debug.rawValue, 0);
-        expect(LogLevel.info.rawValue, 1);
-        expect(LogLevel.warning.rawValue, 2);
-        expect(LogLevel.error.rawValue, 3);
-        expect(LogLevel.none.rawValue, 4);
-      });
-
-      test('LogLevel fromRawValue works correctly', () {
-        expect(LogLevel.fromRawValue(0), LogLevel.debug);
-        expect(LogLevel.fromRawValue(1), LogLevel.info);
-        expect(LogLevel.fromRawValue(2), LogLevel.warning);
-        expect(LogLevel.fromRawValue(3), LogLevel.error);
-        expect(LogLevel.fromRawValue(4), LogLevel.none);
-        expect(LogLevel.fromRawValue(99), LogLevel.info);
-      });
+  test('zero handle from open maps to LlamaException.modelLoad', () async {
+    mockChannel((call) async {
+      if (call.method == 'open') return 0; // 0 handle → load failure
+      return null;
     });
+    await expectLater(
+      LlamaEngine.open(LlamaEngineConfig(modelPath: '/tmp/m.gguf')),
+      throwsA(isA<LlamaException>()
+          .having((e) => e.status, 'status', LlamaStatus.modelLoad)),
+    );
+  });
 
-    group('TTSMethod Enum', () {
-      test('TTSMethod enum has correct values', () {
-        expect(TTSMethod.builtIn.rawValue, 0);
-        expect(TTSMethod.customWorkflow.rawValue, 1);
-      });
-
-      test('TTSMethod fromRawValue works correctly', () {
-        expect(TTSMethod.fromRawValue(0), TTSMethod.builtIn);
-        expect(TTSMethod.fromRawValue(1), TTSMethod.customWorkflow);
-        expect(TTSMethod.fromRawValue(99), TTSMethod.builtIn);
-      });
+  test('tokenize/detokenize decode integer arrays and strings', () async {
+    mockChannel((call) async {
+      if (call.method == 'open') return 7;
+      if (call.method == 'tokenize') {
+        expect((call.arguments as Map)['handle'], 7);
+        expect((call.arguments as Map)['text'], 'hi there');
+        return [12, 34, 56];
+      }
+      if (call.method == 'detokenize') {
+        final args = call.arguments as Map;
+        expect(args['handle'], 7);
+        expect((args['tokens'] as List).cast<int>(), [12, 34, 56]);
+        return 'hi there';
+      }
+      return null;
     });
-
-    group('TTSError Enum', () {
-      test('TTSError enum has correct messages', () {
-        expect(TTSError.noModelLoaded.message, 'No model loaded');
-        expect(TTSError.noVocoderEnabled.message, 'No vocoder enabled');
-        expect(TTSError.invalidText.message, 'Invalid text');
-        expect(TTSError.generationFailed.message, 'Generation failed');
-        expect(TTSError.formattingFailed.message, 'Formatting failed');
-        expect(TTSError.tokenizationFailed.message, 'Tokenization failed');
-        expect(TTSError.audioDecodingFailed.message, 'Audio decoding failed');
-        expect(TTSError.fileSaveFailed.message, 'File save failed');
-        expect(TTSError.unknownError.message, 'Unknown error');
-      });
-    });
-
-    group('InitParams Class', () {
-      test('InitParams toMap works correctly', () {
-        final params = InitParams(
-          modelPath: '/path/to/model.gguf',
-          chatTemplate: 'custom_template',
-          systemPrompt: 'You are a helpful assistant',
-          nCtx: 4096,
-          nBatch: 1024,
-          nUBatch: 512,
-          nGpuLayers: 20,
-          nThreads: 8,
-          useMmap: true,
-          useMlock: false,
-          embedding: false,
-          poolingType: 1,
-          embdNormalize: 1,
-          flashAttention: true,
-          cacheTypeK: 'f16',
-          cacheTypeV: 'f16',
-          enableChatTemplate: true,
-        );
-
-        final map = params.toMap();
-
-        expect(map['modelPath'], '/path/to/model.gguf');
-        expect(map['chatTemplate'], 'custom_template');
-        expect(map['systemPrompt'], 'You are a helpful assistant');
-        expect(map['nCtx'], 4096);
-        expect(map['nBatch'], 1024);
-        expect(map['nUBatch'], 512);
-        expect(map['nGpuLayers'], 20);
-        expect(map['nThreads'], 8);
-        expect(map['useMmap'], true);
-        expect(map['useMlock'], false);
-        expect(map['embedding'], false);
-        expect(map['poolingType'], 1);
-        expect(map['embdNormalize'], 1);
-        expect(map['flashAttention'], true);
-        expect(map['cacheTypeK'], 'f16');
-        expect(map['cacheTypeV'], 'f16');
-        expect(map['enableChatTemplate'], true);
-      });
-    });
-
-    group('CompletionParams Class', () {
-      test('CompletionParams toMap works correctly', () {
-        final params = CompletionParams(
-          prompt: 'Test prompt',
-          maxTokens: 2048,
-          nThreads: 4,
-          seed: 42,
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          minP: 0.05,
-          typicalP: 1.0,
-          penaltyLastN: 64,
-          penaltyRepeat: 1.1,
-          penaltyFreq: 0.0,
-          penaltyPresent: 0.0,
-          mirostat: 0,
-          mirostatTau: 5.0,
-          mirostatEta: 0.1,
-          ignoreEos: false,
-          stopSequences: ['\n', '###'],
-          grammar: 'test_grammar',
-          useJsonResponse: true,
-          nProbs: 5,
-          jsonSchema: '{"type": "object"}',
-          tools: 'test_tools',
-          parallelToolCalls: true,
-          toolChoice: 'auto',
-          mediaPaths: ['/path/to/image.jpg'],
-          chatMessages: [
-            ChatMessage(role: 'user', content: 'Hello'),
-            ChatMessage(role: 'assistant', content: 'Hi there'),
-          ],
-        );
-
-        final map = params.toMap();
-
-        expect(map['prompt'], 'Test prompt');
-        expect(map['maxTokens'], 2048);
-        expect(map['nThreads'], 4);
-        expect(map['seed'], 42);
-        expect(map['temperature'], 0.7);
-        expect(map['topK'], 40);
-        expect(map['topP'], 0.95);
-        expect(map['minP'], 0.05);
-        expect(map['typicalP'], 1.0);
-        expect(map['penaltyLastN'], 64);
-        expect(map['penaltyRepeat'], 1.1);
-        expect(map['penaltyFreq'], 0.0);
-        expect(map['penaltyPresent'], 0.0);
-        expect(map['mirostat'], 0);
-        expect(map['mirostatTau'], 5.0);
-        expect(map['mirostatEta'], 0.1);
-        expect(map['ignoreEos'], false);
-        expect(map['stopSequences'], ['\n', '###']);
-        expect(map['grammar'], 'test_grammar');
-        expect(map['useJsonResponse'], true);
-        expect(map['nProbs'], 5);
-        expect(map['jsonSchema'], '{"type": "object"}');
-        expect(map['tools'], 'test_tools');
-        expect(map['parallelToolCalls'], true);
-        expect(map['toolChoice'], 'auto');
-        expect(map['mediaPaths'], ['/path/to/image.jpg']);
-      });
-
-      test('CompletionParams factory constructors work correctly', () {
-        final fromPrompt = CompletionParams.fromPrompt('Test prompt');
-        expect(fromPrompt.prompt, 'Test prompt');
-        expect(fromPrompt.maxTokens, 1024);
-        expect(fromPrompt.temperature, 0.8);
-
-        final fromChat = CompletionParams.fromChatMessages([
-          ChatMessage(role: 'user', content: 'Hello'),
-        ]);
-        expect(fromChat.chatMessages.length, 1);
-        expect(fromChat.temperature, 0.7);
-
-        final fromCreative = CompletionParams.fromCreativePrompt(
-          'Write a story',
-        );
-        expect(fromCreative.prompt, 'Write a story');
-        expect(fromCreative.temperature, 1.0);
-        expect(fromCreative.maxTokens, 1024);
-
-        final fromFactual = CompletionParams.fromFactualPrompt('What is 2+2?');
-        expect(fromFactual.prompt, 'What is 2+2?');
-        expect(fromFactual.temperature, 0.1);
-      });
-    });
-
-    group('DownloadParams Class', () {
-      test('DownloadParams toMap works correctly', () {
-        final params = DownloadParams(
-          url: 'https://example.com/model.gguf',
-          localPath: '/tmp/model.gguf',
-          username: 'user',
-          password: 'pass',
-          headers: {'Authorization': 'Bearer token'},
-        );
-
-        final map = params.toMap();
-
-        expect(map['url'], 'https://example.com/model.gguf');
-        expect(map['localPath'], '/tmp/model.gguf');
-        expect(map['username'], 'user');
-        expect(map['password'], 'pass');
-        expect(map['headers'], {'Authorization': 'Bearer token'});
-      });
-    });
-
-    group('HuggingFaceDownloadParams Class', () {
-      test('HuggingFaceDownloadParams toMap works correctly', () {
-        final params = HuggingFaceDownloadParams(
-          repoId: 'org/model',
-          filename: 'model.gguf',
-          localPath: '/tmp/model.gguf',
-          bearerToken: 'hf_token',
-          offline: false,
-        );
-
-        final map = params.toMap();
-
-        expect(map['repoId'], 'org/model');
-        expect(map['filename'], 'model.gguf');
-        expect(map['localPath'], '/tmp/model.gguf');
-        expect(map['bearerToken'], 'hf_token');
-        expect(map['offline'], false);
-      });
-    });
-
-    group('TTSOptions Class', () {
-      test('TTSOptions toMap works correctly', () {
-        final options = TTSOptions(
-          sampleRate: 24000,
-          voice: 'default',
-          speed: 1.0,
-          saveToFile: true,
-          outputFilePath: '/tmp/audio.wav',
-        );
-
-        final map = options.toMap();
-
-        expect(map['sampleRate'], 24000);
-        expect(map['voice'], 'default');
-        expect(map['speed'], 1.0);
-        expect(map['saveToFile'], true);
-        expect(map['outputFilePath'], '/tmp/audio.wav');
-      });
-    });
-
-    group('SpeechResult Class', () {
-      test('SpeechResult fromMap works correctly', () {
-        final map = {
-          'audioSamples': [1, 2, 3, 4, 5],
-          'sampleRate': 24000,
-          'duration': 1.5,
-          'outputFilePath': '/tmp/audio.wav',
-          'methodUsed': 0,
-        };
-
-        final result = SpeechResult.fromMap(map);
-
-        expect(result.audioSamples, [1, 2, 3, 4, 5]);
-        expect(result.sampleRate, 24000);
-        expect(result.duration, 1.5);
-        expect(result.outputFilePath, '/tmp/audio.wav');
-        expect(result.methodUsed, TTSMethod.builtIn);
-      });
-    });
-
-    group('SpeechMetadata Class', () {
-      test('SpeechMetadata fromMap works correctly', () {
-        final map = {
-          'sampleRate': 24000,
-          'duration': 1.5,
-          'methodUsed': 1,
-          'outputFilePath': '/tmp/audio.wav',
-        };
-
-        final metadata = SpeechMetadata.fromMap(map);
-
-        expect(metadata.sampleRate, 24000);
-        expect(metadata.duration, 1.5);
-        expect(metadata.methodUsed, TTSMethod.customWorkflow);
-        expect(metadata.outputFilePath, '/tmp/audio.wav');
-      });
-    });
-
-    group('LoraAdapter Class', () {
-      test('LoraAdapter toMap works correctly', () {
-        final adapter = LoraAdapter(
-          adapterPath: '/path/to/adapter.gguf',
-          scale: 1.5,
-        );
-
-        final map = adapter.toMap();
-
-        expect(map['adapterPath'], '/path/to/adapter.gguf');
-        expect(map['scale'], 1.5);
-      });
-
-      test('LoraAdapter fromMap works correctly', () {
-        final map = {'adapterPath': '/path/to/adapter.gguf', 'scale': 1.5};
-
-        final adapter = LoraAdapter.fromMap(map);
-
-        expect(adapter.adapterPath, '/path/to/adapter.gguf');
-        expect(adapter.scale, 1.5);
-      });
-    });
-
-    group('ChatMessage Class', () {
-      test('ChatMessage toMap works correctly', () {
-        final message = ChatMessage(
-          role: 'user',
-          content: 'Hello',
-          reasoningContent: 'Thinking...',
-          toolName: 'test_tool',
-          toolCallId: 'call_123',
-        );
-
-        final map = message.toMap();
-
-        expect(map['role'], 'user');
-        expect(map['content'], 'Hello');
-        expect(map['reasoning_content'], 'Thinking...');
-        expect(map['tool_name'], 'test_tool');
-        expect(map['tool_call_id'], 'call_123');
-      });
-
-      test('ChatMessage fromMap works correctly', () {
-        final map = {
-          'role': 'user',
-          'content': 'Hello',
-          'reasoning_content': 'Thinking...',
-          'tool_name': 'test_tool',
-          'tool_call_id': 'call_123',
-        };
-
-        final message = ChatMessage.fromMap(map);
-
-        expect(message.role, 'user');
-        expect(message.content, 'Hello');
-        expect(message.reasoningContent, 'Thinking...');
-        expect(message.toolName, 'test_tool');
-        expect(message.toolCallId, 'call_123');
-      });
-    });
-
-    group('LlamaMobile Static Methods', () {
-      test('setLogLevel sets log level', () async {
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        await LlamaMobile.setLogLevel(LogLevel.info);
-
-        expect(true, isTrue);
-      });
-
-      test('setLogLevelRaw sets log level with raw value', () async {
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        await LlamaMobile.setLogLevelRaw(1);
-
-        expect(true, isTrue);
-      });
-    });
-
-    group('LlamaContext New Methods', () {
-      // generateAudioFromText test removed as this method is now private
-      // getFormattedAudioCompletion test removed as this method is now private
-      // getAudioGuideTokens test removed as this method is now private
-      // setGuideTokens test removed as this method is now private
-      // decodeAudioTokens test removed as this method is now private
-
-      test('initVocoder initializes vocoder', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        bool result =
-            await context?.initVocoder('/path/to/vocoder.gguf') ?? false;
-
-        expect(result, isTrue);
-      });
-
-      test('releaseVocoder releases vocoder', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        await context?.releaseVocoder();
-
-        expect(true, isTrue);
-      });
-
-      test('releaseMultimodal releases multimodal', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        await context?.releaseMultimodal();
-
-        expect(true, isTrue);
-      });
-
-      test('clearConversation clears conversation', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        await context?.clearConversation();
-
-        expect(true, isTrue);
-      });
-
-      test('isConversationActive checks conversation status', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        await context?.isConversationActive();
-
-        expect(true, isTrue);
-      });
-
-      test('removeLoraAdapters removes adapters', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        await context?.removeLoraAdapters();
-
-        expect(true, isTrue);
-      });
-    });
-
-    group('LlamaMobile Parameter-based Methods', () {
-      test('initContextWithParams creates context', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        final params = InitParams(
-          modelPath: '/path/to/model.gguf',
-          nCtx: 4096,
-          nThreads: 8,
-        );
-
-        LlamaContext? context = await llamaMobile.initContextWithParams(params);
-
-        expect(context, isNotNull);
-        expect(context?.handle, isNotNull);
-      });
-
-      test('downloadModelWithParams downloads model', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        final params = DownloadParams(
-          url: 'https://example.com/model.gguf',
-          localPath: '/tmp/model.gguf',
-        );
-
-        DownloadResult? result = await llamaMobile.downloadModelWithParams(
-          params,
-        );
-
-        expect(result, isNotNull);
-        expect(result?.success, isTrue);
-        expect(result?.localPath, isNotNull);
-      });
-
-      test('downloadHfFileWithParams downloads from Hugging Face', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        final params = HuggingFaceDownloadParams(
-          repoId: 'org/model',
-          filename: 'model.gguf',
-          localPath: '/tmp/model.gguf',
-        );
-
-        DownloadResult? result = await llamaMobile.downloadHfFileWithParams(
-          params,
-        );
-
-        expect(result, isNotNull);
-        expect(result?.success, isTrue);
-        expect(result?.localPath, isNotNull);
-      });
-
-      test('generateCompletionWithParams generates completion', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        final params = CompletionParams(
-          prompt: 'Test prompt',
-          maxTokens: 2048,
-          temperature: 0.7,
-        );
-
-        CompletionResult? result = await context?.generateCompletionWithParams(
-          params,
-        );
-
-        expect(result, isNotNull);
-        expect(result?.text, isNotNull);
-        expect(result?.tokensGenerated, greaterThan(0));
-      });
-
-      test(
-        'generateMultimodalCompletionWithParams generates multimodal completion',
-        () async {
-          LlamaMobile llamaMobile = LlamaMobile();
-          MockLlamaMobileFlutterSdkPlatform fakePlatform =
-              MockLlamaMobileFlutterSdkPlatform();
-          LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-          LlamaContext? context = await llamaMobile.initContext(
-            modelPath: 'test/chat_model.gguf',
-          );
-
-          final params = CompletionParams(
-            prompt: 'Test prompt',
-            maxTokens: 2048,
-            temperature: 0.7,
-          );
-
-          CompletionResult? result = await context
-              ?.generateMultimodalCompletionWithParams(params, [
-                '/path/to/image.jpg',
-              ]);
-
-          expect(result, isNotNull);
-          expect(result?.text, isNotNull);
-          expect(result?.tokensGenerated, greaterThan(0));
-        },
-      );
-
-      test(
-        'generateStreamingCompletionWithParams generates streaming completion',
-        () async {
-          LlamaMobile llamaMobile = LlamaMobile();
-          MockLlamaMobileFlutterSdkPlatform fakePlatform =
-              MockLlamaMobileFlutterSdkPlatform();
-          LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-          LlamaContext? context = await llamaMobile.initContext(
-            modelPath: 'test/chat_model.gguf',
-          );
-
-          final params = CompletionParams(
-            prompt: 'Test prompt',
-            maxTokens: 2048,
-            temperature: 0.7,
-          );
-
-          CompletionResult? result = await context
-              ?.generateStreamingCompletionWithParams(params);
-
-          expect(result, isNotNull);
-          expect(result?.text, isNotNull);
-          expect(result?.tokensGenerated, greaterThan(0));
-        },
-      );
-
-      test('generateOpenAICompletion generates OpenAI completion', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        CompletionResult? result = await context?.generateOpenAICompletion(
-          openAIJSON: '{"model":"test","prompt":"Hello"}',
-        );
-
-        expect(result, isNotNull);
-        expect(result?.text, isNotNull);
-        expect(result?.tokensGenerated, greaterThan(0));
-      });
-
-      test('stopCompletion stops ongoing completion', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        bool result = await context?.stopCompletion() ?? false;
-
-        expect(result, isTrue);
-      });
-
-      test('getLoadedLoraAdapters returns loaded adapters', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        List<Map<String, dynamic>>? adapters = await context
-            ?.getLoadedLoraAdapters();
-
-        expect(adapters, isNotNull);
-        expect(adapters?.length, greaterThan(0));
-      });
-
-      test('getContextWindowSize returns context window size', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        int? windowSize = await context?.getContextWindowSize();
-
-        expect(windowSize, isNotNull);
-        expect(windowSize, greaterThan(0));
-      });
-
-      test('getEmbeddingDimension returns embedding dimension', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        int? dimension = await context?.getEmbeddingDimension();
-
-        expect(dimension, isNotNull);
-        expect(dimension, greaterThan(0));
-      });
-
-      test('getModelDescription returns model description', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        String? description = await context?.getModelDescription();
-
-        expect(description, isNotNull);
-        expect(description?.isNotEmpty, isTrue);
-      });
-
-      test('getModelSize returns model size', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        int? size = await context?.getModelSize();
-
-        expect(size, isNotNull);
-        expect(size, greaterThan(0));
-      });
-
-      test('getModelParametersCount returns parameter count', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        int? count = await context?.getModelParametersCount();
-
-        expect(count, isNotNull);
-        expect(count, greaterThan(0));
-      });
-
-      test('isMultimodalEnabled checks multimodal support', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        bool enabled = await context?.isMultimodalEnabled() ?? false;
-
-        expect(enabled, isTrue);
-      });
-
-      test('supportsVision checks vision support', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        bool supported = await context?.supportsVision() ?? false;
-
-        expect(supported, isTrue);
-      });
-
-      test('supportsAudio checks audio support', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        bool supported = await context?.supportsAudio() ?? false;
-
-        expect(supported, isTrue);
-      });
-
-      test('isVocoderEnabled checks vocoder support', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        bool enabled = await context?.isVocoderEnabled() ?? false;
-
-        expect(enabled, isTrue);
-      });
-
-      test('getTTSType returns TTS model type', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        TTSModelType type = await context?.getTTSType() ?? TTSModelType.unknown;
-
-        expect(type, isNotNull);
-      });
-
-      test('loadGrammar loads grammar from file', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        String? grammar = await context?.loadGrammar('/path/to/grammar.gbnf');
-
-        expect(grammar, isNotNull);
-        expect(grammar?.isNotEmpty, isTrue);
-      });
-
-      test('tokenize converts text to tokens', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        List<int>? tokens = await context?.tokenize('Hello world');
-
-        expect(tokens, isNotNull);
-        expect(tokens?.length, greaterThan(0));
-      });
-
-      test('detokenize converts tokens to text', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        String? text = await context?.detokenize([1, 2, 3, 4, 5]);
-
-        expect(text, isNotNull);
-        expect(text?.isNotEmpty, isTrue);
-      });
-
-      test('saveAudioToWav saves audio to WAV file', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        bool result =
-            await context?.saveAudioToWav(
-              '/path/to/output.wav',
-              List<int>.filled(100, 0),
-              16000,
-            ) ??
-            false;
-
-        expect(result, isTrue);
-      });
-
-      test('initMultimodal initializes multimodal support', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        bool result =
-            await context?.initMultimodal('/path/to/mmproj.gguf', true) ??
-            false;
-
-        expect(result, isTrue);
-      });
-
-      test('initContextWithParams creates context with InitParams', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        final params = InitParams(
-          modelPath: 'test/chat_model.gguf',
-          nCtx: 4096,
-          nBatch: 512,
-          nThreads: 8,
-        );
-
-        LlamaContext? context = await llamaMobile.initContextWithParams(params);
-
-        expect(context, isNotNull);
-      });
-
-      test('downloadHfFile downloads from Hugging Face', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        DownloadResult? result = await llamaMobile.downloadHfFile(
-          repoId: 'test/repo',
-          filename: 'model.gguf',
-          localPath: '/local/path',
-        );
-
-        expect(result, isNotNull);
-        expect(result?.success, isTrue);
-      });
-
-      test(
-        'downloadHfFileWithParams downloads with HuggingFaceDownloadParams',
-        () async {
-          LlamaMobile llamaMobile = LlamaMobile();
-          MockLlamaMobileFlutterSdkPlatform fakePlatform =
-              MockLlamaMobileFlutterSdkPlatform();
-          LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-          final params = HuggingFaceDownloadParams(
-            repoId: 'test/repo',
-            filename: 'model.gguf',
-            localPath: '/local/path',
-          );
-
-          DownloadResult? result = await llamaMobile.downloadHfFileWithParams(
-            params,
-          );
-
-          expect(result, isNotNull);
-          expect(result?.success, isTrue);
-        },
-      );
-
-      test('generateMultimodalCompletion generates with media', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        CompletionResult? result = await context?.generateMultimodalCompletion(
-          prompt: 'Describe this image',
-          mediaPaths: ['/path/to/image.jpg'],
-        );
-
-        expect(result, isNotNull);
-        expect(result?.text, isNotNull);
-      });
-    });
-
-    group('Async API Methods', () {
-      test('initContextAsync creates a new context asynchronously', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContextAsync(
-          modelPath: 'test/model.gguf',
-        );
-
-        expect(context, isNotNull);
-        expect(context?.handle, isNotNull);
-      });
-
-      test('freeContextAsync releases a context asynchronously', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/model.gguf',
-        );
-
-        bool result = await context?.freeAsync() ?? false;
-        expect(result, isTrue);
-      });
-
-      test(
-        'generateCompletionAsync creates completion text asynchronously',
-        () async {
-          LlamaMobile llamaMobile = LlamaMobile();
-          MockLlamaMobileFlutterSdkPlatform fakePlatform =
-              MockLlamaMobileFlutterSdkPlatform();
-          LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-          LlamaContext? context = await llamaMobile.initContext(
-            modelPath: 'test/model.gguf',
-          );
-
-          CompletionResult? result = await context?.generateCompletionAsync(
-            prompt: 'Hello',
-          );
-
-          expect(result, isNotNull);
-          expect(result?.text, isNotNull);
-          expect(result?.tokensGenerated, isNotNull);
-        },
-      );
-
-      test(
-        'generateMultimodalCompletionAsync processes text and images asynchronously',
-        () async {
-          LlamaMobile llamaMobile = LlamaMobile();
-          MockLlamaMobileFlutterSdkPlatform fakePlatform =
-              MockLlamaMobileFlutterSdkPlatform();
-          LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-          LlamaContext? context = await llamaMobile.initContext(
-            modelPath: 'test/multimodal_model.gguf',
-          );
-
-          CompletionResult? result = await context
-              ?.generateMultimodalCompletionAsync(
-                prompt: 'Describe this image',
-                mediaPaths: ['test/image.jpg'],
-              );
-
-          expect(result, isNotNull);
-          expect(result?.text, isNotNull);
-          expect(result?.tokensGenerated, isNotNull);
-        },
-      );
-
-      test('formatChatMessagesAsync formats messages asynchronously', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        List<ChatMessage> messages = [
-          ChatMessage(role: 'user', content: 'Hello'),
-          ChatMessage(role: 'assistant', content: 'Hi there!'),
+    final engine =
+        await LlamaEngine.open(LlamaEngineConfig(modelPath: '/tmp/m.gguf'));
+    final tokens = await engine.tokenize('hi there');
+    expect(tokens, [12, 34, 56]);
+    expect(await engine.detokenize(tokens), 'hi there');
+  });
+
+  test('embed decodes rows of doubles', () async {
+    mockChannel((call) async {
+      if (call.method == 'open') return 9;
+      if (call.method == 'embed') {
+        final args = call.arguments as Map;
+        expect(args['handle'], 9);
+        expect((args['texts'] as List), ['a', 'b']);
+        return [
+          [0.1, 0.2],
+          [0.3, 0.4],
         ];
-
-        String? formatted = await context?.formatChatMessagesAsync(
-          messages,
-          null,
-        );
-
-        expect(formatted, isNotNull);
-      });
-
-      test('loadTTSModelAsync loads a TTS model asynchronously', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        bool? result = await context?.loadTTSModelAsync(
-          'test/tts_model.gguf',
-          TTSModelType.outETTSv02,
-        );
-
-        expect(result, isTrue);
-      });
-
-      test('freeTTSModelAsync frees a TTS model asynchronously', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        await context?.loadTTSModelAsync(
-          'test/tts_model.gguf',
-          TTSModelType.outETTSv02,
-        );
-
-        bool result = await context?.freeTTSModelAsync() ?? false;
-
-        expect(result, isTrue);
-      });
-
-      test(
-        'loadLoraAdapterAsync loads a LoRA adapter asynchronously',
-        () async {
-          LlamaMobile llamaMobile = LlamaMobile();
-          MockLlamaMobileFlutterSdkPlatform fakePlatform =
-              MockLlamaMobileFlutterSdkPlatform();
-          LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-          LlamaContext? context = await llamaMobile.initContext(
-            modelPath: 'test/base_model.gguf',
-          );
-
-          bool? result = await context?.loadLoraAdapterAsync(
-            'test/lora_adapter.gguf',
-            0.75,
-          );
-
-          expect(result, isTrue);
-        },
-      );
-
-      test(
-        'freeLoraAdapterAsync frees a LoRA adapter asynchronously',
-        () async {
-          LlamaMobile llamaMobile = LlamaMobile();
-          MockLlamaMobileFlutterSdkPlatform fakePlatform =
-              MockLlamaMobileFlutterSdkPlatform();
-          LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-          LlamaContext? context = await llamaMobile.initContext(
-            modelPath: 'test/base_model.gguf',
-          );
-
-          await context?.loadLoraAdapterAsync('test/lora_adapter.gguf', 0.75);
-
-          bool? result = await context?.freeLoraAdapterAsync();
-
-          expect(result, isTrue);
-        },
-      );
-
-      test('downloadModelAsync downloads model file asynchronously', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        DownloadResult? result = await llamaMobile.downloadModelAsync(
-          url: 'https://example.com/model.gguf',
-          localPath: '/local/path/model.gguf',
-        );
-
-        expect(result, isNotNull);
-        expect(result?.success, isTrue);
-      });
-
-      test(
-        'downloadHfFileAsync downloads from Hugging Face asynchronously',
-        () async {
-          LlamaMobile llamaMobile = LlamaMobile();
-          MockLlamaMobileFlutterSdkPlatform fakePlatform =
-              MockLlamaMobileFlutterSdkPlatform();
-          LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-          DownloadResult? result = await llamaMobile.downloadHfFileAsync(
-            repoId: 'test/repo',
-            filename: 'model.gguf',
-            localPath: '/local/path',
-          );
-
-          expect(result, isNotNull);
-          expect(result?.success, isTrue);
-        },
-      );
-
-      test(
-        'generateOpenAICompletionAsync creates OpenAI completion asynchronously',
-        () async {
-          LlamaMobile llamaMobile = LlamaMobile();
-          MockLlamaMobileFlutterSdkPlatform fakePlatform =
-              MockLlamaMobileFlutterSdkPlatform();
-          LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-          LlamaContext? context = await llamaMobile.initContext(
-            modelPath: 'test/model.gguf',
-          );
-
-          CompletionResult?
-          result = await context?.generateOpenAICompletionAsync(
-            openAIJSON:
-                '{"model": "test", "messages": [{"role": "user", "content": "Hello"}]}',
-          );
-
-          expect(result, isNotNull);
-          expect(result?.text, isNotNull);
-          expect(result?.tokensGenerated, isNotNull);
-        },
-      );
-
-      test('initVocoderAsync initializes vocoder asynchronously', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/model.gguf',
-        );
-
-        bool result =
-            await context?.initVocoderAsync('/path/to/vocoder.gguf') ?? false;
-
-        expect(result, isTrue);
-      });
-
-      test('releaseVocoderAsync releases vocoder asynchronously', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/model.gguf',
-        );
-
-        await context?.initVocoderAsync('/path/to/vocoder.gguf');
-        await context?.releaseVocoderAsync();
-
-        expect(true, isTrue);
-      });
-
-      test(
-        'releaseMultimodalAsync releases multimodal asynchronously',
-        () async {
-          LlamaMobile llamaMobile = LlamaMobile();
-          MockLlamaMobileFlutterSdkPlatform fakePlatform =
-              MockLlamaMobileFlutterSdkPlatform();
-          LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-          LlamaContext? context = await llamaMobile.initContext(
-            modelPath: 'test/model.gguf',
-          );
-
-          await context?.initMultimodalAsync('/path/to/mmproj.gguf', true);
-          await context?.releaseMultimodalAsync();
-
-          expect(true, isTrue);
-        },
-      );
-
-      test('generateSpeechAsync generates speech asynchronously', () async {
-        LlamaMobile llamaMobile = LlamaMobile();
-        MockLlamaMobileFlutterSdkPlatform fakePlatform =
-            MockLlamaMobileFlutterSdkPlatform();
-        LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-        LlamaContext? context = await llamaMobile.initContext(
-          modelPath: 'test/chat_model.gguf',
-        );
-
-        Map<String, dynamic>? result = await context?.generateSpeechAsync(
-          'Hello, this is a test.',
-        );
-
-        expect(result, isNotNull);
-        expect(result?['audioSamples'], isNotNull);
-        expect(result?['sampleRate'], 24000);
-        expect(result?['duration'], 1.0);
-        expect(result?['methodUsed'], 0);
-      });
-
-      test(
-        'removeLoraAdaptersAsync removes LoRA adapters asynchronously',
-        () async {
-          LlamaMobile llamaMobile = LlamaMobile();
-          MockLlamaMobileFlutterSdkPlatform fakePlatform =
-              MockLlamaMobileFlutterSdkPlatform();
-          LlamaMobileFlutterSdkPlatform.instance = fakePlatform;
-
-          LlamaContext? context = await llamaMobile.initContext(
-            modelPath: 'test/base_model.gguf',
-          );
-
-          await context?.loadLoraAdapterAsync('test/lora_adapter.gguf', 0.75);
-          await context?.removeLoraAdaptersAsync();
-
-          expect(true, isTrue);
-        },
-      );
+      }
+      return null;
     });
+    final engine =
+        await LlamaEngine.open(LlamaEngineConfig(modelPath: '/tmp/e.gguf'));
+    final rows = await engine.embed(['a', 'b']);
+    expect(rows.length, 2);
+    expect(rows[0], [0.1, 0.2]);
+    expect(rows[1], [0.3, 0.4]);
+  });
+
+  test('modelInfo decodes info fields; initMultimodal/abort/close pass handle',
+      () async {
+    final calls = <String>[];
+    mockChannel((call) async {
+      calls.add(call.method);
+      switch (call.method) {
+        case 'open':
+          return 3;
+        case 'modelInfo':
+          return {
+            'nCtx': 2048,
+            'nEmbd': 1024,
+            'modelSizeBytes': 123,
+            'nParams': 456,
+            'description': 'test model',
+          };
+        case 'initMultimodal':
+          expect((call.arguments as Map)['mmprojPath'], '/tmp/mmproj.gguf');
+          return true;
+        case 'abort':
+          expect((call.arguments as Map)['handle'], 3);
+          return true;
+        default:
+          return null;
+      }
+    });
+    final engine = await LlamaEngine.open(LlamaEngineConfig(modelPath: '/tmp/m.gguf'));
+    final info = await engine.modelInfo();
+    expect(info.nCtx, 2048);
+    expect(info.nEmbd, 1024);
+    expect(info.modelSizeBytes, 123);
+    expect(info.nParams, 456);
+    expect(info.description, 'test model');
+    expect(await engine.initMultimodal('/tmp/mmproj.gguf'), isTrue);
+    expect(await engine.abort(), isTrue);
+    await engine.close();
+    expect(calls, containsAll(['open', 'modelInfo', 'initMultimodal', 'abort', 'close']));
   });
 }

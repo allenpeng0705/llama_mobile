@@ -1,98 +1,87 @@
-import React from 'react';
+// Image.tsx — v2 (LlamaEngine) vision tab: load a vision GGUF + mmproj
+// (initMultimodal), then generate a caption for a local image via mediaPaths.
+import { useState } from 'react';
+import { LlamaEngine } from 'llama-mobile-capacitor-plugin';
+import { modelPathFor, errMessage } from '../utils';
 
-interface ImageProps {
-  selectedImage: string | null;
-  selectedImagePath: string | null;
-  multimodalText: string;
-  multimodalResult: string;
-  setMultimodalText: (text: string) => void;
-  selectImage: () => void;
-  generateMultimodalCompletion: () => void;
-  isModelInitialized: boolean;
-  isMultimodalEnabled: boolean;
-}
+const VISION_MODEL = 'SmolVLM-256M-Instruct-Q8_0.gguf';
+const MMPROJ_MODEL = 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf';
 
-const Image: React.FC<ImageProps> = ({
-  selectedImage,
-  selectedImagePath,
-  multimodalText,
-  multimodalResult,
-  setMultimodalText,
-  selectImage,
-  generateMultimodalCompletion,
-  isModelInitialized,
-  isMultimodalEnabled
-}) => {
+export default function Image() {
+  const [engine, setEngine] = useState<LlamaEngine | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [imagePath, setImagePath] = useState('');
+  const [prompt, setPrompt] = useState('Describe this picture in a few words.');
+  const [log, setLog] = useState('');
+  const [status, setStatus] = useState('');
+
+  const push = (line: string) => setLog((prev) => `${prev}${prev ? '\n' : ''}${line}`);
+
+  const load = async () => {
+    setBusy(true);
+    setStatus('Loading vision model + mmproj…');
+    try {
+      const eng = await LlamaEngine.open({
+        modelPath: modelPathFor(VISION_MODEL),
+        nCtx: 2048,
+        chat: true,
+        embedding: false,
+      });
+      const ok = await eng.initMultimodal(modelPathFor(MMPROJ_MODEL));
+      if (!ok) throw new Error('initMultimodal returned false');
+      await engine?.close();
+      setEngine(eng);
+      push('Vision model + mmproj loaded.');
+      setStatus('Ready — enter an image path and prompt below.');
+    } catch (e) {
+      setStatus(`Load failed: ${errMessage(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const ask = async () => {
+    const img = imagePath.trim();
+    const q = prompt.trim();
+    if (!engine || !img || !q || busy) return;
+    setBusy(true);
+    push(`Q(${img}): ${q}`);
+    try {
+      const r = await engine.generate({
+        prompt: q,
+        mediaPaths: [img],
+        maxTokens: 64,
+      });
+      push(`A: ${r.text}`);
+    } catch (e) {
+      push(`Error: ${errMessage(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="settings-container" style={{ paddingBottom: '80px' }}>
-      {!isModelInitialized ? (
-        <div className="model-not-initialized">
-          <h3>Model Not Initialized</h3>
-          <p>Please go to the "More" tab to select and initialize a model first.</p>
-        </div>
-      ) : (
-        <>
-          <div className="setting-section">
-            <h3>Image Input</h3>
-            <div className="setting-item">
-              <button 
-                onClick={selectImage}
-                className="primary-button"
-                disabled={!isModelInitialized}
-              >
-                {selectedImage ? 'Change Image' : 'Select Image'}
-              </button>
-            </div>
-            {selectedImage && (
-              <div className="setting-item">
-                <img 
-                  src={selectedImage} 
-                  alt="Selected" 
-                  style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '8px' }}
-                />
-              </div>
-            )}
-          </div>
-          
-          <div className="setting-section">
-            <h3>Text Input</h3>
-            <div className="setting-item">
-              <textarea 
-                value={multimodalText}
-                onChange={(e) => setMultimodalText(e.target.value)}
-                placeholder="Enter text prompt..."
-                rows={8}
-                style={{ width: '100%', minWidth: '100%', maxWidth: '100%' }}
-                disabled={!isModelInitialized || !isMultimodalEnabled}
-              ></textarea>
-            </div>
-            <button 
-              onClick={generateMultimodalCompletion}
-              className="primary-button"
-              style={{ marginTop: '16px', width: '100%' }}
-              disabled={
-                !isModelInitialized || 
-                !isMultimodalEnabled || 
-                !selectedImagePath || 
-                !multimodalText.trim()
-              }
-            >
-              Generate Completion
-            </button>
-          </div>
-          
-          {multimodalResult && (
-            <div className="setting-section">
-              <h3>Completion Result</h3>
-              <div className="embeddings-result">
-                <pre>{multimodalResult}</pre>
-              </div>
-            </div>
-          )}
-        </>
-      )}
+    <div className="embeddings-container">
+      <button className="primary-button" onClick={load} disabled={busy}>
+        {engine ? 'Reload vision model' : 'Load vision model + mmproj'}
+      </button>
+      <input
+        className="chat-input"
+        value={imagePath}
+        onChange={(e) => setImagePath(e.target.value)}
+        placeholder="Absolute path to an image on the device"
+      />
+      <textarea
+        className="chat-input"
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+        rows={2}
+      />
+      <button className="primary-button" onClick={ask} disabled={!engine || busy}>
+        Generate
+      </button>
+      {log && <pre className="embeddings-result">{log}</pre>}
+      {status && <div className="status-message">{status}</div>}
     </div>
   );
-};
-
-export default Image;
+}

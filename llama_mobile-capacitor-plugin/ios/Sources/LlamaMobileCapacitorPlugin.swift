@@ -1,1399 +1,383 @@
+// LlamaMobileCapacitorPlugin.swift — Capacitor iOS plugin (v2, M7)
+//
+// Implements the `LlamaMobile` bridge used by the v2 TypeScript wrapper:
+// libraryVersion / open / generate / abort / modelInfo / close. Heavy work runs
+// off the main thread (Task.detached) and calls resolve on the main thread
+// (§8). Generation is single-flight per engine; abort targets the request id
+// reported by the stream's `.started` event. Registered name: "LlamaMobile".
+
 import Foundation
-import AVFoundation
 @preconcurrency import Capacitor
+import llama_mobile
 
 @objc(LlamaMobileCapacitorPlugin)
 public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
-    public let identifier = "LlamaMobileCapacitorPlugin"
-    public let jsName = "LlamaMobileCapacitorPlugin"
+    public let identifier = "LlamaMobile"
+    public let jsName = "LlamaMobile"
     public let pluginMethods: [CAPPluginMethod] = [
-        // Initialization
-        CAPPluginMethod(name: "initContext", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "releaseContext", returnType: CAPPluginReturnPromise),
-        
-        // Completion
-        CAPPluginMethod(name: "generateCompletion", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "generateOpenAICompletion", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "stopCompletion", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "loadGrammar", returnType: CAPPluginReturnPromise),
-        
-        // TTS
-        CAPPluginMethod(name: "initVocoder", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "releaseVocoder", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "isVocoderEnabled", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getTTSType", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "generateSpeechAsync", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "generateSpeech", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "generateSpeechStreamForLongTextAsync", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "saveAudioToWav", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "playAudio", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "playAudioFromFile", returnType: CAPPluginReturnPromise),
-        
-        // Multimodal
+        CAPPluginMethod(name: "libraryVersion", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "open", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "generate", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "abort", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "modelInfo", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "initMultimodal", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "releaseMultimodal", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "isMultimodalEnabled", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "supportsVision", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "supportsAudio", returnType: CAPPluginReturnPromise),
-        
-        // LoRA
-        CAPPluginMethod(name: "applyLoraAdapters", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "removeLoraAdapters", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getLoadedLoraAdapters", returnType: CAPPluginReturnPromise),
-        
-        // Conversation
-        CAPPluginMethod(name: "generateResponse", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "clearConversation", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "isConversationActive", returnType: CAPPluginReturnPromise),
-        
-        // Embeddings
-        CAPPluginMethod(name: "generateEmbeddings", returnType: CAPPluginReturnPromise),
-        
-        // Tokenization
         CAPPluginMethod(name: "tokenize", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "detokenize", returnType: CAPPluginReturnPromise),
-        
-        // Model Info
-        CAPPluginMethod(name: "getContextWindowSize", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getEmbeddingDimension", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getModelDescription", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getModelSize", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getModelParametersCount", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "listFiles", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "listModels", returnType: CAPPluginReturnPromise),
-        
-        // Download
-        CAPPluginMethod(name: "downloadModel", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "downloadHfFile", returnType: CAPPluginReturnPromise),
-        
-        // Diagnostics
-        CAPPluginMethod(name: "getGpuBackendInfo", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setVerboseLogging", returnType: CAPPluginReturnPromise),
-        
+        CAPPluginMethod(name: "embed", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "close", returnType: CAPPluginReturnPromise),
     ]
-    
-    private var contexts: [Int: LlamaMobile] = [:]
-    private var nextContextHandle: Int = 1
-    
-    // Audio playback properties
-    private var audioEngine: AVAudioEngine?
-    private var playerNode: AVAudioPlayerNode?
-    
-    private func getNextContextHandle() -> Int {
-        let handle = nextContextHandle
-        nextContextHandle += 1
-        return handle
+
+    private final class Entry {
+        let engine: LlamaEngine
+        var activeRequestId: UInt64 = 0
+        init(_ engine: LlamaEngine) { self.engine = engine }
     }
-    
-    // MARK: - Initialization
-    
-    @objc func initContext(_ call: CAPPluginCall) {
-        let modelPath = call.getString("modelPath") ?? ""
-        if modelPath.isEmpty {
-            call.reject("modelPath is required")
+
+    private let lock = NSLock()
+    private var entries: [Int: Entry] = [:]
+    private var nextHandle = 1
+
+    // MARK: helpers
+
+    private func onMain(_ block: @escaping () -> Void) {
+        DispatchQueue.main.async(execute: block)
+    }
+
+    private func reject(_ call: CAPPluginCall, code: Int, message: String) {
+        onMain { call.reject(message, "\(code)", nil) }
+    }
+
+    private func reject(_ call: CAPPluginCall, _ error: LlamaError) {
+        reject(call, code: Self.statusCode(error), message: "\(error)")
+    }
+
+    private static func statusCode(_ e: LlamaError) -> Int {
+        switch e {
+        case .invalidArgument: return -1
+        case .samplerInitFailed: return -2
+        case .generationFailed: return -3
+        case .modelLoadFailed: return -4
+        case .modelNotFound: return -5
+        case .io: return -6
+        case .unsupported: return -7
+        case .outOfMemory: return -8
+        case .contextFull: return -9
+        case .aborted: return -10
+        case .notInitialized: return -11
+        case .network: return -12
+        case .checksum: return -13
+        case .alreadyRunning: return -14
+        case .unknown: return 0
+        }
+    }
+
+    private func entry(_ handle: Int) -> Entry? {
+        lock.lock(); defer { lock.unlock() }
+        return entries[handle]
+    }
+
+    private func takeEntry(_ handle: Int) -> Entry? {
+        lock.lock(); defer { lock.unlock() }
+        return entries.removeValue(forKey: handle)
+    }
+
+    private func register(_ engine: LlamaEngine) -> Int {
+        lock.lock(); defer { lock.unlock() }
+        let h = nextHandle
+        nextHandle += 1
+        entries[h] = Entry(engine)
+        return h
+    }
+
+    private func opt(_ call: CAPPluginCall, _ key: String) -> Any? {
+        call.options[key]
+    }
+
+    private func str(_ value: Any?, _ key: String) -> String? {
+        (value as? [String: Any])?[key] as? String
+    }
+
+    private func int(_ value: Any?, _ key: String, _ def: Int) -> Int {
+        ((value as? [String: Any])?[key] as? NSNumber)?.intValue ?? def
+    }
+
+    private func float(_ value: Any?, _ key: String, _ def: Float) -> Float {
+        ((value as? [String: Any])?[key] as? NSNumber)?.floatValue ?? def
+    }
+
+    private func bool(_ value: Any?, _ key: String, _ def: Bool) -> Bool {
+        ((value as? [String: Any])?[key] as? NSNumber)?.boolValue ?? def
+    }
+
+    // MARK: bridge methods
+
+    @objc func libraryVersion(_ call: CAPPluginCall) {
+        var v = ""
+        if let p = llama_mobile_version() { v = String(cString: p.pointee.string) }
+        call.resolve(["value": v])
+    }
+
+    @objc func open(_ call: CAPPluginCall) {
+        let o = call.options ?? [:]
+        guard let path = o["modelPath"] as? String, !path.isEmpty else {
+            reject(call, code: -1, message: "modelPath required")
             return
         }
-        
-        let nCtx = call.getInt("nCtx") ?? 2048
-        let nGpuLayers = call.getInt("nGpuLayers") ?? 0
-        let nThreads = call.getInt("nThreads") ?? 4
-        let nBatch = call.getInt("nBatch") ?? 512
-        let nUBatch = call.getInt("nUBatch") ?? 512
-        let useMmap = call.getBool("useMmap") ?? true
-        let useMlock = call.getBool("useMlock") ?? false
-        let embedding = call.getBool("embedding") ?? false
-        let poolingType = call.getInt("poolingType") ?? 0
-        let embdNormalize = call.getInt("embdNormalize") ?? 0
-        let flashAttention = call.getBool("flashAttention") ?? false
-        let chatTemplate = call.getString("chatTemplate")
-        let systemPrompt = call.getString("systemPrompt")
-        let cacheTypeK = call.getString("cacheTypeK")
-        let cacheTypeV = call.getString("cacheTypeV")
-        let enableChatTemplate = call.getBool("enableChatTemplate") ?? true
-        let imageMinTokens = call.getInt("imageMinTokens") ?? -1
-        
-        // Resolve model path if it's just a filename
-        let resolvedModelPath = resolveModelPath(modelPath)
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            var initParams = LlamaMobile.InitParams(modelPath: resolvedModelPath)
-            initParams.nCtx = Int32(nCtx)
-            initParams.nGpuLayers = Int32(nGpuLayers)
-            initParams.nThreads = Int32(nThreads)
-            initParams.nBatch = Int32(nBatch)
-            initParams.nUBatch = Int32(nUBatch)
-            initParams.useMmap = useMmap
-            initParams.useMlock = useMlock
-            initParams.embedding = embedding
-            initParams.poolingType = Int32(poolingType)
-            initParams.embdNormalize = Int32(embdNormalize)
-            initParams.flashAttention = flashAttention
-            initParams.chatTemplate = chatTemplate
-            initParams.systemPrompt = systemPrompt
-            initParams.cacheTypeK = cacheTypeK
-            initParams.cacheTypeV = cacheTypeV
-            initParams.enableChatTemplate = enableChatTemplate
-            initParams.imageMinTokens = Int32(imageMinTokens)
-            
-            guard let llamaMobile = LlamaMobile(with: initParams) else {
-                DispatchQueue.main.async {
-                    call.reject("Failed to initialize LlamaMobile context")
-                }
-                return
-            }
-            
-            DispatchQueue.main.async {
-                let handle = self.getNextContextHandle()
-                self.contexts[handle] = llamaMobile
-                call.resolve(["contextHandle": handle])
-            }
-        }
-    }
-    
-    // Helper method to resolve model paths
-    private func resolveModelPath(_ modelPath: String) -> String {
-        // If the path is already absolute, return it as-is
-        if modelPath.hasPrefix("/") {
-            return modelPath
-        }
-        
-        let fileManager = FileManager.default
-        
-        // List of common directories to search for models
-        var searchDirs: [String] = []
-        
-        // Get documents directory
-        if let documentsDirectory = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first {
-            searchDirs.append(documentsDirectory)
-            searchDirs.append(documentsDirectory + "/models")
-            searchDirs.append(documentsDirectory + "/Downloads")
-            searchDirs.append(documentsDirectory + "/Downloads/models")
-        }
-        
-        // Add app bundle directories for bundled models
-        let bundlePath = Bundle.main.bundlePath
-        searchDirs.append(bundlePath + "/public/models")
-        searchDirs.append(bundlePath + "/models")
-        searchDirs.append(bundlePath)
-        
-        // Search for the model file in common directories
-        for dir in searchDirs {
-            let fullPath = dir + (dir.hasSuffix("/") ? "" : "/") + modelPath
-            if fileManager.fileExists(atPath: fullPath) {
-                return fullPath
-            }
-        }
-        
-        // If not found, return the original path (will likely fail, but let the error propagate)
-        return modelPath
-    }
-    
-    @objc func releaseContext(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            llamaMobile.releaseContext()
-            
-            DispatchQueue.main.async {
-                self.contexts.removeValue(forKey: contextHandle)
-                call.resolve()
-            }
-        }
-    }
-    
-    // MARK: - Completion
-    
-    @objc func generateCompletion(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let params = call.getObject("params")
-        else {
-            call.reject("Invalid parameters")
-            return
-        }
-        let prompt = params["prompt"] as? String ?? ""       
-        let maxTokens = (params["maxTokens"] as? Int) ?? 128
-        let nThreads = (params["nThreads"] as? Int)
-        let seed = (params["seed"] as? Int) ?? -1
-        let temperature = (params["temperature"] as? Double) ?? 0.8
-        let topK = (params["topK"] as? Int) ?? 40
-        let topP = (params["topP"] as? Double) ?? 0.95
-        let minP = (params["minP"] as? Double) ?? 0.05
-        let typicalP = (params["typicalP"] as? Double) ?? 1.0
-        let penaltyLastN = (params["penaltyLastN"] as? Int) ?? 64
-        let penaltyRepeat = (params["penaltyRepeat"] as? Double) ?? 1.1
-        let penaltyFreq = (params["penaltyFreq"] as? Double) ?? 0.0
-        let penaltyPresent = (params["penaltyPresent"] as? Double) ?? 0.0
-        let mirostat = (params["mirostat"] as? Int) ?? 0
-        let mirostatTau = (params["mirostatTau"] as? Double) ?? 5.0
-        let mirostatEta = (params["mirostatEta"] as? Double) ?? 0.1
-        let ignoreEos = (params["ignoreEos"] as? Bool) ?? false
-        let stopSequences = (params["stopSequences"] as? [String]) ?? []
-        let grammar = (params["grammar"] as? String) ?? nil
-        let mediaPaths = (params["mediaPaths"] as? [String]) ?? []
-        let useJsonResponse = (params["useJsonResponse"] as? Bool) ?? true
-        let nProbs = (params["nProbs"] as? Int) ?? 0
-        let jsonSchema = (params["jsonSchema"] as? String)
-        let tools = (params["tools"] as? String)
-        let parallelToolCalls = (params["parallelToolCalls"] as? Bool) ?? false
-        let toolChoice = (params["toolChoice"] as? String)
-        
-        let chatMessages = parseChatMessages(params["chatMessages"] as? [[String: Any]])
-        
-        DispatchQueue.global(qos: .userInitiated).async {
+        var config = LlamaModelConfig(modelPath: path)
+        config.nCtx = Int32(int(o, "nCtx", 2048))
+        config.nBatch = Int32(int(o, "nBatch", 512))
+        config.nUBatch = Int32(int(o, "nUBatch", 512))
+        config.nThreads = Int32(int(o, "nThreads", 0))
+        config.nGpuLayers = Int32(int(o, "nGpuLayers", 0))
+        var flags: LlamaContextFlags = []
+        if bool(o, "useMmap", true) { flags.insert(.mmap) }
+        if bool(o, "useMlock", false) { flags.insert(.mlock) }
+        if bool(o, "embedding", false) { flags.insert(.embedding) }
+        if bool(o, "flashAttention", false) { flags.insert(.flashAttn) }
+        if bool(o, "chat", true) { flags.insert(.chat) }
+        config.flags = flags
+        config.kvCacheTypeK = str(o, "kvCacheTypeK")
+        config.kvCacheTypeV = str(o, "kvCacheTypeV")
+        config.chatTemplate = str(o, "chatTemplate")
+        config.systemPrompt = str(o, "systemPrompt")
+
+        Task.detached(priority: .userInitiated) {
             do {
-                var processedMediaPaths: [String] = []
-                for mediaPath in mediaPaths {
-                    if mediaPath.hasPrefix("data:image/") {
-                        if let tempFilePath = self.saveBase64ImageToTempFile(mediaPath) {
-                            processedMediaPaths.append(tempFilePath)
-                        }
-                    } else {
-                        processedMediaPaths.append(mediaPath)
-                    }
-                }
-                
-                let completionParams = LlamaMobile.CompletionParams(
-                    prompt: prompt,
-                    maxTokens: Int32(maxTokens),
-                    nThreads: nThreads.map { Int32($0) },
-                    seed: Int32(seed),
-                    temperature: temperature,
-                    topK: Int32(topK),
-                    topP: topP,
-                    minP: minP,
-                    typicalP: typicalP,
-                    penaltyLastN: Int32(penaltyLastN),
-                    penaltyRepeat: penaltyRepeat,
-                    penaltyFreq: penaltyFreq,
-                    penaltyPresent: penaltyPresent,
-                    mirostat: Int32(mirostat),
-                    mirostatTau: mirostatTau,
-                    mirostatEta: mirostatEta,
-                    ignoreEos: ignoreEos,
-                    stopSequences: stopSequences,
-                    grammar: grammar,
-                    mediaPaths: processedMediaPaths,
-                    chatMessages: chatMessages,
-                    useJsonResponse: useJsonResponse,
-                    nProbs: Int32(nProbs),
-                    jsonSchema: jsonSchema,
-                    tools: tools,
-                    parallelToolCalls: parallelToolCalls,
-                    toolChoice: toolChoice
-                )
-                
-                guard let genResult = llamaMobile.generateCompletion(with: completionParams) else {
-                    DispatchQueue.main.async {
-                        call.reject("Failed to generate completion")
-                    }
-                    return
-                }
-                
-                DispatchQueue.main.async {
-                    call.resolve([
-                        "text": genResult.text,
-                        "tokensGenerated": genResult.tokensGenerated,
-                        "tokensEvaluated": genResult.tokensEvaluated,
-                        "truncated": genResult.truncated,
-                        "stoppedEos": genResult.stoppedEos,
-                        "stoppedWord": genResult.stoppedWord,
-                        "stoppedLimit": genResult.stoppedLimit
-                    ])
-                }
+                let engine = try LlamaEngine.open(config)
+                let handle = self.register(engine)
+                self.onMain { call.resolve(["value": handle]) }
+            } catch let e as LlamaError {
+                self.reject(call, e)
             } catch {
-                DispatchQueue.main.async {
-                    call.reject(error.localizedDescription)
-                }
+                self.reject(call, code: -4, message: "\(error)")
             }
         }
     }
-    
-    @objc func generateOpenAICompletion(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let openAIJSON = call.getString("openAIJSON") else {
-            call.reject("contextHandle and openAIJSON are required")
+
+    @objc func generate(_ call: CAPPluginCall) {
+        let o = call.options ?? [:]
+        guard let handle = (o["handle"] as? NSNumber)?.intValue,
+              let entry = entry(handle),
+              let rq = o["request"] as? [String: Any] else {
+            reject(call, code: -11, message: "no engine / request for handle")
             return
         }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            guard let genResult = llamaMobile.generateOpenAICompletion(with: openAIJSON) else {
-                DispatchQueue.main.async {
-                    call.reject("Failed to generate OpenAI completion")
+        let request = parse(request: rq)
+
+        Task.detached(priority: .userInitiated) {
+            var text = ""
+            var doneText: String?
+            var stopValue = 4
+            var promptTokens = 0
+            var generated = 0
+            var failure: LlamaError?
+            do {
+                for try await event in entry.engine.generateStream(request) {
+                    switch event {
+                    case .started(let id):
+                        self.lock.lock(); entry.activeRequestId = id; self.lock.unlock()
+                    case .token(let t): text += t
+                    case .done(let r):
+                        doneText = r.text
+                        stopValue = Int(r.stopReason.rawValue)
+                        promptTokens = Int(r.usage.promptTokens)
+                        generated = Int(r.usage.generatedTokens)
+                    case .failed(let e): failure = e
+                    }
                 }
+            } catch let e as LlamaError {
+                failure = e
+            } catch {
+                failure = .generationFailed
+            }
+            self.lock.lock(); entry.activeRequestId = 0; self.lock.unlock()
+            if let doneText { text = doneText }
+
+            if let failure {
+                self.reject(call, failure)
                 return
             }
-            
-            DispatchQueue.main.async {
+            self.onMain {
                 call.resolve([
-                    "text": genResult.text,
-                    "tokensGenerated": genResult.tokensGenerated,
-                    "tokensEvaluated": genResult.tokensEvaluated,
-                    "truncated": genResult.truncated,
-                    "stoppedEos": genResult.stoppedEos,
-                    "stoppedWord": genResult.stoppedWord,
-                    "stoppedLimit": genResult.stoppedLimit
+                    "text": text,
+                    "stopReason": stopValue,
+                    "promptTokens": promptTokens,
+                    "generatedTokens": generated,
                 ])
             }
         }
     }
-    
-    @objc func stopCompletion(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
+
+    @objc func abort(_ call: CAPPluginCall) {
+        guard let handle = (((call.options ?? [:])["handle"] as? NSNumber))?.intValue,
+              let entry = entry(handle) else {
+            reject(call, code: -11, message: "no engine for handle")
             return
         }
-        
-        llamaMobile.stopCompletion()
-        call.resolve()
-    }
-    
-    @objc func loadGrammar(_ call: CAPPluginCall) {
-        guard let filePath = call.getString("filePath"),
-              let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("filePath and contextHandle are required")
+        lock.lock(); let requestId = entry.activeRequestId; lock.unlock()
+        guard requestId != 0 else {
+            call.resolve(["value": false])
             return
         }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let grammar = llamaMobile.loadGrammar(from: filePath)
-            
-            DispatchQueue.main.async {
-                if let grammar = grammar {
-                    call.resolve(["grammar": grammar])
-                } else {
-                    call.reject("Failed to load grammar file")
-                }
-            }
-        }
-    }
-    
-    // MARK: - TTS
-    
-    @objc func initVocoder(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let vocoderModelPath = call.getString("vocoderModelPath") else {
-            call.reject("contextHandle and vocoderModelPath are required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let success = llamaMobile.initVocoder(vocoderModelPath: vocoderModelPath)
-            
-            DispatchQueue.main.async {
-                call.resolve(["success": success])
-            }
-        }
-    }
-    
-    @objc func releaseVocoder(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            llamaMobile.releaseVocoder()
-            
-            DispatchQueue.main.async {
-                call.resolve()
-            }
-        }
-    }
-    
-    @objc func isVocoderEnabled(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let enabled = llamaMobile.isVocoderEnabled()
-            
-            DispatchQueue.main.async {
-                call.resolve(["enabled": enabled])
-            }
-        }
-    }
-    
-    @objc func getTTSType(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let type = llamaMobile.getTTSType()
-            
-            DispatchQueue.main.async {
-                call.resolve(["type": type.rawValue])
-            }
-        }
-    }
-    
-    @objc func generateSpeechAsync(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let text = call.getString("text") else {
-            call.reject("contextHandle and text are required")
-            return
-        }
-        
-        let sampleRate = call.getInt("sampleRate") ?? 24000
-        
-        var options = LlamaMobile.TTSOptions()
-        options.sampleRate = sampleRate
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            Task {
-                let result = await llamaMobile.generateSpeechAsync(
-                    text: text,
-                    options: options
-                )
-                
-                switch result {
-                case .success(let speechResult):
-                    let tempFileName = "temp_audio_\(UUID().uuidString).wav"
-                    
-                    let floatAudioData = speechResult.audioSamples.map { Float($0) / Float(Int16.max) }
-                    
-                    let saveSuccess = self.saveAudioToWavInternal(
-                        contextHandle: contextHandle,
-                        llamaMobile: llamaMobile,
-                        filePath: tempFileName,
-                        audioData: floatAudioData,
-                        sampleRate: speechResult.sampleRate
-                    )
-                    
-                    if saveSuccess {
-                        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                        let tempFilePath = documentsDir.appendingPathComponent(tempFileName).path
-                        
-                        let methodUsedString = speechResult.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
-                        let roundedDuration = Double(round(speechResult.duration * 100) / 100)
-                        
-                        DispatchQueue.main.async {
-                            call.resolve([
-                                "audioPath": tempFilePath,
-                                "sampleRate": speechResult.sampleRate,
-                                "duration": roundedDuration,
-                                "methodUsed": methodUsedString
-                            ])
-                        }
-                    } else {
-                        DispatchQueue.main.async {
-                            call.reject("Failed to save audio to file")
-                        }
-                    }
-                case .failure(let error):
-                    DispatchQueue.main.async {
-                        call.reject("Failed to generate speech: \(error.localizedDescription)")
-                    }
-                }
-            }
-        }
-    }
-    
-    @objc func generateSpeech(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let text = call.getString("text") else {
-            call.reject("contextHandle and text are required")
-            return
-        }
-        
-        let sampleRate = call.getInt("sampleRate") ?? 24000
-        
-        var options = LlamaMobile.TTSOptions()
-        options.sampleRate = sampleRate
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let result = llamaMobile.generateSpeech(
-                text: text,
-                options: options
-            )
-            
-            switch result {
-            case .success(let speechResult):
-                let tempFileName = "temp_audio_\(UUID().uuidString).wav"
-                
-                let floatAudioData = speechResult.audioSamples.map { Float($0) / Float(Int16.max) }
-                
-                let saveSuccess = self.saveAudioToWavInternal(
-                    contextHandle: contextHandle,
-                    llamaMobile: llamaMobile,
-                    filePath: tempFileName,
-                    audioData: floatAudioData,
-                    sampleRate: speechResult.sampleRate
-                )
-                
-                if saveSuccess {
-                    let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                    let tempFilePath = documentsDir.appendingPathComponent(tempFileName).path
-                    
-                    let methodUsedString = speechResult.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
-                    let roundedDuration = Double(round(speechResult.duration * 100) / 100)
-                    
-                    DispatchQueue.main.async {
-                        call.resolve([
-                            "audioPath": tempFilePath,
-                            "sampleRate": speechResult.sampleRate,
-                            "duration": roundedDuration,
-                            "methodUsed": methodUsedString
-                        ])
-                    }
-                } else {
-                    DispatchQueue.main.async {
-                        call.reject("Failed to save audio to file")
-                    }
-                }
-            case .failure(let error):
-                DispatchQueue.main.async {
-                    call.reject("Failed to generate speech sync: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
-    
-    // Internal method to save audio to WAV using existing logic
-    private func saveAudioToWavInternal(
-        contextHandle: Int,
-        llamaMobile: LlamaMobile,
-        filePath: String,
-        audioData: [Float],
-        sampleRate: Int
-    ) -> Bool {
-        // Resolve filePath to app's documents directory
-        let documentsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let finalPath = documentsDir.appendingPathComponent(filePath).path
-        
-        // Ensure directory exists
-        let fileManager = FileManager.default
-        let directory = (finalPath as NSString).deletingLastPathComponent
-        if !fileManager.fileExists(atPath: directory) {
+        Task.detached {
             do {
-                try fileManager.createDirectory(atPath: directory, withIntermediateDirectories: true, attributes: nil)
+                try entry.engine.abort(requestId: requestId)
+                self.onMain { call.resolve(["value": true]) }
             } catch {
-                print("Error creating directory: \(error.localizedDescription)")
-                return false
+                self.onMain { call.resolve(["value": false]) }
             }
         }
-        
-        return llamaMobile.saveAudioToWav(filePath: finalPath, audioData: audioData, sampleRate: Int32(sampleRate))
     }
-    
-    
-    @objc func generateSpeechStreamForLongTextAsync(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let text = call.getString("text") else {
-            call.reject("contextHandle and text are required")
+
+    @objc func modelInfo(_ call: CAPPluginCall) {
+        guard let handle = (((call.options ?? [:])["handle"] as? NSNumber))?.intValue,
+              let entry = entry(handle) else {
+            reject(call, code: -11, message: "no engine for handle")
             return
         }
-        
-        let sampleRate = call.getInt("sampleRate") ?? 24000
-        
-        var ttsOptions = LlamaMobile.TTSOptions()
-        ttsOptions.sampleRate = sampleRate
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            Task {
-                let result = await llamaMobile.generateSpeechStreamForLongTextAsync(
-                    text: text,
-                    options: ttsOptions,
-                    progressHandler: { progress in
-                        self.notifyListeners("progress", data: ["progress": progress])
-                    },
-                    audioChunkHandler: { audioChunk in
-                        self.notifyListeners("audioChunk", data: ["audio": audioChunk])
-                    }
-                )
-                
-                switch result {
-                case .success(let metadata):
-                    let methodUsedString = metadata.methodUsed == .builtIn ? "builtIn" : "customWorkflow"
-                    let roundedDuration = Double(round(metadata.duration * 100) / 100)
-                    
-                    DispatchQueue.main.async {
-                        call.resolve([
-                            "sampleRate": metadata.sampleRate,
-                            "duration": roundedDuration,
-                            "methodUsed": methodUsedString
-                        ])
-                    }
-                case .failure(let error):
-                    DispatchQueue.main.async {
-                        call.reject("Failed to generate speech stream: \(error.localizedDescription)")
-                    }
-                }
-            }
-        }
-    }
-    
-    @objc func saveAudioToWav(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let filePath = call.getString("filePath"),
-              let audioData = call.getArray("audioData", Float.self) else {
-            call.reject("contextHandle, filePath, and audioData are required")
-            return
-        }
-        
-        let sampleRate = call.getInt("sampleRate") ?? 24000
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let success = self.saveAudioToWavInternal(
-                contextHandle: contextHandle,
-                llamaMobile: llamaMobile,
-                filePath: filePath,
-                audioData: audioData,
-                sampleRate: sampleRate
-            )
-            
-            DispatchQueue.main.async {
-                call.resolve(["success": success])
-            }
-        }
-    }
-    
-    @objc func playAudio(_ call: CAPPluginCall) {
-        guard let audioData = call.getArray("audioData", Float.self) else {
-            call.reject("audioData is required")
-            return
-        }
-        
-        let sampleRate = call.getInt("sampleRate") ?? 24000
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let success = self.playAudioSamples(audioData: audioData, sampleRate: Int32(sampleRate))
-            
-            DispatchQueue.main.async {
-                call.resolve(["success": success])
-            }
-        }
-    }
-    
-    private func playAudioSamples(audioData: [Float], sampleRate: Int32) -> Bool {
-        do {
-            // Create audio format
-            let audioFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: Double(sampleRate), channels: 1, interleaved: false)
-            guard let audioFormat = audioFormat else {
-                print("Failed to create audio format")
-                return false
-            }
-            
-            // Create audio buffer
-            let audioBuffer = AVAudioPCMBuffer(pcmFormat: audioFormat, frameCapacity: UInt32(audioData.count))
-            guard let audioBuffer = audioBuffer else {
-                print("Failed to create audio buffer")
-                return false
-            }
-            
-            // Copy audio data to buffer
-            audioBuffer.frameLength = UInt32(audioData.count)
-            let floatBuffer = audioBuffer.floatChannelData?[0]
-            for (i, sample) in audioData.enumerated() {
-                floatBuffer?[i] = sample
-            }
-            
-            // Stop any existing audio playback
-            if let existingPlayerNode = playerNode {
-                existingPlayerNode.stop()
-            }
-            
-            if let existingAudioEngine = audioEngine {
-                existingAudioEngine.stop()
-                existingAudioEngine.reset()
-            }
-            
-            // Create new audio engine and player node
-            let newAudioEngine = AVAudioEngine()
-            let newPlayerNode = AVAudioPlayerNode()
-            
-            // Store references
-            self.audioEngine = newAudioEngine
-            self.playerNode = newPlayerNode
-            
-            // Attach and connect nodes
-            newAudioEngine.attach(newPlayerNode)
-            newAudioEngine.connect(newPlayerNode, to: newAudioEngine.mainMixerNode, format: audioFormat)
-            
-            // Start audio engine
-            try newAudioEngine.start()
-            
-            // Play audio
-            newPlayerNode.scheduleBuffer(audioBuffer) {
-                // Playback completed
-                DispatchQueue.main.async {
-                    // Release references after playback
-                    self.playerNode = nil
-                    self.audioEngine = nil
-                }
-            }
-            
-            newPlayerNode.play()
-            
-            return true
-        } catch {
-            print("Error playing audio: \(error.localizedDescription)")
-            // Clean up references on error
-            self.playerNode = nil
-            self.audioEngine = nil
-            return false
-        }
-    }
-    
-    @objc func playAudioFromFile(_ call: CAPPluginCall) {
-        guard let filePath = call.getString("filePath") else {
-            call.reject("filePath is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let success = self.playAudioFromFilePath(filePath: filePath)
-            
-            DispatchQueue.main.async {
-                call.resolve(["success": success])
-            }
-        }
-    }
-    
-    private func playAudioFromFilePath(filePath: String) -> Bool {
-        do {
-            // Stop any existing audio playback
-            if let existingPlayerNode = playerNode {
-                existingPlayerNode.stop()
-            }
-            
-            if let existingAudioEngine = audioEngine {
-                existingAudioEngine.stop()
-                existingAudioEngine.reset()
-            }
-            
-            // Create audio player with the file
-            let audioURL = URL(fileURLWithPath: filePath)
-            let audioPlayer = try AVAudioPlayer(contentsOf: audioURL)
-            
-            // Set up audio session with proper options
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playback, mode: .default, options: [])
-            try audioSession.setActive(true)
-            
-            // Play audio
-            audioPlayer.play()
-            
-            // Wait for playback to complete
-            while audioPlayer.isPlaying {
-                Thread.sleep(forTimeInterval: 0.1)
-            }
-            
-            // Deactivate audio session with proper options
-            try audioSession.setActive(false, options: .notifyOthersOnDeactivation)
-            
-            return true
-        } catch {
-            print("Error playing audio from file: \(error.localizedDescription)")
-            // Clean up references on error
-            self.playerNode = nil
-            self.audioEngine = nil
-            return false
-        }
-    }
-    
-    // MARK: - Multimodal
-    
-    @objc func initMultimodal(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let mmprojPath = call.getString("mmprojPath") else {
-            call.reject("contextHandle and mmprojPath are required")
-            return
-        }
-        
-        let useGpu = call.getBool("useGpu") ?? true
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let success = llamaMobile.initMultimodal(mmprojPath: mmprojPath, useGpu: useGpu)
-            
-            DispatchQueue.main.async {
-                call.resolve(["success": success])
-            }
-        }
-    }
-    
-    @objc func releaseMultimodal(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            llamaMobile.releaseMultimodal()
-            
-            DispatchQueue.main.async {
-                call.resolve()
-            }
-        }
-    }
-    
-    @objc func isMultimodalEnabled(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let enabled = llamaMobile.isMultimodalEnabled()
-            
-            DispatchQueue.main.async {
-                call.resolve(["enabled": enabled])
-            }
-        }
-    }
-    
-    @objc func supportsVision(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let supported = llamaMobile.supportsVision()
-            
-            DispatchQueue.main.async {
-                call.resolve(["supported": supported])
-            }
-        }
-    }
-    
-    @objc func supportsAudio(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let supported = llamaMobile.supportsAudio()
-            
-            DispatchQueue.main.async {
-                call.resolve(["supported": supported])
-            }
-        }
-    }
-    
-    // MARK: - LoRA
-    
-    @objc func applyLoraAdapters(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let adapters = call.getArray("adapters") as? [[String: Any]] else {
-            call.reject("contextHandle and adapters are required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            var loraAdapters: [LlamaMobile.LoraAdapter] = []
-            for adapter in adapters {
-                if let path = adapter["path"] as? String {
-                    let scale = (adapter["scale"] as? Double) ?? 1.0
-                    loraAdapters.append(LlamaMobile.LoraAdapter(path: path, scale: Float(scale)))
-                }
-            }
-            
-            let success = llamaMobile.applyLoraAdapters(loraAdapters)
-            
-            DispatchQueue.main.async {
-                call.resolve(["success": success])
-            }
-        }
-    }
-    
-    @objc func removeLoraAdapters(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            llamaMobile.removeLoraAdapters()
-            
-            DispatchQueue.main.async {
-                call.resolve()
-            }
-        }
-    }
-    
-    @objc func getLoadedLoraAdapters(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let adapters = llamaMobile.getLoadedLoraAdapters()
-            let adapterDicts = adapters?.map { adapter -> [String: Any] in
-                return ["path": adapter.path, "scale": adapter.scale]
-            } ?? []
-            
-            DispatchQueue.main.async {
-                call.resolve(["adapters": adapterDicts])
-            }
-        }
-    }
-    
-    // MARK: - Conversation
-    
-    @objc func generateResponse(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let userMessage = call.getString("userMessage") else {
-            call.reject("contextHandle and userMessage are required")
-            return
-        }
-        
-        let maxTokens = call.getInt("maxTokens") ?? 128
-        let enableStreaming = call.getBool("enableStreaming") ?? false
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let result = llamaMobile.generateResponse(
-                userMessage: userMessage,
-                maxTokens: Int32(maxTokens),
-                tokenCallback: enableStreaming ? { token in
-                    self.notifyListeners("token", data: ["token": token])
-                    return true
-                } : nil
-            )
-            
-            DispatchQueue.main.async {
-                if let result = result {
+        Task.detached {
+            do {
+                let info = try entry.engine.modelInfo()
+                self.onMain {
                     call.resolve([
-                        "text": result.text,
-                        "tokensGenerated": result.tokensGenerated
+                        "nCtx": info.nCtx,
+                        "nEmbd": info.nEmbd,
+                        "modelSizeBytes": info.sizeBytes,
+                        "nParams": info.nParams,
+                        "description": info.description,
                     ])
-                } else {
-                    call.reject("Failed to generate response")
                 }
+            } catch let e as LlamaError {
+                self.reject(call, e)
+            } catch {
+                self.reject(call, code: -11, message: "\(error)")
             }
         }
     }
-    
-    @objc func clearConversation(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
+
+
+    @objc func initMultimodal(_ call: CAPPluginCall) {
+        guard let handle = (((call.options ?? [:])["handle"] as? NSNumber))?.intValue,
+              let entry = entry(handle),
+              let mmproj = (call.options ?? [:])["mmprojPath"] as? String else {
+            reject(call, code: -11, message: "no engine / mmproj for handle")
             return
         }
-        
-        llamaMobile.clearConversation()
-        call.resolve()
-    }
-    
-    @objc func isConversationActive(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let active = llamaMobile.isConversationActive()
-            
-            DispatchQueue.main.async {
-                call.resolve(["active": active])
+        Task.detached {
+            do {
+                try entry.engine.initMultimodal(mmprojPath: mmproj)
+                self.onMain { call.resolve(["value": true]) }
+            } catch let e as LlamaError {
+                self.reject(call, e)
+            } catch {
+                self.onMain { call.resolve(["value": false]) }
             }
         }
     }
-    
-    // MARK: - Embeddings
-    
-    @objc func generateEmbeddings(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let text = call.getString("text") else {
-            call.reject("contextHandle and text are required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let embeddings = llamaMobile.generateEmbeddings(for: text)
-            
-            DispatchQueue.main.async {
-                if let embeddings = embeddings {
-                    call.resolve(["embedding": embeddings])
-                } else {
-                    call.reject("Failed to generate embeddings")
-                }
-            }
-        }
-    }
-    
-    // MARK: - Tokenization
-    
+
     @objc func tokenize(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let text = call.getString("text") else {
-            call.reject("contextHandle and text are required")
+        guard let handle = (((call.options ?? [:])["handle"] as? NSNumber))?.intValue,
+              let entry = entry(handle),
+              let text = (call.options ?? [:])["text"] as? String else {
+            reject(call, code: -11, message: "no engine / text for handle")
             return
         }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let tokens = llamaMobile.tokenize(text: text)
-            let tokenInts = tokens?.map { Int($0) } ?? []
-            
-            DispatchQueue.main.async {
-                call.resolve(["tokens": tokenInts])
+        Task.detached {
+            do {
+                let tokens = try entry.engine.tokenize(text)
+                self.onMain { call.resolve(["value": tokens.map { Int($0) }]) }
+            } catch let e as LlamaError {
+                self.reject(call, e)
+            } catch {
+                self.reject(call, code: -3, message: "\(error)")
             }
         }
     }
-    
+
     @objc func detokenize(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle],
-              let tokens = call.getArray("tokens", Int.self) else {
-            call.reject("contextHandle and tokens are required")
+        guard let handle = (((call.options ?? [:])["handle"] as? NSNumber))?.intValue,
+              let entry = entry(handle),
+              let raw = (call.options ?? [:])["tokens"] as? [NSNumber] else {
+            reject(call, code: -11, message: "no engine / tokens for handle")
             return
         }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let tokenInt32s = tokens.map { Int32($0) }
-            let text = llamaMobile.detokenize(tokens: tokenInt32s)
-            
-            DispatchQueue.main.async {
-                call.resolve(["text": text ?? ""])
+        let tokens = raw.map { $0.int32Value }
+        Task.detached {
+            do {
+                let text = try entry.engine.detokenize(tokens)
+                self.onMain { call.resolve(["value": text]) }
+            } catch let e as LlamaError {
+                self.reject(call, e)
+            } catch {
+                self.reject(call, code: -3, message: "\(error)")
             }
         }
     }
-    
-    // MARK: - Model Info
-    
-    @objc func getContextWindowSize(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
+
+    @objc func embed(_ call: CAPPluginCall) {
+        guard let handle = (((call.options ?? [:])["handle"] as? NSNumber))?.intValue,
+              let entry = entry(handle),
+              let texts = (call.options ?? [:])["texts"] as? [String] else {
+            reject(call, code: -11, message: "no engine / texts for handle")
             return
         }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let size = llamaMobile.getContextWindowSize()
-            
-            DispatchQueue.main.async {
-                call.resolve(["size": Int(size)])
+        Task.detached {
+            do {
+                let rows = try entry.engine.embed(texts)
+                self.onMain { call.resolve(["value": rows.map { $0.map { NSNumber(value: $0) } }]) }
+            } catch let e as LlamaError {
+                self.reject(call, e)
+            } catch {
+                self.reject(call, code: -3, message: "\(error)")
             }
         }
     }
-    
-    @objc func getEmbeddingDimension(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let dimension = llamaMobile.getEmbeddingDimension()
-            
-            DispatchQueue.main.async {
-                call.resolve(["dimension": Int(dimension)])
-            }
+
+    @objc func close(_ call: CAPPluginCall) {
+        let handle = (((call.options ?? [:])["handle"] as? NSNumber))?.intValue ?? -1
+        let entry = takeEntry(handle)
+        Task.detached {
+            entry?.engine.close()
+            self.onMain { call.resolve() }
         }
     }
-    
-    @objc func getModelDescription(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
+
+    // MARK: request parsing
+
+    private func parse(request rq: [String: Any]) -> LlamaGenerationRequest {
+        let sampling = (rq["sampling"] as? [String: Any]) ?? [:]
+        var req = LlamaGenerationRequest(prompt: (rq["prompt"] as? String) ?? "")
+        req.maxTokens = Int32(int(rq, "maxTokens", 128))
+        req.grammar = rq["grammar"] as? String
+        req.jsonSchema = rq["jsonSchema"] as? String
+        req.stopSequences = (rq["stopSequences"] as? [String]) ?? []
+
+        let roles = (rq["roles"] as? [String]) ?? []
+        let contents = (rq["contents"] as? [String]) ?? []
+        if roles.count == contents.count && !roles.isEmpty {
+            req.messages = zip(roles, contents).map { LlamaMessage(role: $0.0, content: $0.1) }
         }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let description = llamaMobile.getModelDescription()
-            
-            DispatchQueue.main.async {
-                call.resolve(["description": description ?? ""])
-            }
+        let mediaPaths = (rq["mediaPaths"] as? [String]) ?? []
+        if !mediaPaths.isEmpty {
+            req.media = mediaPaths.map { LlamaMedia(path: $0) }
         }
-    }
-    
-    @objc func getModelSize(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let size = llamaMobile.getModelSize()
-            
-            DispatchQueue.main.async {
-                call.resolve(["size": size])
-            }
-        }
-    }
-    
-    @objc func getModelParametersCount(_ call: CAPPluginCall) {
-        guard let contextHandle = call.getInt("contextHandle"),
-              let llamaMobile = contexts[contextHandle] else {
-            call.reject("contextHandle is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            let count = llamaMobile.getModelParametersCount()
-            
-            DispatchQueue.main.async {
-                call.resolve(["count": count])
-            }
-        }
-    }
-    
-    @objc func getGpuBackendInfo(_ call: CAPPluginCall) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            let info = LlamaMobile.getGpuBackendInfo()
-            
-            DispatchQueue.main.async {
-                call.resolve(["info": info])
-            }
-        }
-    }
-    
-    @objc func setVerboseLogging(_ call: CAPPluginCall) {
-        let enabled = call.getBool("enabled") ?? false
-        LlamaMobile.setVerboseLogging(enabled)
-        call.resolve()
-    }
-    
-    @objc func listFiles(_ call: CAPPluginCall) {
-        guard let directory = call.getString("directory") else {
-            call.reject("directory is required")
-            return
-        }
-        
-        DispatchQueue.global(qos: .userInitiated).async {
-            var files: [String] = []
-            let fileManager = FileManager.default
-            
-            if fileManager.fileExists(atPath: directory), 
-               let enumerator = fileManager.enumerator(atPath: directory) {
-                while let file = enumerator.nextObject() as? String {
-                    files.append(file)
-                }
-            }
-            
-            DispatchQueue.main.async {
-                call.resolve(["files": files])
-            }
-        }
-    }
-    
-    @objc func listModels(_ call: CAPPluginCall) {
-        DispatchQueue.global(qos: .userInitiated).async {
-            // Define model info struct
-            struct ModelInfo {
-                let name: String
-                let path: String
-            }
-            
-            var models: [ModelInfo] = []
-            let fileManager = FileManager.default
-            
-            // Get documents directory
-            let documentsDirectory = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0]
-            
-            // Directories to scan
-            var modelDirectories = [
-                documentsDirectory,
-                documentsDirectory + "/models",
-                documentsDirectory + "/Downloads",
-                documentsDirectory + "/Downloads/models"
-            ]
-            
-            // Add app bundle directories for bundled models
-            let bundlePath = Bundle.main.bundlePath
-            let bundleModelDirectories = [
-                bundlePath + "/public/models",
-                bundlePath + "/models",
-                bundlePath
-            ]
-            modelDirectories.append(contentsOf: bundleModelDirectories)
-            
-            // Model file extensions to look for
-            let modelExtensions = ["gguf", "safetensors", "bin"]
-            
-            for directory in modelDirectories {
-                if fileManager.fileExists(atPath: directory), 
-                   let enumerator = fileManager.enumerator(atPath: directory) {
-                    while let file = enumerator.nextObject() as? String {
-                        let fullPath = directory + (directory.hasSuffix("/") ? "" : "/") + file
-                        let lowercasedFile = file.lowercased()
-                        
-                        // Check if file has a model extension
-                        for ext in modelExtensions {
-                            if lowercasedFile.hasSuffix("." + ext) {
-                                models.append(ModelInfo(name: file, path: fullPath))
-                                break
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Convert to the expected format
-            var modelsResult: [[String: String]] = []
-            for model in models {
-                modelsResult.append(["name": model.name, "path": model.path])
-            }
-            
-            DispatchQueue.main.async {
-                call.resolve(["models": modelsResult])
-            }
-        }
-    }
-    
-    
-    
-    // MARK: - Download
-    
-    @objc func downloadModel(_ call: CAPPluginCall) {
-        guard let url = call.getString("url"),
-              let localPath = call.getString("localPath") else {
-            call.reject("url and localPath are required")
-            return
-        }
-        
-        Task {
-            let result = await Task.detached {
-                let params = LlamaMobile.DownloadParams(
-                    url: url,
-                    localPath: localPath,
-                    progressCallback: { progress in
-                        self.notifyListeners("progress", data: ["progress": progress])
-                    }
-                )
-                
-                return LlamaMobile.download(with: params)
-            }.value
-            
-            call.resolve([
-                "success": result.success,
-                "localPath": result.localPath,
-                "errorMessage": result.errorMessage ?? ""
-            ])
-        }
-    }
-    
-    @objc func downloadHfFile(_ call: CAPPluginCall) {
-        guard let repoId = call.getString("repoId"),
-              let filename = call.getString("filename"),
-              let localPath = call.getString("destinationPath") else {
-            call.reject("repoId, filename, and destinationPath are required")
-            return
-        }
-        
-        let bearerToken = call.getString("bearerToken")
-        let offline = call.getBool("offline", false)
-        
-        Task {
-            let result = await Task.detached {
-                let params = LlamaMobile.HuggingFaceDownloadParams(
-                    repoID: repoId,
-                    filename: filename,
-                    destinationPath: localPath,
-                    bearerToken: bearerToken,
-                    offline: offline,
-                    progressCallback: { progress in
-                        self.notifyListeners("progress", data: ["progress": progress])
-                    }
-                )
-                
-                return LlamaMobile.downloadHuggingFaceFile(with: params)
-            }.value
-            
-            call.resolve([
-                "success": result.success,
-                "localPath": result.localPath,
-                "errorMessage": result.errorMessage ?? ""
-            ])
-        }
-    }
-    
-    
-    // MARK: - Helper Methods
-    
-    private func parseChatMessages(_ messages: [[String: Any]]?) -> [LlamaMobile.ChatMessage] {
-        guard let messages = messages else { return [] }
-        
-        return messages.compactMap { messageDict -> LlamaMobile.ChatMessage? in
-            guard let role = messageDict["role"] as? String,
-                  let content = messageDict["content"] as? String else {
-                return nil
-            }
-            
-            let reasoningContent = messageDict["reasoning_content"] as? String
-            let toolName = messageDict["tool_name"] as? String
-            let toolCallId = messageDict["tool_call_id"] as? String
-            
-            return LlamaMobile.ChatMessage(
-                role: role,
-                content: content,
-                reasoningContent: reasoningContent,
-                toolName: toolName,
-                toolCallId: toolCallId
-            )
-        }
-    }
-    
-    private func saveBase64ImageToTempFile(_ base64Data: String) -> String? {
-        guard base64Data.hasPrefix("data:image/") else {
-            return nil
-        }
-        
-        var imageData = base64Data
-        
-        if let commaIndex = base64Data.firstIndex(of: ",") {
-            imageData = String(base64Data[commaIndex...].dropFirst())
-        } else {
-            return nil
-        }
-        
-        guard let decodedData = Data(base64Encoded: imageData) else {
-            return nil
-        }
-        
-        guard let image = UIImage(data: decodedData) else {
-            return nil
-        }
-        
-        guard let jpegData = image.jpegData(compressionQuality: 1.0) else {
-            return nil
-        }
-        
-        let tempDir = FileManager.default.temporaryDirectory
-        let filename = "temp_image_\(UUID().uuidString).jpg"
-        let tempFilePath = tempDir.appendingPathComponent(filename)
-        
-        do {
-            try jpegData.write(to: tempFilePath)
-            return tempFilePath.path
-        } catch {
-            return nil
-        }
+
+        var s = LlamaSampling()
+        s.seed = Int32(int(sampling, "seed", -1))
+        s.temperature = float(sampling, "temperature", 0.8)
+        s.topK = Int32(int(sampling, "topK", 40))
+        s.topP = float(sampling, "topP", 0.95)
+        s.minP = float(sampling, "minP", 0.05)
+        s.typicalP = float(sampling, "typicalP", 1.0)
+        s.penaltyRepeat = float(sampling, "penaltyRepeat", 1.1)
+        s.penaltyLastN = Int32(int(sampling, "penaltyLastN", 64))
+        s.penaltyFreq = float(sampling, "penaltyFreq", 0)
+        s.penaltyPresent = float(sampling, "penaltyPresent", 0)
+        s.mirostat = Int32(int(sampling, "mirostat", 0))
+        s.mirostatTau = float(sampling, "mirostatTau", 5.0)
+        s.mirostatEta = float(sampling, "mirostatEta", 0.1)
+        s.ignoreEos = bool(sampling, "ignoreEos", false)
+        req.sampling = s
+        return req
     }
 }

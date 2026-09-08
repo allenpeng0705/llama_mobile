@@ -23,6 +23,7 @@ allprojects {
 
 apply plugin: "com.android.library"
 apply plugin: "kotlin-android"
+apply plugin: "maven-publish"
 
 android {
     namespace = "com.llamamobile"
@@ -45,10 +46,15 @@ android {
 
     defaultConfig {
         minSdk = 28
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters 'arm64-v8a', 'x86_64'
             stl "c++_shared"
         }
+    }
+
+    publishing {
+        singleVariant('release')
     }
 
     externalNativeBuild {
@@ -75,6 +81,19 @@ android {
                events "passed", "skipped", "failed", "standardOut", "standardError"
                outputs.upToDateWhen {false}
                showStandardStreams = true
+            }
+        }
+    }
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = 'com.llamamobile'
+            artifactId = 'llama-mobile'
+            version = '2.0.0'
+            afterEvaluate {
+                from components.release
             }
         }
     }

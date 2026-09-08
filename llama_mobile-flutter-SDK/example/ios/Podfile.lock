@@ -2,7 +2,7 @@ PODS:
   - Flutter (1.0.0)
   - integration_test (0.0.1):
     - Flutter
-  - llama_mobile_flutter_sdk (0.0.1):
+  - llama_mobile_flutter_sdk (2.0.0):
     - Flutter
 
 DEPENDENCIES:
@@ -21,7 +21,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   integration_test: 252f60fa39af5e17c3aa9899d35d908a0721b573
-  llama_mobile_flutter_sdk: 786f2215ed917cf551ac46591b68dba65719086e
+  llama_mobile_flutter_sdk: 8a316d488a2c9a8e2b28a557ec9984a1920e982f
 
 PODFILE CHECKSUM: 3c63482e143d1b91d2d2560aee9fb04ecc74ac7e
 

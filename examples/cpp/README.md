@@ -1,143 +1,51 @@
-# llama_mobile C++ Examples
+# llama_mobile v2 C++ examples
 
-This folder contains independent C++ examples for using the llama_mobile library. Each example demonstrates different functionalities of the library.
+Independent host examples for the canonical v2 C API in
+[`lib/llama_mobile_v2.h`](../../lib/llama_mobile_v2.h). The v1 examples
+(`llama_mobile_api.h` / `llama_mobile_ffi.h`, conversation/vlm FFI binaries)
+were removed with the rest of the v1 surface — every demo below is written
+against the v2 C API that the SDKs wrap 1:1.
 
-## Available Models
+Each binary takes its model(s) from `argv`. With no arguments they default to
+fixtures under `models/` at the repo root (set `LLAMA_MOBILE_MODELS_DIR` to
+override).
 
-The models are located in the top-level `models` directory:
-- `Qwen3-0.6B-Q5_K_M.gguf` - A small 0.6B parameter model suitable for testing
-- `Qwen3-4B-Q5_K_M.gguf` - A larger 4B parameter model with better performance
+| Binary | Source | Demonstrates |
+|---|---|---|
+| `llama_mobile_llm` | `main_llm.cpp` | context create (chat), structured messages, token streaming callback, **request-scoped abort from another thread** (`stopReason == aborted`), `modelInfo`/`context_stats` |
+| `llama_mobile_embed` | `main_embed.cpp` | `LLAMA_MOBILE_CTX_EMBEDDING`, batch `embed`, dimension + cosine similarity |
+| `llama_mobile_tts` | `main_tts.cpp` | `tts_init` (vocoder), full-text `tts_speak` (PCM + usage), optional WAV export |
+| `llama_mobile_vlm` | `main_vlm.cpp` | `multimodal_init` (mmproj), image-in-prompt generation via media paths |
+| `llama_mobile_dual_purpose` | `main_dual_purpose.cpp` | two contexts (chat + embedding) in one process; **single-flight**: a second concurrent generate fails with `-14 ALREADY_RUNNING`; abort |
+| `llama_mobile_api_example` | `api_example.cpp` | version/capabilities/status/logging/model-registry tour + optional one-shot chat |
+| `llama_mobile_benchmark` | `benchmark_example.cpp` | repeated greedy generations, tokens/s + latency from `usage` |
 
-## Building the Examples
-
-To build the examples, run the provided build script:
+## Build
 
 ```bash
 cd examples/cpp
 ./build.sh
 ```
 
-This will compile all the examples and generate executable files in the `build` directory.
-
-## Running the Examples
-
-Each example accepts a model path as a command line argument. You can use the models from the top-level `models` directory by providing the correct path.
-
-### 1. Simple API Example
-
-This example demonstrates the basic usage of the llama_mobile API:
+## Run (from the repo root — `models/` holds the fixtures)
 
 ```bash
-cd examples/cpp/build
-./llama_mobile_api_example ../../../../models/Qwen3-1.7B-Q4_K_M.gguf
+./examples/cpp/build/llama_mobile_llm        models/SmolLM-360M-Instruct.Q6_K.gguf
+./examples/cpp/build/llama_mobile_embed      models/Qwen3-Embedding-0.6B-Q8_0.gguf
+./examples/cpp/build/llama_mobile_tts        models/OuteTTS-0.2-500M-Q6_K.gguf \
+                                             models/WavTokenizer-Large-75-F16.gguf /tmp/tts.wav
+./examples/cpp/build/llama_mobile_vlm        models/SmolVLM-256M-Instruct-Q8_0.gguf \
+                                             models/mmproj-SmolVLM-256M-Instruct-Q8_0.gguf \
+                                             models/img/image.jpg
+./examples/cpp/build/llama_mobile_dual_purpose models/SmolLM-360M-Instruct.Q6_K.gguf
+./examples/cpp/build/llama_mobile_api_example  models/SmolLM-360M-Instruct.Q6_K.gguf
+./examples/cpp/build/llama_mobile_benchmark    models/SmolLM-360M-Instruct.Q6_K.gguf 3 64
 ```
 
-### 2. Conversation FFI Example
+## Notes
 
-This example shows how to use the conversation API:
-
-```bash
-cd examples/cpp/build
-./llama_mobile_conversation_ffi
-```
-
-By default, this example uses the `Qwen3-1.7B-Q4_K_M.gguf` model from the top-level `models` directory. You can specify a different model:
-
-```bash
-cd examples/cpp/build
-./llama_mobile_conversation_ffi /path/to/your/model.gguf
-```
-
-### 3. LLM Example
-
-This example demonstrates the core LLM functionality:
-
-```bash
-cd examples/cpp/build
-./llama_mobile_llm ../../../../models/Qwen3-1.7B-Q4_K_M.gguf
-```
-
-### 4. Embedding Example
-
-This example shows how to generate embeddings:
-
-```bash
-cd examples/cpp/build
-./llama_mobile_embed ../../../../models/embedding/Qwen3-Embedding-0.6B-Q8_0.gguf
-```
-
-### 5. VLM Example
-
-This example demonstrates Vision Language Model capabilities:
-
-```bash
-cd examples/cpp/build
-./llama_mobile_vlm ../../../../models/SmolVLM-256M-Instruct-Q8_0.gguf
-```
-
-### 6. VLM FFI Example
-
-This example shows how to use the VLM API through FFI:
-
-```bash
-cd examples/cpp/build
-./llama_mobile_vlm_ffi ../../../../models/SmolVLM-256M-Instruct-Q8_0.gguf
-```
-
-### 7. TTS Example
-
-This example demonstrates Text-to-Speech functionality:
-
-```bash
-cd examples/cpp/build
-./llama_mobile_tts ../../../../models/OuteTTS-0.2-500M-Q6_K.gguf
-```
-
-## Example Descriptions
-
-### Simple API Example (`llama_mobile_api_example`)
-- Demonstrates basic model initialization and text generation
-- Shows how to use the streaming token callback
-- Provides a simple interface to test the core functionality
-
-### Conversation FFI Example (`llama_mobile_conversation_ffi`)
-- Shows how to use the conversation management API
-- Demonstrates multi-turn conversations
-- Includes performance metrics tracking
-
-### LLM Example (`llama_mobile_llm`)
-- Demonstrates advanced LLM functionality
-- Shows how to use different sampling parameters
-- Includes prompt engineering examples
-
-### Embedding Example (`llama_mobile_embed`)
-- Demonstrates how to generate text embeddings
-- Shows how to compare text similarity using embeddings
-
-### VLM Examples (`llama_mobile_vlm`, `llama_mobile_vlm_ffi`)
-- Demonstrate Vision Language Model capabilities
-- Show how to process images and text together
-- Can answer questions about images
-
-### TTS Example (`llama_mobile_tts`)
-- Demonstrates Text-to-Speech functionality
-- Shows how to generate audio from text
-
-## Customization
-
-Each example can be customized by modifying the source code. Key parameters you might want to adjust:
-
-- `n_ctx`: Context window size
-- `n_gpu_layers`: Number of layers to offload to GPU (0 for CPU only)
-- `n_threads`: Number of CPU threads to use
-- `temperature`: Sampling temperature
-- `top_k`/`top_p`: Sampling parameters
-
-## Troubleshooting
-
-1. **Model loading errors**: Ensure you're providing the correct path to the model file
-2. **Performance issues**: Adjust `n_threads` and `n_gpu_layers` based on your hardware
-3. **Memory issues**: Reduce `n_ctx` if you're running out of memory
-4. **Build errors**: Make sure you have the required dependencies installed
-
-For more detailed information about the API, refer to the `llama_mobile_api.h` header file in the `lib` directory.
+- The examples compile and link `lib/llama_mobile_core_static` (same core that
+  ships in the iOS/Android SDKs).
+- Threading contract (§8): the C core is synchronous; `abort(ctx, request_id)`
+  is thread-safe while a generation is in flight, and a second concurrent
+  generation on one context fails fast with `LLAMA_MOBILE_ERR_ALREADY_RUNNING`.

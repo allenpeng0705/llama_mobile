@@ -77,6 +77,73 @@ int main(int argc, char ** argv) {
         llama_mobile_generate_result_free(&sr);
     }
 
+    // generate: chat messages + JSON schema (structured output in chat mode)
+    {
+        llama_mobile_generate_params_t gs;
+        llama_mobile_generate_params_init(&gs);
+        llama_mobile_message_t m0 = {"system",
+            "Answer with the requested JSON object only, no extra text.", nullptr, nullptr, nullptr};
+        llama_mobile_message_t m1 = {"user", "What is your name?", nullptr, nullptr, nullptr};
+        llama_mobile_message_t cmsgs[2] = {m0, m1};
+        gs.messages = cmsgs;
+        gs.n_messages = 2;
+        gs.json_schema = "{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}},\"required\":[\"name\"]}";
+        gs.max_tokens = 200;
+        gs.sampling.temperature = 0.1f;
+        llama_mobile_generate_result_t sr;
+        CHECK(llama_mobile_generate(ctx, &gs, nullptr, nullptr, nullptr, &sr) == LLAMA_MOBILE_OK,
+              "generate(chat + json_schema) OK");
+        if (sr.text) {
+            const char * t = sr.text;
+            while (*t == ' ' || *t == '\n' || *t == '\r' || *t == '\t') ++t;
+            CHECK(*t == '{', "chat+schema output starts with '{' after trim");
+            CHECK(std::strstr(sr.text, "\"name\"") != nullptr, "chat+schema output has a name field");
+        }
+        llama_mobile_generate_result_free(&sr);
+    }
+
+    // generate: logit biases are wired into the engine sampler
+    {
+        llama_mobile_tokenize_result_t bt;
+        memset(&bt, 0, sizeof(bt));
+        CHECK(llama_mobile_tokenize(ctx, " Paris", nullptr, 0, &bt) == LLAMA_MOBILE_OK,
+              "tokenize for bias probe OK");
+        if (bt.n_tokens > 0) {
+            std::vector<int32_t> toks;
+            for (size_t i = 0; i < bt.n_tokens; ++i) toks.push_back(bt.tokens[i]);
+            std::vector<float> biases(toks.size(), 8.0f);
+            llama_mobile_generate_params_t g;
+            llama_mobile_generate_params_init(&g);
+            g.prompt = "What is the capital of France? Reply with a single city name.";
+            g.max_tokens = 12;
+            g.sampling.temperature = 0.9f;
+            g.sampling.seed = 123;
+            g.sampling.logit_bias_tokens = toks.data();
+            g.sampling.logit_bias_values = biases.data();
+            g.sampling.n_logit_biases = toks.size();
+            llama_mobile_generate_result_t br;
+            CHECK(llama_mobile_generate(ctx, &g, nullptr, nullptr, nullptr, &br) == LLAMA_MOBILE_OK,
+                  "generate with logit bias OK");
+            if (br.text) {
+                CHECK(std::strlen(br.text) > 0, "biased generate text non-empty");
+                llama_mobile_generate_result_free(&br);
+            }
+        }
+        llama_mobile_tokenize_result_free(&bt);
+
+        // Argument validation: n>0 with NULL arrays -> INVALID_ARGUMENT.
+        llama_mobile_generate_params_t g2;
+        llama_mobile_generate_params_init(&g2);
+        g2.prompt = "x";
+        g2.sampling.n_logit_biases = 1;
+        g2.sampling.logit_bias_tokens = nullptr;
+        g2.sampling.logit_bias_values = nullptr;
+        llama_mobile_generate_result_t unused;
+        CHECK(llama_mobile_generate(ctx, &g2, nullptr, nullptr, nullptr, &unused)
+                  == LLAMA_MOBILE_ERR_INVALID_ARGUMENT,
+              "logit bias with NULL arrays -> INVALID_ARGUMENT");
+    }
+
     // generate: chat messages
     llama_mobile_message_t msgs[2];
     msgs[0].role = "system"; msgs[0].content = "Reply with the single word OK.";

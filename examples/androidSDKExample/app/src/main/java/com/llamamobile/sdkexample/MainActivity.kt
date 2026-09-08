@@ -1,88 +1,186 @@
+// MainActivity.kt — llama_mobile v2 (LlamaEngine) example (M5)
+//
+// Minimal chat demo: pick/load a GGUF, stream a chat completion, abort on
+// demand. Uses the v2 Android SDK (com.llamamobile.LlamaEngine) from the local
+// module. Async forms never block the UI thread (§8).
+
 package com.llamamobile.sdkexample
 
 import android.os.Bundle
+import android.widget.Button
+import android.widget.EditText
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.navigation.fragment.NavHostFragment
-import androidx.navigation.ui.setupWithNavController
-import com.google.android.material.bottomnavigation.BottomNavigationView
-import com.llamamobile.sdkexample.databinding.ActivityMainBinding
+import com.llamamobile.LlamaEngine
+import com.llamamobile.LlamaException
+import com.llamamobile.LlamaGenerationRequest
+import com.llamamobile.LlamaStatus
+import com.llamamobile.TokenCallback
+import java.io.File
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityMainBinding
-    lateinit var appState: AppState
+    private lateinit var status: TextView
+    private lateinit var modelPathInput: EditText
+    private lateinit var logView: TextView
+    private lateinit var promptInput: EditText
+    private lateinit var loadBtn: Button
+    private lateinit var sendBtn: Button
+    private lateinit var stopBtn: Button
+
+    private var engine: LlamaEngine? = null
+    private val running = AtomicBoolean(false)
+    private var generation: CompletableFuture<*>? = null
+
+    private val sb = StringBuilder()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(R.layout.activity_main)
 
-        // Initialize app state FIRST before setting content view (prevents fragment inflation issues)
-        appState = AppState()
-        appState.init(this)
+        status = findViewById(R.id.status)
+        modelPathInput = findViewById(R.id.modelPath)
+        logView = findViewById(R.id.log)
+        promptInput = findViewById(R.id.prompt)
+        loadBtn = findViewById(R.id.loadBtn)
+        sendBtn = findViewById(R.id.sendBtn)
+        stopBtn = findViewById(R.id.stopBtn)
 
-        setContentView(binding.root)
+        appendLog("llama_mobile v2 — LlamaEngine demo (lib ${LlamaEngine.libraryVersion()})")
+        modelPathInput.setText(findDefaultModel() ?: "")
 
-        // Set up navigation with standard approach
-        setupNavigation()
-    }
+        loadBtn.setOnClickListener { loadModel() }
+        sendBtn.setOnClickListener { send() }
+        stopBtn.setOnClickListener { stop() }
 
-    private fun setupNavigation() {
-        try {
-            // Get NavHostFragment
-            val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment_activity_main)
-                as NavHostFragment
-            
-            // Get NavController
-            val navController = navHostFragment.navController
-            
-            // Set navigation graph programmatically AFTER appState is initialized
-            navController.setGraph(R.navigation.mobile_navigation)
-            
-            // Add navigation error listener
-            navController.addOnDestinationChangedListener {
-                _, destination, _ ->
-                android.util.Log.d("MainActivity", "Navigating to destination: ${destination.label}")
-            }
-            
-            // Set up bottom navigation with custom listener to fix NavigationUI crash
-            val navView: BottomNavigationView = binding.navView
-            
-            // Custom navigation item selected listener to avoid NavigationUI crash
-            navView.setOnItemSelectedListener {
-                item ->
-                // Get destination ID from menu item
-                val destinationId = item.itemId
-                
-                try {
-                    // Try to navigate directly without explicitly accessing graph
-                    navController.navigate(destinationId)
-                    true
-                } catch (e: IllegalStateException) {
-                    // Catch the specific "You must call setGraph() before calling getGraph()" exception
-                    android.util.Log.e("MainActivity", "Navigation graph not ready: ${e.message}")
-                    android.widget.Toast.makeText(this, "Navigation error: Please try again", android.widget.Toast.LENGTH_SHORT).show()
-                    false
-                } catch (e: Exception) {
-                    // Catch any other navigation exceptions to prevent crash
-                    android.util.Log.e("MainActivity", "Navigation error: ${e.message}")
-                    e.printStackTrace()
-                    android.widget.Toast.makeText(this, "Navigation error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                    false
-                }
-            }
-            
-            android.util.Log.d("MainActivity", "Navigation setup completed successfully")
-        } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Navigation setup error: ${e.message}")
-            e.printStackTrace()
-            // Show error message
-            android.widget.Toast.makeText(this, "Navigation setup error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-        }
+        stopBtn.isEnabled = false
     }
 
     override fun onDestroy() {
+        engine?.close()
+        engine = null
         super.onDestroy()
-        // Release SDK resources
-        appState.unloadModel()
+    }
+
+    // ------------------------------------------------------------- helpers
+
+    private fun findDefaultModel(): String? {
+        val dirs = listOf(
+            File("/sdcard/Download"),
+            File("/data/local/tmp/models"),
+            getExternalFilesDir(null),
+        )
+        for (dir in dirs) {
+            if (dir == null || !dir.exists()) continue
+            val gguf = dir.listFiles { f -> f.name.endsWith(".gguf") }?.firstOrNull()
+            if (gguf != null) return gguf.absolutePath
+        }
+        return null
+    }
+
+    private fun appendLog(text: String) {
+        runOnUiThread {
+            sb.append(text).append('\n')
+            logView.text = sb.toString()
+            status.text = text.take(160)
+        }
+    }
+
+    private fun modelPath(): String = modelPathInput.text.toString().trim()
+
+    // ------------------------------------------------------------- actions
+
+    private fun loadModel() {
+        if (engine != null) {
+            engine?.close()
+            engine = null
+        }
+        val path = modelPath()
+        if (path.isEmpty()) {
+            appendLog("No model path set")
+            return
+        }
+        loadBtn.isEnabled = false
+        appendLog("Loading $path ...")
+
+        val config = LlamaEngine.Config()
+        config.modelPath = path
+        config.nCtx = 2048
+
+        LlamaEngine.openAsync(config).whenComplete { eng, err ->
+            runOnUiThread {
+                loadBtn.isEnabled = true
+                if (err != null) {
+                    val msg = when (err) {
+                        is LlamaException -> "${err.status} ${err.message}"
+                        else -> err.message
+                    }
+                    appendLog("Load failed: $msg")
+                } else {
+                    engine = eng
+                    val info = eng.modelInfo()
+                    appendLog("Loaded: ${info.description.ifEmpty { path }} (n_ctx=${info.nCtx})")
+                }
+            }
+        }
+    }
+
+    private fun send() {
+        val eng = engine ?: run {
+            appendLog("Load a model first")
+            return
+        }
+        val text = promptInput.text.toString().trim()
+        if (text.isEmpty()) return
+        promptInput.setText("")
+
+        if (!running.compareAndSet(false, true)) {
+            appendLog("already running (single-flight)")
+            return
+        }
+        sendBtn.isEnabled = false
+        stopBtn.isEnabled = true
+        appendLog("Q: $text")
+
+        var assistant = StringBuilder()
+        val req = LlamaGenerationRequest(
+            messages = listOf(com.llamamobile.LlamaChatMessage("user", text)),
+            maxTokens = 256,
+        )
+
+        val future = eng.generateAsync(req, TokenCallback { token ->
+            appendLog(token)
+            assistant.append(token)
+            true
+        })
+
+        generation = future
+        future.whenComplete { result, err ->
+            runOnUiThread {
+                running.set(false)
+                sendBtn.isEnabled = true
+                stopBtn.isEnabled = false
+                generation = null
+                if (err != null) {
+                    val msg = when (err) {
+                        is LlamaException ->
+                            if (err.status == LlamaStatus.ABORTED) "[aborted]" else "error ${err.status}"
+                        else -> err.message ?: "error"
+                    }
+                    appendLog(msg)
+                } else {
+                    if (result.stopReason == com.llamamobile.LlamaStopReason.ABORTED) {
+                        appendLog("[stopped]")
+                    }
+                    appendLog("— done (${result.usage.generatedTokens} tokens)")
+                }
+            }
+        }
+    }
+
+    private fun stop() {
+        engine?.abort()
     }
 }

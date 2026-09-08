@@ -1,8 +1,9 @@
 ---
 name: llama_mobile_flutter_sdk
-description: A new Flutter plugin project.
+description: llama_mobile v2 Flutter SDK — on-device LLM inference (LlamaEngine).
 version: 2.0.0
-homepage:
+homepage: https://github.com/llama-mobile/llama_mobile
+repository: https://github.com/llama-mobile/llama_mobile
 environment:
   sdk: "^3.9.2"
   flutter: ">=3.3.0"

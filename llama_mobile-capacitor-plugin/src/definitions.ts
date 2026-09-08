@@ -1,228 +1,102 @@
-import type { PluginListenerHandle } from '@capacitor/core';
+// definitions.ts — llama_mobile v2 Capacitor plugin definitions (M7)
+//
+// Threading contract (docs/api-contract-v2.md §8): TypeScript/Capacitor is
+// async-only; none of these calls block the JS thread. The native side keeps
+// one active generation per engine (single-flight) and `abort` is thread-safe.
 
-export interface LlamaMobileCapacitorPlugin {
-  // Initialization
-  initContext(options: InitParams): Promise<{ contextHandle: number }>;
-  releaseContext(options: { contextHandle: number }): Promise<void>;
-  
-  // Completion
-  generateCompletion(options: { contextHandle: number; params: CompletionParams }): Promise<CompletionResult>;
-  generateOpenAICompletion(options: { contextHandle: number; openAIJSON: string; grammar?: string; stopSequences?: string[] }): Promise<CompletionResult>;
-  stopCompletion(options: { contextHandle: number }): Promise<void>;
-  loadGrammar(options: { filePath: string }): Promise<{ grammar: string }>;
-  
-  // TTS
-  initVocoder(options: { contextHandle: number; vocoderModelPath: string }): Promise<{ success: boolean }>;
-  releaseVocoder(options: { contextHandle: number }): Promise<void>;
-  isVocoderEnabled(options: { contextHandle: number }): Promise<{ enabled: boolean }>;
-  getTTSType(options: { contextHandle: number }): Promise<{ type: TTSModelType }>;
-  generateSpeechAsync(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod; speakerJson?: string }): Promise<SpeechResult>;
-  generateSpeech(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod }): Promise<SpeechResult>;
-  generateSpeechStream(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod }): Promise<SpeechMetadata>;
-  generateSpeechStreamForLongTextAsync(options: { contextHandle: number; text: string; sampleRate?: number; method?: TTSMethod }): Promise<SpeechMetadata>;
-  saveAudioToWav(options: { contextHandle: number; filePath: string; audioData: number[]; sampleRate: number }): Promise<{ success: boolean }>;
-  playAudio(options: { audioData: number[]; sampleRate?: number }): Promise<{ success: boolean }>;
-  playAudioFromFile(options: { filePath: string }): Promise<{ success: boolean }>;
-  
-  // Multimodal
-  initMultimodal(options: { contextHandle: number; mmprojPath: string; useGpu?: boolean }): Promise<{ success: boolean }>;
-  releaseMultimodal(options: { contextHandle: number }): Promise<void>;
-  isMultimodalEnabled(options: { contextHandle: number }): Promise<{ enabled: boolean }>;
-  supportsVision(options: { contextHandle: number }): Promise<{ supported: boolean }>;
-  supportsAudio(options: { contextHandle: number }): Promise<{ supported: boolean }>;
-  
-  // LoRA
-  applyLoraAdapters(options: { contextHandle: number; adapters: LoraAdapter[] }): Promise<{ success: boolean }>;
-  removeLoraAdapters(options: { contextHandle: number }): Promise<void>;
-  getLoadedLoraAdapters(options: { contextHandle: number }): Promise<{ adapters: LoraAdapter[] }>;
-  
-  // Conversation
-  generateResponse(options: { contextHandle: number; userMessage: string; maxTokens?: number; enableStreaming?: boolean }): Promise<ConversationResult>;
-  clearConversation(options: { contextHandle: number }): Promise<void>;
-  isConversationActive(options: { contextHandle: number }): Promise<{ active: boolean }>;
-  
-  // Embeddings
-  generateEmbeddings(options: { contextHandle: number; text: string }): Promise<{ embedding: number[] }>;
-  
-  // Tokenization
-  tokenize(options: { contextHandle: number; text: string }): Promise<{ tokens: number[] }>;
-  detokenize(options: { contextHandle: number; tokens: number[] }): Promise<{ text: string }>;
-  
-  // Model Info
-  getContextWindowSize(options: { contextHandle: number }): Promise<{ size: number }>;
-  getEmbeddingDimension(options: { contextHandle: number }): Promise<{ dimension: number }>;
-  getModelDescription(options: { contextHandle: number }): Promise<{ description: string }>;
-  getModelSize(options: { contextHandle: number }): Promise<{ size: number }>;
-  getModelParametersCount(options: { contextHandle: number }): Promise<{ count: number }>;
-  
-  // Download
-  downloadModel(options: DownloadParams): Promise<DownloadResult>;
-  downloadHfFile(options: DownloadHfFileParams): Promise<DownloadResult>;
-  
-  // Chat
-  setChatTemplate(options: { contextHandle: number; chatTemplate: string }): Promise<{ success: boolean }>;
-  getModelChatTemplate(options: { contextHandle: number }): Promise<{ chatTemplate: string }>;
-  formatChatMessages(options: { contextHandle: number; messagesJson: string; chatTemplate?: string }): Promise<{ formattedPrompt: string }>;
-  
-  // File System
-  listFiles(options: { directory: string }): Promise<{ files: string[] }>;
-  listModels(): Promise<{ models: Array<{ name: string; path: string }> }>;
-  
-  // Listeners
-  addListener(eventName: 'token', listenerFunc: (data: { token: string }) => void): Promise<PluginListenerHandle>;
-  addListener(eventName: 'progress', listenerFunc: (data: { progress: number }) => void): Promise<PluginListenerHandle>;
-  removeAllListeners(): Promise<void>;
-}
-
-// Types
-export enum TTSModelType {
-  UNKNOWN = -1,
-  OUT_ETTS_V02 = 1,
-  OUT_ETTS_V03 = 2
-}
-
-export enum TTSMethod {
-  BUILT_IN = 'BUILT_IN',
-  CUSTOM_WORKFLOW = 'CUSTOM_WORKFLOW',
-  BEST = 'BEST'
-}
-
-export enum CacheType {
-  NONE,
-  MEMORY
-}
-
-export enum GrammarName {
-  ARITHMETIC,
-  C,
-  CHESS,
-  ENGLISH,
-  JAPANESE,
-  JSON,
-  JSON_ARR,
-  LIST
-}
-
-export interface ChatMessage {
-  role: string;
-  content: string;
-}
-
-export interface LoraAdapter {
-  path: string;
-  scale: number;
-}
-
-export interface TTSOptions {
-  sampleRate?: number;
-  method?: TTSMethod;
-  voice?: string;
-  speed?: number;
-  saveToFile?: boolean;
-  outputFilePath?: string;
-}
-
-export interface SpeechResult {
-  audio?: number[];
-  audioPath?: string;
-  sampleRate: number;
-  duration: number;
-  methodUsed: TTSMethod;
-  outputFilePath?: string;
-}
-
-export interface SpeechMetadata {
-  sampleRate: number;
-  duration: number;
-  methodUsed: TTSMethod;
-  outputFilePath?: string;
-}
-
-export interface InitParams {
+export interface LlamaEngineConfig {
   modelPath: string;
-  nCtx?: number;
-  chatTemplate?: string;
-  systemPrompt?: string;
-  nBatch?: number;
-  nUBatch?: number;
+  engine?: number; // 0=AUTO 1=CPU 2=METAL 3=VULKAN 4=OPENCL
   nGpuLayers?: number;
-  nThreads?: number;
+  nCtx?: number; // default 2048
+  nBatch?: number; // default 512
+  nUBatch?: number; // default 512
+  nThreads?: number; // 0 = auto
   useMmap?: boolean;
   useMlock?: boolean;
   embedding?: boolean;
-  poolingType?: number;
-  embdNormalize?: number;
   flashAttention?: boolean;
-  cacheTypeK?: string;
-  cacheTypeV?: string;
-  enableChatTemplate?: boolean;
-  imageMinTokens?: number;
+  chat?: boolean; // enable chat template
+  kvCacheTypeK?: string | null;
+  kvCacheTypeV?: string | null;
+  chatTemplate?: string | null;
+  systemPrompt?: string | null;
 }
 
-export interface CompletionParams {
-  prompt: string;
-  temperature?: number;
-  maxTokens?: number;
-  nThreads?: number;
+export interface LlamaSampling {
   seed?: number;
-  topK?: number;
-  topP?: number;
-  minP?: number;
-  typicalP?: number;
-  penaltyLastN?: number;
-  penaltyRepeat?: number;
+  temperature?: number; // default 0.8
+  topK?: number; // default 40
+  topP?: number; // default 0.95
+  minP?: number; // default 0.05
+  typicalP?: number; // default 1.0
+  penaltyRepeat?: number; // default 1.1
+  penaltyLastN?: number; // default 64
   penaltyFreq?: number;
   penaltyPresent?: number;
   mirostat?: number;
   mirostatTau?: number;
   mirostatEta?: number;
   ignoreEos?: boolean;
-  nProbs?: number;
-  grammar?: string;
-  stopSequences?: string[];
+}
+
+export interface LlamaChatMessage {
+  role: string;
+  content: string;
+}
+
+/** Exactly one of `prompt` or `messages` is used; image paths for vision. */
+export interface LlamaGenerationRequest {
+  prompt?: string;
+  messages?: LlamaChatMessage[];
   mediaPaths?: string[];
-  chatMessages?: ChatMessage[];
-  useJsonResponse?: boolean;
-  jsonSchema?: string;
-  tools?: string;
-  parallelToolCalls?: boolean;
-  toolChoice?: string;
-  chatTemplate?: string;
+  sampling?: LlamaSampling;
+  maxTokens?: number; // default 128
+  stopSequences?: string[];
+  grammar?: string | null;
+  jsonSchema?: string | null;
 }
 
-export interface CompletionResult {
+/** stopReason mirrors llama_mobile_stop_reason_t. */
+export enum LlamaStopReason {
+  Eos = 0,
+  Word = 1,
+  Length = 2,
+  Aborted = 3,
+  Error = 4,
+}
+
+export interface LlamaGenerationResult {
   text: string;
-  tokensGenerated: number;
-  tokensEvaluated: number;
-  truncated: boolean;
-  stoppedEos: boolean;
-  stoppedWord: boolean;
-  stoppedLimit: boolean;
-  stoppingWord?: string;
+  stopReason: LlamaStopReason;
+  promptTokens: number;
+  generatedTokens: number;
 }
 
-export interface ConversationResult {
-  text: string;
-  tokensGenerated: number;
+export interface LlamaModelInfo {
+  nCtx: number;
+  nEmbd: number;
+  modelSizeBytes: number;
+  nParams: number;
+  description: string;
 }
 
-export interface DownloadParams {
-  url: string;
-  localPath: string;
-  password?: string;
-  headers?: Record<string, string>;
-}
-
-export interface DownloadHfFileParams {
-  repoId: string;
-  filename: string;
-  destinationPath: string;
-  bearerToken?: string;
-  offline?: boolean;
-}
-
-export interface DownloadResult {
-  success: boolean;
-  localPath: string;
-  errorMessage?: string;
+/**
+ * Low-level bridge: handle-based methods implemented by the native plugins.
+ * Most apps should use the `LlamaEngine` wrapper from index.ts instead.
+ */
+export interface LlamaMobileBridge {
+  libraryVersion(): Promise<string>;
+  open(config: LlamaEngineConfig): Promise<number>;
+  generate(
+    handle: number,
+    request: LlamaGenerationRequest,
+  ): Promise<LlamaGenerationResult>;
+  abort(handle: number): Promise<boolean>;
+  modelInfo(handle: number): Promise<LlamaModelInfo>;
+  initMultimodal(handle: number, mmprojPath: string): Promise<boolean>;
+  tokenize(handle: number, text: string): Promise<number[]>;
+  detokenize(handle: number, tokens: number[]): Promise<string>;
+  embed(handle: number, texts: string[]): Promise<number[][]>;
+  close(handle: number): Promise<void>;
 }

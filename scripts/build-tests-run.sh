@@ -123,7 +123,8 @@ select_program() {
     echo -e "  7. test_v2_tts (model + vocoder)"
     echo -e "  8. test_chat_template (engine-level template formatting)"
     echo -e "  9. direct_test (engine-level direct loader)"
-    echo -e "  10. Auto: run all non-interactive single-model suites"
+    echo -e "  10. test_v2_download (no-model: download manager + model registry)"
+    echo -e "  11. Auto: run all non-interactive single-model suites"
     echo
     
     read -p "Enter selection: " PROGRAM_SELECTION
@@ -138,7 +139,8 @@ select_program() {
         7) PROGRAM="test_v2_tts" ;;
         8) PROGRAM="test_chat_template" ;;
         9) PROGRAM="direct_test" ;;
-        10) PROGRAM="auto" ;;
+        10) PROGRAM="test_v2_download" ;;
+        11) PROGRAM="auto" ;;
         *)
             echo -e "${RED}✗ Invalid selection${NC}"
             exit 1
@@ -159,9 +161,13 @@ extra_assets() {
             IMAGE_PATH="$(pick_file 'img/*' 'Select an image:')" || IMAGE_PATH=""
             ;;
         test_v2_tts)
+            # speak requires the TTS main model (OuteTTS); fall back to the
+            # selected main model for lifecycle-only checks.
+            MAIN_TTS_PATH="$(pick_file '*OuteTTS*' 'Select the TTS main model:')" || MAIN_TTS_PATH="$SELECTED_MODEL"
             VOCODER_PATH="$(pick_file '*WavTokenizer*' 'Select a vocoder model:')" || VOCODER_PATH=""
             if [ -z "$VOCODER_PATH" ]; then
                 VOCODER_PATH="$(pick_file '*neuttn*' 'Select a vocoder model:')" || VOCODER_PATH=""
+    MAIN_TTS_PATH="$(pick_file '*OuteTTS*' 'Select the TTS main model:')" || MAIN_TTS_PATH="$SELECTED_MODEL"
             fi
             ;;
     esac
@@ -176,6 +182,9 @@ run_program() {
 
         echo -e "\n${BLUE}1. test_v2_meta (no model)...${NC}"
         ./test_v2_meta || { echo -e "${RED}✗ test_v2_meta failed${NC}"; exit 1; }
+
+        echo -e "\n${BLUE}2. test_v2_download (no model)...${NC}"
+        ./test_v2_download || { echo -e "${RED}✗ test_v2_download failed${NC}"; exit 1; }
 
         if [ -n "$SELECTED_MODEL" ]; then
             for t in test_v2_functional test_v2_threads test_v2_streaming test_chat_template direct_test; do
@@ -193,7 +202,7 @@ run_program() {
         echo -e "${BLUE}Running $PROGRAM...${NC}"
         echo -e "${YELLOW}====================================${NC}"
 
-        if [ "$PROGRAM" = "test_v2_meta" ]; then
+        if [ "$PROGRAM" = "test_v2_meta" ] || [ "$PROGRAM" = "test_v2_download" ]; then
             ./"$PROGRAM"
         elif [ "$PROGRAM" = "test_v2_lora" ]; then
             if [ -z "$SELECTED_MODEL" ] || [ -z "$LORA_PATH" ]; then
@@ -212,7 +221,7 @@ run_program() {
                 echo -e "${YELLOW}⚠ test_v2_tts requires a main model and a vocoder model${NC}"
                 exit 1
             fi
-            ./"$PROGRAM" "$SELECTED_MODEL" "$VOCODER_PATH"
+            ./"$PROGRAM" "$MAIN_TTS_PATH" "$VOCODER_PATH"
         elif [ -n "$SELECTED_MODEL" ]; then
             echo -e "${BLUE}With model: $(basename "$SELECTED_MODEL")${NC}"
             ./"$PROGRAM" "$SELECTED_MODEL"

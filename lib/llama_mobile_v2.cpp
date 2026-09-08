@@ -25,12 +25,20 @@
 
 #include <cstring>
 #include <cstdio>
+#include <cctype>
 #include <map>
 #include <mutex>
 #include <cstdlib>
 #include <new>
 #include <string>
 #include <vector>
+#include <atomic>
+#include <filesystem>
+#include <fstream>
+#include <thread>
+#include <unordered_map>
+#include <system_error>
+#include "llama.cpp-master/vendor/cpp-httplib/httplib.h"
 
 // ---------------------------------------------------------------------------
 // Process-wide bookkeeping (single-flight generations, log level/callback)
@@ -477,6 +485,129 @@ static llama_mobile_status_t schema_to_grammar(const char * schema, std::string 
 }
 
 // ---------------------------------------------------------------------------
+// Media materialization: PATH / URI (file://, data:image/...;base64) / BYTES
+// ---------------------------------------------------------------------------
+
+struct media_path_res {
+    std::string path;
+    bool temp = false; // owned temp file to remove after the call
+};
+
+static std::string media_temp_path(const char * ext) {
+    static std::atomic<uint64_t> counter{0};
+    auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+    std::string name = "llama_mobile_media_" + std::to_string(now) + "_" +
+                       std::to_string(counter.fetch_add(1)) + (ext ? ext : ".img");
+    return (std::filesystem::temp_directory_path() / name).string();
+}
+
+static std::string media_extension_from_mime(const char * mime) {
+    if (!mime) return ".img";
+    std::string m(mime);
+    auto slash = m.find('/');
+    std::string sub = slash == std::string::npos ? m : m.substr(slash + 1);
+    for (auto & ch : sub) ch = (char) std::tolower((unsigned char) ch);
+    if (sub.find("png") != std::string::npos) return ".png";
+    if (sub.find("jpeg") != std::string::npos || sub.find("jpg") != std::string::npos) return ".jpg";
+    if (sub.find("webp") != std::string::npos) return ".webp";
+    if (sub.find("gif") != std::string::npos) return ".gif";
+    return ".img";
+}
+
+static std::string base64_decode(const std::string & in) {
+    static const std::string tbl =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    int val = 0, bits = -8;
+    for (unsigned char c : in) {
+        if (c == '=' || std::isspace(c)) continue;
+        auto pos = tbl.find((char) c);
+        if (pos == std::string::npos) continue;
+        val = (val << 6) + (int) pos;
+        bits += 6;
+        if (bits >= 0) {
+            out.push_back((char) ((val >> bits) & 0xFF));
+            bits -= 8;
+        }
+    }
+    return out;
+}
+
+// Resolves each media entry to a path (writing BYTES/data:-URIs to a temp
+// file). Keeps every referenced path alive in `resolved` and returns borrowed
+// pointers in `paths`. The caller removes `temp` files when done.
+static llama_mobile_status_t resolve_media(const llama_mobile_media_t * media,
+                                           size_t n_media,
+                                           std::vector<media_path_res> & resolved,
+                                           std::vector<const char *> & paths) {
+    for (size_t i = 0; i < n_media; ++i) {
+        const llama_mobile_media_t & m = media[i];
+        switch (m.kind) {
+            case LLAMA_MOBILE_MEDIA_PATH: {
+                if (!m.path || !m.path[0]) return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
+                resolved.push_back(media_path_res{m.path, false});
+                break;
+            }
+            case LLAMA_MOBILE_MEDIA_URI: {
+                if (!m.path || !m.path[0]) return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
+                std::string uri(m.path);
+                if (uri.rfind("file://", 0) == 0) {
+                    std::string p = uri.substr(7);
+                    if (p.empty()) return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
+                    resolved.push_back(media_path_res{p, false});
+                    break;
+                }
+                if (uri.rfind("data:", 0) == 0) {
+                    auto comma = uri.find(',');
+                    if (comma == std::string::npos) return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
+                    std::string header = uri.substr(5, comma - 5);
+                    std::string b64 = uri.substr(comma + 1);
+                    bool is_base64 = header.find(";base64") != std::string::npos;
+                    if (!is_base64) return LLAMA_MOBILE_ERR_UNSUPPORTED; // percent-encoded data: is not supported
+                    std::string mime;
+                    auto semi = header.find(';');
+                    if (semi != std::string::npos) mime = header.substr(0, semi);
+                    std::string bytes = base64_decode(b64);
+                    std::string tmp = media_temp_path(media_extension_from_mime(mime.c_str()).c_str());
+                    std::ofstream f(tmp, std::ios::binary);
+                    f.write(bytes.data(), (std::streamsize) bytes.size());
+                    f.close();
+                    resolved.push_back(media_path_res{tmp, true});
+                    break;
+                }
+                return LLAMA_MOBILE_ERR_UNSUPPORTED; // http(s): URI needs the download manager
+            }
+            case LLAMA_MOBILE_MEDIA_BYTES: {
+                if (!m.bytes || m.bytes_len == 0) return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
+                std::string tmp = media_temp_path(media_extension_from_mime(m.mime).c_str());
+                std::ofstream f(tmp, std::ios::binary);
+                f.write(reinterpret_cast<const char *>(m.bytes),
+                        (std::streamsize) m.bytes_len);
+                f.close();
+                resolved.push_back(media_path_res{tmp, true});
+                break;
+            }
+            default:
+                return LLAMA_MOBILE_ERR_UNSUPPORTED;
+        }
+    }
+    paths.clear();
+    paths.reserve(resolved.size());
+    for (const auto & r : resolved) paths.push_back(r.path.c_str());
+    return LLAMA_MOBILE_OK;
+}
+
+// Removes temp files owned by a resolved media list (RAII scope guard).
+struct media_cleanup {
+    std::vector<media_path_res> & list;
+    ~media_cleanup() {
+        for (const auto & r : list) {
+            if (r.temp) std::remove(r.path.c_str());
+        }
+    }
+};
+
+// ---------------------------------------------------------------------------
 // Generate (single-flight; per-request abort)
 // ---------------------------------------------------------------------------
 
@@ -529,8 +660,17 @@ static int run_generation(engine_t * engine,
         engine->params.sampling.mirostat_eta = p->sampling.mirostat_eta;
         engine->params.sampling.ignore_eos = p->sampling.ignore_eos;
         engine->params.sampling.n_probs = 0; // v1 core exposes no logprobs
+        // Logit biases: the engine's common sampler applies
+        // params.sampling.logit_bias (user biases + model suppress tokens).
+        engine->params.sampling.logit_bias.clear();
         if (p->sampling.n_logit_biases > 0) {
-            return -1; // engine core has no logit-bias support (v2: UNSUPPORTED)
+            engine->params.sampling.logit_bias.reserve(p->sampling.n_logit_biases);
+            for (size_t i = 0; i < p->sampling.n_logit_biases; ++i) {
+                llama_logit_bias lb;
+                lb.token = (llama_token) p->sampling.logit_bias_tokens[i];
+                lb.bias = p->sampling.logit_bias_values[i];
+                engine->params.sampling.logit_bias.push_back(lb);
+            }
         }
         engine->params.antiprompt = c_str_array_to_vector(p->stop_sequences, (int) p->n_stop_sequences);
         // Grammar: fill_generate_params wired p->grammar; llama_mobile_generate
@@ -639,33 +779,31 @@ llama_mobile_status_t llama_mobile_generate(
 
     engine_t * engine = get_engine(ctx);
 
-    // Real structured output: convert json_schema -> GBNF grammar (raw-prompt
-    // mode). Message+tools mode keeps the engine chat/tool handling and reports
-    // unsupported here until the message+tools structured-output path is wired.
+    // Real structured output: convert json_schema -> GBNF grammar and apply it
+    // as the effective grammar for raw-prompt AND message/tools runs (the
+    // engine's chat template still formats the messages; the grammar constrains
+    // the assistant's JSON output).
     std::string schema_grammar;
     const char * effective_grammar = params->grammar;
     if (params->json_schema && params->json_schema[0]) {
-        if (params->messages && params->n_messages > 0) {
-            return LLAMA_MOBILE_ERR_UNSUPPORTED;
-        }
         llama_mobile_status_t s = schema_to_grammar(params->json_schema, schema_grammar);
         if (s != LLAMA_MOBILE_OK) return s;
         effective_grammar = schema_grammar.c_str();
     }
 
-    // Media: only PATH supported at this stage.
+    // Media: PATH / URI (file:// + data:;base64) / BYTES are all supported;
+    // non-path kinds are materialized to temp files for the mtmd loader.
+    std::vector<media_path_res> media_resolved;
     std::vector<const char *> media_paths;
-    for (size_t i = 0; i < params->n_media; ++i) {
-        const llama_mobile_media_t & m = params->media[i];
-        if (m.kind != LLAMA_MOBILE_MEDIA_PATH || !m.path) {
-            return LLAMA_MOBILE_ERR_UNSUPPORTED;
-        }
-        media_paths.push_back(m.path);
-    }
+    llama_mobile_status_t media_st = resolve_media(params->media, params->n_media,
+                                                   media_resolved, media_paths);
+    if (media_st != LLAMA_MOBILE_OK) return media_st;
+    media_cleanup cleanup{media_resolved}; // removes temp files on any exit
 
-    // fill_generate_params port: the engine core has no logit-bias support.
-    if (params->sampling.n_logit_biases > 0) {
-        return LLAMA_MOBILE_ERR_UNSUPPORTED;
+    // Logit-bias argument sanity (values are consumed in run_generation).
+    if (params->sampling.n_logit_biases > 0 &&
+        (!params->sampling.logit_bias_tokens || !params->sampling.logit_bias_values)) {
+        return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
     }
 
     llama_mobile_generate_params_t effective = *params;
@@ -809,13 +947,49 @@ llama_mobile_status_t llama_mobile_tokenize(llama_mobile_context_t ctx,
                                             size_t n_media,
                                             llama_mobile_tokenize_result_t * out) {
     if (!ctx || !text || !out) return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
-    if (n_media > 0) {
-        // Media-aware tokenization at the v2 layer is part of the v2.0 media
-        // work (engine tokenize() supports it once multimodal is enabled).
-        return LLAMA_MOBILE_ERR_UNSUPPORTED;
-    }
     engine_t * engine = get_engine(ctx);
     if (!engine->ctx) return LLAMA_MOBILE_ERR_GENERATION;
+
+    // Media-aware tokenization: PATH/URI/BYTES kinds are resolved to paths
+    // (temp files for non-PATH), then the engine's mtmd-aware tokenizer runs.
+    if (n_media > 0) {
+        if (!media) return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
+        if (!engine->has_multimodal) return LLAMA_MOBILE_ERR_UNSUPPORTED;
+        std::vector<media_path_res> media_resolved;
+        std::vector<const char *> media_paths;
+        llama_mobile_status_t media_st = resolve_media(media, n_media,
+                                                       media_resolved, media_paths);
+        if (media_st != LLAMA_MOBILE_OK) return media_st;
+        media_cleanup cleanup{media_resolved};
+        try {
+            std::vector<std::string> resolved_paths;
+            resolved_paths.reserve(media_paths.size());
+            for (const char * path : media_paths) resolved_paths.emplace_back(path);
+
+            llama_mobile::llama_mobile_tokenize_result tr =
+                engine->tokenize(text, resolved_paths);
+            memset(out, 0, sizeof(*out));
+            if (tr.tokens.empty()) return LLAMA_MOBILE_ERR_GENERATION;
+            out->tokens = (int32_t *) malloc(tr.tokens.size() * sizeof(int32_t));
+            if (!out->tokens) return LLAMA_MOBILE_ERR_OOM;
+            for (size_t i = 0; i < tr.tokens.size(); ++i) {
+                out->tokens[i] = (int32_t) tr.tokens[i];
+            }
+            out->n_tokens = tr.tokens.size();
+            out->has_media = tr.has_media;
+            if (!tr.chunk_pos_media.empty()) {
+                out->media_positions = (size_t *) malloc(tr.chunk_pos_media.size() * sizeof(size_t));
+                if (!out->media_positions) { free(out->tokens); return LLAMA_MOBILE_ERR_OOM; }
+                for (size_t i = 0; i < tr.chunk_pos_media.size(); ++i) {
+                    out->media_positions[i] = tr.chunk_pos_media[i];
+                }
+                out->n_media_positions = tr.chunk_pos_media.size();
+            }
+            return LLAMA_MOBILE_OK;
+        } catch (...) {
+            return LLAMA_MOBILE_ERR_GENERATION;
+        }
+    }
 
     try {
         // Port of llama_mobile_tokenize_c: tokenize without BOS/add-special.
@@ -942,14 +1116,114 @@ llama_mobile_status_t llama_mobile_tts_init(llama_mobile_context_t ctx,
     return ok ? LLAMA_MOBILE_OK : LLAMA_MOBILE_ERR_MODEL_LOAD;
 }
 
+static inline int clamp_i16(float v) {
+    if (v < -32768.f) return -32768;
+    if (v > 32767.f) return 32767;
+    return (int) v;
+}
+
 llama_mobile_status_t llama_mobile_tts_speak(llama_mobile_context_t ctx,
-                                             const llama_mobile_tts_params_t * params,
-                                             llama_mobile_usage_t * out_usage,
-                                             int16_t ** out_pcm, size_t * out_pcm_len) {
-    (void) ctx; (void) params; (void) out_usage; (void) out_pcm; (void) out_pcm_len;
-    // Deliberately not implemented: full-text speak must follow the TTS
-    // workflow review (docs/tts-current-workflow.md).
-    return LLAMA_MOBILE_ERR_UNSUPPORTED;
+                                              const llama_mobile_tts_params_t * params,
+                                              llama_mobile_usage_t * out_usage,
+                                              int16_t ** out_pcm, size_t * out_pcm_len) {
+    if (!ctx || !params || !params->text || !params->text[0] ||
+        !out_pcm || !out_pcm_len) {
+        return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
+    }
+    *out_pcm = nullptr;
+    *out_pcm_len = 0;
+
+    engine_t * engine = get_engine(ctx);
+    if (!engine->model || !engine->ctx) return LLAMA_MOBILE_ERR_NOT_INITIALIZED;
+    if (!engine->has_vocoder || !engine->isVocoderEnabled()) {
+        return LLAMA_MOBILE_ERR_NOT_INITIALIZED;
+    }
+
+    try {
+        std::string text(params->text);
+        std::string speaker = params->speaker_json ? params->speaker_json : "";
+        engine->rewind();
+        engine->chat_messages.clear();
+        engine->params.prompt = engine->getFormattedAudioCompletion(speaker, text);
+        engine->params.n_predict = 8192; // hard safety cap; see loop below
+        engine->params.n_keep = -1;
+        // Greedy sampling: guide tokens keep the phoneme sequence on track.
+        engine->params.sampling.temp = 0.0f;
+        engine->params.sampling.top_k = 1;
+        engine->params.sampling.ignore_eos = false;
+
+        const std::vector<llama_token> guides =
+            engine->getAudioCompletionGuideTokens(text);
+        engine->setGuideTokens(guides);
+        engine->next_token_uses_guide_token = true;
+
+        if (!engine->initSampling()) return LLAMA_MOBILE_ERR_SAMPLER_INIT;
+        engine->beginCompletion();
+        engine->loadPrompt();
+
+        engine->audio_tokens.clear();
+        const size_t max_tokens = 8192;
+        for (size_t k = 0; engine->has_next_token && !engine->is_interrupted &&
+                            k < max_tokens; ++k) {
+            engine->doCompletion();
+        }
+        engine->endCompletion();
+
+        if (engine->audio_tokens.empty()) {
+            return LLAMA_MOBILE_ERR_GENERATION;
+        }
+
+        std::vector<float> audio = engine->decodeAudioTokens(engine->audio_tokens);
+        if (audio.empty()) {
+            return LLAMA_MOBILE_ERR_GENERATION;
+        }
+
+        // Output sample rate: vocoder native is 24000; resample when a
+        // different rate was requested (nearest-neighbour, cheap + safe).
+        const int in_rate = 24000;
+        int out_rate = params->sample_rate > 0 ? params->sample_rate : in_rate;
+        float speed = params->speed > 0.f ? params->speed : 1.0f;
+
+        std::vector<int16_t> pcm;
+        if (out_rate == in_rate && speed == 1.0f) {
+            pcm.reserve(audio.size());
+            for (float v : audio) {
+                pcm.push_back((int16_t) clamp_i16(v));
+            }
+        } else {
+            double ratio = ((double) out_rate * (double) speed) / (double) in_rate;
+            if (ratio <= 0.0) ratio = 1.0;
+            size_t n = (size_t) ((double) audio.size() * ratio);
+            pcm.reserve(n);
+            for (size_t idx = 0; idx < n; ++idx) {
+                size_t src = (size_t) ((double) idx / ratio);
+                if (src >= audio.size()) src = audio.size() - 1;
+                pcm.push_back((int16_t) clamp_i16(audio[src]));
+            }
+        }
+
+        if (pcm.empty()) return LLAMA_MOBILE_ERR_GENERATION;
+        int16_t * buf = (int16_t *) malloc(pcm.size() * sizeof(int16_t));
+        if (!buf) return LLAMA_MOBILE_ERR_OOM;
+        memcpy(buf, pcm.data(), pcm.size() * sizeof(int16_t));
+        *out_pcm = buf;
+        *out_pcm_len = pcm.size();
+
+        if (out_usage) {
+            out_usage->prompt_tokens = (int32_t) engine->num_prompt_tokens;
+            out_usage->generated_tokens = (int32_t) engine->audio_tokens.size();
+            out_usage->time_to_first_token_ms = 0;
+            out_usage->total_ms = 0;
+        }
+        return LLAMA_MOBILE_OK;
+    } catch (const std::exception & e) {
+        (void) e;
+        if (*out_pcm) { free(*out_pcm); *out_pcm = nullptr; *out_pcm_len = 0; }
+        return LLAMA_MOBILE_ERR_GENERATION;
+    } catch (...) {
+        if (*out_pcm) { free(*out_pcm); *out_pcm = nullptr; *out_pcm_len = 0; }
+        return LLAMA_MOBILE_ERR_GENERATION;
+    }
 }
 
 void llama_mobile_tts_pcm_free(int16_t * pcm) {
@@ -980,4 +1254,356 @@ bool llama_mobile_tts_is_enabled(llama_mobile_context_t ctx) {
 
 void llama_mobile_free_text(char * text) {
     free(text);
+}
+
+// ---------------------------------------------------------------------------
+// 12. Download manager + model registry
+// ---------------------------------------------------------------------------
+//
+// Downloads run on a background thread (never block the caller); progress and
+// terminal events are reported through the callback on that thread. cancel()
+// is thread-safe and stops the transfer at the next chunk boundary. The model
+// registry is a directory of .gguf files (LLAMA_MOBILE_MODELS_DIR, or a temp
+// default) — downloaded files land in the registry dir by default.
+
+namespace {
+
+// ---------- minimal SHA-256 (public-domain style implementation) ----------
+struct sha256_ctx {
+    uint32_t h[8];
+    uint64_t len;
+    unsigned char buf[64];
+    size_t buflen;
+};
+
+static inline uint32_t rotr32(uint32_t x, unsigned n) {
+    return (x >> n) | (x << (32u - n));
+}
+
+static const uint32_t k_sha256[64] = {
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2};
+
+static void sha256_init(sha256_ctx * c) {
+    c->h[0] = 0x6a09e667; c->h[1] = 0xbb67ae85; c->h[2] = 0x3c6ef372; c->h[3] = 0xa54ff53a;
+    c->h[4] = 0x510e527f; c->h[5] = 0x9b05688c; c->h[6] = 0x1f83d9ab; c->h[7] = 0x5be0cd19;
+    c->len = 0; c->buflen = 0;
+}
+
+static void sha256_block(sha256_ctx * c, const unsigned char * p) {
+    uint32_t w[64];
+    for (int i = 0; i < 16; ++i) {
+        w[i] = ((uint32_t) p[i*4] << 24) | ((uint32_t) p[i*4+1] << 16) |
+               ((uint32_t) p[i*4+2] << 8) | (uint32_t) p[i*4+3];
+    }
+    for (int i = 16; i < 64; ++i) {
+        uint32_t s0 = rotr32(w[i-15], 7) ^ rotr32(w[i-15], 18) ^ (w[i-15] >> 3);
+        uint32_t s1 = rotr32(w[i-2], 17) ^ rotr32(w[i-2], 19) ^ (w[i-2] >> 10);
+        w[i] = w[i-16] + s0 + w[i-7] + s1;
+    }
+    uint32_t a = c->h[0], b = c->h[1], cc = c->h[2], d = c->h[3];
+    uint32_t e = c->h[4], f = c->h[5], g = c->h[6], h = c->h[7];
+    for (int i = 0; i < 64; ++i) {
+        uint32_t S1 = rotr32(e, 6) ^ rotr32(e, 11) ^ rotr32(e, 25);
+        uint32_t ch = (e & f) ^ (~e & g);
+        uint32_t t1 = h + S1 + ch + k_sha256[i] + w[i];
+        uint32_t S0 = rotr32(a, 2) ^ rotr32(a, 13) ^ rotr32(a, 22);
+        uint32_t maj = (a & b) ^ (a & cc) ^ (b & cc);
+        uint32_t t2 = S0 + maj;
+        h = g; g = f; f = e; e = d + t1; d = cc; cc = b; b = a; a = t1 + t2;
+    }
+    c->h[0] += a; c->h[1] += b; c->h[2] += cc; c->h[3] += d;
+    c->h[4] += e; c->h[5] += f; c->h[6] += g; c->h[7] += h;
+}
+
+static void sha256_update(sha256_ctx * c, const unsigned char * data, size_t len) {
+    c->len += len;
+    while (len > 0) {
+        size_t take = 64 - c->buflen;
+        if (take > len) take = len;
+        memcpy(c->buf + c->buflen, data, take);
+        c->buflen += take; data += take; len -= take;
+        if (c->buflen == 64) { sha256_block(c, c->buf); c->buflen = 0; }
+    }
+}
+
+static void sha256_final(sha256_ctx * c, unsigned char out[32]) {
+    uint64_t bitlen = c->len * 8;
+    unsigned char pad = 0x80;
+    sha256_update(c, &pad, 1);
+    unsigned char zero = 0;
+    while (c->buflen != 56) sha256_update(c, &zero, 1);
+    unsigned char lenb[8];
+    for (int i = 0; i < 8; ++i) lenb[i] = (unsigned char) (bitlen >> (56 - i*8));
+    sha256_update(c, lenb, 8);
+    for (int i = 0; i < 8; ++i) {
+        out[i*4]   = (unsigned char) (c->h[i] >> 24);
+        out[i*4+1] = (unsigned char) (c->h[i] >> 16);
+        out[i*4+2] = (unsigned char) (c->h[i] >> 8);
+        out[i*4+3] = (unsigned char) c->h[i];
+    }
+}
+
+static std::string sha256_hex_file(const std::string & path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return std::string();
+    sha256_ctx c;
+    sha256_init(&c);
+    char buf[65536];
+    while (f) {
+        f.read(buf, sizeof(buf));
+        std::streamsize got = f.gcount();
+        if (got > 0) sha256_update(&c, (const unsigned char *) buf, (size_t) got);
+    }
+    unsigned char digest[32];
+    sha256_final(&c, digest);
+    static const char hex[] = "0123456789abcdef";
+    std::string out;
+    out.reserve(64);
+    for (int i = 0; i < 32; ++i) {
+        out.push_back(hex[digest[i] >> 4]);
+        out.push_back(hex[digest[i] & 0xF]);
+    }
+    return out;
+}
+
+// ---------- registry root ----------
+static std::string models_root() {
+    const char * env = std::getenv("LLAMA_MOBILE_MODELS_DIR");
+    if (env && env[0]) return std::string(env);
+    return (std::filesystem::temp_directory_path() / "llama_mobile_models").string();
+}
+
+// ---------- download tasks ----------
+struct dl_task {
+    uint64_t id;
+    std::string url;
+    std::string filename;
+    std::string destination_dir;
+    std::string bearer_token;
+    std::string checksum_sha256;
+    std::atomic<bool> cancel{false};
+    llama_mobile_download_cb cb = nullptr;
+    void * ud = nullptr;
+    std::thread thread;
+    std::string last_message;
+};
+
+std::mutex g_dl_mtx;
+std::unordered_map<uint64_t, dl_task *> g_dl_tasks;
+std::atomic<uint64_t> g_dl_next{1};
+
+static void dl_emit(dl_task * t, llama_mobile_download_state_t state, float progress,
+                    int64_t downloaded, int64_t total, const char * msg) {
+    if (!t->cb) return;
+    llama_mobile_download_event_t ev;
+    ev.request_id = t->id;
+    ev.state = state;
+    ev.progress = progress;
+    ev.downloaded_bytes = downloaded;
+    ev.total_bytes = total;
+    ev.message = msg;
+    t->cb(&ev, t->ud);
+}
+
+} // namespace
+
+llama_mobile_status_t llama_mobile_download_start(
+        const llama_mobile_download_request_t * req,
+        llama_mobile_download_cb cb, void * cb_user_data,
+        uint64_t * out_request_id) {
+    if (!req || !req->url_or_repo || !req->destination_dir || !out_request_id) {
+        return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
+    }
+    std::string url(req->url_or_repo);
+    std::string filename = req->filename ? req->filename : "";
+    if (url.find("://") == std::string::npos) {
+        // HF "owner/repo" form -> https://huggingface.co/<repo>/resolve/<rev>/<file>
+        if (filename.empty()) return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
+        std::string rev = req->revision && req->revision[0] ? req->revision : "main";
+        url = "https://huggingface.co/" + url + "/resolve/" + rev + "/" + filename;
+    } else if (filename.empty()) {
+        // derive filename from URL tail for direct links
+        auto pos = url.find_last_of('/');
+        filename = pos == std::string::npos ? "model.gguf" : url.substr(pos + 1);
+        if (filename.empty()) filename = "model.gguf";
+    }
+
+    // Directory checks + .part target inside destination (also the registry
+    // location when the request uses the default models dir).
+    if (req->resume) {
+        return LLAMA_MOBILE_ERR_UNSUPPORTED; // resume not implemented yet
+    }
+
+    dl_task * t = new (std::nothrow) dl_task();
+    if (!t) return LLAMA_MOBILE_ERR_OOM;
+    t->id = g_dl_next.fetch_add(1);
+    t->url = url;
+    t->filename = filename;
+    t->destination_dir = req->destination_dir;
+    t->bearer_token = req->bearer_token ? req->bearer_token : "";
+    t->checksum_sha256 = req->checksum_sha256 ? req->checksum_sha256 : "";
+    t->cb = cb;
+    t->ud = cb_user_data;
+
+    {
+        std::lock_guard<std::mutex> lk(g_dl_mtx);
+        g_dl_tasks[t->id] = t;
+    }
+    *out_request_id = t->id;
+
+    t->thread = std::thread([t]() {
+        dl_emit(t, LLAMA_MOBILE_DL_QUEUED, 0, 0, -1, "queued");
+        // split scheme://host/path
+        size_t scheme = t->url.find("://");
+        if (scheme == std::string::npos) { dl_emit(t, LLAMA_MOBILE_DL_FAILED, 0, 0, -1, "invalid URL"); t->cancel.store(true); return; }
+        size_t host_start = scheme + 3;
+        size_t host_end = t->url.find('/', host_start);
+        std::string host = host_end == std::string::npos ? t->url.substr(host_start) : t->url.substr(host_start, host_end - host_start);
+        std::string path = host_end == std::string::npos ? "/" : t->url.substr(host_end);
+        bool https = t->url.rfind("https://", 0) == 0;
+
+        httplib::Client cli(https ? "https://" + host : "http://" + host);
+        cli.set_follow_location(true);
+        cli.set_connection_timeout(10, 0);
+        cli.set_read_timeout(30, 0);
+
+        // Optional auth
+        httplib::Headers headers;
+        if (!t->bearer_token.empty()) headers.emplace("Authorization", "Bearer " + t->bearer_token);
+
+        std::error_code ec;
+        std::filesystem::create_directories(t->destination_dir, ec);
+        std::string part = (std::filesystem::path(t->destination_dir) / (t->filename + ".part")).string();
+        std::ofstream out(part, std::ios::binary);
+
+        int64_t downloaded = 0;
+        auto receiver = [&](const char * data, size_t len) -> bool {
+            if (t->cancel.load()) return false;
+            out.write(data, (std::streamsize) len);
+            downloaded += (int64_t) len;
+            dl_emit(t, LLAMA_MOBILE_DL_RUNNING, 0.0f, downloaded, -1, "downloading");
+            return !t->cancel.load();
+        };
+
+        auto res = cli.Get(path.c_str(), headers, receiver);
+        out.close();
+        if (t->cancel.load()) {
+            std::remove(part.c_str());
+            dl_emit(t, LLAMA_MOBILE_DL_CANCELLED, 0, downloaded, -1, "cancelled");
+        } else if (res && res->status == 200) {
+            // optional checksum
+            if (!t->checksum_sha256.empty()) {
+                std::string got = sha256_hex_file(part);
+                std::string want = t->checksum_sha256;
+                for (auto & ch : want) ch = (char) std::tolower((unsigned char) ch);
+                if (got != want) {
+                    std::remove(part.c_str());
+                    t->last_message = "checksum mismatch";
+                    dl_emit(t, LLAMA_MOBILE_DL_FAILED, 0, downloaded, -1, t->last_message.c_str());
+                } else {
+                    std::filesystem::rename(part, (std::filesystem::path(t->destination_dir) / t->filename), ec);
+                    dl_emit(t, LLAMA_MOBILE_DL_DONE, 1.0f, downloaded, downloaded, "done");
+                }
+            } else {
+                std::filesystem::rename(part, (std::filesystem::path(t->destination_dir) / t->filename), ec);
+                dl_emit(t, LLAMA_MOBILE_DL_DONE, 1.0f, downloaded, downloaded, "done");
+            }
+        } else {
+            int status = res ? (int) res->status : 0;
+            std::remove(part.c_str());
+            t->last_message = status == 0 ? "network error" : ("HTTP " + std::to_string(status));
+            dl_emit(t, LLAMA_MOBILE_DL_FAILED, 0, downloaded, -1, t->last_message.c_str());
+        }
+        {
+            std::lock_guard<std::mutex> lk(g_dl_mtx);
+            g_dl_tasks.erase(t->id);
+        }
+        // Clean up on a separate thread so the worker can finish and join itself.
+        std::thread([t]() {
+            if (t->thread.joinable()) t->thread.join();
+            delete t;
+        }).detach();
+    });
+
+    return LLAMA_MOBILE_OK;
+}
+
+llama_mobile_status_t llama_mobile_download_cancel(uint64_t request_id) {
+    std::lock_guard<std::mutex> lk(g_dl_mtx);
+    auto it = g_dl_tasks.find(request_id);
+    if (it == g_dl_tasks.end()) return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
+    it->second->cancel.store(true);
+    return LLAMA_MOBILE_OK;
+}
+
+// ---------- model registry ----------
+
+llama_mobile_status_t llama_mobile_models_list(llama_mobile_model_entry_t ** out,
+                                               size_t * out_count) {
+    if (!out || !out_count) return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
+    *out = nullptr;
+    *out_count = 0;
+    std::error_code ec;
+    std::filesystem::create_directories(models_root(), ec);
+    std::vector<llama_mobile_model_entry_t> entries;
+    for (auto & p : std::filesystem::directory_iterator(models_root(), ec)) {
+        if (ec) break;
+        if (!p.is_regular_file()) continue;
+        std::string fname = p.path().filename().string();
+        if (fname.size() < 5 || fname.compare(fname.size() - 5, 5, ".gguf") != 0) continue;
+        llama_mobile_model_entry_t e;
+        e.name = strdup(fname.c_str());
+        e.path = strdup(p.path().string().c_str());
+        e.size_bytes = (int64_t) p.file_size();
+        if (!e.name || !e.path) { free((void *) e.name); free((void *) e.path); return LLAMA_MOBILE_ERR_OOM; }
+        entries.push_back(e);
+    }
+    if (entries.empty()) return LLAMA_MOBILE_OK;
+    llama_mobile_model_entry_t * arr = (llama_mobile_model_entry_t *) calloc(entries.size(), sizeof(llama_mobile_model_entry_t));
+    if (!arr) return LLAMA_MOBILE_ERR_OOM;
+    memcpy(arr, entries.data(), entries.size() * sizeof(llama_mobile_model_entry_t));
+    *out = arr;
+    *out_count = entries.size();
+    return LLAMA_MOBILE_OK;
+}
+
+void llama_mobile_models_list_free(llama_mobile_model_entry_t * entries, size_t count) {
+    if (!entries) return;
+    for (size_t i = 0; i < count; ++i) {
+        free((void *) entries[i].name);
+        free((void *) entries[i].path);
+    }
+    free(entries);
+}
+
+llama_mobile_status_t llama_mobile_models_remove(const char * name) {
+    if (!name || !name[0]) return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
+    std::string n(name);
+    // registry entries are flat file basenames only
+    if (n.find('/') != std::string::npos || n.find('\\') != std::string::npos ||
+        n == ".." || n == ".") return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
+    std::string path = (std::filesystem::path(models_root()) / n).string();
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec)) return LLAMA_MOBILE_ERR_MODEL_NOT_FOUND;
+    if (!std::filesystem::remove(path, ec)) return LLAMA_MOBILE_ERR_IO;
+    return LLAMA_MOBILE_OK;
+}
+
+llama_mobile_status_t llama_mobile_models_verify(const char * path,
+                                                 const char * expected_sha256) {
+    if (!path || !expected_sha256) return LLAMA_MOBILE_ERR_INVALID_ARGUMENT;
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec)) return LLAMA_MOBILE_ERR_MODEL_NOT_FOUND;
+    std::string got = sha256_hex_file(path);
+    if (got.empty()) return LLAMA_MOBILE_ERR_IO;
+    std::string want(expected_sha256);
+    for (auto & ch : want) ch = (char) std::tolower((unsigned char) ch);
+    return got == want ? LLAMA_MOBILE_OK : LLAMA_MOBILE_ERR_CHECKSUM;
 }
