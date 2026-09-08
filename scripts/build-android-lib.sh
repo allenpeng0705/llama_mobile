@@ -27,6 +27,12 @@ ENABLE_GPU=${ENABLE_GPU:-"true"}              # Enable GPU support by default
 GGML_OPENCL=${GGML_OPENCL:-"OFF"}             # Disable OpenCL backend by default
 GGML_VULKAN=${GGML_VULKAN:-"ON"}              # Enable Vulkan backend by default (requires Vulkan SDK)
 
+# Optional extra CMake -D flags appended to every ABI configure, e.g.:
+#   LLAMA_MOBILE_EXTRA_CMAKE_FLAGS="-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH"
+# (needed so host Homebrew Vulkan/SPIRV-Headers CMake packages are findable
+# under the NDK toolchain, which roots package lookups into the NDK by default)
+LLAMA_MOBILE_EXTRA_CMAKE_FLAGS=${LLAMA_MOBILE_EXTRA_CMAKE_FLAGS:-""}
+
 # VULKAN SDK INSTALLATION:
 # Vulkan is required for GPU acceleration on Android.
 # Please install Vulkan SDK using one of these methods:
@@ -375,7 +381,8 @@ for ABI in "${ABI_LIST[@]}"; do
         -DLLAMA_USE_HTTPLIB=OFF \
         -DGGML_OPENMP=OFF \
         $PLATFORM_FLAGS \
-        $STATIC_GPU_FLAGS"
+        $STATIC_GPU_FLAGS \
+        $LLAMA_MOBILE_EXTRA_CMAKE_FLAGS"
     
     verbose_output "Static library CMake command: $STATIC_CMAKE_COMMAND"
     
@@ -402,12 +409,14 @@ for ABI in "${ABI_LIST[@]}"; do
     STATIC_LIBS=(
         "libllama_mobile_core.a"
         "llama.cpp-master/src/libllama.a"
-        "llama.cpp-master/common/libcommon.a"
+        "llama.cpp-master/common/libllama-common.a"
+        "llama.cpp-master/common/libllama-common-base.a"
         "llama.cpp-master/ggml/src/libggml.a"
         "llama.cpp-master/ggml/src/libggml-base.a"
         "llama.cpp-master/ggml/src/libggml-cpu.a"
         "llama.cpp-master/tools/mtmd/libmtmd.a"
         "llama.cpp-master/vendor/cpp-httplib/libcpp-httplib.a"
+        "llama.cpp-master/vendor/hash/libvendor-hash.a"
     )
     
     # Add Vulkan library if Vulkan is enabled
@@ -488,12 +497,14 @@ script_progress "Verifying build..."
 STATIC_LIBS=(
     "libllama_mobile_core.a"
     "libllama.a"
-    "libcommon.a"
+    "libllama-common.a"
+    "libllama-common-base.a"
     "libggml.a"
     "libggml-base.a"
     "libggml-cpu.a"
     "libmtmd.a"
     "libcpp-httplib.a"
+    "libvendor-hash.a"
     "libggml-vulkan.a"
 )
 

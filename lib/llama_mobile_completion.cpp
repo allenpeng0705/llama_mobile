@@ -188,7 +188,7 @@ void llama_mobile_context::loadPrompt() {
                     
                     // Apply grammar if provided by chat template or json_schema
                     if (!chat_result.grammar.empty()) {
-                        params.sampling.grammar = chat_result.grammar;
+                        params.sampling.grammar = common_grammar(COMMON_GRAMMAR_TYPE_USER, chat_result.grammar);
                         LOG_INFO("Applied grammar from chat template");
                     }
                 } else {

@@ -120,7 +120,19 @@ static mtmd_tokenize_result tokenizeWithMedia(llama_mobile_context::llama_mobile
             std::vector<uint8_t> media_data = base64_decode(base64_data);
             LOG_VERBOSE("Base64 decoded, size: %zu bytes", media_data.size());
 
-            mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_buf(mtmd_wrapper->mtmd_ctx, media_data.data(), media_data.size()));
+            auto media_wrapper = mtmd_helper_bitmap_init_from_buf(mtmd_wrapper->mtmd_ctx, media_data.data(), media_data.size(), false, mtmd_helper_init_opt_default());
+            if (!media_wrapper.bitmap) {
+                bitmaps.entries.clear();
+                throw std::runtime_error("Failed to load base64 media");
+            }
+            if (media_wrapper.video_ctx) {
+                // Video inputs need a live decode context across chunk eval; llama_mobile only supports image/audio here.
+                mtmd_helper_video_free(media_wrapper.video_ctx);
+                mtmd_bitmap_free(media_wrapper.bitmap);
+                bitmaps.entries.clear();
+                throw std::runtime_error("Video media is not supported");
+            }
+            mtmd::bitmap bmp(media_wrapper.bitmap); // takes ownership
             if (!bmp.ptr) {
                 bitmaps.entries.clear();
                 throw std::runtime_error("Failed to load base64 media");
@@ -150,7 +162,18 @@ static mtmd_tokenize_result tokenizeWithMedia(llama_mobile_context::llama_mobile
             LOG_VERBOSE("File exists and size is %zu bytes", file_size);
             file.close();
 
-            mtmd::bitmap bmp(mtmd_helper_bitmap_init_from_file(mtmd_wrapper->mtmd_ctx, media_path.c_str()));
+            auto media_wrapper = mtmd_helper_bitmap_init_from_file(mtmd_wrapper->mtmd_ctx, media_path.c_str(), false, mtmd_helper_init_opt_default());
+            if (!media_wrapper.bitmap) {
+                bitmaps.entries.clear();
+                throw std::runtime_error("Failed to load media");
+            }
+            if (media_wrapper.video_ctx) {
+                mtmd_helper_video_free(media_wrapper.video_ctx);
+                mtmd_bitmap_free(media_wrapper.bitmap);
+                bitmaps.entries.clear();
+                throw std::runtime_error("Video media is not supported");
+            }
+            mtmd::bitmap bmp(media_wrapper.bitmap); // takes ownership
             if (!bmp.ptr) {
                 bitmaps.entries.clear();
                 throw std::runtime_error("Failed to load media");
@@ -250,7 +273,7 @@ bool llama_mobile_context::initMultimodal(const std::string &mmproj_path, bool u
     has_multimodal = true;
 
     bool uses_mrope = mtmd_decode_use_mrope(mtmd_ctx);
-    bool uses_non_causal = mtmd_decode_use_non_causal(mtmd_ctx);
+    bool uses_non_causal = mtmd_decode_use_non_causal(mtmd_ctx, nullptr); // nullptr = default image chunk case
     LOG_VERBOSE("Model multimodal properties: uses_mrope=%d, uses_non_causal=%d", uses_mrope ? 1 : 0, uses_non_causal ? 1 : 0);
 
     LOG_INFO("Multimodal context initialized successfully with mmproj: %s", mmproj_path.c_str());

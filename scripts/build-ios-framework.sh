@@ -9,8 +9,15 @@
 # Load centralized configuration from config.env
 CONFIG_FILE="$(dirname "$0")/config.env"
 if [ -f "$CONFIG_FILE" ]; then
-    # Extract all relevant variables from config.env, excluding comments
-    export $(grep -E '^(IOS_BUILD_TYPE|IOS_SIMULATOR_ARCHES|IOS_DEVICE_ARCHES|XCODE_PATH|CMAKE_BUILD_TYPE|CMAKE_JOBS|VERBOSE)=' "$CONFIG_FILE" | sed 's/\s*#.*$//' | xargs)
+    # Read values preserving multi-word values like IOS_SIMULATOR_ARCHES="arm64 x86_64"
+    # (the naive `export $(... | xargs)` below would word-split them into two exports).
+    while IFS='=' read -r __key __value; do
+        case "$__key" in
+            IOS_BUILD_TYPE|IOS_SIMULATOR_ARCHES|IOS_DEVICE_ARCHES|XCODE_PATH|CMAKE_BUILD_TYPE|CMAKE_JOBS|VERBOSE)
+                __value="${__value%\"}"; __value="${__value#\"}"
+                export "$__key=$__value" ;;
+        esac
+    done < <(grep -E '^(IOS_BUILD_TYPE|IOS_SIMULATOR_ARCHES|IOS_DEVICE_ARCHES|XCODE_PATH|CMAKE_BUILD_TYPE|CMAKE_JOBS|VERBOSE)=' "$CONFIG_FILE")
 fi
 
 # Variables with defaults
@@ -379,7 +386,9 @@ build_library() {
         "$(find "$BUILD_DIR" -name "libggml-cpu.a" | head -1)"
         "$(find "$BUILD_DIR" -name "libggml-metal.a" | head -1)"
         "$(find "$BUILD_DIR" -name "libggml-blas.a" | head -1)"
-        "$(find "$BUILD_DIR" -name "libcommon.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libllama-common.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libllama-common-base.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libvendor-hash.a" | head -1)"
         "$(find "$BUILD_DIR" -name "libmtmd.a" | head -1)"
         "$(find "$BUILD_DIR" -name "libcpp-httplib.a" | head -1)"
     )
@@ -472,7 +481,9 @@ build_shared_framework() {
         "$(find "$BUILD_DIR" -name "libggml-cpu.a" | head -1)"
         "$(find "$BUILD_DIR" -name "libggml-metal.a" | head -1)"
         "$(find "$BUILD_DIR" -name "libggml-blas.a" | head -1)"
-        "$(find "$BUILD_DIR" -name "libcommon.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libllama-common.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libllama-common-base.a" | head -1)"
+        "$(find "$BUILD_DIR" -name "libvendor-hash.a" | head -1)"
         "$(find "$BUILD_DIR" -name "libmtmd.a" | head -1)"
         "$(find "$BUILD_DIR" -name "libcpp-httplib.a" | head -1)"
     )

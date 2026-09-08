@@ -32,7 +32,7 @@ void llama_mobile_context::rewind() {
     is_interrupted = false;
     is_predicting = false;
     params.antiprompt.clear();
-    params.sampling.grammar.clear();
+    params.sampling.grammar = common_grammar();
     num_prompt_tokens = 0;
     num_tokens_predicted = 0;
     generated_text = "";

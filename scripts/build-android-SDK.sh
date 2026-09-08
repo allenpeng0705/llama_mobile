@@ -274,12 +274,14 @@ for ABI in "arm64-v8a" "x86_64"; do
     STATIC_LIBS=(
         "libllama_mobile_core.a"
         "libllama.a"
-        "libcommon.a"
+        "libllama-common.a"
+        "libllama-common-base.a"
         "libggml.a"
         "libggml-base.a"
         "libggml-cpu.a"
         "libmtmd.a"
         "libcpp-httplib.a"
+        "libvendor-hash.a"
         "libggml-vulkan.a"
     )
     

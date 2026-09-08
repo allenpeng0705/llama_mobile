@@ -1,8 +1,5 @@
 #include "llama_mobile.h"
 #include "llama.cpp-master/common/common.h"
-#include "llama.cpp-master/vendor/nlohmann/json.hpp"
-
-using json = nlohmann::ordered_json;
 
 namespace llama_mobile {
 
@@ -22,18 +19,19 @@ common_chat_params llama_mobile_context::getFormattedChatWithJinja(
     inputs.use_jinja = true;
     inputs.add_generation_prompt = true;
     try {
-        inputs.messages = common_chat_msgs_parse_oaicompat(json::parse(messages));
+        // llama.cpp master switched the OpenAI-compatible chat parsers to the common_json wrapper
+        inputs.messages = common_chat_msgs_parse_oaicompat(common_json::parse(messages));
         auto useTools = !tools.empty();
         if (useTools) {
-            inputs.tools = common_chat_tools_parse_oaicompat(json::parse(tools));
+            inputs.tools = common_chat_tools_parse_oaicompat(common_json::parse(tools));
         }
         if (!tool_choice.empty()) {
              inputs.tool_choice = common_chat_tool_choice_parse_oaicompat(tool_choice);
         }
         if (!json_schema.empty()) {
-            inputs.json_schema = json::parse(json_schema);
+            inputs.json_schema = json_schema;
         }
-    } catch (const json::exception& e) {
+    } catch (const common_json_error& e) {
         LOG_ERROR("JSON parsing error during chat formatting: %s", e.what());
         throw std::runtime_error("Invalid JSON input for chat formatting.");
     }
@@ -68,8 +66,8 @@ std::string llama_mobile_context::getFormattedChat(
     inputs.use_jinja = false;
     inputs.add_generation_prompt = true;
      try {
-         inputs.messages = common_chat_msgs_parse_oaicompat(json::parse(messages));
-     } catch (const json::exception& e) {
+         inputs.messages = common_chat_msgs_parse_oaicompat(common_json::parse(messages));
+     } catch (const common_json_error& e) {
          LOG_ERROR("JSON parsing error during chat formatting: %s", e.what());
          throw std::runtime_error("Invalid JSON input for chat formatting.");
      }

@@ -556,6 +556,14 @@ int tts_main(int argc, char **argv) {
     const int n_parallel = params.n_parallel;
     const int n_predict  = params.n_predict;
 
+    // llama.cpp master removed the common_params.vocoder sub-struct and its CLI flags
+    // (-mv/--model-vocoder, --tts-use-guide-tokens). This standalone tts_main is kept as
+    // reference only - the mobile TTS runtime in llama_mobile_context does not use it -
+    // so the vocoder settings are kept here as locals with safe defaults.
+    const std::string vocoder_model_path;                              // was params.vocoder.model.path
+    const std::string vocoder_speaker_file = params.tts_speaker_file;  // was params.vocoder.speaker_file
+    const bool vocoder_use_guide_tokens = false;                       // was params.vocoder.use_guide_tokens
+
     common_init();
 
     // init LLM
@@ -580,7 +588,7 @@ int tts_main(int argc, char **argv) {
 
     const llama_vocab * vocab = llama_model_get_vocab(model_ttc);
 
-    params.model = params.vocoder.model;
+    params.model.path = vocoder_model_path;
     params.embedding = true;
     params.n_ubatch = params.n_batch;
 
@@ -655,11 +663,11 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
     }
 
     // load speaker if given
-    if (!params.vocoder.speaker_file.empty()) {
+    if (!vocoder_speaker_file.empty()) {
         LOG_INF("%s: loading speaker ..\n", __func__);
-        json speaker = speaker_from_file(params.vocoder.speaker_file);
+        json speaker = speaker_from_file(vocoder_speaker_file);
         if (speaker.empty()) {
-            LOG_ERR("%s: Failed to load speaker file '%s'\n", __func__, params.vocoder.speaker_file.c_str());
+            LOG_ERR("%s: Failed to load speaker file '%s'\n", __func__, vocoder_speaker_file.c_str());
             return 1;
         }
         audio_text = audio_text_from_speaker(speaker, tts_version);
@@ -679,7 +687,7 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
         // convert the input text into the necessary format expected by OuteTTS
         {
             std::string prompt_clean = process_text(params.prompt, tts_version);
-            if (params.vocoder.use_guide_tokens) {
+            if (vocoder_use_guide_tokens) {
                 guide_tokens = prepare_guide_tokens(vocab, prompt_clean, tts_version);
             }
 
@@ -690,7 +698,7 @@ lovely<|t_0.56|><|code_start|><|634|><|596|><|1766|><|1556|><|1306|><|1285|><|14
 
         prompt_add(prompt_inp, vocab, "<|text_end|>\n", false, true);
 
-        if (!params.vocoder.speaker_file.empty()) {
+        if (!vocoder_speaker_file.empty()) {
             prompt_add(prompt_inp, vocab, audio_data, false, true);
         } else {
             // disabled to save time on tokenizing each time

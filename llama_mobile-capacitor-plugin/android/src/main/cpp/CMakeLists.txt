@@ -40,9 +40,19 @@ set_target_properties(ggml-cpu PROPERTIES
     IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libggml-cpu.a
 )
 
-add_library(common STATIC IMPORTED)
-set_target_properties(common PROPERTIES
-    IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libcommon.a
+add_library(llama-common STATIC IMPORTED)
+set_target_properties(llama-common PROPERTIES
+    IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libllama-common.a
+)
+
+add_library(llama-common-base STATIC IMPORTED)
+set_target_properties(llama-common-base PROPERTIES
+    IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libllama-common-base.a
+)
+
+add_library(vendor-hash STATIC IMPORTED)
+set_target_properties(vendor-hash PROPERTIES
+    IMPORTED_LOCATION ${LLAMA_MOBILE_LIB_PATH}/${ANDROID_ABI}/libvendor-hash.a
 )
 
 add_library(mtmd STATIC IMPORTED)
@@ -88,10 +98,12 @@ target_link_libraries(llama_mobile_jni
     -Wl,--whole-archive
     llama_mobile_core
     llama
+    llama-common
+    llama-common-base
     ggml
     ggml-cpu
     ggml-base
-    common
+    vendor-hash
     mtmd
     ggml-vulkan
     cpp-httplib

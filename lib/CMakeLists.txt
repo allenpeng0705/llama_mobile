@@ -14,7 +14,13 @@ option(GGML_OPENCL_EMBED_KERNELS "Embed OpenCL kernels in the binary" ON)
 option(GGML_VULKAN_EMBED_KERNELS "Embed Vulkan shaders in the binary" ON)
 
 option(LLAMA_BUILD_COMMON "Build common utils library" ON)
-option(LLAMA_BUILD_TOOLS "Build tools including mtmd" ON)
+# llama_mobile only needs the mtmd library from llama.cpp. Building the full
+# tools/ tree (LLAMA_BUILD_TOOLS=ON) compiles example binaries that reference
+# CMAKE_SOURCE_DIR/ggml/... include paths, which is only correct when llama.cpp
+# is the top-level CMake project - as a subdirectory those targets fail to
+# compile (e.g. tools/tuning cannot find ggml-metal-tuning.h).
+option(LLAMA_BUILD_TOOLS "Build llama.cpp tools" OFF)
+option(LLAMA_BUILD_MTMD "Build tools/mtmd library standalone" ON)
 
 add_subdirectory(llama.cpp-master)
 
@@ -35,7 +41,7 @@ set(LLAMA_MOBILE_CORE_SOURCES
 )
 
 add_library(llama_mobile_core_static STATIC ${LLAMA_MOBILE_CORE_SOURCES})
-target_link_libraries(llama_mobile_core_static PUBLIC llama ggml common mtmd)
+target_link_libraries(llama_mobile_core_static PUBLIC llama ggml llama-common mtmd)
 target_include_directories(llama_mobile_core_static PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp-master/include
@@ -52,7 +58,7 @@ set_target_properties(llama_mobile_core_static PROPERTIES
 
 if(BUILD_SHARED_LIBS)
     add_library(llama_mobile_core_shared SHARED ${LLAMA_MOBILE_CORE_SOURCES})
-    target_link_libraries(llama_mobile_core_shared PUBLIC llama ggml common mtmd)
+    target_link_libraries(llama_mobile_core_shared PUBLIC llama ggml llama-common mtmd)
     target_include_directories(llama_mobile_core_shared PUBLIC 
         ${CMAKE_CURRENT_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp-master/include

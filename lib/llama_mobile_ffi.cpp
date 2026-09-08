@@ -99,8 +99,16 @@ llama_mobile_context_handle_t llama_mobile_init_context_c(const llama_mobile_ini
         cpp_params.n_ubatch = params->n_ubatch;
         cpp_params.n_gpu_layers = params->n_gpu_layers;
         cpp_params.cpuparams.n_threads = params->n_threads;
-        cpp_params.use_mmap = params->use_mmap;
-        cpp_params.use_mlock = params->use_mlock;
+        // llama.cpp now expresses mmap/mlock as a single load_mode enum
+        if (params->use_mmap && params->use_mlock) {
+            cpp_params.load_mode = LLAMA_LOAD_MODE_MMAP_MLOCK;
+        } else if (params->use_mmap) {
+            cpp_params.load_mode = LLAMA_LOAD_MODE_MMAP;
+        } else if (params->use_mlock) {
+            cpp_params.load_mode = LLAMA_LOAD_MODE_MLOCK;
+        } else {
+            cpp_params.load_mode = LLAMA_LOAD_MODE_NONE;
+        }
         cpp_params.embedding = params->embedding;
         cpp_params.pooling_type = static_cast<enum llama_pooling_type>(params->pooling_type);
         cpp_params.embd_normalize = params->embd_normalize;
@@ -200,7 +208,7 @@ int llama_mobile_completion_c(
         context->params.sampling.n_probs = params->n_probs;
         context->params.antiprompt = c_str_array_to_vector(params->stop_sequences, params->stop_sequence_count);
         if (params->grammar) {
-             context->params.sampling.grammar = params->grammar;
+             context->params.sampling.grammar = common_grammar(COMMON_GRAMMAR_TYPE_USER, params->grammar);
         }
         
         // Advanced parameters for Jinja template engine (stored in context)
@@ -383,7 +391,7 @@ int llama_mobile_multimodal_completion_c(
         context->params.sampling.n_probs = params->n_probs;
         context->params.antiprompt = c_str_array_to_vector(params->stop_sequences, params->stop_sequence_count);
         if (params->grammar) {
-            context->params.sampling.grammar = params->grammar;
+            context->params.sampling.grammar = common_grammar(COMMON_GRAMMAR_TYPE_USER, params->grammar);
         }
         
         // Handle chat messages if provided (stored in context)
@@ -1631,6 +1639,19 @@ bool llama_mobile_is_conversation_active_c(llama_mobile_context_handle_t handle)
 
 // **HIGH PRIORITY: Model Download Functions**
 
+// No-op progress callback used to suppress the default terminal progress bar
+// that common_download_file_single would otherwise print.
+struct llama_mobile_null_download_callback : common_download_callback {
+    void on_start(const common_download_progress &) override {}
+    void on_update(const common_download_progress &) override {}
+    void on_done(const common_download_progress &, bool) override {}
+};
+
+// Returns true when the download finished with a success (or cache-hit) status.
+static bool llama_mobile_download_ok(int status) {
+    return (status >= 200 && status < 300) || status == 304;
+}
+
 llama_mobile_download_result_c_t llama_mobile_download_model_c(const llama_mobile_download_params_c_t* params) {
     llama_mobile_download_result_c_t result = {false, nullptr, nullptr, 0};
     
@@ -1663,8 +1684,15 @@ llama_mobile_download_result_c_t llama_mobile_download_model_c(const llama_mobil
         
         model_params.path = destination_path + "/" + filename;
         
-        // Call download function (new API doesn't support progress callback directly)
-        bool success = common_download_model(model_params, bearer_token, params->offline);
+        // common_download_model was removed; download the single file directly.
+        // Returns the HTTP status code (or 304 for a cached file), or -1 on error.
+        llama_mobile_null_download_callback progress_sink;
+        common_download_opts dl_opts;
+        dl_opts.bearer_token = bearer_token;
+        dl_opts.offline = params->offline;
+        dl_opts.callback = &progress_sink;
+        const int dl_status = common_download_file_single(model_params.url, model_params.path, dl_opts);
+        const bool success = llama_mobile_download_ok(dl_status);
         
         if (success) {
             result.success = true;
@@ -1705,8 +1733,14 @@ llama_mobile_download_result_c_t llama_mobile_download_hf_file_c(const char* rep
         model_params.url = "https://huggingface.co/" + repo_id_str + "/resolve/main/" + filename_str;
         model_params.path = destination_path_str + "/" + filename_str;
         
-        // Call download function (new API doesn't support progress callback directly)
-        bool success = common_download_model(model_params, token, offline);
+        // common_download_model was removed; download the single file directly.
+        llama_mobile_null_download_callback progress_sink;
+        common_download_opts dl_opts;
+        dl_opts.bearer_token = token;
+        dl_opts.offline = offline;
+        dl_opts.callback = &progress_sink;
+        const int dl_status = common_download_file_single(model_params.url, model_params.path, dl_opts);
+        const bool success = llama_mobile_download_ok(dl_status);
         
         if (success) {
             result.success = true;

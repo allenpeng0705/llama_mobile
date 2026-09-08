@@ -137,3 +137,7 @@ llama_mobile-ios-SDK/llama_mobile.xcframework/ios-arm64-simulator/llama_mobile.f
 /build-ios-device-arm64-static
 /lib/tests/build/llama.cpp-master/ggml/src/CMakeFiles/ggml-base.dir
 /lib/tests/build
+llama_mobile-ios-SDK/llama_mobile.xcframework/ios-arm64-simulator/llama_mobile.framework/llama_mobile
+llama_mobile-ios-SDK/llama_mobile.xcframework/ios-arm64/llama_mobile.framework/llama_mobile
+/build-ios-simulator-arm64-static
+llama_mobile-ios-SDK/llama_mobile.xcframework/ios-arm64/llama_mobile.framework/llama_mobile

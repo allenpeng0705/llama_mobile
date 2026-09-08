@@ -15,13 +15,17 @@ include_directories(
 set(LLAMA_MOBILE_LIB_PATH "${CMAKE_SOURCE_DIR}/../../../src/main/jniLibs")
 
 # Add all pre-built static libraries
+# Note: llama.cpp master split the old `common` library into libllama-common.a +
+# libllama-common-base.a; mtmd also needs libvendor-hash.a.
 set(STATIC_LIBS
     llama_mobile_core
     llama
-    common
+    llama-common
+    llama-common-base
     ggml
     ggml-base
     ggml-cpu
+    vendor-hash
     mtmd
     cpp-httplib
     ggml-vulkan

@@ -57,7 +57,7 @@ print_final_summary() {
         echo "  2. Ensure pre-built framework exists at $SHARED_DIR/$XCFRAMEWORK_NAME"
         echo "  3. Run ./scripts/build-ios-framework.sh to rebuild iOS framework"
         echo "  4. Verify Swift wrapper exists at $SDK_DIR/Sources/LlamaMobile/LlamaMobile.swift"
-        echo "  5. Check XCFramework contains required platforms (ios-arm64, ios-arm64-simulator)"
+        echo "  5. Check XCFramework contains required platforms (ios-arm64, ios-arm64[-x86_64]-simulator)"
         echo ""
     fi
     
@@ -148,8 +148,10 @@ validate_sdk() {
             return 1
         fi
         
-        if [ ! -d "$sdk_dir/$XCFRAMEWORK_NAME/ios-arm64-simulator" ]; then
-            log_message "ERROR" "XCFramework missing ios-arm64-simulator platform"
+        # Accept either an arm64-only simulator slice (ios-arm64-simulator) or a
+        # universal simulator slice (ios-arm64_x86_64-simulator).
+        if ! ls -d "$sdk_dir/$XCFRAMEWORK_NAME"/ios-arm64*simulator > /dev/null 2>&1; then
+            log_message "ERROR" "XCFramework missing ios-arm64 simulator platform"
             return 1
         fi
         
@@ -340,8 +342,9 @@ create_framework_bundle "$SDK_DIR" "$FRAMEWORK_NAME"
 log_message "INFO" "Verifying SDK structure..."
 
 # Check framework structure
+SIM_SLICE_DIR="$(ls -d "$SDK_DIR/$XCFRAMEWORK_NAME"/ios-arm64*simulator 2>/dev/null | head -1)"
 if [ -f "$SDK_DIR/$XCFRAMEWORK_NAME/ios-arm64/$FRAMEWORK_NAME.framework/Headers/llama_mobile_api.h" ] && \
-   [ -f "$SDK_DIR/$XCFRAMEWORK_NAME/ios-arm64-simulator/$FRAMEWORK_NAME.framework/Headers/llama_mobile_api.h" ]; then
+   [ -n "$SIM_SLICE_DIR" ] && [ -f "$SIM_SLICE_DIR/$FRAMEWORK_NAME.framework/Headers/llama_mobile_api.h" ]; then
     log_message "SUCCESS" "Framework headers are accessible"
 else
     log_message "ERROR" "Framework headers not found"
