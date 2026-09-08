@@ -518,8 +518,10 @@ build_shared_framework() {
     cp "$LIB_PATH" "$DEST_PATH/$FRAMEWORK_NAME"
     
     # Copy headers
-    cp "$ROOT_DIR/lib/llama_mobile_api.h" "$DEST_PATH/Headers/"
-    cp "$ROOT_DIR/lib/llama_mobile_ffi.h" "$DEST_PATH/Headers/"
+    # v1 public headers were removed on the v2 branch (docs/v1-purge-workplan.md);
+    # the framework ships the v2 IDL (llama_mobile_v2.h) + version header only.
+    cp "$ROOT_DIR/lib/llama_mobile_v2.h" "$DEST_PATH/Headers/"
+    cp "$ROOT_DIR/lib/llama_mobile_version.h" "$DEST_PATH/Headers/"
     
     # Copy all llama_cpp headers recursively
     mkdir -p "$DEST_PATH/Headers/llama_cpp"
@@ -565,7 +567,7 @@ build_shared_framework() {
     mkdir -p "$DEST_PATH/Modules"
     cat > "$DEST_PATH/Modules/module.modulemap" << EOF
 framework module llama_mobile {
-    umbrella header "llama_mobile_api.h"
+    umbrella header "llama_mobile_v2.h"
     
     export *
     module * { export * }
@@ -706,8 +708,9 @@ log_message "[INFO] Added Accelerate framework and libc++ as required dependenci
 script_progress "Copying header files..."
 
 # Copy headers to static include directory
-cp "$ROOT_DIR/lib/llama_mobile_ffi.h" "$STATIC_INCLUDE_DIR/"
-cp "$ROOT_DIR/lib/llama_mobile_api.h" "$STATIC_INCLUDE_DIR/"
+# v2 IDL + version header only (v1 public headers removed on this branch).
+cp "$ROOT_DIR/lib/llama_mobile_v2.h" "$STATIC_INCLUDE_DIR/"
+cp "$ROOT_DIR/lib/llama_mobile_version.h" "$STATIC_INCLUDE_DIR/"
 mkdir -p "$STATIC_INCLUDE_DIR/llama_cpp"
 rsync -av "$ROOT_DIR/lib/llama.cpp-master/ggml/include/" "$STATIC_INCLUDE_DIR/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
 rsync -av "$ROOT_DIR/lib/llama.cpp-master/include/" "$STATIC_INCLUDE_DIR/llama_cpp/" --include="*.h" --include="*.hpp" --include="*/" --exclude="*"
@@ -866,7 +869,7 @@ else
 fi
 
 # Check header files
-if [ -f "$STATIC_INCLUDE_DIR/llama_mobile_api.h" ]; then
+if [ -f "$STATIC_INCLUDE_DIR/llama_mobile_v2.h" ]; then
     log_message "[SUCCESS] Static header files copied to: $STATIC_INCLUDE_DIR"
 else
     log_message "[ERROR] Static header files not found!"

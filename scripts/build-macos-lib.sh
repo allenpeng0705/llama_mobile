@@ -242,8 +242,9 @@ fi
 
 # Copy headers to static include directory
 script_progress "Copying headers to static directory..."
-cp "$ROOT_DIR/lib/llama_mobile_api.h" "$STATIC_INCLUDE_DIR/"
-cp "$ROOT_DIR/lib/llama_mobile_ffi.h" "$STATIC_INCLUDE_DIR/"
+# v2 IDL + version header only (v1 public headers removed on the v2 branch).
+cp "$ROOT_DIR/lib/llama_mobile_v2.h" "$STATIC_INCLUDE_DIR/"
+cp "$ROOT_DIR/lib/llama_mobile_version.h" "$STATIC_INCLUDE_DIR/"
 cp "$ROOT_DIR/lib/llama_mobile_version.h" "$STATIC_INCLUDE_DIR/"
 
 # Copy all llama_cpp headers recursively
@@ -322,7 +323,7 @@ output/mac_libs/
 ## Example Code
 
 ```c++
-#include <llama_mobile_api.h>
+#include <llama_mobile_v2.h>
 
 // Initialize context
 llama_context_params params = llama_context_default_params();
@@ -362,11 +363,11 @@ If you get linker errors like "undefined reference to...":
 
 ### Header Not Found
 
-If you get "llama_mobile_api.h file not found":
+If you get "llama_mobile_v2.h file not found":
 
 1. Make sure you've added the include directory to "Header Search Paths"
 2. Check that the include path is correct
-3. Try using angle brackets: `#include <llama_mobile_api.h>`
+3. Try using angle brackets: `#include <llama_mobile_v2.h>`
 
 ### Metal Not Working
 
@@ -454,6 +455,6 @@ echo ""
 echo "To use in your macOS app:"
 echo "1. Drag the $OUTPUT_DIR folder into your Xcode project"
 echo "2. Link to required frameworks: Foundation, Accelerate, Metal"
-echo "3. Include headers: #include <llama_mobile_api.h>"
+echo "3. Include headers: #include <llama_mobile_v2.h>"
 echo ""
 echo "Done!"

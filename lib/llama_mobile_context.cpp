@@ -26,6 +26,16 @@ llama_mobile_context::~llama_mobile_context() {
     }
     releaseMultimodal();
     releaseVocoder();
+    // The direct loader owns the llama model/context (no common_init_result);
+    // free them explicitly here.
+    if (ctx != nullptr) {
+        llama_free(ctx);
+        ctx = nullptr;
+    }
+    if (model != nullptr) {
+        llama_free_model(model);
+        model = nullptr;
+    }
 }
 
 void llama_mobile_context::rewind() {
@@ -283,19 +293,20 @@ bool llama_mobile_context::initVocoder(const std::string &vocoder_model_path) {
     vocoder_params.model.path = vocoder_model_path;
     vocoder_params.embedding = true;
     vocoder_params.n_ubatch = vocoder_params.n_batch;
+    // Prevent auto-fit probing / extra bufts (see llama_mobile_loader.cpp).
+    vocoder_params.fit_params = false;
+    vocoder_params.no_extra_bufts = true;
 
-    llama_mobile_context_vocoder *wrapper = new llama_mobile_context_vocoder{
-        .init_result = common_init_from_params(vocoder_params),
-    };
-
-    wrapper->model = wrapper->init_result->model();
-    wrapper->ctx = wrapper->init_result->context();
-
-    if (wrapper->model == nullptr || wrapper->ctx == nullptr) {
+    llama_model * vocoder_model = nullptr;
+    llama_context * vocoder_ctx = nullptr;
+    if (!llama_mobile_load_context_direct(vocoder_params, &vocoder_model, &vocoder_ctx)) {
         LOG_ERROR("Failed to load vocoder model: %s", vocoder_model_path.c_str());
-        delete wrapper;
         return false;
     }
+
+    llama_mobile_context_vocoder *wrapper = new llama_mobile_context_vocoder{};
+    wrapper->model = vocoder_model;
+    wrapper->ctx = vocoder_ctx;
 
     // Check vocab type immediately after loading
     const llama_vocab *vocab = llama_model_get_vocab(wrapper->model);
@@ -336,6 +347,15 @@ bool llama_mobile_context::isVocoderEnabled() const {
 
 void llama_mobile_context::releaseVocoder() {
     if (vocoder_wrapper != nullptr) {
+        // The direct loader owns the vocoder model/context.
+        if (vocoder_wrapper->ctx != nullptr) {
+            llama_free(vocoder_wrapper->ctx);
+            vocoder_wrapper->ctx = nullptr;
+        }
+        if (vocoder_wrapper->model != nullptr) {
+            llama_free_model(vocoder_wrapper->model);
+            vocoder_wrapper->model = nullptr;
+        }
         delete vocoder_wrapper;
         vocoder_wrapper = nullptr;
     }

@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'llama_mobile_flutter_sdk'
-  s.version          = '0.0.1'
+  s.version          = '2.0.0'
   s.summary          = 'A Flutter plugin for LlamaMobile'
   s.description      = <<-DESC
 A Flutter plugin for LlamaMobile that provides access to LLMs on mobile devices.

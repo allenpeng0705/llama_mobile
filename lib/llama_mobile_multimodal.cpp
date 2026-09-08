@@ -196,6 +196,7 @@ static mtmd_tokenize_result tokenizeWithMedia(llama_mobile_context::llama_mobile
 
     mtmd_input_text input_text;
     input_text.text = prompt.c_str();
+    input_text.text_len = prompt.size(); // must be set: mtmd splits by this buffer
     input_text.add_special = true;
     input_text.parse_special = true;
 

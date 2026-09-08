@@ -38,6 +38,33 @@ build_tests() {
     fi
 }
 
+# Prompts the user to pick one file matching a glob under MODELS_DIR.
+pick_file() {
+    local pattern="$1"
+    local prompt="$2"
+    local -a FILES
+    FILES=($(find "$MODELS_DIR" -type f -name "$pattern" 2>/dev/null | sort))
+    
+    if [ ${#FILES[@]} -eq 0 ]; then
+        echo -e "${YELLOW}⚠ No file matching '$pattern' under $MODELS_DIR${NC}"
+        return 1
+    fi
+    if [ ${#FILES[@]} -eq 1 ]; then
+        echo "${FILES[0]}"
+        return 0
+    fi
+    echo -e "${BLUE}$prompt${NC}"
+    for i in "${!FILES[@]}"; do
+        echo -e "  $((i+1)). $(basename "${FILES[$i]}")"
+    done
+    read -p "Enter file number: " FILE_SELECTION
+    if ! [[ "$FILE_SELECTION" =~ ^[0-9]+$ ]] || [ "$FILE_SELECTION" -lt 1 ] || [ "$FILE_SELECTION" -gt ${#FILES[@]} ]; then
+        echo -e "${RED}✗ Invalid selection${NC}"
+        exit 1
+    fi
+    echo "${FILES[$FILE_SELECTION-1]}"
+}
+
 list_models() {
     echo -e "${BLUE}Available models:${NC}"
     
@@ -86,30 +113,32 @@ select_model() {
 }
 
 select_program() {
-    echo -e "${BLUE}Select program to run:${NC}"
-    echo -e "  1. test_api (API test program)"
-    echo -e "  2. test_advanced_chat (Advanced chat features test)"
-    echo -e "  3. test_chat_template (Chat template test)"
-    echo -e "  4. test_streaming (Streaming test)"
-    echo -e "  5. test_download (Download test)"
-    echo -e "  6. direct_test (Direct API test)"
-    echo -e "  7. chat_example (Interactive chat)"
-    echo -e "  8. test_conversation (Conversation API test)"
-    echo -e "  9. Run all tests"
+    echo -e "${BLUE}Select program to run (v2 suites + engine-level host suites):${NC}"
+    echo -e "  1. test_v2_meta (no-model meta/IDL checks)"
+    echo -e "  2. test_v2_functional (model: context/generate/chat/embed)"
+    echo -e "  3. test_v2_threads (model: abort/concurrency)"
+    echo -e "  4. test_v2_streaming (model: token stream order + early stop)"
+    echo -e "  5. test_v2_lora (model + lora adapter)"
+    echo -e "  6. test_v2_multimodal (vision model + mmproj + image)"
+    echo -e "  7. test_v2_tts (model + vocoder)"
+    echo -e "  8. test_chat_template (engine-level template formatting)"
+    echo -e "  9. direct_test (engine-level direct loader)"
+    echo -e "  10. Auto: run all non-interactive single-model suites"
     echo
     
     read -p "Enter selection: " PROGRAM_SELECTION
     
     case "$PROGRAM_SELECTION" in
-        1) PROGRAM="test_api" ;;
-        2) PROGRAM="test_advanced_chat" ;;
-        3) PROGRAM="test_chat_template" ;;
-        4) PROGRAM="test_streaming" ;;
-        5) PROGRAM="test_download" ;;
-        6) PROGRAM="direct_test" ;;
-        7) PROGRAM="chat_example" ;;
-        8) PROGRAM="test_conversation" ;;
-        9) PROGRAM="all" ;;
+        1) PROGRAM="test_v2_meta" ;;
+        2) PROGRAM="test_v2_functional" ;;
+        3) PROGRAM="test_v2_threads" ;;
+        4) PROGRAM="test_v2_streaming" ;;
+        5) PROGRAM="test_v2_lora" ;;
+        6) PROGRAM="test_v2_multimodal" ;;
+        7) PROGRAM="test_v2_tts" ;;
+        8) PROGRAM="test_chat_template" ;;
+        9) PROGRAM="direct_test" ;;
+        10) PROGRAM="auto" ;;
         *)
             echo -e "${RED}✗ Invalid selection${NC}"
             exit 1
@@ -119,49 +148,71 @@ select_program() {
     echo
 }
 
+# Resolves the extra per-suite model assets (std fixtures preferred).
+extra_assets() {
+    case "$PROGRAM" in
+        test_v2_lora)
+            LORA_PATH="$(pick_file 'lora/*.gguf' 'Select a LoRA adapter:')" || LORA_PATH=""
+            ;;
+        test_v2_multimodal)
+            MMPROJ_PATH="$(pick_file 'mmproj-*.gguf' 'Select an mmproj:')" || MMPROJ_PATH=""
+            IMAGE_PATH="$(pick_file 'img/*' 'Select an image:')" || IMAGE_PATH=""
+            ;;
+        test_v2_tts)
+            VOCODER_PATH="$(pick_file '*WavTokenizer*' 'Select a vocoder model:')" || VOCODER_PATH=""
+            if [ -z "$VOCODER_PATH" ]; then
+                VOCODER_PATH="$(pick_file '*neuttn*' 'Select a vocoder model:')" || VOCODER_PATH=""
+            fi
+            ;;
+    esac
+}
+
 run_program() {
     cd "$BUILD_DIR"
-    
-    if [ "$PROGRAM" = "all" ]; then
-        echo -e "${BLUE}Running all tests...${NC}"
+
+    if [ "$PROGRAM" = "auto" ]; then
+        echo -e "${BLUE}Running the non-interactive v2 suites...${NC}"
         echo -e "${YELLOW}====================================${NC}"
-        
-        echo -e "\n${BLUE}1. Running test_download...${NC}"
-        ./"test_download" --help
-        
+
+        echo -e "\n${BLUE}1. test_v2_meta (no model)...${NC}"
+        ./test_v2_meta || { echo -e "${RED}✗ test_v2_meta failed${NC}"; exit 1; }
+
         if [ -n "$SELECTED_MODEL" ]; then
-            echo -e "\n${BLUE}2. Running test_api...${NC}"
-            ./"test_api" "$SELECTED_MODEL"
-            
-            echo -e "\n${BLUE}3. Running test_advanced_chat...${NC}"
-            ./"test_advanced_chat" "$SELECTED_MODEL"
-            
-            echo -e "\n${BLUE}4. Running test_chat_template...${NC}"
-            ./"test_chat_template" "$SELECTED_MODEL"
-            
-            echo -e "\n${BLUE}5. Running test_streaming...${NC}"
-            ./"test_streaming" "$SELECTED_MODEL"
-            
-            echo -e "\n${BLUE}6. Running chat_example...${NC}"
-            ./"chat_example" "$SELECTED_MODEL"
-            
-            echo -e "\n${BLUE}7. Running test_conversation...${NC}"
-            ./"test_conversation" "$SELECTED_MODEL"
-            
-            echo -e "\n${BLUE}8. Running direct_test...${NC}"
-            ./"direct_test" "$SELECTED_MODEL"
+            for t in test_v2_functional test_v2_threads test_v2_streaming test_chat_template direct_test; do
+                echo -e "\n${BLUE}$t ${SELECTED_MODEL}...${NC}"
+                ./"$t" "$SELECTED_MODEL" || { echo -e "${RED}✗ $t failed${NC}"; exit 1; }
+            done
+            echo -e "${YELLOW}  (test_v2_lora / test_v2_multimodal / test_v2_tts need extra assets; run them individually)${NC}"
         else
-            echo -e "${YELLOW}⚠ Skipping model-dependent tests (no model selected)${NC}"
+            echo -e "${YELLOW}⚠ Skipping model-dependent suites (no model selected)${NC}"
         fi
-        
-        echo -e "${YELLOW}====================================${NC}"
-        echo -e "${GREEN}✓ All tests completed${NC}"
+
+        echo -e "\n${YELLOW}====================================${NC}"
+        echo -e "${GREEN}✓ All automated suites passed${NC}"
     else
         echo -e "${BLUE}Running $PROGRAM...${NC}"
         echo -e "${YELLOW}====================================${NC}"
-        
-        if [ "$PROGRAM" = "test_download" ]; then
+
+        if [ "$PROGRAM" = "test_v2_meta" ]; then
             ./"$PROGRAM"
+        elif [ "$PROGRAM" = "test_v2_lora" ]; then
+            if [ -z "$SELECTED_MODEL" ] || [ -z "$LORA_PATH" ]; then
+                echo -e "${YELLOW}⚠ test_v2_lora requires a base model and a LoRA adapter${NC}"
+                exit 1
+            fi
+            ./"$PROGRAM" "$SELECTED_MODEL" "$LORA_PATH"
+        elif [ "$PROGRAM" = "test_v2_multimodal" ]; then
+            if [ -z "$SELECTED_MODEL" ] || [ -z "$MMPROJ_PATH" ] || [ -z "$IMAGE_PATH" ]; then
+                echo -e "${YELLOW}⚠ test_v2_multimodal requires a vision model, mmproj and an image${NC}"
+                exit 1
+            fi
+            ./"$PROGRAM" "$SELECTED_MODEL" "$MMPROJ_PATH" "$IMAGE_PATH"
+        elif [ "$PROGRAM" = "test_v2_tts" ]; then
+            if [ -z "$SELECTED_MODEL" ] || [ -z "$VOCODER_PATH" ]; then
+                echo -e "${YELLOW}⚠ test_v2_tts requires a main model and a vocoder model${NC}"
+                exit 1
+            fi
+            ./"$PROGRAM" "$SELECTED_MODEL" "$VOCODER_PATH"
         elif [ -n "$SELECTED_MODEL" ]; then
             echo -e "${BLUE}With model: $(basename "$SELECTED_MODEL")${NC}"
             ./"$PROGRAM" "$SELECTED_MODEL"
@@ -209,11 +260,16 @@ fi
 
 if [ "$BUILD_ONLY" = false ]; then
     select_program
-    if [ "$PROGRAM" != "test_download" ]; then
+    if [ "$PROGRAM" != "auto" ] && [ "$PROGRAM" != "test_v2_meta" ]; then
         select_model
+        extra_assets
     else
         SELECTED_MODEL=""
-        echo -e "${YELLOW}⚠ Skipping model selection (not needed for $PROGRAM)${NC}"
+        LORA_PATH=""
+        MMPROJ_PATH=""
+        IMAGE_PATH=""
+        VOCODER_PATH=""
+        echo -e "${YELLOW}⚠ No model needed for $PROGRAM${NC}"
         echo
     fi
     run_program

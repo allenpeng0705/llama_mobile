@@ -307,8 +307,10 @@ log_message "[SUCCESS] Output directories created"
 
 # Copy header files to include directory
 script_progress "Copying header files..."
-cp "$ROOT_DIR/lib/llama_mobile_ffi.h" "$INCLUDE_DIR/" 2>/dev/null || true
-cp "$ROOT_DIR/lib/llama_mobile_api.h" "$INCLUDE_DIR/" 2>/dev/null || true
+# v1 public headers (llama_mobile_ffi.h/llama_mobile_api.h) were removed on the
+# v2 branch (see docs/v1-purge-workplan.md); ship the v2 IDL header instead.
+cp "$ROOT_DIR/lib/llama_mobile_v2.h" "$INCLUDE_DIR/" 2>/dev/null || true
+cp "$ROOT_DIR/lib/llama_mobile_version.h" "$INCLUDE_DIR/" 2>/dev/null || true
 
 # Copy headers from llama.cpp-master
 mkdir -p "$INCLUDE_DIR/llama_cpp"
@@ -505,8 +507,11 @@ STATIC_LIBS=(
     "libmtmd.a"
     "libcpp-httplib.a"
     "libvendor-hash.a"
-    "libggml-vulkan.a"
 )
+# Vulkan is only required when the backend is enabled.
+if [[ "$GGML_VULKAN" == "ON" ]]; then
+    STATIC_LIBS+=("libggml-vulkan.a")
+fi
 
 # Check if static libraries were built
 for ABI in "${ABI_LIST[@]}"; do

@@ -27,7 +27,7 @@ let package = Package(
         ),
         .testTarget(
             name: "LlamaMobileTests",
-            dependencies: ["LlamaMobile"],
+            dependencies: ["LlamaMobile", "llama_mobile"],
             linkerSettings: [
                 .linkedFramework("Accelerate")
             ]

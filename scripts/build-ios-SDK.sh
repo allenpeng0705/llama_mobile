@@ -38,7 +38,7 @@ print_final_summary() {
         echo "  SDK Directory: $SDK_DIR"
         echo "  Framework Bundle: $SDK_DIR/${FRAMEWORK_NAME}Bundle"
         echo "  XCFramework: $SDK_DIR/$XCFRAMEWORK_NAME"
-        echo "  Swift Wrapper: $SDK_DIR/Sources/LlamaMobile/LlamaMobile.swift"
+        echo "  Swift Wrapper: $SDK_DIR/Sources/LlamaMobile/LlamaEngine.swift"
         echo "  Centralized Output: $OUTPUT_SDK_DIR/${FRAMEWORK_NAME}Bundle"
         echo ""
         echo "Next Steps:"
@@ -56,7 +56,7 @@ print_final_summary() {
         echo "  1. Check error messages above for specific issues"
         echo "  2. Ensure pre-built framework exists at $SHARED_DIR/$XCFRAMEWORK_NAME"
         echo "  3. Run ./scripts/build-ios-framework.sh to rebuild iOS framework"
-        echo "  4. Verify Swift wrapper exists at $SDK_DIR/Sources/LlamaMobile/LlamaMobile.swift"
+        echo "  4. Verify Swift wrapper exists at $SDK_DIR/Sources/LlamaMobile/LlamaEngine.swift"
         echo "  5. Check XCFramework contains required platforms (ios-arm64, ios-arm64[-x86_64]-simulator)"
         echo ""
     fi
@@ -124,8 +124,8 @@ validate_sdk() {
     fi
     
     # Check if Swift wrapper exists
-    if [ ! -f "$sdk_dir/Sources/LlamaMobile/LlamaMobile.swift" ]; then
-        log_message "ERROR" "Swift wrapper not found at Sources/LlamaMobile/LlamaMobile.swift"
+    if [ ! -f "$sdk_dir/Sources/LlamaMobile/LlamaEngine.swift" ]; then
+        log_message "ERROR" "Swift wrapper not found at Sources/LlamaMobile/LlamaEngine.swift"
         return 1
     fi
     
@@ -162,8 +162,8 @@ validate_sdk() {
     fi
     
     # Check for test files
-    if [ ! -f "$sdk_dir/Tests/LlamaMobileTests/LlamaMobileTests.swift" ]; then
-        log_message "ERROR" "Test file not found at Tests/LlamaMobileTests/LlamaMobileTests.swift"
+    if [ ! -f "$sdk_dir/Tests/LlamaMobileTests/LlamaEngineTests.swift" ]; then
+        log_message "ERROR" "Test file not found at Tests/LlamaMobileTests/LlamaEngineTests.swift"
         cd "$ROOT_DIR"
         return 1
     fi
@@ -301,7 +301,7 @@ if [ ! -d "$SDK_DIR" ]; then
     # Create Tests directory
     mkdir -p "$SDK_DIR/Tests/LlamaMobileTests"
     
-    log_message "INFO" "SDK directory structure created. Please add your persistent files (LlamaMobile.swift, Package.swift, README.md) manually."
+    log_message "INFO" "SDK directory structure created. Please add your persistent files (LlamaEngine.swift, Package.swift, README.md) manually."
 fi
 
 # Clean only the XCFramework directory while preserving other files
@@ -322,8 +322,8 @@ log_message "INFO" "Copying framework to SDK directory..."
 cp -R "$SHARED_DIR/$XCFRAMEWORK_NAME" "$SDK_DIR/"
 
 # Verify the Swift wrapper exists
-if [ ! -f "$SDK_DIR/Sources/LlamaMobile/LlamaMobile.swift" ]; then
-    log_message "ERROR" "Swift wrapper not found at $SDK_DIR/Sources/LlamaMobile/LlamaMobile.swift"
+if [ ! -f "$SDK_DIR/Sources/LlamaMobile/LlamaEngine.swift" ]; then
+    log_message "ERROR" "Swift wrapper not found at $SDK_DIR/Sources/LlamaMobile/LlamaEngine.swift"
     print_final_summary "FAILED" "iOS SDK" "Swift wrapper not found"
     exit 1
 fi
@@ -343,8 +343,8 @@ log_message "INFO" "Verifying SDK structure..."
 
 # Check framework structure
 SIM_SLICE_DIR="$(ls -d "$SDK_DIR/$XCFRAMEWORK_NAME"/ios-arm64*simulator 2>/dev/null | head -1)"
-if [ -f "$SDK_DIR/$XCFRAMEWORK_NAME/ios-arm64/$FRAMEWORK_NAME.framework/Headers/llama_mobile_api.h" ] && \
-   [ -n "$SIM_SLICE_DIR" ] && [ -f "$SIM_SLICE_DIR/$FRAMEWORK_NAME.framework/Headers/llama_mobile_api.h" ]; then
+if [ -f "$SDK_DIR/$XCFRAMEWORK_NAME/ios-arm64/$FRAMEWORK_NAME.framework/Headers/llama_mobile_v2.h" ] && \
+   [ -n "$SIM_SLICE_DIR" ] && [ -f "$SIM_SLICE_DIR/$FRAMEWORK_NAME.framework/Headers/llama_mobile_v2.h" ]; then
     log_message "SUCCESS" "Framework headers are accessible"
 else
     log_message "ERROR" "Framework headers not found"
@@ -352,7 +352,7 @@ else
 fi
 
 # Check Swift wrapper
-if grep -q "import llama_mobile" "$SDK_DIR/Sources/LlamaMobile/LlamaMobile.swift"; then
+if grep -q "import llama_mobile" "$SDK_DIR/Sources/LlamaMobile/LlamaEngine.swift"; then
     log_message "SUCCESS" "Swift wrapper properly imports llama_mobile module"
 else
     log_message "ERROR" "Swift wrapper does not import llama_mobile module"
@@ -376,7 +376,7 @@ log_message "INFO" ""
 log_message "INFO" "SDK Location: $SDK_DIR"
 log_message "INFO" "Output Bundle Location: $OUTPUT_SDK_DIR/${FRAMEWORK_NAME}Bundle"
 log_message "INFO" "Framework: $SDK_DIR/$XCFRAMEWORK_NAME"
-log_message "INFO" "Swift Wrapper: $SDK_DIR/Sources/LlamaMobile/LlamaMobile.swift"
+log_message "INFO" "Swift Wrapper: $SDK_DIR/Sources/LlamaMobile/LlamaEngine.swift"
 log_message "INFO" "Framework Bundle: $SDK_DIR/${FRAMEWORK_NAME}Bundle"
 log_message "INFO" ""
 log_message "INFO" "To use the SDK in your project:"

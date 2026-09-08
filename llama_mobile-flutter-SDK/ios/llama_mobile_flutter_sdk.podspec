@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'llama_mobile_flutter_sdk'
-  s.version          = '0.0.1'
+  s.version          = '2.0.0'
   s.summary          = 'Flutter SDK for llama_mobile.'
   s.description      = <<-DESC
 Flutter SDK wrapper for llama_mobile iOS framework and Android library.

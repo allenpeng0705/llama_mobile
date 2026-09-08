@@ -31,13 +31,12 @@ set(LLAMA_MOBILE_CORE_SOURCES
     llama_mobile_utils.cpp
     llama_mobile_embedding.cpp
     llama_mobile_lora.cpp
-    llama_mobile_ffi.cpp
-    llama_mobile_api.cpp
     llama_mobile_tokenization.cpp
     llama_mobile_multimodal.cpp
     llama_mobile_tts.cpp
     llama_mobile_bench.cpp
     llama_mobile_chat.cpp
+    llama_mobile_v2.cpp
 )
 
 add_library(llama_mobile_core_static STATIC ${LLAMA_MOBILE_CORE_SOURCES})
@@ -57,6 +56,10 @@ set_target_properties(llama_mobile_core_static PROPERTIES
 # Don't combine - we'll use all individual libraries
 
 if(BUILD_SHARED_LIBS)
+    # The v1 "*_t" convenience layer (llama_mobile_api.cpp) and the v1 FFI
+    # layer (llama_mobile_ffi.cpp) were purged with the v1 public API, so the
+    # shared core is built from the exact same sources as the static one (no
+    # duplicate-symbol exclusions are needed anymore).
     add_library(llama_mobile_core_shared SHARED ${LLAMA_MOBILE_CORE_SOURCES})
     target_link_libraries(llama_mobile_core_shared PUBLIC llama ggml llama-common mtmd)
     target_include_directories(llama_mobile_core_shared PUBLIC 

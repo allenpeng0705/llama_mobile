@@ -1,6 +1,6 @@
 # llama_mobile iOS SDK
 
-The llama_mobile iOS SDK provides a Swift wrapper around the llama_mobile C API for easy integration into iOS projects. It includes both the XCFramework with native implementations and a Swift wrapper for a friendly API.
+The llama_mobile iOS SDK provides the v2 Swift API (`LlamaEngine`) around the llama_mobile v2 C API (`llama_mobile_v2.h`) for easy integration into iOS projects. It includes the XCFramework with native implementations and the Swift wrapper.
 
 ## Project Structure
 
@@ -18,10 +18,10 @@ llama_mobile-ios-SDK/
 │   └── Info.plist                 # XCFramework configuration
 ├── Sources/
 │   └── LlamaMobile/               # Swift wrapper files
-│       └── LlamaMobile.swift      # Main Swift API wrapper
+│       └── LlamaEngine.swift      # v2 Swift API wrapper (LlamaEngine)
 ├── Tests/
 │   └── LlamaMobileTests/          # Test files
-│       └── LlamaMobileTests.swift # SDK test cases
+│       └── LlamaEngineTests.swift # v2 conformance tests
 ├── llama_mobileBundle/            # Complete integration bundle
 │   ├── Frameworks/                # XCFramework copy
 │   ├── Sources/                   # Swift wrapper copy
@@ -38,7 +38,7 @@ llama_mobile-ios-SDK/
 
 The llama_mobile-ios-SDK is a library project that packages:
 - **Pre-built native XCFramework** (copied from `llama_mobile-ios/shared/`)
-- **Swift wrapper code** (LlamaMobile.swift)
+- **Swift wrapper code** (`LlamaEngine.swift`)
 
 "Building" the SDK refers to updating the SDK structure with the latest XCFramework and ensuring all components are properly organized for integration. The native C++ libraries are pre-built and simply copied during this process.
 
@@ -78,7 +78,7 @@ After running the build script, the iOS SDK is available at:
 
 The `output/llama_mobile-iOS-SDK/llama_mobileBundle/` directory is a self-contained bundle that includes:
 - **Frameworks/llama_mobile.xcframework** - Native C++ libraries for iOS
-- **Sources/LlamaMobile/** - Swift wrapper source code
+- **Sources/LlamaMobile/** - v2 Swift wrapper source code (`LlamaEngine.swift`)
 - **README.md** - Integration instructions
 - **llama_mobile.podspec** - CocoaPod specification
 
@@ -105,6 +105,10 @@ The SDK includes test files that validate functionality, but full test execution
 2. **Configure Test Environment**
    - Ensure you have an iOS simulator set up
    - Update model paths in `Tests/LlamaMobileTests/LlamaMobileTests.swift` to point to actual model files
+   - `LlamaEngineTests.swift` (v2 §8 conformance: sync/async/stream/abort) uses
+     the same model paths and skips with `XCTSkip` when a model is missing; you
+     can override the model with the `LLAMA_MOBILE_TEST_MODEL` environment
+     variable (or scheme argument) to point at a GGUF on your device.
 
 3. **Run Tests**
    - Select an iOS simulator as the run destination
@@ -130,9 +134,9 @@ The SDK includes test files that validate functionality, but full test execution
 ### Option 2: Use individual components
 
 1. Add the `llama_mobile.xcframework` to your Xcode project
-2. Add the `LlamaMobile.swift` file to your project
+2. Add the `LlamaEngine.swift` file to your project
 3. Import `LlamaMobile` in your Swift files
-4. Use the existing API structure from `LlamaMobile.swift`
+4. Use the `LlamaEngine` API (see the usage section above)
 
 ### Option 3: Use CocoaPods
 
@@ -171,44 +175,93 @@ The SDK requires the following frameworks:
 
 These are automatically included when using CocoaPods or Swift Package Manager, or you can add them manually when integrating the framework directly.
 
-## Usage Example
+## Usage — v2 `LlamaEngine` (recommended for new code)
+
+`LlamaEngine` is the v2 Swift API built on the v2 C API (`llama_mobile_v2.h`).
+The legacy v1 `LlamaMobile` facade and the v1 C ABI have been fully removed on
+this branch (see the V1 removal section below).
+
+Every operation comes in two documented forms (threading contract in
+`docs/api-contract-v2.md` §8):
+
+- a **sync** form that blocks the calling thread — never call it from the
+  main/UI thread;
+- an **async** form that never blocks the caller.
 
 ```swift
 import LlamaMobile
 
-// Initialize the model
-let params = LlamaMobile.InitParams(
-    modelPath: "/path/to/model.gguf",
-    threadCount: 4,
-    contextSize: 2048
-)
-
-do {
-    let llamaMobile = try LlamaMobile(params: params)
-    
-    // Generate completion
-    let completionParams = LlamaMobile.CompletionParams(
-        prompt: "Hello, world!",
-        maxTokens: 100,
-        temperature: 0.7
-    )
-    
-    try llamaMobile.generateCompletion(params: completionParams) { result in
-        switch result {
-        case .success(let text):
-            print("Generated text: \(text)")
-        case .failure(let error):
-            print("Error: \(error)")
-        }
-    }
-} catch {
-    print("Initialization error: \(error)")
+// --- Open a model ---------------------------------------------------------
+// Sync (blocking load — call off the main thread):
+//   let engine = try LlamaEngine.open(config)
+// Async (never blocks the caller):
+var config = LlamaModelConfig(modelPath: "/path/to/model.gguf")
+config.engine = .auto               // .cpu / .metal / .vulkan / .opencl
+config.nCtx = 2048
+config.flags = [.mmap, .chat]       // context flags
+config.loadProgress = { progress in // 0...1 on the loading thread
+    print("loading \(progress)")
+    return true                     // false aborts the load
 }
+let engine = try await LlamaEngine.open(config)
+
+// --- One-shot generation --------------------------------------------------
+// Sync (blocks the calling thread — never call from the main/UI thread):
+var req = LlamaGenerationRequest(prompt: "Write a haiku about llamas")
+req.maxTokens = 64
+req.sampling.temperature = 0.8
+let r = try await Task.detached { try engine.generate(req) }.value  // sync form
+print(r.text, r.stopReason, r.usage)
+
+// Async (never blocks):
+let asyncResult = try await engine.generate(req)
+
+// --- Chat via messages ----------------------------------------------------
+var chat = LlamaGenerationRequest(messages: [
+    LlamaMessage(role: "system", content: "You are a concise assistant."),
+    LlamaMessage(role: "user", content: "What is 2+2?"),
+])
+chat.maxTokens = 128
+let answer = try await engine.generate(chat)
+
+// --- Streaming + abort ----------------------------------------------------
+var streamReq = LlamaGenerationRequest(prompt: "Tell me a long story")
+streamReq.maxTokens = 1000
+var requestId: UInt64?
+for try await event in engine.generateStream(streamReq) {
+    switch event {
+    case .started(let id):  requestId = id        // pass this to abort()
+    case .token(let text):  print(text, terminator: "")
+    case .done(let result):
+        if result.stopReason == .aborted { print("\n[aborted by user]") }
+    case .failed(let error): print("\n[error] \(error)")
+    }
+}
+// abort() is thread-safe — safe to call from any thread (e.g. a UI action):
+try engine.abort(requestId: requestId!)
+
+// --- Lifecycle -------------------------------------------------------------
+engine.close()   // idempotent
 ```
+
+**Threading rules (short version):** use the `async` forms from your UI code;
+they never block the caller and all events are delivered on the engine's
+private serial queue — hop back to the main actor with `await MainActor.run`
+when you touch UI state. One engine runs one generation at a time; a second
+concurrent call throws `.alreadyRunning`.
+
+## V1 removal
+
+The legacy v1 Swift facade (`LlamaMobile`) and the v1 C ABI (`*_c`/`*_t`) have
+been fully removed on this branch (see `docs/v1-purge-workplan.md`). The SDK
+exposes only the v2 `LlamaEngine` API on top of `llama_mobile_v2.h`. The v1.x
+git tag keeps the old line available.
 
 ## API Reference
 
-For detailed API documentation, please refer to the comments in the `LlamaMobile.swift` file.
+For detailed API documentation, please refer to the comments in the
+`LlamaEngine.swift` file and the frozen `lib/llama_mobile_v2.h` header.
+
 
 ## Troubleshooting
 
@@ -224,11 +277,11 @@ For detailed API documentation, please refer to the comments in the `LlamaMobile
 
 ### Logging
 
-The SDK includes logging functionality that can help with troubleshooting. You can set the log level using:
-
-```swift
-LlamaMobile.setLogLevel(.debug)
-```
+The C API exposes `llama_mobile_log_set_level(level)` /
+`llama_mobile_log_set_callback(cb, user_data)` (see `llama_mobile_v2.h`). A
+Swift convenience on `LlamaEngine` is planned with the engine configuration
+work; until then, call the C functions directly when you need verbose logs
+during debugging.
 
 ## License
 

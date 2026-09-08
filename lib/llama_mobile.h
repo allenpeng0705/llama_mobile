@@ -25,6 +25,12 @@ std::string tokens_to_str(llama_context *ctx, const std::vector<llama_token>::co
 
 ggml_type kv_cache_type_from_str(const std::string & s);
 
+// Direct model+context loader that bypasses llama.cpp's common_init_from_params
+// (unstable when llama.cpp is embedded; see llama_mobile_loader.cpp).
+bool llama_mobile_load_context_direct(common_params & params,
+                                      llama_model ** out_model,
+                                      llama_context ** out_ctx);
+
 enum stop_type
 {
     STOP_FULL,
