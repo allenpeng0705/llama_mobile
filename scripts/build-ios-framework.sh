@@ -364,6 +364,8 @@ build_library() {
         -DLLAMA_USE_CURL=OFF \
         -DLLAMA_USE_HTTPLIB=OFF \
         -DGGML_METAL=ON \
+        -DGGML_METAL_EMBED_LIBRARY=OFF \
+        -DGGML_METAL_TARGET_OS=ios \
         -DGGML_OPENMP=OFF
     
     if [[ $? -ne 0 ]]; then
@@ -459,6 +461,8 @@ build_shared_framework() {
         -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY="" \
         -DGGML_OPENMP=OFF \
         -DGGML_METAL=ON \
+        -DGGML_METAL_EMBED_LIBRARY=OFF \
+        -DGGML_METAL_TARGET_OS=ios \
         -DBUILD_SHARED_LIBS=OFF
     
     if [[ $? -ne 0 ]]; then

@@ -87,8 +87,8 @@ int main() {
           "tts_init(NULL) -> INVALID");
     int16_t * pcm = nullptr;
     CHECK(llama_mobile_tts_speak(nullptr, nullptr, nullptr, &pcm, nullptr)
-              == LLAMA_MOBILE_ERR_UNSUPPORTED,
-          "tts_speak deferred -> UNSUPPORTED (no crash)");
+              == LLAMA_MOBILE_ERR_INVALID_ARGUMENT,
+          "tts_speak(NULL) -> INVALID");
 
     llama_mobile_capabilities_t caps;
     CHECK(llama_mobile_capabilities(&caps) == LLAMA_MOBILE_OK, "capabilities OK");
