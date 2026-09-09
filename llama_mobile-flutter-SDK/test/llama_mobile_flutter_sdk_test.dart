@@ -235,4 +235,29 @@ void main() {
     await engine.close();
     expect(calls, containsAll(['open', 'modelInfo', 'initMultimodal', 'abort', 'close']));
   });
+  test('tts + multimodal methods decode through the channel', () async {
+    mockChannel((call) async {
+      if (call.method == 'open') return 3;
+      if (call.method == 'ttsSpeak') {
+        final a = call.arguments as Map;
+        expect(a['handle'], 3);
+        expect(a['text'], 'hi');
+        expect(a['sampleRate'], 48000);
+        return [0, 1, -2];
+      }
+      if (call.method == 'ttsEnabled') return true;
+      if (call.method == 'supportsVision') return true;
+      if (call.method == 'multimodalEnabled') return false;
+      if (call.method == 'releaseMultimodal') return true;
+      return null;
+    });
+    final engine =
+        await LlamaEngine.open(LlamaEngineConfig(modelPath: '/tmp/m.gguf'));
+    final pcm = await engine.ttsSpeak('hi', sampleRate: 48000);
+    expect(pcm, [0, 1, -2]);
+    expect(await engine.ttsEnabled(), isTrue);
+    expect(await engine.supportsVision(), isTrue);
+    expect(await engine.multimodalEnabled(), isFalse);
+    expect(await engine.releaseMultimodal(), isTrue);
+  });
 }

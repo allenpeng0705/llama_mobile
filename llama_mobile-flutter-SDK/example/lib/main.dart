@@ -1,5 +1,115 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:llama_mobile_flutter_sdk/llama_mobile_flutter_sdk.dart';
+
+/// Self-run device smoke (temporary): when a bundled fixture exists
+/// (assets/models/…), the example loads it with GPU layers and chats once on
+/// startup, printing the result into the log so a real device can be verified
+/// without the flutter tool attaching.
+Future<File?> _assetToTemp(String asset) async {
+  try {
+    final data = (await rootBundle.load(asset)).buffer.asUint8List();
+    final dir = await Directory.systemTemp.createTemp('llama');
+    final f = File('${dir.path}/${asset.split('/').last}');
+    await f.writeAsBytes(data, flush: true);
+    return f;
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<void> _runBundledModelSmoke(_HomePageState page) async {
+  final gpu = Platform.isIOS ? 99 : (Platform.isAndroid ? 60 : 0);
+  Future<void> step(String label, Future<void> Function() body) async {
+    try {
+      await body();
+      page._append('[smoke] $label OK');
+    } catch (e) {
+      page._append('[smoke] $label FAILED: $e');
+    }
+  }
+
+  // 1/4 chat (existing bundled SmolLM)
+  await step('1/4 chat', () async {
+    final model = await _assetToTemp('assets/models/SmolLM-360M-Instruct.Q6_K.gguf');
+    if (model == null) throw Exception('no smolLM asset');
+    page._append('[smoke] loading chat (GPU $gpu)…');
+    final engine = await LlamaEngine.open(LlamaEngineConfig(modelPath: model.path)
+      ..nGpuLayers = gpu);
+    try {
+      final info = await engine.modelInfo();
+      final r = await engine.generate(LlamaGenerationRequest(
+        messages: const [LlamaChatMessage('user', 'Say hello in one short sentence.')],
+        maxTokens: 24,
+        sampling: LlamaSampling()..temperature = 0,
+      ));
+      page._append('[smoke] chat reply: ${r.text} (${info.description})');
+    } finally {
+      await engine.close();
+    }
+  });
+
+  // 2/4 embed
+  await step('2/4 embed', () async {
+    final model = await _assetToTemp('assets/models/Qwen3-Embedding-0.6B-Q8_0.gguf');
+    if (model == null) throw Exception('no embed asset');
+    final engine = await LlamaEngine.open(LlamaEngineConfig(modelPath: model.path)
+      ..nGpuLayers = gpu
+      ..embedding = true);
+    try {
+      final rows = await engine.embed(['hello llama']);
+      page._append('[smoke] embed dim=${rows.first.length}');
+    } finally {
+      await engine.close();
+    }
+  });
+
+  // 3/4 vision
+  await step('3/4 vision', () async {
+    final model = await _assetToTemp('assets/models/SmolVLM-256M-Instruct-Q8_0.gguf');
+    final mm = await _assetToTemp('assets/models/mmproj-SmolVLM-256M-Instruct-Q8_0.gguf');
+    final img = await _assetToTemp('assets/models/image.jpg');
+    if (model == null || mm == null || img == null) throw Exception('no vision assets');
+    final engine = await LlamaEngine.open(LlamaEngineConfig(modelPath: model.path)
+      ..nGpuLayers = gpu);
+    try {
+      final ok = await engine.initMultimodal(mm.path);
+      if (!ok) throw Exception('initMultimodal false');
+      final r = await engine.generate(LlamaGenerationRequest(
+        prompt: 'Describe this picture in a few words.',
+        mediaPaths: [img.path],
+        maxTokens: 32,
+        sampling: LlamaSampling()..temperature = 0,
+      ));
+      page._append('[smoke] vision: ${r.text}');
+    } finally {
+      await engine.close();
+    }
+  });
+
+  // 4/4 TTS
+  await step('4/4 tts', () async {
+    final model = await _assetToTemp('assets/models/OuteTTS-0.2-500M-Q6_K.gguf');
+    final voc = await _assetToTemp('assets/models/WavTokenizer-Large-75-F16.gguf');
+    if (model == null || voc == null) throw Exception('no tts assets');
+    final engine = await LlamaEngine.open(LlamaEngineConfig(modelPath: model.path)
+      ..nGpuLayers = gpu);
+    try {
+      final ok = await engine.ttsInit(voc.path);
+      if (!ok) throw Exception('ttsInit false');
+      final pcm = await engine.ttsSpeak('Hello from flutter on device speech.');
+      page._append('[smoke] tts pcm=${pcm.length}');
+      await engine.ttsRelease();
+    } finally {
+      await engine.close();
+    }
+  });
+
+  page._append('[smoke] ALL APIS DONE');
+}
 
 void main() => runApp(const MyApp());
 
@@ -36,6 +146,11 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _logCtrl = TextEditingController();
     _append('llama_mobile v2 — LlamaEngine demo');
+    // Temporary self-run device smoke (bundled fixture); no-op when the
+    // fixture is absent (normal example usage stays interactive).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_runBundledModelSmoke(this));
+    });
   }
 
   @override

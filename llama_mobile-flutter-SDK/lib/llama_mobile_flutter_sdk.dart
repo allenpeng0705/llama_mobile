@@ -121,7 +121,7 @@ class LlamaGenerationRequest {
         stopSequences = stopSequences ?? const [];
 
   Map<String, dynamic> toJson() => {
-        'prompt': prompt,
+        if (prompt != null && prompt!.isNotEmpty) 'prompt': prompt,
         'roles': messages.map((m) => m.role).toList(),
         'contents': messages.map((m) => m.content).toList(),
         'mediaPaths': mediaPaths,
@@ -343,4 +343,42 @@ class LlamaEngine {
   Future<void> close() async {
     await _channel.invokeMethod<void>('close', {'handle': _handle});
   }
+
+  /// Detaches the multimodal projector (mmproj).
+  Future<bool> releaseMultimodal() async =>
+      (await _invoke('releaseMultimodal', {'handle': _handle})) as bool? ?? false;
+
+  Future<bool> multimodalEnabled() async =>
+      (await _invoke('multimodalEnabled', {'handle': _handle})) as bool? ?? false;
+
+  Future<bool> supportsVision() async =>
+      (await _invoke('supportsVision', {'handle': _handle})) as bool? ?? false;
+
+  Future<bool> supportsAudio() async =>
+      (await _invoke('supportsAudio', {'handle': _handle})) as bool? ?? false;
+
+  /// Attaches a vocoder so [ttsSpeak] can synthesize audio.
+  Future<bool> ttsInit(String vocoderPath) async =>
+      (await _invoke('ttsInit', {'handle': _handle, 'vocoderPath': vocoderPath})) as bool? ?? false;
+
+  Future<bool> ttsEnabled() async =>
+      (await _invoke('ttsEnabled', {'handle': _handle})) as bool? ?? false;
+
+  /// Full-text synthesis -> 16-bit PCM samples (as a List<int>).
+  Future<List<int>> ttsSpeak(
+    String text, {
+    int sampleRate = 24000,
+    double speed = 1.0,
+  }) async {
+    final raw = (await _invoke('ttsSpeak', {
+      'handle': _handle,
+      'text': text,
+      'sampleRate': sampleRate,
+      'speed': speed,
+    })) as List?;
+    return raw?.map((e) => (e as num).toInt()).toList() ?? const [];
+  }
+
+  Future<bool> ttsRelease() async =>
+      (await _invoke('ttsRelease', {'handle': _handle})) as bool? ?? false;
 }

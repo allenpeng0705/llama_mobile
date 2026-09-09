@@ -204,6 +204,47 @@ public struct LlamaModelInfo: Sendable {
     }
 }
 
+// MARK: - Debug logging (device syslog) --------------------------------
+
+private let llamaLogTrampoline: @convention(c) (
+    Int32, UnsafePointer<CChar>?, UnsafeMutableRawPointer?) -> Void = {
+    level, msg, _ in
+    let text = msg.map { String(cString: $0) } ?? ""
+    NSLog("[llama l%ld] %@", level, text)
+}
+
+func installLlamaMobileSyslog() {
+    llama_mobile_log_set_level(Int32(LLAMA_MOBILE_LOG_DEBUG))
+    llama_mobile_log_set_callback(llamaLogTrampoline, nil)
+}
+
+// MARK: - Result value types
+
+public struct LlamaCapabilities: Sendable {
+    public let supportsVision: Bool
+    public let supportsAudioInput: Bool
+    public let supportsTTS: Bool
+    public let supportsEmbeddings: Bool
+    public let supportsLora: Bool
+    public let defaultNCtx: UInt32
+    public let availableMemoryBytes: UInt64
+    public let deviceName: String?
+}
+
+public struct LlamaContextStats: Sendable {
+    public let kvUsage: Float
+    public let contextBytes: UInt64
+    public let modelBytes: UInt64
+}
+
+public struct LlamaTtsResult: Sendable {
+    public let pcm: [Int16]
+    public let promptTokens: Int32
+    public let generatedTokens: Int32
+    public let timeToFirstTokenMs: Int64
+    public let totalMs: Int64
+}
+
 // MARK: - Engine
 
 public final class LlamaEngine: @unchecked Sendable {
@@ -230,6 +271,10 @@ public final class LlamaEngine: @unchecked Sendable {
     private init() {}
 
     private func start(_ config: LlamaModelConfig) throws {
+        installLlamaMobileSyslog()
+        NSLog("llama_mobile: open begin engine=%@ layers=%d n_ctx=%d model=%@",
+              String(describing: config.engine), config.nGpuLayers, config.nCtx,
+              (config.modelPath as NSString).lastPathComponent)
         let cc = UnsafeMutablePointer<llama_mobile_context_config_t>.allocate(capacity: 1)
         defer { cc.deallocate() }
         llama_mobile_context_config_init(cc)
@@ -266,14 +311,17 @@ public final class LlamaEngine: @unchecked Sendable {
             cc.pointee.load_progress_user_data = progressBox!.toOpaque()
         }
 
+        NSLog("llama_mobile: open: calling llama_mobile_context_create ...")
         var out: llama_mobile_context_t? = nil
         let status = llama_mobile_context_create(cc, &out)
         progressBox?.release()   // C no longer calls the trampoline after create() returns
-
+        NSLog("llama_mobile: open: context_create status=%d (%s)", status.rawValue,
+              llama_mobile_status_string(status))
         guard status == LLAMA_MOBILE_OK, let opened = out else {
             throw LlamaError(status: status)
         }
         lock.lock(); ctx = opened; lock.unlock()
+        NSLog("llama_mobile: open: OK (ctx created)")
     }
 
     // MARK: Sync generate (blocking — call off the main thread)
@@ -447,6 +495,100 @@ public final class LlamaEngine: @unchecked Sendable {
     public func releaseMultimodal() throws {
         guard let c = currentContext() else { throw LlamaError.notInitialized }
         let status = llama_mobile_multimodal_release(c)
+        guard status == LLAMA_MOBILE_OK else { throw LlamaError(status: status) }
+    }
+
+    // MARK: Introspection & modules (full v2 surface)
+
+    /// Device/library capabilities (LLAMA_MOBILE_CTX_* support etc).
+    public func capabilities() throws -> LlamaCapabilities {
+        var caps = llama_mobile_capabilities_t()
+        let status = llama_mobile_capabilities(&caps)
+        guard status == LLAMA_MOBILE_OK else { throw LlamaError(status: status) }
+        return LlamaCapabilities(
+            supportsVision: caps.supports_vision,
+            supportsAudioInput: caps.supports_audio_input,
+            supportsTTS: caps.supports_tts,
+            supportsEmbeddings: caps.supports_embeddings,
+            supportsLora: caps.supports_lora,
+            defaultNCtx: caps.default_n_ctx,
+            availableMemoryBytes: caps.available_memory_bytes,
+            deviceName: caps.device_name.map { String(cString: $0) })
+    }
+
+    /// KV-context usage + memory stats for this engine.
+    public func contextStats() throws -> LlamaContextStats {
+        guard let c = currentContext() else { throw LlamaError.notInitialized }
+        var st = llama_mobile_context_stats_t()
+        let status = llama_mobile_context_stats(c, &st)
+        guard status == LLAMA_MOBILE_OK else { throw LlamaError(status: status) }
+        return LlamaContextStats(kvUsage: st.kv_usage,
+                                 contextBytes: st.context_bytes,
+                                 modelBytes: st.model_bytes)
+    }
+
+    // MARK: Multimodal introspection
+
+    public func multimodalEnabled() -> Bool {
+        guard let c = currentContext() else { return false }
+        return llama_mobile_multimodal_is_enabled(c)
+    }
+
+    public func multimodalSupportsVision() -> Bool {
+        guard let c = currentContext() else { return false }
+        return llama_mobile_multimodal_supports_vision(c)
+    }
+
+    public func multimodalSupportsAudio() -> Bool {
+        guard let c = currentContext() else { return false }
+        return llama_mobile_multimodal_supports_audio(c)
+    }
+
+    // MARK: TTS (Wave-B speak; caller owns the PCM)
+
+    public func ttsInit(vocoderModelPath: String) throws {
+        guard let c = currentContext() else { throw LlamaError.notInitialized }
+        let status = llama_mobile_tts_init(c, vocoderModelPath)
+        guard status == LLAMA_MOBILE_OK else { throw LlamaError(status: status) }
+    }
+
+    public func ttsEnabled() -> Bool {
+        guard let c = currentContext() else { return false }
+        return llama_mobile_tts_is_enabled(c)
+    }
+
+    public func ttsSpeak(
+        text: String,
+        sampleRate: Int32 = 24000,
+        speed: Float = 1.0,
+        speakerJSON: String? = nil
+    ) throws -> LlamaTtsResult {
+        guard let c = currentContext() else { throw LlamaError.notInitialized }
+        var p = llama_mobile_tts_params_t()
+        llama_mobile_tts_params_init(&p)
+        let buf = CBuf()
+        defer { buf.release() }
+        p.text = buf.str(text)
+        p.sample_rate = sampleRate
+        p.speed = speed
+        p.speaker_json = buf.strOpt(speakerJSON)
+        var usage = llama_mobile_usage_t()
+        var pcm: UnsafeMutablePointer<Int16>? = nil
+        var pcmLen: Int = 0
+        let status = llama_mobile_tts_speak(c, &p, &usage, &pcm, &pcmLen)
+        defer { if pcm != nil { llama_mobile_tts_pcm_free(pcm) } }
+        guard status == LLAMA_MOBILE_OK else { throw LlamaError(status: status) }
+        let samples = Array(UnsafeBufferPointer(start: pcm, count: Int(pcmLen)))
+        return LlamaTtsResult(pcm: samples,
+                              promptTokens: usage.prompt_tokens,
+                              generatedTokens: usage.generated_tokens,
+                              timeToFirstTokenMs: usage.time_to_first_token_ms,
+                              totalMs: usage.total_ms)
+    }
+
+    public func ttsRelease() throws {
+        guard let c = currentContext() else { throw LlamaError.notInitialized }
+        let status = llama_mobile_tts_release(c)
         guard status == LLAMA_MOBILE_OK else { throw LlamaError(status: status) }
     }
 

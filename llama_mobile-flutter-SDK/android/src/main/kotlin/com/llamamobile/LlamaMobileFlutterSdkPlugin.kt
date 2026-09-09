@@ -56,7 +56,15 @@ class LlamaMobileFlutterSdkPlugin : FlutterPlugin, MethodCallHandler {
             "initMultimodal" -> handleInitMultimodal(call, result)
             "tokenize" -> handleTokenize(call, result)
             "detokenize" -> handleDetokenize(call, result)
-            "embed" -> handleEmbed(call, result)
+                        "embed" -> handleEmbed(call, result)
+            "releaseMultimodal" -> handleReleaseMultimodal(call, result)
+            "multimodalEnabled" -> handleBool(call, result) { it.multimodalEnabled() }
+            "supportsVision" -> handleBool(call, result) { it.supportsVision() }
+            "supportsAudio" -> handleBool(call, result) { it.supportsAudio() }
+            "ttsInit" -> handleTtsInit(call, result)
+            "ttsSpeak" -> handleTtsSpeak(call, result)
+            "ttsRelease" -> handleBool(call, result) { it.ttsRelease() }
+            "ttsEnabled" -> handleBool(call, result) { it.ttsEnabled() }
             "abort" -> handleAbort(call, result)
             "modelInfo" -> handleModelInfo(call, result)
             "close" -> handleClose(call, result)
@@ -329,4 +337,52 @@ class LlamaMobileFlutterSdkPlugin : FlutterPlugin, MethodCallHandler {
             onMain { result.success(null) }
         }
     }
+    private fun handleReleaseMultimodal(call: MethodCall, result: Result) {
+        val engine = engineFor(call) ?: return fail(result, LlamaStatus.NOT_INITIALIZED, "no engine")
+        bg.execute {
+            try { onMain { result.success(engine.releaseMultimodal()) } }
+            catch (e: Throwable) { fail(result, LlamaStatus.UNSUPPORTED, e.message ?: "release failed") }
+        }
+    }
+
+    private fun handleBool(call: MethodCall, result: Result, read: (LlamaEngine) -> Boolean) {
+        val engine = engineFor(call) ?: return fail(result, LlamaStatus.NOT_INITIALIZED, "no engine")
+        bg.execute {
+            try { onMain { result.success(read(engine)) } }
+            catch (e: Throwable) { fail(result, LlamaStatus.UNSUPPORTED, e.message ?: "prop failed") }
+        }
+    }
+
+    private fun handleTtsInit(call: MethodCall, result: Result) {
+        val args = call.arguments as? Map<*, *>
+        val vocoder = args?.get("vocoderPath") as? String
+        val engine = engineFor(call) ?: return fail(result, LlamaStatus.NOT_INITIALIZED, "no engine")
+        if (vocoder.isNullOrEmpty()) return fail(result, LlamaStatus.INVALID_ARGUMENT, "vocoderPath required")
+        bg.execute {
+            try { onMain { result.success(engine.ttsInit(vocoder)) } }
+            catch (e: Throwable) { fail(result, LlamaStatus.UNSUPPORTED, e.message ?: "tts init failed") }
+        }
+    }
+
+    private fun handleTtsSpeak(call: MethodCall, result: Result) {
+        val args = call.arguments as? Map<*, *>
+        val text = args?.get("text") as? String
+        val engine = engineFor(call) ?: return fail(result, LlamaStatus.NOT_INITIALIZED, "no engine")
+        if (text.isNullOrEmpty()) return fail(result, LlamaStatus.INVALID_ARGUMENT, "text required")
+        val sampleRate = (args?.get("sampleRate") as? Number)?.toInt() ?: 24000
+        val speed = (args?.get("speed") as? Number)?.toDouble() ?: 1.0
+        bg.execute {
+            try {
+                val out = engine.ttsSpeak(text, sampleRate, speed.toFloat())
+                onMain { result.success(out.pcm.toList()) }
+            } catch (e: Throwable) { fail(result, LlamaStatus.UNSUPPORTED, e.message ?: "tts speak failed") }
+        }
+    }
+
+    private fun engineFor(call: MethodCall): LlamaEngine? {
+        val args = call.arguments as? Map<*, *>
+        val handle = (args?.get("handle") as? Number)?.toInt()
+        return handle?.let { synchronized(engines) { engines[it] } }
+    }
+
 }

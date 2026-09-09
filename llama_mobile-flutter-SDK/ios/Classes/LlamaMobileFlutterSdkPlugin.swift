@@ -78,6 +78,22 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin {
       embed(call, result: result)
     case "close":
       close(call, result: result)
+    case "releaseMultimodal":
+      releaseMultimodal(call, result: result)
+    case "multimodalEnabled":
+      boolProp(call, result: result, read: { try $0.multimodalEnabled() })
+    case "supportsVision":
+      boolProp(call, result: result, read: { try $0.multimodalSupportsVision() })
+    case "supportsAudio":
+      boolProp(call, result: result, read: { try $0.multimodalSupportsAudio() })
+    case "ttsInit":
+      ttsInit(call, result: result)
+    case "ttsSpeak":
+      ttsSpeak(call, result: result)
+    case "ttsRelease":
+      ttsReleaseAction(call, result: result)
+    case "ttsEnabled":
+      boolProp(call, result: result, read: { try $0.ttsEnabled() })
     default:
       result(err(-7, message: "Unknown method \(call.method)"))
     }
@@ -225,7 +241,25 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin {
 
   private func parse(request rq: [String: Any]) -> LlamaGenerationRequest {
     let sampling = (rq["sampling"] as? [String: Any]) ?? [:]
-    var req = LlamaGenerationRequest(prompt: string(rq, "prompt") ?? "")
+    // Prefer messages when present. Dart sends prompt:null for chat mode;
+    // never coerce that to "" — an empty non-nil prompt confuses the C layer
+    // ("exactly one of prompt or messages").
+    let roles = (rq["roles"] as? [String]) ?? []
+    let contents = (rq["contents"] as? [String]) ?? []
+    let promptRaw = string(rq, "prompt")
+    let promptNonEmpty = (promptRaw?.isEmpty == false) ? promptRaw : nil
+
+    var req: LlamaGenerationRequest
+    if roles.count == contents.count && !roles.isEmpty {
+      req = LlamaGenerationRequest(
+        messages: zip(roles, contents).map { LlamaMessage(role: $0.0, content: $0.1) }
+      )
+    } else if let promptNonEmpty {
+      req = LlamaGenerationRequest(prompt: promptNonEmpty)
+    } else {
+      req = LlamaGenerationRequest(messages: [])
+    }
+
     req.maxTokens = Int32(int(rq, "maxTokens", 128))
     req.grammar = string(rq, "grammar")
     req.jsonSchema = string(rq, "jsonSchema")
@@ -233,12 +267,6 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin {
     let mediaPaths = (rq["mediaPaths"] as? [String]) ?? []
     if !mediaPaths.isEmpty {
         req.media = mediaPaths.map { LlamaMedia(path: $0) }
-    }
-
-    let roles = (rq["roles"] as? [String]) ?? []
-    let contents = (rq["contents"] as? [String]) ?? []
-    if roles.count == contents.count && !roles.isEmpty {
-      req.messages = zip(roles, contents).map { LlamaMessage(role: $0.0, content: $0.1) }
     }
 
     var s = LlamaSampling()
@@ -408,4 +436,71 @@ public class LlamaMobileFlutterSdkPlugin: NSObject, FlutterPlugin {
       self.onMain { result(nil) }
     }
   }
+  // MARK: full-surface channel handlers (v2 parity)
+
+  private func releaseMultimodal(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let handle = argInt(call, "handle")
+    guard let e = entry(handle) else { result(err(-11, message: "no engine for handle")); return }
+    Task.detached {
+      do { try e.engine.releaseMultimodal(); self.onMain { result(true) } }
+      catch let er as LlamaError { self.onMain { result(self.err(er)) } }
+      catch { self.onMain { result(self.err(-3, message: "\(error)")) } }
+    }
+  }
+
+  private func ttsReleaseAction(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let handle = argInt(call, "handle")
+    guard let e = entry(handle) else { result(err(-11, message: "no engine for handle")); return }
+    Task.detached {
+      do { try e.engine.ttsRelease(); self.onMain { result(true) } }
+      catch let er as LlamaError { self.onMain { result(self.err(er)) } }
+      catch { self.onMain { result(self.err(-3, message: "\(error)")) } }
+    }
+  }
+
+  private func boolProp(_ call: FlutterMethodCall, result: @escaping FlutterResult,
+                        read: @escaping (LlamaEngine) throws -> Bool) {
+    let handle = argInt(call, "handle")
+    guard let e = entry(handle) else { result(err(-11, message: "no engine for handle")); return }
+    Task.detached {
+      do { let v = try read(e.engine); self.onMain { result(v) } }
+      catch let er as LlamaError { self.onMain { result(self.err(er)) } }
+      catch { self.onMain { result(self.err(-3, message: "\(error)")) } }
+    }
+  }
+
+  private func ttsInit(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let handle = argInt(call, "handle")
+    guard let e = entry(handle),
+          let vocoder = (call.arguments as? [String: Any])?["vocoderPath"] as? String
+    else { result(err(-1, message: "bad ttsInit args")); return }
+    Task.detached {
+      do { try e.engine.ttsInit(vocoderModelPath: vocoder); self.onMain { result(true) } }
+      catch let er as LlamaError { self.onMain { result(self.err(er)) } }
+      catch { self.onMain { result(self.err(-3, message: "\(error)")) } }
+    }
+  }
+
+  private func ttsSpeak(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    let handle = argInt(call, "handle")
+    guard let e = entry(handle),
+          let args = call.arguments as? [String: Any],
+          let text = args["text"] as? String
+    else { result(err(-1, message: "bad ttsSpeak args")); return }
+    let rate = Int32(args["sampleRate"] as? Int ?? 24000)
+    let speed = args["speed"] as? Float ?? 1.0
+    Task.detached {
+      do {
+        let out = try e.engine.ttsSpeak(text: text, sampleRate: rate, speed: speed)
+        let ns = out.pcm.map { NSNumber(value: $0) }
+        self.onMain { result(ns) }
+      } catch let er as LlamaError { self.onMain { result(self.err(er)) } }
+      catch { self.onMain { result(self.err(-3, message: "\(error)")) } }
+    }
+  }
+
+  private func argInt(_ call: FlutterMethodCall, _ key: String) -> Int {
+    ((call.arguments as? [String: Any])?[key] as? NSNumber)?.intValue ?? -1
+  }
+
 }
