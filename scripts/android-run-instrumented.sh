@@ -13,5 +13,10 @@ adb push "$MODEL" /sdcard/Android/data/com.llamamobile.test/files/ >/dev/null
 if [ -f "$EMBEDDING" ]; then
     adb push "$EMBEDDING" /sdcard/Android/data/com.llamamobile.test/files/ >/dev/null
 fi
+# Vision + TTS fixtures for the multimodal/TTS instrumented tests.
+for f in SmolVLM-256M-Instruct-Q8_0.gguf mmproj-SmolVLM-256M-Instruct-Q8_0.gguf img/image.jpg OuteTTS-0.2-500M-Q6_K.gguf WavTokenizer-Large-75-F16.gguf; do
+    src="$SDK_DIR/../models/$f"
+    [ -f "$src" ] && adb push "$src" /sdcard/Android/data/com.llamamobile.test/files/$(basename "$f") >/dev/null
+done
 cd "$SDK_DIR"
 ./gradlew connectedDebugAndroidTest "$@"

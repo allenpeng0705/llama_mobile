@@ -53,7 +53,8 @@ class LlamaEngineTests {
         val c = LlamaEngine.Config()
         c.modelPath = modelPath() ?: ""
         c.nCtx = 2048
-        c.engine = 1 // CPU for deterministic CI/emulator runs
+        c.engine = 0 // AUTO -> Vulkan on real device
+        c.nGpuLayers = 1
         return c
     }
 
@@ -216,7 +217,8 @@ class LlamaEngineTests {
         val c = LlamaEngine.Config()
         c.modelPath = emPath
         c.nCtx = 512
-        c.engine = 1
+        c.engine = 0
+        c.nGpuLayers = 1
         c.embedding = true
         LlamaEngine.open(c).use { engine ->
             val rows = engine.embed(listOf("hello", "world"))
@@ -233,4 +235,134 @@ class LlamaEngineTests {
             )
         }
     }
+    private fun extFile(name: String): File? {
+        val dir = InstrumentationRegistry.getInstrumentation().targetContext
+            .getExternalFilesDir(null) ?: return null
+        return File(dir, name)
+    }
+
+    /** Vision: SmolVLM + mmproj, image caption (CPU first; GPU variant below). */
+    @Test
+    fun visionGenerateWithGpu() {
+        val model = extFile("SmolVLM-256M-Instruct-Q8_0.gguf") ?: return
+        val mmproj = extFile("mmproj-SmolVLM-256M-Instruct-Q8_0.gguf") ?: return
+        val img = extFile("image.jpg") ?: return
+        if (!model.exists() || !mmproj.exists() || !img.exists()) return
+        val c = LlamaEngine.Config()
+        c.modelPath = model.absolutePath
+        c.nCtx = 2048
+        c.chat = true
+        c.engine = 1 // CPU first — isolates pipeline from the Vulkan backend
+        c.nGpuLayers = 0
+        try {
+            LlamaEngine.open(c).use { engine ->
+                val ok = engine.initMultimodal(mmproj.absolutePath)
+                assertTrue("initMultimodal returned false", ok)
+                assertTrue("supportsVision true", engine.supportsVision())
+                val r = engine.generate(
+                    LlamaGenerationRequest(
+                        prompt = "Describe this picture in a few words.",
+                        mediaPaths = listOf(img.absolutePath),
+                        maxTokens = 32,
+                        sampling = LlamaSampling(temperature = 0f),
+                    ),
+                )
+                assertTrue("vision caption produced text", r.text.isNotEmpty())
+            }
+        } catch (t: Throwable) {
+            throw AssertionError("vision test failed: " + t, t)
+        }
+    }
+
+    /** TTS: OuteTTS main + WavTokenizer vocoder -> PCM samples. */
+    @Test
+    fun ttsSpeakProducesPcm() {
+        val model = extFile("OuteTTS-0.2-500M-Q6_K.gguf") ?: return
+        val vocoder = extFile("WavTokenizer-Large-75-F16.gguf") ?: return
+        if (!model.exists() || !vocoder.exists()) return
+        val c = LlamaEngine.Config()
+        c.modelPath = model.absolutePath
+        c.nCtx = 4096
+        c.engine = 1
+        c.nGpuLayers = 0
+        try {
+        LlamaEngine.open(c).use { engine ->
+            assertTrue("tts init ok", engine.ttsInit(vocoder.absolutePath))
+            assertTrue("tts enabled", engine.ttsEnabled())
+            val out = engine.ttsSpeak("Hello from on device speech.")
+            assertTrue("pcm samples produced", out.pcm.isNotEmpty())
+            assertTrue("usage generated>0", out.usage.generatedTokens > 0)
+            assertTrue("tts release ok", engine.ttsRelease())
+        }
+        } catch (t: Throwable) { throw AssertionError("tts failed: " + t, t) }
+    }
+
+    /** Embedding on the GPU (Vulkan). */
+    @Test
+    fun embedGpu() {
+        val model = extFile("Qwen3-Embedding-0.6B-Q8_0.gguf") ?: return
+        if (!model.exists()) return
+        val c = LlamaEngine.Config()
+        c.modelPath = model.absolutePath
+        c.nCtx = 512
+        c.engine = 0
+        c.nGpuLayers = 1
+        c.embedding = true
+        try {
+            LlamaEngine.open(c).use { engine ->
+                val rows = engine.embed(listOf("hello", "world"))
+                assertTrue("embedding dim > 0", rows.first().isNotEmpty())
+            }
+        } catch (t: Throwable) { throw AssertionError("embedGpu failed: " + t, t) }
+    }
+
+    /** Vision caption on the GPU (Vulkan). */
+    @Test
+    fun visionGpu() {
+        val model = extFile("SmolVLM-256M-Instruct-Q8_0.gguf") ?: return
+        val mmproj = extFile("mmproj-SmolVLM-256M-Instruct-Q8_0.gguf") ?: return
+        val img = extFile("image.jpg") ?: return
+        if (!model.exists() || !mmproj.exists() || !img.exists()) return
+        val c = LlamaEngine.Config()
+        c.modelPath = model.absolutePath
+        c.nCtx = 2048
+        c.chat = true
+        c.engine = 0
+        c.nGpuLayers = 1
+        try {
+            LlamaEngine.open(c).use { engine ->
+                assertTrue("initMultimodal ok", engine.initMultimodal(mmproj.absolutePath))
+                val r = engine.generate(
+                    LlamaGenerationRequest(
+                        prompt = "Describe this picture in a few words.",
+                        mediaPaths = listOf(img.absolutePath),
+                        maxTokens = 32,
+                        sampling = LlamaSampling(temperature = 0f),
+                    ),
+                )
+                assertTrue("vision text produced", r.text.isNotEmpty())
+            }
+        } catch (t: Throwable) { throw AssertionError("visionGpu failed: " + t, t) }
+    }
+
+    /** TTS speak with GPU offload (Vulkan). */
+    @Test
+    fun ttsGpu() {
+        val model = extFile("OuteTTS-0.2-500M-Q6_K.gguf") ?: return
+        val vocoder = extFile("WavTokenizer-Large-75-F16.gguf") ?: return
+        if (!model.exists() || !vocoder.exists()) return
+        val c = LlamaEngine.Config()
+        c.modelPath = model.absolutePath
+        c.nCtx = 4096
+        c.engine = 0
+        c.nGpuLayers = 1
+        try {
+            LlamaEngine.open(c).use { engine ->
+                assertTrue("tts init ok", engine.ttsInit(vocoder.absolutePath))
+                val out = engine.ttsSpeak("Hello from GPU speech.")
+                assertTrue("pcm produced", out.pcm.isNotEmpty())
+            }
+        } catch (t: Throwable) { throw AssertionError("ttsGpu failed: " + t, t) }
+    }
+
 }
