@@ -6,9 +6,9 @@
 import { WebPlugin } from '@capacitor/core';
 import type {
   LlamaEngineConfig,
-  LlamaGenerationRequest,
   LlamaGenerationResult,
   LlamaMobileBridge,
+  LlamaMobileBridgeRequest,
   LlamaModelInfo,
 } from './definitions';
 
@@ -20,34 +20,57 @@ export class LlamaMobileWeb extends WebPlugin implements LlamaMobileBridge {
   libraryVersion(): Promise<string> {
     return Promise.reject(this.unsupported());
   }
-  open(_config: LlamaEngineConfig): Promise<number> {
+  open(_options: LlamaEngineConfig): Promise<{ value: number }> {
     return Promise.reject(this.unsupported());
   }
   generate(
-    _handle: number,
-    _request: LlamaGenerationRequest,
+    _options: { handle: number } & LlamaMobileBridgeRequest,
   ): Promise<LlamaGenerationResult> {
     return Promise.reject(this.unsupported());
   }
-  abort(_handle: number): Promise<boolean> {
+  abort(_options: { handle: number }): Promise<{ value: boolean }> {
     return Promise.reject(this.unsupported());
   }
-  modelInfo(_handle: number): Promise<LlamaModelInfo> {
+  modelInfo(_options: { handle: number }): Promise<LlamaModelInfo> {
     return Promise.reject(this.unsupported());
   }
-  initMultimodal(_handle: number, _mmprojPath: string): Promise<boolean> {
+  initMultimodal(_options: { handle: number; mmprojPath: string }): Promise<{ value: boolean }> {
     return Promise.reject(this.unsupported());
   }
-  tokenize(_handle: number, _text: string): Promise<number[]> {
+  tokenize(_options: { handle: number; text: string }): Promise<{ value: number[] }> {
     return Promise.reject(this.unsupported());
   }
-  detokenize(_handle: number, _tokens: number[]): Promise<string> {
+  detokenize(_options: { handle: number; tokens: number[] }): Promise<{ value: string }> {
     return Promise.reject(this.unsupported());
   }
-  embed(_handle: number, _texts: string[]): Promise<number[][]> {
+  embed(_options: { handle: number; texts: string[] }): Promise<{ value: number[][] }> {
     return Promise.reject(this.unsupported());
   }
-  close(_handle: number): Promise<void> {
+  close(_options: { handle: number }): Promise<void> {
+    return Promise.reject(this.unsupported());
+  }
+  releaseMultimodal(_o: { handle: number }): Promise<{ value: boolean }> {
+    return Promise.reject(this.unsupported());
+  }
+  multimodalEnabled(_o: { handle: number }): Promise<{ value: boolean }> {
+    return Promise.reject(this.unsupported());
+  }
+  supportsVision(_o: { handle: number }): Promise<{ value: boolean }> {
+    return Promise.reject(this.unsupported());
+  }
+  supportsAudio(_o: { handle: number }): Promise<{ value: boolean }> {
+    return Promise.reject(this.unsupported());
+  }
+  ttsInit(_o: { handle: number; vocoderPath: string }): Promise<{ value: boolean }> {
+    return Promise.reject(this.unsupported());
+  }
+  ttsSpeak(_o: { handle: number; text: string; sampleRate?: number; speed?: number }): Promise<{ value: number[] }> {
+    return Promise.reject(this.unsupported());
+  }
+  ttsRelease(_o: { handle: number }): Promise<{ value: boolean }> {
+    return Promise.reject(this.unsupported());
+  }
+  ttsEnabled(_o: { handle: number }): Promise<{ value: boolean }> {
     return Promise.reject(this.unsupported());
   }
 }

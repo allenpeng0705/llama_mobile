@@ -21,10 +21,18 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "abort", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "modelInfo", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "initMultimodal", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "releaseMultimodal", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "multimodalEnabled", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "supportsVision", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "supportsAudio", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "tokenize", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "detokenize", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "embed", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "close", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "ttsEnabled", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "ttsInit", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "ttsSpeak", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "ttsRelease", returnType: CAPPluginReturnPromise),
     ]
 
     private final class Entry {
@@ -157,10 +165,20 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func generate(_ call: CAPPluginCall) {
         let o = call.options ?? [:]
         guard let handle = (o["handle"] as? NSNumber)?.intValue,
-              let entry = entry(handle),
-              let rq = o["request"] as? [String: Any] else {
+              let entry = entry(handle) else {
             reject(call, code: -11, message: "no engine / request for handle")
             return
+        }
+        // The TS wrapper sends the request fields flat on the options object
+        // ({ handle, prompt/roles/contents/… }); some callers nest them under
+        // "request". Accept both shapes.
+        let rq: [String: Any]
+        if let nested = o["request"] as? [String: Any] {
+            rq = nested
+        } else {
+            // call.options is [AnyHashable: Any]; rebuild with String keys.
+            rq = Dictionary(
+                uniqueKeysWithValues: o.map { (String(describing: $0.key), $0.value) })
         }
         let request = parse(request: rq)
 
@@ -342,21 +360,102 @@ public class LlamaMobileCapacitorPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    // MARK: request parsing
+        // MARK: full-surface bridge (v2 parity)
+
+    @objc func releaseMultimodal(_ call: CAPPluginCall) {
+        guard let e = entryFor(call) else { call.reject("no engine"); return }
+        Task.detached {
+            do { try e.engine.releaseMultimodal(); self.onMain { call.resolve(["value": true]) } }
+            catch let er as LlamaError { self.onMain { call.reject("\(er)") } }
+            catch { self.onMain { call.reject("\(error)") } }
+        }
+    }
+
+    @objc func multimodalEnabled(_ call: CAPPluginCall) { boolBridge(call) { try $0.multimodalEnabled() } }
+    @objc func supportsVision(_ call: CAPPluginCall) { boolBridge(call) { try $0.multimodalSupportsVision() } }
+    @objc func supportsAudio(_ call: CAPPluginCall) { boolBridge(call) { try $0.multimodalSupportsAudio() } }
+    @objc func ttsEnabled(_ call: CAPPluginCall) { boolBridge(call) { try $0.ttsEnabled() } }
+
+    @objc func ttsInit(_ call: CAPPluginCall) {
+        guard let e = entryFor(call), let voc = call.options?["vocoderPath"] as? String else {
+            call.reject("no engine / vocoderPath"); return
+        }
+        Task.detached {
+            do { try e.engine.ttsInit(vocoderModelPath: voc); self.onMain { call.resolve(["value": true]) } }
+            catch let er as LlamaError { self.onMain { call.reject("\(er)") } }
+            catch { self.onMain { call.reject("\(error)") } }
+        }
+    }
+
+    @objc func ttsSpeak(_ call: CAPPluginCall) {
+        guard let e = entryFor(call), let text = call.options?["text"] as? String else {
+            call.reject("no engine / text"); return
+        }
+        let rate = Int32((call.options?["sampleRate"] as? NSNumber)?.intValue ?? 24000)
+        let speed = (call.options?["speed"] as? NSNumber)?.floatValue ?? 1.0
+        Task.detached {
+            do {
+                let out = try e.engine.ttsSpeak(text: text, sampleRate: rate, speed: speed)
+                let samples = out.pcm.map { NSNumber(value: $0) }
+                self.onMain { call.resolve(["value": samples]) }
+            } catch let er as LlamaError { self.onMain { call.reject("\(er)") } }
+            catch { self.onMain { call.reject("\(error)") } }
+        }
+    }
+
+    @objc func ttsRelease(_ call: CAPPluginCall) {
+        guard let e = entryFor(call) else { call.reject("no engine"); return }
+        Task.detached {
+            do { try e.engine.ttsRelease(); self.onMain { call.resolve(["value": true]) } }
+            catch let er as LlamaError { self.onMain { call.reject("\(er)") } }
+            catch { self.onMain { call.reject("\(error)") } }
+        }
+    }
+
+    private func entryFor(_ call: CAPPluginCall) -> Entry? {
+        guard let handle = (call.options?["handle"] as? NSNumber)?.intValue else { return nil }
+        lock.lock(); defer { lock.unlock() }
+        return entries[handle]
+    }
+
+    private func boolBridge(_ call: CAPPluginCall, read: @escaping (LlamaEngine) throws -> Bool) {
+        guard let e = entryFor(call) else { call.reject("no engine"); return }
+        Task.detached {
+            do { let v = try read(e.engine); self.onMain { call.resolve(["value": v]) } }
+            catch let er as LlamaError { self.onMain { call.reject("\(er)") } }
+            catch { self.onMain { call.reject("\(error)") } }
+        }
+    }
+
+// MARK: request parsing
 
     private func parse(request rq: [String: Any]) -> LlamaGenerationRequest {
         let sampling = (rq["sampling"] as? [String: Any]) ?? [:]
-        var req = LlamaGenerationRequest(prompt: (rq["prompt"] as? String) ?? "")
+
+        // Chat messages (parallel roles/contents) take precedence over the raw
+        // prompt. Never coerce a missing/empty prompt to "" — the C contract is
+        // "exactly one of prompt or messages", and an empty non-nil prompt with
+        // no messages would be treated as an empty raw prompt.
+        let roles = (rq["roles"] as? [String]) ?? []
+        let contents = (rq["contents"] as? [String]) ?? []
+        let hasMessages = roles.count == contents.count && !roles.isEmpty
+        let promptRaw = (rq["prompt"] as? String)?.trimmingCharacters(in: .whitespaces)
+        let prompt: String? =
+            (promptRaw == nil || promptRaw!.isEmpty || hasMessages) ? nil : promptRaw
+
+        var req: LlamaGenerationRequest
+        if hasMessages {
+            req = LlamaGenerationRequest(messages: zip(roles, contents).map {
+                LlamaMessage(role: $0.0, content: $0.1)
+            })
+        } else {
+            req = LlamaGenerationRequest(prompt: prompt ?? "")
+        }
         req.maxTokens = Int32(int(rq, "maxTokens", 128))
         req.grammar = rq["grammar"] as? String
         req.jsonSchema = rq["jsonSchema"] as? String
         req.stopSequences = (rq["stopSequences"] as? [String]) ?? []
 
-        let roles = (rq["roles"] as? [String]) ?? []
-        let contents = (rq["contents"] as? [String]) ?? []
-        if roles.count == contents.count && !roles.isEmpty {
-            req.messages = zip(roles, contents).map { LlamaMessage(role: $0.0, content: $0.1) }
-        }
         let mediaPaths = (rq["mediaPaths"] as? [String]) ?? []
         if !mediaPaths.isEmpty {
             req.media = mediaPaths.map { LlamaMedia(path: $0) }

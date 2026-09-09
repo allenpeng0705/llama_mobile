@@ -11,9 +11,11 @@ package com.llamamobile.capacitorplugin;
 import android.os.Handler;
 import android.os.Looper;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
+import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import org.json.JSONArray;
@@ -77,14 +79,41 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         return "null".equals(v) ? def : v;
     }
 
+    /// Resolves a possibly bundle-relative model path ('models/x.gguf') to an
+    /// absolute file. The demo web assets ship the same models under the app's
+    /// assets/public/models; on first use the file is extracted next to the
+    /// app's external files dir so llama.cpp can fopen it (Android scoped
+    /// storage hides shared Download/ from other apps). Absolute paths pass
+    /// through untouched.
+    private String resolveModelPath(String raw) throws java.io.IOException {
+        if (raw == null || raw.isEmpty()) return raw;
+        if (raw.startsWith("/")) return raw;
+        java.io.File dest = new java.io.File(getContext().getExternalFilesDir(null), raw);
+        java.io.File f = dest.getCanonicalFile();
+        if (f.exists() && f.length() > 0) return f.getAbsolutePath();
+        java.io.File parent = f.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new java.io.IOException("cannot create dir " + parent);
+        }
+        try (java.io.InputStream in = getContext().getAssets().open("public/" + raw);
+             java.io.OutputStream out = new java.io.FileOutputStream(f)) {
+            byte[] buf = new byte[1 << 20];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+        }
+        return f.getAbsolutePath();
+    }
+
     // ------------------------------------------------------------- methods
 
+    @PluginMethod()
     public void libraryVersion(PluginCall call) {
         JSObject ret = new JSObject();
         ret.put("value", LlamaEngine.libraryVersion());
         call.resolve(ret);
     }
 
+    @PluginMethod()
     public void open(PluginCall call) {
         LlamaEngine.Config config = new LlamaEngine.Config();
         config.setModelPath(call.getString("modelPath") == null ? "" : call.getString("modelPath"));
@@ -106,6 +135,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
 
         runBg(() -> {
             try {
+                config.setModelPath(resolveModelPath(config.getModelPath()));
                 LlamaEngine engine = LlamaEngine.open(config);
                 int handle = nextHandle.getAndIncrement();
                 engines.put(handle, engine);
@@ -119,6 +149,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         });
     }
 
+    @PluginMethod()
     public void generate(PluginCall call) {
         Integer handle = call.getInt("handle");
         LlamaEngine engine = handle == null ? null : engines.get(handle);
@@ -126,7 +157,11 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             fail(call, -11, "no engine for handle " + handle);
             return;
         }
+        // The TS wrapper sends request fields flat on the call data
+        // ({ handle, prompt/roles/contents/… }); some callers nest them under
+        // "request". Accept both shapes.
         JSObject rq = call.getObject("request");
+        if (rq == null) rq = call.getData();
         if (rq == null) {
             fail(call, -1, "request required");
             return;
@@ -134,6 +169,12 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         LlamaGenerationRequest request = parseRequest(rq);
         runBg(() -> {
             try {
+                java.util.List<String> mp = request.getMediaPaths();
+                if (mp != null && !mp.isEmpty()) {
+                    java.util.List<String> resolved = new java.util.ArrayList<>();
+                    for (String p : mp) resolved.add(resolveModelPath(p));
+                    request.setMediaPaths(resolved);
+                }
                 com.llamamobile.LlamaGenerationResult res = engine.generate(request, null);
                 JSObject ret = new JSObject();
                 ret.put("text", res.getText());
@@ -148,6 +189,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         });
     }
 
+    @PluginMethod()
     public void abort(PluginCall call) {
         Integer handle = call.getInt("handle");
         LlamaEngine engine = handle == null ? null : engines.get(handle);
@@ -163,6 +205,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         });
     }
 
+    @PluginMethod()
     public void modelInfo(PluginCall call) {
         Integer handle = call.getInt("handle");
         LlamaEngine engine = handle == null ? null : engines.get(handle);
@@ -186,6 +229,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         });
     }
 
+    @PluginMethod()
     public void close(PluginCall call) {
         Integer handle = call.getInt("handle");
         LlamaEngine engine = handle == null ? null : engines.remove(handle);
@@ -212,19 +256,25 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         return engine;
     }
 
+    @PluginMethod()
     public void initMultimodal(PluginCall call) {
         LlamaEngine engine = engineFor(call, -11);
         if (engine == null) return;
         String mmproj = call.getString("mmprojPath");
         if (mmproj == null) { fail(call, -1, "mmprojPath required"); return; }
         runBg(() -> {
-            boolean ok = engine.initMultimodal(mmproj);
-            JSObject ret = new JSObject();
-            ret.put("value", ok);
-            runMain(() -> call.resolve(ret));
+            try {
+                boolean ok = engine.initMultimodal(resolveModelPath(mmproj));
+                JSObject ret = new JSObject();
+                ret.put("value", ok);
+                runMain(() -> call.resolve(ret));
+            } catch (Throwable t) {
+                runMain(() -> fail(call, -4, String.valueOf(t.getMessage())));
+            }
         });
     }
 
+    @PluginMethod()
     public void tokenize(PluginCall call) {
         LlamaEngine engine = engineFor(call, -11);
         if (engine == null) return;
@@ -238,6 +288,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         });
     }
 
+    @PluginMethod()
     public void detokenize(PluginCall call) {
         LlamaEngine engine = engineFor(call, -11);
         if (engine == null) return;
@@ -253,6 +304,7 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         });
     }
 
+    @PluginMethod()
     public void embed(PluginCall call) {
         LlamaEngine engine = engineFor(call, -11);
         if (engine == null) return;
@@ -323,6 +375,15 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
             }
             request.setMessages(msgs);
         }
+        JSONArray mediaArr = rq.optJSONArray("mediaPaths");
+        if (mediaArr != null) {
+            java.util.List<String> list = new java.util.ArrayList<>();
+            for (int i = 0; i < mediaArr.length(); i++) {
+                String p = mediaArr.optString(i, null);
+                if (p != null && !p.isEmpty() && !"null".equals(p)) list.add(p);
+            }
+            if (!list.isEmpty()) request.setMediaPaths(list);
+        }
         JSONArray stops = rq.optJSONArray("stopSequences");
         if (stops != null) {
             java.util.List<String> list = new java.util.ArrayList<>();
@@ -331,4 +392,68 @@ public class LlamaMobileCapacitorPlugin extends Plugin {
         }
         return request;
     }
+    // MARK: full-surface bridge (v2 parity)
+
+    @PluginMethod()
+    public void releaseMultimodal(PluginCall call) {
+        LlamaEngine engine = engineFor(call, -11);
+        if (engine == null) return;
+        runBg(() -> { JSObject ret = new JSObject(); ret.put("value", engine.releaseMultimodal()); runMain(() -> call.resolve(ret)); });
+    }
+
+    @PluginMethod()
+    public void multimodalEnabled(PluginCall call) { boolProp(call, engine -> engine.multimodalEnabled()); }
+    @PluginMethod()
+    public void supportsVision(PluginCall call) { boolProp(call, engine -> engine.supportsVision()); }
+    @PluginMethod()
+    public void supportsAudio(PluginCall call) { boolProp(call, engine -> engine.supportsAudio()); }
+    @PluginMethod()
+    public void ttsEnabled(PluginCall call) { boolProp(call, engine -> engine.ttsEnabled()); }
+
+    @PluginMethod()
+    public void ttsInit(PluginCall call) {
+        LlamaEngine engine = engineFor(call, -11);
+        if (engine == null) return;
+        String vocoder = call.getString("vocoderPath");
+        if (vocoder == null) { fail(call, -1, "vocoderPath required"); return; }
+        runBg(() -> {
+            try {
+                JSObject ret = new JSObject(); ret.put("value", engine.ttsInit(resolveModelPath(vocoder)));
+                runMain(() -> call.resolve(ret));
+            } catch (Throwable t) {
+                runMain(() -> fail(call, -4, String.valueOf(t.getMessage())));
+            }
+        });
+    }
+
+    @PluginMethod()
+    public void ttsSpeak(PluginCall call) {
+        LlamaEngine engine = engineFor(call, -11);
+        if (engine == null) return;
+        String text = call.getString("text");
+        if (text == null) { fail(call, -1, "text required"); return; }
+        int sampleRate = call.getInt("sampleRate", 24000);
+        double speed = call.getDouble("speed", 1.0);
+        runBg(() -> {
+            try {
+                com.llamamobile.LlamaTtsResult out = engine.ttsSpeak(text, sampleRate, (float) speed);
+                JSArray samples = new JSArray();
+                for (int v : out.getPcm()) { samples.put(v); }
+                JSObject ret = new JSObject(); ret.put("value", samples);
+                runMain(() -> call.resolve(ret));
+            } catch (Throwable t) {
+                runMain(() -> fail(call, -3, String.valueOf(t)));
+            }
+        });
+    }
+
+    @PluginMethod()
+    public void ttsRelease(PluginCall call) { boolProp(call, engine -> engine.ttsRelease()); }
+
+    private void boolProp(PluginCall call, java.util.function.Function<LlamaEngine, Boolean> read) {
+        LlamaEngine engine = engineFor(call, -11);
+        if (engine == null) return;
+        runBg(() -> { JSObject ret = new JSObject(); ret.put("value", read.apply(engine)); runMain(() -> call.resolve(ret)); });
+    }
+
 }

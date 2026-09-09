@@ -431,3 +431,91 @@ Java_com_llamamobile_Native_embed(JNIEnv * env, jobject, jlong h, jobjectArray t
     llama_mobile_embed_result_free(&res);
     return rows;
 }
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_llamamobile_Native_releaseMultimodal(JNIEnv * env, jobject, jlong h) {
+    EngineWrap * w = wrap(h);
+    if (!w || !w->ctx) { setError(LLAMA_MOBILE_ERR_INVALID_ARGUMENT); return JNI_FALSE; }
+    return llama_mobile_multimodal_release(w->ctx) == LLAMA_MOBILE_OK ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_llamamobile_Native_multimodalEnabled(JNIEnv *, jobject, jlong h) {
+    EngineWrap * w = wrap(h);
+    return (w && w->ctx && llama_mobile_multimodal_is_enabled(w->ctx)) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_llamamobile_Native_supportsVision(JNIEnv *, jobject, jlong h) {
+    EngineWrap * w = wrap(h);
+    return (w && w->ctx && llama_mobile_multimodal_supports_vision(w->ctx)) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_llamamobile_Native_supportsAudio(JNIEnv *, jobject, jlong h) {
+    EngineWrap * w = wrap(h);
+    return (w && w->ctx && llama_mobile_multimodal_supports_audio(w->ctx)) ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_llamamobile_Native_ttsInit(JNIEnv * env, jobject, jlong h, jstring vocoder) {
+    EngineWrap * w = wrap(h);
+    if (!w || !w->ctx) { setError(LLAMA_MOBILE_ERR_INVALID_ARGUMENT); return JNI_FALSE; }
+    std::string path = toCpp(env, vocoder);
+    if (path.empty()) { setError(LLAMA_MOBILE_ERR_INVALID_ARGUMENT); return JNI_FALSE; }
+    return llama_mobile_tts_init(w->ctx, path.c_str()) == LLAMA_MOBILE_OK ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_llamamobile_Native_ttsRelease(JNIEnv *, jobject, jlong h) {
+    EngineWrap * w = wrap(h);
+    if (!w || !w->ctx) { setError(LLAMA_MOBILE_ERR_INVALID_ARGUMENT); return JNI_FALSE; }
+    return llama_mobile_tts_release(w->ctx) == LLAMA_MOBILE_OK ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_llamamobile_Native_ttsEnabled(JNIEnv *, jobject, jlong h) {
+    EngineWrap * w = wrap(h);
+    return (w && w->ctx && llama_mobile_tts_is_enabled(w->ctx)) ? JNI_TRUE : JNI_FALSE;
+}
+
+// Returns PCM samples as jint[] (16-bit samples sign-extended) and fills
+// meta[0..3] = promptTokens, generatedTokens, ttftMs, totalMs.
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_llamamobile_Native_ttsSpeak(JNIEnv * env, jobject, jlong h, jstring text,
+                                     jint sampleRate, jfloat speed, jstring speaker,
+                                     jlongArray metaOut) {
+    EngineWrap * w = wrap(h);
+    if (!w || !w->ctx) { setError(LLAMA_MOBILE_ERR_INVALID_ARGUMENT); return nullptr; }
+    std::string t = toCpp(env, text);
+    std::string spk = toCpp(env, speaker);
+    if (t.empty()) { setError(LLAMA_MOBILE_ERR_INVALID_ARGUMENT); return nullptr; }
+
+    llama_mobile_tts_params_t p;
+    llama_mobile_tts_params_init(&p);
+    p.text = t.c_str();
+    p.sample_rate = sampleRate;
+    p.speed = speed;
+    p.speaker_json = spk.empty() ? nullptr : spk.c_str();
+
+    llama_mobile_usage_t usage;
+    memset(&usage, 0, sizeof(usage));
+    int16_t * pcm = nullptr;
+    size_t pcmLen = 0;
+    llama_mobile_status_t st = llama_mobile_tts_speak(w->ctx, &p, &usage, &pcm, &pcmLen);
+    if (st != LLAMA_MOBILE_OK) { setError(st); return nullptr; }
+
+    if (metaOut) {
+        jlong meta[4] = {usage.prompt_tokens, usage.generated_tokens,
+                         usage.time_to_first_token_ms, usage.total_ms};
+        env->SetLongArrayRegion(metaOut, 0, 4, meta);
+    }
+    jintArray out = env->NewIntArray((jsize) pcmLen);
+    if (out && pcmLen > 0) {
+        // Copy int16 -> int32 (samples never read as unsigned here).
+        std::vector<jint> tmp(pcm, pcm + pcmLen);
+        env->SetIntArrayRegion(out, 0, (jsize) pcmLen, tmp.data());
+    }
+    llama_mobile_tts_pcm_free(pcm);
+    return out;
+}

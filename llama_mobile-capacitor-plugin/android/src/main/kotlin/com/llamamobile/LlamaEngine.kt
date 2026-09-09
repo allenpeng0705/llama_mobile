@@ -98,6 +98,11 @@ data class LlamaUsage(
     val totalMs: Long,
 )
 
+data class LlamaTtsResult(
+    val pcm: IntArray,
+    val usage: LlamaUsage,
+)
+
 /** stopReason values mirror llama_mobile_stop_reason_t. */
 enum class LlamaStopReason(val value: Int) {
     EOS(0), WORD(1), LENGTH(2), ABORTED(3), ERROR(4);
@@ -242,6 +247,53 @@ class LlamaEngine private constructor(private val handle: Long) : AutoCloseable 
         return Native.initMultimodal(handle, mmprojPath)
     }
 
+    /** Detaches the multimodal projector. */
+    fun releaseMultimodal(): Boolean {
+        if (!ensureOpenSafe()) return false
+        return Native.releaseMultimodal(handle)
+    }
+
+    fun multimodalEnabled(): Boolean =
+        ensureOpenSafe() && Native.multimodalEnabled(handle)
+
+    fun supportsVision(): Boolean =
+        ensureOpenSafe() && Native.supportsVision(handle)
+
+    fun supportsAudio(): Boolean =
+        ensureOpenSafe() && Native.supportsAudio(handle)
+
+    /** Attaches a vocoder so [ttsSpeak] can synthesize audio. */
+    fun ttsInit(vocoderPath: String): Boolean {
+        if (!ensureOpenSafe()) return false
+        return Native.ttsInit(handle, vocoderPath)
+    }
+
+    fun ttsEnabled(): Boolean =
+        ensureOpenSafe() && Native.ttsEnabled(handle)
+
+    /** Full-text synthesis -> 16-bit PCM samples (caller-owned copy). */
+    @JvmOverloads
+    fun ttsSpeak(
+        text: String,
+        sampleRate: Int = 24000,
+        speed: Float = 1.0f,
+        speaker: String? = null,
+    ): LlamaTtsResult {
+        ensureOpen()
+        val meta = LongArray(4)
+        val pcm = Native.ttsSpeak(handle, text, sampleRate, speed, speaker, meta)
+            ?: throw LlamaException.fromNative(Native.lastError(), "tts speak failed")
+        return LlamaTtsResult(
+            pcm = pcm,
+            usage = LlamaUsage(meta[0].toInt(), meta[1].toInt(), meta[2], meta[3]),
+        )
+    }
+
+    fun ttsRelease(): Boolean {
+        if (!ensureOpenSafe()) return false
+        return Native.ttsRelease(handle)
+    }
+
     /** Thread-safe abort of the currently running generation. */
     fun abort(): Boolean {
         if (closed.get() || handle == 0L) return false
@@ -292,6 +344,8 @@ class LlamaEngine private constructor(private val handle: Long) : AutoCloseable 
     private fun ensureOpen() {
         check(isOpen) { "engine is closed" }
     }
+
+    private fun ensureOpenSafe(): Boolean = isOpen
 }
 
 /** JNI bridge to the v2 C API (llama_mobile_v2.h). Loads libllama_mobile_jni. */
@@ -329,4 +383,15 @@ private object Native {
     external fun tokenize(ctx: Long, text: String): IntArray?
     external fun detokenize(ctx: Long, tokens: IntArray): String?
     external fun embed(ctx: Long, texts: Array<String>): Array<FloatArray>?
+    external fun releaseMultimodal(ctx: Long): Boolean
+    external fun multimodalEnabled(ctx: Long): Boolean
+    external fun supportsVision(ctx: Long): Boolean
+    external fun supportsAudio(ctx: Long): Boolean
+    external fun ttsInit(ctx: Long, vocoderPath: String): Boolean
+    external fun ttsRelease(ctx: Long): Boolean
+    external fun ttsEnabled(ctx: Long): Boolean
+    external fun ttsSpeak(
+        ctx: Long, text: String, sampleRate: Int, speed: Float,
+        speaker: String?, meta: LongArray,
+    ): IntArray?
 }

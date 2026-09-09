@@ -82,21 +82,60 @@ export interface LlamaModelInfo {
 }
 
 /**
+ * Wire shape of a generate request sent to the native plugins. Chat messages
+ * travel as parallel `roles`/`contents` arrays (exactly what every native
+ * parser reads); the high-level [LlamaGenerationRequest] uses `messages` and
+ * the [LlamaEngine] wrapper converts between the two. `prompt` is optional —
+ * a chat request simply omits it (never coerce a missing prompt to "").
+ */
+export interface LlamaMobileBridgeRequest {
+  prompt?: string;
+  roles?: string[];
+  contents?: string[];
+  mediaPaths?: string[];
+  sampling?: LlamaSampling;
+  maxTokens?: number;
+  stopSequences?: string[];
+  grammar?: string | null;
+  jsonSchema?: string | null;
+}
+
+/**
  * Low-level bridge: handle-based methods implemented by the native plugins.
- * Most apps should use the `LlamaEngine` wrapper from index.ts instead.
+ * Every method takes a single options object (Capacitor's native calling
+ * convention) and scalar/list results are wrapped in `{ value: … }`; the
+ * high-level `LlamaEngine` wrapper (index.ts) unwraps them.
  */
 export interface LlamaMobileBridge {
   libraryVersion(): Promise<string>;
-  open(config: LlamaEngineConfig): Promise<number>;
+  open(options: LlamaEngineConfig): Promise<{ value: number }>;
   generate(
-    handle: number,
-    request: LlamaGenerationRequest,
+    options: { handle: number } & LlamaMobileBridgeRequest,
   ): Promise<LlamaGenerationResult>;
-  abort(handle: number): Promise<boolean>;
-  modelInfo(handle: number): Promise<LlamaModelInfo>;
-  initMultimodal(handle: number, mmprojPath: string): Promise<boolean>;
-  tokenize(handle: number, text: string): Promise<number[]>;
-  detokenize(handle: number, tokens: number[]): Promise<string>;
-  embed(handle: number, texts: string[]): Promise<number[][]>;
-  close(handle: number): Promise<void>;
+  abort(options: { handle: number }): Promise<{ value: boolean }>;
+  modelInfo(options: { handle: number }): Promise<LlamaModelInfo>;
+  initMultimodal(options: {
+    handle: number;
+    mmprojPath: string;
+  }): Promise<{ value: boolean }>;
+  tokenize(options: { handle: number; text: string }): Promise<{ value: number[] }>;
+  detokenize(options: { handle: number; tokens: number[] }): Promise<{ value: string }>;
+  embed(options: { handle: number; texts: string[] }): Promise<{ value: number[][] }>;
+  close(options: { handle: number }): Promise<void>;
+  releaseMultimodal(options: { handle: number }): Promise<{ value: boolean }>;
+  multimodalEnabled(options: { handle: number }): Promise<{ value: boolean }>;
+  supportsVision(options: { handle: number }): Promise<{ value: boolean }>;
+  supportsAudio(options: { handle: number }): Promise<{ value: boolean }>;
+  ttsInit(options: {
+    handle: number;
+    vocoderPath: string;
+  }): Promise<{ value: boolean }>;
+  ttsSpeak(options: {
+    handle: number;
+    text: string;
+    sampleRate?: number;
+    speed?: number;
+  }): Promise<{ value: number[] }>;
+  ttsRelease(options: { handle: number }): Promise<{ value: boolean }>;
+  ttsEnabled(options: { handle: number }): Promise<{ value: boolean }>;
 }

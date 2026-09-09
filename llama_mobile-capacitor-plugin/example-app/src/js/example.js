@@ -7,6 +7,8 @@
 
 import { LlamaEngine } from 'llama-mobile-capacitor-plugin';
 
+try { const m = document.getElementById('bootmark'); if (m) m.textContent = 'JS-module-ok'; } catch (e) {}
+
 // Chat models for the picker; the embedding section always uses the
 // Qwen3-Embedding fixture.
 const chatModels = [
@@ -35,12 +37,33 @@ function appendLog(line) {
   log.scrollTop = log.scrollHeight;
 }
 
+// Capacitor 8 removed the `Capacitor.platform` property; use getPlatform() when
+// present and fall back to the legacy property for older Capacitor versions.
+function nativePlatform() {
+  if (typeof Capacitor.getPlatform === 'function') return Capacitor.getPlatform();
+  return Capacitor.platform;
+}
+
 function modelPathFor(modelName) {
-  if (Capacitor.platform === 'ios') return `models/${modelName}`;
-  if (Capacitor.platform === 'android') {
-    return `/storage/emulated/0/Download/models/${modelName}`;
+  const platform = nativePlatform();
+  if (platform === 'ios' || platform === 'android') {
+    // Both native plugins resolve bundle-relative "models/x" themselves:
+    // iOS against Bundle.main resources, Android by extracting the packaged
+    // web-asset models into app storage.
+    return `models/${modelName}`;
   }
-  throw new Error('Unsupported platform (web has no native core)');
+  throw new Error(
+    `Unsupported platform (${platform || 'unknown'} — web has no native core)`,
+  );
+}
+
+// Run on the accelerator: Metal on iOS, Vulkan on Android. The native engines
+// honor engine + nGpuLayers; CPU-only TTS is impractically slow on device.
+function gpuOpenOptions(base) {
+  const platform = nativePlatform();
+  if (platform === 'ios') return { ...base, engine: 2, nGpuLayers: 99 };
+  if (platform === 'android') return { ...base, engine: 3, nGpuLayers: 99 };
+  return base;
 }
 
 function populateModelSelect() {
@@ -64,12 +87,14 @@ async function loadModel() {
   showStatus('loadStatus', `Loading ${name} …`, 'info');
   document.getElementById('loadBtn').disabled = true;
   try {
-    const engine = await LlamaEngine.open({
-      modelPath: modelPathFor(name),
-      nCtx: 2048,
-      chat: true,
-      embedding: false,
-    });
+    const engine = await LlamaEngine.open(
+      gpuOpenOptions({
+        modelPath: modelPathFor(name),
+        nCtx: 2048,
+        chat: true,
+        embedding: false,
+      }),
+    );
     chatEngine = engine;
     const info = await engine.modelInfo();
     appendLog(`Loaded: ${info.description || name} (n_ctx=${info.nCtx})`);
@@ -143,12 +168,14 @@ async function generateEmbedding() {
   document.getElementById('embedBtn').disabled = true;
   let engine = null;
   try {
-    engine = await LlamaEngine.open({
-      modelPath: modelPathFor(EMBEDDING_MODEL),
-      nCtx: 512,
-      embedding: true,
-      chat: false,
-    });
+    engine = await LlamaEngine.open(
+      gpuOpenOptions({
+        modelPath: modelPathFor(EMBEDDING_MODEL),
+        nCtx: 512,
+        embedding: true,
+        chat: false,
+      }),
+    );
     const rows = await engine.embed([text]);
     const embedding = rows[0] || [];
     const dim = embedding.length;
@@ -187,7 +214,67 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sendBtn').addEventListener('click', send);
   document.getElementById('stopBtn').addEventListener('click', stop);
   document.getElementById('embedBtn').addEventListener('click', generateEmbedding);
+
   LlamaEngine.libraryVersion()
-    .then((v) => appendLog(`llama_mobile v2 — LlamaEngine demo (lib ${v})`))
-    .catch(() => appendLog('llama_mobile v2 — LlamaEngine demo'));
+    .then((v) => { appendLog(`llama_mobile v2 — LlamaEngine demo (lib ${v})`); mark('version '+v); })
+    .catch((e) => { appendLog('llama_mobile v2 — LlamaEngine demo'); mark('ver-err '+e); });
+  // Manual mode: user drives Load/Send/Stop/Embed. Sweep available on demand.
+  const sb = document.createElement('button');
+  sb.textContent = 'Run Auto Sweep';
+  sb.style.cssText = 'position:fixed;bottom:10px;right:10px;z-index:99998;';
+  document.body.appendChild(sb);
+  sb.onclick = () => runSweep().catch(() => appendLog('[cap] sweep aborted'));
 });
+
+const sweepModels = {
+  chat: 'SmolLM-360M-Instruct.Q6_K.gguf',
+  embed: 'Qwen3-Embedding-0.6B-Q8_0.gguf',
+  vision: 'SmolVLM-256M-Instruct-Q8_0.gguf',
+  mmproj: 'mmproj-SmolVLM-256M-Instruct-Q8_0.gguf',
+  image: 'image.jpg',
+  tts: 'OuteTTS-0.2-500M-Q6_K.gguf',
+  vocoder: 'WavTokenizer-Large-75-F16.gguf',
+};
+
+function mark(t){ try { const m=document.getElementById('bootmark'); if(m){ m.textContent = t; } } catch(e){} }
+
+async function runSweep() {
+  const step = async (label, body) => {
+    try {
+      const msg = await body();
+      appendLog(`[cap] ${label} OK — ${msg}`);
+    } catch (e) {
+      appendLog(`[cap] ${label} FAILED — ${e.message || e}`);
+    }
+  };
+  await step('1/4 chat', async () => {
+    const e = await LlamaEngine.open(gpuOpenOptions({ modelPath: modelPathFor(sweepModels.chat), nCtx: 2048, chat: true }));
+    const r = await e.generate({ messages: [{ role: 'user', content: 'Say hello in one short sentence.' }], maxTokens: 24, sampling: { temperature: 0 } });
+    await e.close();
+    return r.text;
+  });
+  await step('2/4 embed', async () => {
+    const e = await LlamaEngine.open(gpuOpenOptions({ modelPath: modelPathFor(sweepModels.embed), nCtx: 512, embedding: true }));
+    const rows = await e.embed(['hello llama']);
+    await e.close();
+    return `dim=${rows[0].length}`;
+  });
+  await step('3/4 vision', async () => {
+    const e = await LlamaEngine.open(gpuOpenOptions({ modelPath: modelPathFor(sweepModels.vision), nCtx: 2048, chat: true }));
+    const ok = await e.initMultimodal(modelPathFor(sweepModels.mmproj));
+    if (!ok) throw new Error('initMultimodal false');
+    const r = await e.generate({ prompt: 'Describe this picture in a few words.', mediaPaths: [modelPathFor(sweepModels.image)], maxTokens: 32, sampling: { temperature: 0 } });
+    await e.close();
+    return r.text;
+  });
+  await step('4/4 tts', async () => {
+    const e = await LlamaEngine.open(gpuOpenOptions({ modelPath: modelPathFor(sweepModels.tts), nCtx: 4096, chat: false }));
+    const ok = await e.ttsInit(modelPathFor(sweepModels.vocoder));
+    if (!ok) throw new Error('ttsInit false');
+    const pcm = await e.ttsSpeak('Hello from capacitor on device speech.', 24000, 1.0);
+    await e.ttsRelease();
+    await e.close();
+    return `pcm=${pcm.length}`;
+  });
+  appendLog('[cap] ALL APIS DONE');
+}
